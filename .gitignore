@@ -40,5 +40,9 @@ data/
 .env.local
 .env.*.local
 .env.dev
+.env.production
 application-local.yml
 application-local.yaml
+
+# Build / release artifacts
+dist/

@@ -1,0 +1,290 @@
+# 发布 / 交付编排（离线产品包内使用）
+#
+# 与 docker-compose.yml / deploy/docker-compose.prod.yml 的区别：
+#   1. 所有服务使用已构建好的镜像（无 build 段），产品包内不含源码
+#   2. 固定项目名 knowledge-os，保证数据卷名稳定、升级时不丢数据
+#   3. 端口可通过 .env 调整，避免与客户环境冲突
+#
+# 镜像名由 VERSION / IMAGE_PREFIX 控制：
+#   VERSION=1.1.0 IMAGE_PREFIX=registry.example.com/knowledge-os docker compose up -d
+
+name: knowledge-os
+
+services:
+  mysql:
+    image: mysql:8.0.36
+    restart: unless-stopped
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_0900_ai_ci
+      - --default-time-zone=+08:00
+      - --max_allowed_packet=256M
+      - --max_connections=500
+      - --slow_query_log=ON
+      - --long_query_time=2
+    env_file: .env
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - mysqladmin ping -h 127.0.0.1 -uroot -p$$MYSQL_ROOT_PASSWORD --silent
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 40s
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command:
+      - sh
+      - -c
+      - exec redis-server --appendonly yes --maxmemory 1gb --maxmemory-policy allkeys-lru $${REDIS_PASSWORD:+--requirepass "$$REDIS_PASSWORD"}
+    env_file: .env
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - if [ -n "$$REDIS_PASSWORD" ]; then redis-cli -a "$$REDIS_PASSWORD" --no-auth-warning ping | grep -q PONG; else redis-cli ping | grep -q PONG; fi
+      interval: 10s
+      timeout: 5s
+      retries: 15
+
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:9.5.3
+    restart: unless-stopped
+    environment:
+      discovery.type: single-node
+      ELASTICSEARCH_INITIAL_ADMIN_PASSWORD: ${ELASTICSEARCH_INITIAL_ADMIN_PASSWORD}
+      ES_JAVA_OPTS: ${ES_JAVA_OPTS:--Xms2g -Xmx2g}
+    volumes:
+      - elasticsearch_data:/usr/share/elasticsearch/data
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+      nofile:
+        soft: 65536
+        hard: 65536
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - curl -fsS -u elastic:$$ELASTICSEARCH_INITIAL_ADMIN_PASSWORD http://127.0.0.1:9200/_cluster/health >/dev/null
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 60s
+
+  milvus-etcd:
+    image: quay.io/coreos/etcd:v3.5.18
+    restart: unless-stopped
+    environment:
+      ETCD_AUTO_COMPACTION_MODE: revision
+      ETCD_AUTO_COMPACTION_RETENTION: '1000'
+      ETCD_QUOTA_BACKEND_BYTES: '4294967296'
+      ETCD_SNAPSHOT_COUNT: '50000'
+    command: etcd -advertise-client-urls=http://127.0.0.1:2379 -listen-client-urls http://0.0.0.0:2379 --data-dir /etcd
+    volumes:
+      - milvus_etcd:/etcd
+    healthcheck:
+      test: ["CMD", "etcdctl", "endpoint", "health"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+
+  milvus-minio:
+    image: minio/minio:RELEASE.2025-07-23T15-54-02Z
+    restart: unless-stopped
+    environment:
+      MINIO_ACCESS_KEY: minioadmin
+      MINIO_SECRET_KEY: minioadmin
+    command: minio server /minio_data --console-address :9001
+    volumes:
+      - milvus_minio:/minio_data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+
+  milvus:
+    image: milvusdb/milvus:v3.0.1
+    command: ["milvus", "run", "standalone"]
+    restart: unless-stopped
+    environment:
+      ETCD_ENDPOINTS: milvus-etcd:2379
+      MINIO_ADDRESS: milvus-minio:9000
+    volumes:
+      - milvus_data:/var/lib/milvus
+    depends_on:
+      milvus-etcd:
+        condition: service_healthy
+      milvus-minio:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9091/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 60s
+
+  neo4j:
+    image: neo4j:5.26
+    restart: unless-stopped
+    environment:
+      NEO4J_AUTH: neo4j/${NEO4J_PASSWORD:-knowledge123}
+      # 注意：Neo4j 会把所有 NEO4J_* 变量当作配置项，密码校验需使用非 NEO4J_ 前缀
+      KOS_NEO4J_PASSWORD: ${NEO4J_PASSWORD:-knowledge123}
+      NEO4J_server_memory_heap_initial__size: ${NEO4J_HEAP_INIT:-1G}
+      NEO4J_server_memory_heap_max__size: ${NEO4J_HEAP_MAX:-4G}
+      NEO4J_server_memory_pagecache_size: ${NEO4J_PAGECACHE:-1G}
+    volumes:
+      - neo4j_data:/data
+      - neo4j_logs:/logs
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - cypher-shell -u neo4j -p "$$KOS_NEO4J_PASSWORD" 'RETURN 1' >/dev/null 2>&1 || exit 1
+      interval: 10s
+      timeout: 8s
+      retries: 20
+      start_period: 60s
+
+  ai-service:
+    image: ${IMAGE_PREFIX:-knowledge-os}/ai-service:${VERSION:-1.1.0}
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      KNOWLEDGE_DATA_DIR: /app/data
+      NEO4J_URI: bolt://neo4j:7687
+      ELASTICSEARCH_URL: https://elasticsearch:9200
+      MILVUS_URL: http://milvus:19530
+    volumes:
+      - ai_data:/app/data
+    depends_on:
+      neo4j:
+        condition: service_healthy
+      elasticsearch:
+        condition: service_healthy
+      milvus:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - import urllib.request; urllib.request.urlopen('http://127.0.0.1:12000/health', timeout=2)
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 20s
+
+  backend:
+    image: ${IMAGE_PREFIX:-knowledge-os}/backend:${VERSION:-1.1.0}
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DB_URL: jdbc:mysql://mysql:3306/${MYSQL_DATABASE:-knowledge_os}?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true
+      DB_USERNAME: ${MYSQL_USER:-knowledge}
+      DB_PASSWORD: ${MYSQL_PASSWORD:-knowledge123}
+      REDIS_HOST: redis
+      AI_SERVICE_BASE_URL: http://ai-service:12000
+      STARTUP_FAIL_FAST: 'true'
+      INDEX_OUTBOX_ENABLED: 'false'
+    ports:
+      - ${BACKEND_HTTP_PORT:-8080}:8080
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      ai-service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8080/actuator/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 25
+      start_period: 60s
+
+  index-worker:
+    image: ${IMAGE_PREFIX:-knowledge-os}/backend:${VERSION:-1.1.0}
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DB_URL: jdbc:mysql://mysql:3306/${MYSQL_DATABASE:-knowledge_os}?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true
+      DB_USERNAME: ${MYSQL_USER:-knowledge}
+      DB_PASSWORD: ${MYSQL_PASSWORD:-knowledge123}
+      REDIS_HOST: redis
+      AI_SERVICE_BASE_URL: http://ai-service:12000
+      STARTUP_FAIL_FAST: 'true'
+      INDEX_OUTBOX_ENABLED: 'true'
+      INDEX_OUTBOX_ARCHIVE_ENABLED: 'true'
+      SERVER_PORT: '8081'
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      ai-service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8081/actuator/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 25
+      start_period: 60s
+
+  prometheus:
+    image: prom/prometheus:v3.5.0
+    restart: unless-stopped
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./monitoring/alerts.yml:/etc/prometheus/alerts.yml:ro
+      - prometheus_data:/prometheus
+    ports:
+      - ${PROMETHEUS_HTTP_PORT:-9090}:9090
+    depends_on:
+      backend:
+        condition: service_healthy
+
+  grafana:
+    image: grafana/grafana:12.1.1
+    restart: unless-stopped
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin123}
+    ports:
+      - ${GRAFANA_HTTP_PORT:-3000}:3000
+    volumes:
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana_data:/var/lib/grafana
+    depends_on:
+      - prometheus
+
+  frontend:
+    image: ${IMAGE_PREFIX:-knowledge-os}/frontend:${VERSION:-1.1.0}
+    restart: unless-stopped
+    ports:
+      - ${PUBLIC_HTTP_PORT:-8088}:80
+    depends_on:
+      backend:
+        condition: service_healthy
+
+volumes:
+  mysql_data:
+  redis_data:
+  elasticsearch_data:
+  milvus_data:
+  milvus_etcd:
+  milvus_minio:
+  neo4j_data:
+  neo4j_logs:
+  ai_data:
+  prometheus_data:
+  grafana_data:

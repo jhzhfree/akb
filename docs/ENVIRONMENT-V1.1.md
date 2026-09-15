@@ -21,6 +21,8 @@
 
 ## 二、快速开始
 
+完整命令清单见 [COMMANDS.md](./COMMANDS.md)（开发裸跑、容器、发布打包、产品启停）。
+
 ```bash
 cp .env.dev.example .env.dev     # 或直接 make dev-env
 make dev-up                      # 仅启动 mysql + redis + neo4j

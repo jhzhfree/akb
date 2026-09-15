@@ -102,6 +102,7 @@ services:
       timeout: 5s
       retries: 20
   ai-service:
+    image: knowledge-os/ai-service:${VERSION:-1.1.0}
     build:
       context: ./ai-service
       args:
@@ -137,6 +138,7 @@ services:
       timeout: 4s
       retries: 15
   backend:
+    image: knowledge-os/backend:${VERSION:-1.1.0}
     build: ./backend
     env_file:
     - .env
@@ -187,6 +189,7 @@ services:
     depends_on:
     - prometheus
   frontend:
+    image: knowledge-os/frontend:${VERSION:-1.1.0}
     build: ./frontend
     ports:
     - 8088:80
