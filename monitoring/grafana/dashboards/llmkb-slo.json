@@ -1,0 +1,15 @@
+{
+  "title": "LLMKB Production SLO",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "30s",
+  "panels": [
+    {"type":"timeseries","title":"Backend P95 latency","targets":[{"expr":"histogram_quantile(0.95, sum(rate(http_server_requests_seconds_bucket{uri=~\"/api/knowledge/.*\"}[5m])) by (le))"}],"gridPos":{"x":0,"y":0,"w":12,"h":8}},
+    {"type":"timeseries","title":"Backend 5xx rate","targets":[{"expr":"sum(rate(http_server_requests_seconds_count{status=~\"5..\"}[5m])) / clamp_min(sum(rate(http_server_requests_seconds_count[5m])), 0.001)"}],"gridPos":{"x":12,"y":0,"w":12,"h":8}},
+    {"type":"timeseries","title":"Outbox oldest lag","targets":[{"expr":"llmkb_index_outbox_oldest_lag_seconds"}],"gridPos":{"x":0,"y":8,"w":8,"h":8}},
+    {"type":"timeseries","title":"Outbox retry backlog","targets":[{"expr":"llmkb_index_outbox_retry"}],"gridPos":{"x":8,"y":8,"w":8,"h":8}},
+    {"type":"timeseries","title":"Outbox dead letters","targets":[{"expr":"llmkb_index_outbox_dead"}],"gridPos":{"x":16,"y":8,"w":8,"h":8}},
+    {"type":"timeseries","title":"Index delivery P95","targets":[{"expr":"histogram_quantile(0.95, sum(rate(llmkb_index_outbox_delivery_duration_seconds_bucket[5m])) by (le))"}],"gridPos":{"x":0,"y":16,"w":12,"h":8}},
+    {"type":"timeseries","title":"JVM heap usage","targets":[{"expr":"jvm_memory_used_bytes{area=\"heap\"} / clamp_min(jvm_memory_max_bytes{area=\"heap\"},1)"}],"gridPos":{"x":12,"y":16,"w":12,"h":8}}
+  ]
+}

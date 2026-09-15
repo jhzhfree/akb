@@ -1,0 +1,10 @@
+{
+  "phase": "lexical",
+  "rss_start_mb": 98.05,
+  "cold_load_ms": 8722.39,
+  "rss_loaded_mb": 1713.81,
+  "count": 100000,
+  "first_bm25_ms": 6808.01,
+  "rss_lexical_mb": 2908.11,
+  "cached_bm25_ms": 650.91
+}

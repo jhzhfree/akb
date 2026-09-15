@@ -1,0 +1,28 @@
+{
+  "version": "1.1",
+  "traceHeader": "X-Trace-Id",
+  "endpoints": {
+    "query": {
+      "method": "POST",
+      "path": "/ai/query",
+      "requestRequired": ["knowledgeBaseId", "query"],
+      "responseRequired": ["queryId", "rewrittenQueries", "router", "strategies", "recall", "candidates", "reranker", "context", "citations", "answer", "model", "trace"]
+    },
+    "extract": {
+      "method": "POST",
+      "path": "/ai/extract",
+      "requestRequired": ["knowledgeBaseId"],
+      "responseRequired": ["cards", "claims", "entities", "relations"]
+    },
+    "adjudicate": {
+      "method": "POST",
+      "path": "/ai/adjudicate",
+      "responseRequired": ["policyVersion", "knowledgeConfidence", "riskLevel", "decision", "requiresHumanReview", "components", "aiJudge"]
+    },
+    "capabilities": {
+      "method": "GET",
+      "path": "/ai/capabilities",
+      "responseRequired": ["graph", "reranker"]
+    }
+  }
+}

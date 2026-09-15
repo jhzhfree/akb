@@ -1,0 +1,28 @@
+{
+  "cold_load_ms": 8477.73,
+  "lexical_build_ms": 6716.93,
+  "vector_snapshot_build_and_first_query_ms": 1712.91,
+  "warm_query_ms": {
+    "samples": [
+      778.19,
+      1490.93,
+      728.29,
+      1388.54,
+      754.06
+    ],
+    "p50": 778.19,
+    "p95": 1470.46
+  },
+  "concurrency4": {
+    "wall_ms": 4433.79,
+    "qps": 0.9,
+    "latencies_ms": [
+      4432.41,
+      3080.11,
+      2135.68,
+      1394.41
+    ],
+    "p50": 2607.89,
+    "p95": 4229.57
+  }
+}

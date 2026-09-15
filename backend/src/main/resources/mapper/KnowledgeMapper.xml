@@ -1,0 +1,221 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd"><mapper namespace="com.jh.knowledgeos.mapper.KnowledgeMapper">
+<insert id="insertSource" parameterType="com.jh.knowledgeos.domain.KnowledgeSource" useGeneratedKeys="true" keyProperty="id">INSERT INTO t_source(source_code,knowledge_base_id,name,source_type,source_uri,authority_score,status)VALUES(#{sourceCode},#{knowledgeBaseId},#{name},#{sourceType},#{sourceUri},#{authorityScore},#{status})</insert>
+<insert id="insertSourceVersion">INSERT INTO t_source_version(source_id,version_no,source_hash,object_uri,status)VALUES(#{sourceId},#{versionNo},#{sourceHash},#{objectUri},'ACTIVE')</insert>
+<select id="findSourceVersionId" resultType="long">SELECT id FROM t_source_version WHERE source_id=#{sourceId} AND version_no=#{versionNo}</select>
+<insert id="insertDocument" parameterType="com.jh.knowledgeos.domain.KnowledgeDocument" useGeneratedKeys="true" keyProperty="id">INSERT INTO t_document(source_version_id,document_code,title,mime_type,parse_status,chunk_count)VALUES(#{sourceVersionId},#{documentCode},#{title},#{mimeType},#{parseStatus},0)</insert>
+<update id="updateDocumentParsed">UPDATE t_document SET raw_text=#{rawText},chunk_count=#{chunkCount},parse_status=#{status} WHERE id=#{id}</update>
+<insert id="insertContentUnit">INSERT INTO t_content_unit(document_id,unit_code,heading_path,page_no,content,content_hash)VALUES(#{documentId},#{unitCode},#{headingPath},#{pageNo},#{content},#{contentHash})</insert>
+<select id="findContentUnitId" resultType="long">SELECT id FROM t_content_unit WHERE unit_code=#{unitCode}</select>
+<insert id="batchInsertContentUnits">INSERT INTO t_content_unit(document_id,unit_code,heading_path,page_no,content,content_hash) VALUES <foreach collection="rows" item="row" separator=",">(#{row.documentId},#{row.unitCode},#{row.headingPath},#{row.pageNo},#{row.content},#{row.contentHash})</foreach></insert>
+<select id="findContentUnitIdsByCodes" resultType="map">SELECT id,unit_code unitCode FROM t_content_unit WHERE unit_code IN <foreach collection="codes" item="code" open="(" separator="," close=")">#{code}</foreach></select>
+<insert id="batchInsertEvidence">INSERT INTO t_evidence(evidence_code,knowledge_base_id,content_unit_id,source_id,quote_text,location_json,authority_score,freshness_score,status) VALUES <foreach collection="rows" item="row" separator=",">(#{row.evidenceCode},#{row.knowledgeBaseId},#{row.contentUnitId},#{row.sourceId},#{row.quoteText},CAST(#{row.locationJson} AS JSON),#{row.authorityScore},1.0,'ACTIVE')</foreach></insert>
+<insert id="insertEvidence">INSERT INTO t_evidence(evidence_code,knowledge_base_id,content_unit_id,source_id,quote_text,location_json,authority_score,freshness_score,status)VALUES(#{evidenceCode},#{kb},#{contentUnitId},#{sourceId},#{quoteText},CAST(#{locationJson} AS JSON),#{authorityScore},1.0,'ACTIVE')</insert>
+<insert id="insertCard" parameterType="com.jh.knowledgeos.domain.KnowledgeCard">INSERT INTO t_knowledge_card(knowledge_code,knowledge_base_id,type,title,summary,content,confidence,status,version)VALUES(#{knowledgeCode},#{knowledgeBaseId},#{type},#{title},#{summary},#{content},#{confidence},#{status},#{version})</insert>
+<insert id="insertClaim" parameterType="com.jh.knowledgeos.domain.Claim">INSERT INTO t_claim(claim_code,knowledge_base_id,subject,predicate,object_value,condition_json,confidence,status)VALUES(#{claimCode},#{knowledgeBaseId},#{subject},#{predicate},#{objectValue},CAST(#{conditionJson} AS JSON),#{confidence},#{status})</insert>
+<insert id="linkClaimEvidenceFromDocument">INSERT IGNORE INTO t_claim_evidence(claim_code,evidence_id,support_type,support_score) SELECT #{claimCode},e.id,'SUPPORT',0.80 FROM t_evidence e JOIN t_content_unit cu ON cu.id=e.content_unit_id WHERE cu.document_id=#{documentId}</insert>
+<insert id="linkCardEvidenceFromDocument">INSERT IGNORE INTO t_knowledge_evidence(knowledge_code,evidence_id,support_type,support_score) SELECT #{knowledgeCode},e.id,'SUPPORT',0.80 FROM t_evidence e JOIN t_content_unit cu ON cu.id=e.content_unit_id WHERE cu.document_id=#{documentId}</insert>
+<select id="listAdjudicationCandidates" resultType="map">
+SELECT 'CLAIM' objectType,c.claim_code objectCode,CONCAT(c.subject,' ',c.predicate,' ',c.object_value) objectContent,c.confidence,
+ COUNT(DISTINCT ce.evidence_id) evidenceCount,COUNT(DISTINCT e.source_id) sourceCount,COALESCE(AVG(e.authority_score),0) authorityScore,COALESCE(AVG(e.freshness_score),0) freshnessScore,
+ COALESCE(MAX(cf.conflictCount),0) conflictCount,COALESCE(MAX(cf.maxConflictScore),0) maxConflictScore,c.status
+ FROM t_claim c
+ LEFT JOIN t_claim_evidence ce ON ce.claim_code=c.claim_code
+ LEFT JOIN t_evidence e ON e.id=ce.evidence_id
+ LEFT JOIN (
+   SELECT objectCode,COUNT(*) conflictCount,MAX(conflictScore) maxConflictScore
+   FROM (
+     SELECT object_a_code objectCode,conflict_score conflictScore FROM t_knowledge_conflict WHERE status='OPEN'
+     UNION ALL
+     SELECT object_b_code objectCode,conflict_score conflictScore FROM t_knowledge_conflict WHERE status='OPEN'
+   ) conflict_rows GROUP BY objectCode
+ ) cf ON cf.objectCode=c.claim_code
+ WHERE c.knowledge_base_id=#{kb} AND c.status IN ('DRAFT','UNCERTAIN','CONFLICTED','PENDING_REVIEW') GROUP BY c.id
+UNION ALL
+SELECT 'CARD' objectType,k.knowledge_code objectCode,CONCAT(k.title,' ',k.content) objectContent,k.confidence,
+ COUNT(DISTINCT ke.evidence_id) evidenceCount,COUNT(DISTINCT e.source_id) sourceCount,COALESCE(AVG(e.authority_score),0) authorityScore,COALESCE(AVG(e.freshness_score),0) freshnessScore,0 conflictCount,0 maxConflictScore,k.status
+ FROM t_knowledge_card k LEFT JOIN t_knowledge_evidence ke ON ke.knowledge_code=k.knowledge_code LEFT JOIN t_evidence e ON e.id=ke.evidence_id WHERE k.knowledge_base_id=#{kb} AND k.status IN ('DRAFT','UNCERTAIN','CONFLICTED','PENDING_REVIEW') GROUP BY k.id</select>
+<select id="listEvidenceForObject" resultType="map">
+SELECT e.evidence_code evidenceCode,e.quote_text quoteText,e.authority_score authorityScore,e.freshness_score freshnessScore,s.name sourceName,e.location_json locationJson FROM t_evidence e JOIN t_source s ON s.id=e.source_id WHERE e.id IN (SELECT evidence_id FROM t_claim_evidence WHERE claim_code=#{objectCode}) AND #{objectType}='CLAIM'
+UNION ALL SELECT e.evidence_code,e.quote_text,e.authority_score,e.freshness_score,s.name,e.location_json FROM t_evidence e JOIN t_source s ON s.id=e.source_id WHERE e.id IN (SELECT evidence_id FROM t_knowledge_evidence WHERE knowledge_code=#{objectCode}) AND #{objectType}='CARD' LIMIT 8</select>
+<select id="listObjectConflicts" resultType="map">SELECT object_a_code objectACode,object_b_code objectBCode,conflict_type conflictType,conflict_score conflictScore,status FROM t_knowledge_conflict WHERE status='OPEN' AND (object_a_code=#{objectCode} OR object_b_code=#{objectCode})</select>
+<insert id="insertAssessment">INSERT INTO t_adjudication_assessment(knowledge_base_id,object_type,object_code,policy_version,knowledge_confidence,risk_level,decision,requires_human_review,score_json,ai_judge_json,reason_text) VALUES(#{kb},#{objectType},#{objectCode},#{policyVersion},#{confidence},#{riskLevel},#{decision},#{requiresHuman},CAST(#{scoreJson} AS JSON),CAST(#{aiJson} AS JSON),#{reason})</insert>
+<select id="listAssessments" resultType="map">SELECT id,object_type objectType,object_code objectCode,policy_version policyVersion,knowledge_confidence knowledgeConfidence,risk_level riskLevel,decision,requires_human_review requiresHumanReview,score_json scoreJson,ai_judge_json aiJudgeJson,reason_text reasonText,created_time createdTime FROM t_adjudication_assessment WHERE knowledge_base_id=#{kb} ORDER BY created_time DESC LIMIT #{limit}</select>
+<select id="listCards" resultType="com.jh.knowledgeos.domain.KnowledgeCard">SELECT * FROM t_knowledge_card WHERE knowledge_base_id=#{kb} ORDER BY updated_time DESC</select><select id="listClaims" resultType="com.jh.knowledgeos.domain.Claim">SELECT * FROM t_claim WHERE knowledge_base_id=#{kb} ORDER BY updated_time DESC</select><select id="listClaimsBySubjects" resultType="com.jh.knowledgeos.domain.Claim">SELECT * FROM t_claim WHERE knowledge_base_id=#{kb}<choose><when test="subjects != null and subjects.size() > 0"> AND subject IN <foreach collection="subjects" item="subject" open="(" separator="," close=")">#{subject}</foreach></when><otherwise> AND 1=0</otherwise></choose></select>
+<select id="listSources" resultType="com.jh.knowledgeos.domain.KnowledgeSource">SELECT * FROM t_source WHERE knowledge_base_id=#{kb} ORDER BY created_time DESC</select>
+<select id="listDocuments" resultType="map">SELECT d.id,d.document_code documentCode,d.title,d.mime_type mimeType,d.parse_status parseStatus,d.chunk_count chunkCount,s.name sourceName,s.id sourceId,d.created_time createdTime FROM t_document d JOIN t_source_version sv ON sv.id=d.source_version_id JOIN t_source s ON s.id=sv.source_id WHERE s.knowledge_base_id=#{kb} ORDER BY d.created_time DESC</select>
+<update id="updateCardStatus">UPDATE t_knowledge_card SET status=#{status} WHERE knowledge_code=#{code}</update><update id="updateClaimStatus">UPDATE t_claim SET status=#{status} WHERE claim_code=#{code}</update>
+<insert id="insertReview">INSERT INTO t_knowledge_review(object_type,object_code,decision,reviewer,comment_text)VALUES(#{type},#{code},#{decision},#{reviewer},#{comment})</insert>
+<insert id="insertConflict">INSERT IGNORE INTO t_knowledge_conflict(knowledge_base_id,object_a_code,object_b_code,conflict_type,conflict_score,status) VALUES(#{kb},#{a},#{b},#{type},#{score},'OPEN')</insert>
+<select id="listConflicts" resultType="map">SELECT id,knowledge_base_id knowledgeBaseId,object_a_code objectACode,object_b_code objectBCode,conflict_type conflictType,conflict_score conflictScore,status,created_time createdTime FROM t_knowledge_conflict WHERE knowledge_base_id=#{kb} AND (#{status} IS NULL OR status=#{status}) ORDER BY conflict_score DESC,created_time DESC</select>
+<update id="resolveConflict">UPDATE t_knowledge_conflict SET status=#{status} WHERE id=#{id}</update>
+<select id="listPendingReviews" resultType="map">SELECT 'CARD' objectType,knowledge_code objectCode,title displayTitle,confidence,status FROM t_knowledge_card WHERE knowledge_base_id=#{kb} AND status IN ('DRAFT','UNCERTAIN','CONFLICTED','PENDING_REVIEW') UNION ALL SELECT 'CLAIM' objectType,claim_code objectCode,CONCAT(subject,' ',predicate,' ',LEFT(object_value,120)) displayTitle,confidence,status FROM t_claim WHERE knowledge_base_id=#{kb} AND status IN ('DRAFT','UNCERTAIN','CONFLICTED','PENDING_REVIEW') ORDER BY confidence ASC</select>
+<insert id="insertTrace" parameterType="com.jh.knowledgeos.domain.QueryTraceRecord">INSERT INTO t_query_trace(query_id,knowledge_base_id,trace_id,original_query,rewritten_queries_json,router_decision_json,retrieval_json,fusion_json,rerank_json,selected_context_json,citations_json,model_name,latency_ms,token_usage_json,error_code,trace_json,answer) VALUES(#{queryId},#{knowledgeBaseId},#{traceId},#{originalQuery},CAST(#{rewrittenQueriesJson} AS JSON),CAST(#{routerDecisionJson} AS JSON),CAST(#{retrievalJson} AS JSON),CAST(#{fusionJson} AS JSON),CAST(#{rerankJson} AS JSON),CAST(#{selectedContextJson} AS JSON),CAST(#{citationsJson} AS JSON),#{modelName},#{latencyMs},CAST(#{tokenUsageJson} AS JSON),#{errorCode},CAST(#{traceJson} AS JSON),#{answer})</insert><select id="getTrace" resultType="map">SELECT id,query_id queryId,knowledge_base_id knowledgeBaseId,trace_id traceId,original_query originalQuery,rewritten_queries_json rewrittenQueriesJson,router_decision_json routerDecisionJson,retrieval_json retrievalJson,fusion_json fusionJson,rerank_json rerankJson,selected_context_json selectedContextJson,citations_json citationsJson,model_name modelName,latency_ms latencyMs,token_usage_json tokenUsageJson,error_code errorCode,trace_json traceJson,answer,created_time createdTime FROM t_query_trace WHERE query_id=#{qid}</select>
+
+<insert id="incrementIndexAggregateVersion">
+  INSERT INTO t_index_aggregate_version(aggregate_key,current_version) VALUES(#{aggregateKey},1)
+  ON DUPLICATE KEY UPDATE current_version=current_version+1
+</insert>
+<select id="getIndexAggregateVersion" resultType="long">
+  SELECT current_version FROM t_index_aggregate_version WHERE aggregate_key=#{aggregateKey}
+</select>
+<insert id="insertIndexOutbox" parameterType="com.jh.knowledgeos.domain.IndexOutboxEvent" useGeneratedKeys="true" keyProperty="id">
+  INSERT IGNORE INTO t_index_outbox(event_id,idempotency_key,knowledge_base_id,aggregate_type,aggregate_key,event_type,object_version,target_path,payload_json,status,attempt_count,max_attempts,next_attempt_at)
+  VALUES(#{eventId},#{idempotencyKey},#{knowledgeBaseId},#{aggregateType},#{aggregateKey},#{eventType},#{objectVersion},#{targetPath},CAST(#{payloadJson} AS JSON),#{status},#{attemptCount},#{maxAttempts},CURRENT_TIMESTAMP)
+</insert>
+<select id="findOutboxByIdempotencyKey" resultType="com.jh.knowledgeos.domain.IndexOutboxEvent">
+  SELECT * FROM t_index_outbox WHERE idempotency_key=#{idempotencyKey}
+</select>
+<select id="findOutboxByEventId" resultType="com.jh.knowledgeos.domain.IndexOutboxEvent">
+  SELECT * FROM t_index_outbox WHERE event_id=#{eventId}
+</select>
+<select id="selectDueIndexOutbox" resultType="com.jh.knowledgeos.domain.IndexOutboxEvent">
+  SELECT o.* FROM t_index_outbox o
+  WHERE o.status IN ('PENDING','RETRY') AND o.next_attempt_at&lt;=CURRENT_TIMESTAMP
+    AND NOT EXISTS (
+      SELECT 1 FROM t_index_outbox older
+      WHERE older.aggregate_key=o.aggregate_key
+        AND older.object_version&lt;o.object_version
+        AND older.status NOT IN ('SUCCEEDED','SKIPPED')
+    )
+  ORDER BY o.id LIMIT #{limit} FOR UPDATE SKIP LOCKED
+</select>
+<update id="claimIndexOutbox">
+  UPDATE t_index_outbox SET status='PROCESSING',attempt_count=attempt_count+1,locked_by=#{workerId},locked_at=CURRENT_TIMESTAMP
+  WHERE id=#{id} AND status IN ('PENDING','RETRY')
+</update>
+<update id="markIndexOutboxSucceeded">
+  UPDATE t_index_outbox SET status='SUCCEEDED',result_json=CAST(#{resultJson} AS JSON),last_error=NULL,locked_by=NULL,locked_at=NULL,processed_time=CURRENT_TIMESTAMP
+  WHERE id=#{id} AND status='PROCESSING'
+</update>
+<update id="markIndexOutboxRetry">
+  UPDATE t_index_outbox SET status='RETRY',last_error=#{error},next_attempt_at=#{nextAttemptAt},locked_by=NULL,locked_at=NULL
+  WHERE id=#{id} AND status='PROCESSING'
+</update>
+<update id="markIndexOutboxDead">
+  UPDATE t_index_outbox SET status='DEAD',last_error=#{error},locked_by=NULL,locked_at=NULL,processed_time=CURRENT_TIMESTAMP
+  WHERE id=#{id} AND status='PROCESSING'
+</update>
+<update id="recoverStaleIndexOutbox">
+  UPDATE t_index_outbox SET status='RETRY',next_attempt_at=CURRENT_TIMESTAMP,locked_by=NULL,locked_at=NULL,last_error=CONCAT('Recovered stale lock; ',COALESCE(last_error,''))
+  WHERE status='PROCESSING' AND locked_at&lt;#{threshold}
+</update>
+<insert id="insertIndexDeliveryAttempt">
+  INSERT IGNORE INTO t_index_delivery_attempt(event_id,attempt_no,status,duration_ms,response_json,error_text)
+  VALUES(#{eventId},#{attemptNo},#{status},#{durationMs},CASE WHEN #{responseJson} IS NULL THEN NULL ELSE CAST(#{responseJson} AS JSON) END,#{errorText})
+</insert>
+<select id="listIndexOutbox" resultType="com.jh.knowledgeos.domain.IndexOutboxEvent">
+  SELECT * FROM t_index_outbox WHERE knowledge_base_id=#{kb}
+  <if test="status != null and status != ''">AND status=#{status}</if>
+  ORDER BY id DESC LIMIT #{limit}
+</select>
+<select id="indexOutboxStats" resultType="map">
+  SELECT COUNT(*) total,
+    SUM(status='PENDING') pending, SUM(status='PROCESSING') processing, SUM(status='RETRY') retryCount,
+    SUM(status='SUCCEEDED') succeeded, SUM(status='DEAD') dead, SUM(status='SKIPPED') skipped,
+    TIMESTAMPDIFF(SECOND,MIN(CASE WHEN status IN ('PENDING','RETRY','PROCESSING') THEN created_time END),CURRENT_TIMESTAMP) oldestLagSeconds
+  FROM t_index_outbox WHERE knowledge_base_id=#{kb}
+</select>
+<update id="replayIndexOutbox">
+  UPDATE t_index_outbox SET status='RETRY',attempt_count=0,next_attempt_at=CURRENT_TIMESTAMP,locked_by=NULL,locked_at=NULL,last_error=NULL,processed_time=NULL
+  WHERE event_id=#{eventId} AND status IN ('DEAD','RETRY')
+</update>
+<update id="skipIndexOutbox">
+  UPDATE t_index_outbox SET status='SKIPPED',locked_by=NULL,locked_at=NULL,processed_time=CURRENT_TIMESTAMP
+  WHERE event_id=#{eventId} AND status IN ('DEAD','RETRY','PENDING')
+</update>
+<select id="findKnowledgeBaseIdForObject" resultType="long">
+  SELECT knowledge_base_id FROM t_claim WHERE claim_code=#{objectCode} AND UPPER(#{objectType})='CLAIM'
+  UNION ALL
+  SELECT knowledge_base_id FROM t_knowledge_card WHERE knowledge_code=#{objectCode} AND UPPER(#{objectType})!='CLAIM'
+  LIMIT 1
+</select>
+<select id="countIndexableObjects" resultType="long">
+  SELECT
+    (SELECT COUNT(*) FROM t_content_unit cu JOIN t_document d ON d.id=cu.document_id JOIN t_source_version sv ON sv.id=d.source_version_id JOIN t_source s ON s.id=sv.source_id WHERE s.knowledge_base_id=#{kb})
+    +(SELECT COUNT(*) FROM t_knowledge_card WHERE knowledge_base_id=#{kb} AND status IN ('APPROVED','EFFECTIVE'))
+    +(SELECT COUNT(*) FROM t_claim WHERE knowledge_base_id=#{kb} AND status IN ('APPROVED','EFFECTIVE'))
+</select>
+
+<select id="getDocumentIndexHeader" resultType="map">
+  SELECT d.id documentId,s.knowledge_base_id knowledgeBaseId,s.name sourceName,s.source_uri sourceUri
+  FROM t_document d JOIN t_source_version sv ON sv.id=d.source_version_id JOIN t_source s ON s.id=sv.source_id
+  WHERE d.id=#{documentId}
+</select>
+<select id="listDocumentIndexChunks" resultType="map">
+  SELECT cu.id content_unit_id,cu.page_no,cu.heading_path,cu.content,cu.content_hash
+  FROM t_content_unit cu WHERE cu.document_id=#{documentId} ORDER BY cu.id
+</select>
+
+<select id="indexOutboxGlobalStats" resultType="map">
+ SELECT SUM(status='PENDING') pending,SUM(status='RETRY') retryCount,SUM(status='DEAD') dead,
+ TIMESTAMPDIFF(SECOND,MIN(CASE WHEN status IN ('PENDING','RETRY','PROCESSING') THEN created_time END),CURRENT_TIMESTAMP) oldestLagSeconds FROM t_index_outbox
+</select>
+<insert id="archiveCompletedIndexOutbox">
+ INSERT IGNORE INTO t_index_outbox_archive(id,event_id,idempotency_key,knowledge_base_id,aggregate_type,aggregate_key,event_type,object_version,target_path,payload_json,status,attempt_count,max_attempts,result_json,last_error,created_time,processed_time)
+ SELECT id,event_id,idempotency_key,knowledge_base_id,aggregate_type,aggregate_key,event_type,object_version,target_path,payload_json,status,attempt_count,max_attempts,result_json,last_error,created_time,processed_time
+ FROM t_index_outbox WHERE status IN ('SUCCEEDED','SKIPPED') AND processed_time&lt;#{cutoff} ORDER BY id LIMIT #{limit}
+</insert>
+<insert id="archiveIndexDeliveryAttempts">
+ INSERT IGNORE INTO t_index_delivery_attempt_archive(id,event_id,attempt_no,status,duration_ms,response_json,error_text,created_time)
+ SELECT a.id,a.event_id,a.attempt_no,a.status,a.duration_ms,a.response_json,a.error_text,a.created_time
+ FROM t_index_delivery_attempt a JOIN t_index_outbox_archive o ON o.event_id=a.event_id WHERE o.processed_time&lt;#{cutoff}
+</insert>
+<delete id="deleteArchivedIndexDeliveryAttempts">
+ DELETE a FROM t_index_delivery_attempt a JOIN t_index_outbox_archive o ON o.event_id=a.event_id WHERE o.processed_time&lt;#{cutoff}
+</delete>
+<delete id="deleteArchivedIndexOutbox">
+ DELETE FROM t_index_outbox WHERE id IN (SELECT id FROM (SELECT o.id FROM t_index_outbox o JOIN t_index_outbox_archive a ON a.id=o.id WHERE o.status IN ('SUCCEEDED','SKIPPED') AND o.processed_time&lt;#{cutoff} ORDER BY o.id LIMIT #{limit}) x)
+</delete>
+<insert id="insertIndexSchemaRelease" parameterType="com.jh.knowledgeos.domain.IndexSchemaRelease">
+ INSERT INTO t_index_schema_release(release_id,knowledge_base_id,schema_version,state,expected_count) VALUES(#{releaseId},#{knowledgeBaseId},#{schemaVersion},#{state},#{expectedCount})
+</insert>
+<select id="findIndexSchemaRelease" resultType="com.jh.knowledgeos.domain.IndexSchemaRelease">SELECT * FROM t_index_schema_release WHERE release_id=#{releaseId}</select>
+<select id="listIndexSchemaReleases" resultType="com.jh.knowledgeos.domain.IndexSchemaRelease">SELECT * FROM t_index_schema_release WHERE knowledge_base_id=#{kb} ORDER BY id DESC LIMIT #{limit}</select>
+<update id="completeIndexSchemaRelease">UPDATE t_index_schema_release SET state=#{state},elasticsearch_count=#{elasticsearchCount},milvus_count=#{milvusCount},elasticsearch_target=#{elasticsearchTarget},milvus_target=#{milvusTarget},validation_json=CASE WHEN #{validationJson} IS NULL THEN NULL ELSE CAST(#{validationJson} AS JSON) END,error_text=#{errorText} WHERE release_id=#{releaseId}</update>
+<update id="activateIndexSchemaRelease">
+ UPDATE t_index_schema_release SET state=CASE WHEN release_id=#{releaseId} THEN 'ACTIVE' WHEN state='ACTIVE' THEN 'RETIRED' ELSE state END,
+ activated_time=CASE WHEN release_id=#{releaseId} THEN CURRENT_TIMESTAMP ELSE activated_time END,retired_time=CASE WHEN state='ACTIVE' AND release_id&lt;&gt;#{releaseId} THEN CURRENT_TIMESTAMP ELSE retired_time END
+ WHERE knowledge_base_id=#{kb} AND (release_id=#{releaseId} OR state='ACTIVE')
+</update>
+
+<select id="maxIndexOutboxId" resultType="long">
+ SELECT COALESCE(MAX(id),0) FROM t_index_outbox WHERE knowledge_base_id=#{kb}
+</select>
+
+<select id="listAuthoritativeIndexSnapshot" resultType="com.jh.knowledgeos.projection.AuthoritativeIndexSnapshotRow">
+ SELECT * FROM (
+   SELECT CONCAT('CONTENT_UNIT:',cu.id) objectKey,CAST(cu.id AS CHAR) objectId,'CONTENT_UNIT' objectType,
+          s.knowledge_base_id knowledgeBaseId,d.id documentId,cu.id contentUnitId,
+          COALESCE(cu.heading_path,s.name) title,cu.content content,s.name sourceName,s.source_uri sourceUri,
+          cu.page_no pageNo,cu.heading_path headingPath,NULL status,cu.content_hash contentHash,'' permissionTags
+   FROM t_content_unit cu JOIN t_document d ON d.id=cu.document_id
+   JOIN t_source_version sv ON sv.id=d.source_version_id JOIN t_source s ON s.id=sv.source_id
+   WHERE s.knowledge_base_id=#{kb}
+   UNION ALL
+   SELECT CONCAT('CARD:',knowledge_code),knowledge_code,'CARD',knowledge_base_id,NULL,NULL,
+          title,COALESCE(content,summary),'知识卡片','',NULL,'',status,
+          SHA2(CONCAT_WS('|',knowledge_code,COALESCE(title,''),COALESCE(content,summary,''),COALESCE(status,''),COALESCE(version,0)),256),'' permissionTags
+   FROM t_knowledge_card WHERE knowledge_base_id=#{kb} AND status IN ('APPROVED','EFFECTIVE')
+   UNION ALL
+   SELECT CONCAT('CLAIM:',claim_code),claim_code,'CLAIM',knowledge_base_id,NULL,NULL,
+          CONCAT('断言：',COALESCE(subject,'')),CONCAT_WS(' ',COALESCE(subject,''),COALESCE(predicate,''),COALESCE(object_value,'')),
+          '断言','',NULL,'',status,
+          SHA2(CONCAT_WS('|',claim_code,COALESCE(subject,''),COALESCE(predicate,''),COALESCE(object_value,''),COALESCE(status,'')),256),'' permissionTags
+   FROM t_claim WHERE knowledge_base_id=#{kb} AND status IN ('APPROVED','EFFECTIVE')
+ ) x ORDER BY objectKey LIMIT #{limit} OFFSET #{offset}
+</select>
+
+<insert id="insertIndexSnapshotAudit">
+ INSERT INTO t_index_schema_snapshot_audit(
+   release_id,knowledge_base_id,page_no,row_count,page_checksum,first_object_key,last_object_key)
+ VALUES(#{releaseId},#{kb},#{pageNo},#{rowCount},#{pageChecksum},#{firstObjectKey},#{lastObjectKey})
+</insert>
+
+<update id="updateIndexSchemaIntegrity">
+ UPDATE t_index_schema_release SET snapshot_checksum=#{snapshotChecksum},
+ source_high_watermark=#{sourceHighWatermark},source_end_watermark=#{sourceEndWatermark},
+ snapshot_count=#{snapshotCount},integrity_state=#{integrityState}
+ WHERE release_id=#{releaseId}
+</update>
+
+</mapper>

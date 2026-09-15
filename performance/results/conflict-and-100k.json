@@ -1,0 +1,53 @@
+{
+  "conflict": [
+    {
+      "scale": 10000,
+      "elapsed_ms": 75.39,
+      "comparisons": 0,
+      "conflicts": 0,
+      "naive_pairs": 49995000
+    },
+    {
+      "scale": 50000,
+      "elapsed_ms": 83.11,
+      "comparisons": 4,
+      "conflicts": 0,
+      "naive_pairs": 1249975000
+    },
+    {
+      "scale": 100000,
+      "elapsed_ms": 213.09,
+      "comparisons": 9,
+      "conflicts": 0,
+      "naive_pairs": 4999950000
+    }
+  ],
+  "full_100k": {
+    "cold_load_ms": 8328.25,
+    "lexical_warm_ms": 6807.14,
+    "full_first_query_ms": 2539.4,
+    "full_warm_query_ms": 1387.26,
+    "concurrent4_wall_ms": 4041.26,
+    "concurrent4_qps": 0.99,
+    "concurrent4_lats_ms": [
+      4035.9,
+      3099.55,
+      1785.43,
+      849.32
+    ],
+    "trace": {
+      "retrievalLatencyMs": 1386,
+      "fusionLatencyMs": 0,
+      "rerankLatencyMs": 0,
+      "llmLatencyMs": 0,
+      "totalLatencyMs": 1387,
+      "recallCounts": {
+        "bm25": 30,
+        "vector": 30,
+        "card": 30
+      },
+      "candidateCount": 10,
+      "citationCount": 10
+    }
+  }
+}

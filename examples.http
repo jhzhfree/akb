@@ -1,0 +1,26 @@
+### 知识抽取
+POST http://localhost:8080/api/knowledge/extract
+Content-Type: application/json
+
+{"knowledgeBaseId":1,"sourceId":1,"text":"知识裁决是正式知识发布前的质量控制环节。低置信度知识必须人工审核。\n\n知识查询应按问题类型选择向量、BM25、知识卡片、断言和图谱。"}
+
+### 查询
+POST http://localhost:8080/api/knowledge/query
+Content-Type: application/json
+
+{"knowledgeBaseId":1,"query":"知识为什么需要裁决？","topK":10,"userId":"u001"}
+
+### Outbox backlog
+GET http://localhost:8080/api/knowledge/index/outbox/1/stats
+
+### List dead outbox events
+GET http://localhost:8080/api/knowledge/index/outbox/1?status=DEAD&limit=50
+
+### Replay a dead event
+POST http://localhost:8080/api/knowledge/index/outbox/events/{{eventId}}/replay
+
+### Skip a dead event (operator compensation)
+POST http://localhost:8080/api/knowledge/index/outbox/events/{{eventId}}/skip
+
+### Check index count drift
+GET http://localhost:8080/api/knowledge/index/drift/1

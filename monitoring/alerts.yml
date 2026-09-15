@@ -1,0 +1,30 @@
+groups:
+  - name: llmkb-indexing
+    rules:
+      - alert: LLMKBIndexOutboxDeadLetters
+        expr: llmkb_index_outbox_dead > 0
+        for: 2m
+        labels: {severity: critical}
+        annotations: {summary: "LLMKB index outbox has dead letters"}
+      - alert: LLMKBIndexOutboxLagHigh
+        expr: llmkb_index_outbox_oldest_lag_seconds > 120
+        for: 5m
+        labels: {severity: warning}
+        annotations: {summary: "LLMKB index outbox lag exceeds 120 seconds"}
+      - alert: LLMKBIndexOutboxRetryBacklog
+        expr: llmkb_index_outbox_retry > 20
+        for: 5m
+        labels: {severity: warning}
+        annotations: {summary: "LLMKB index retry backlog is growing"}
+  - name: llmkb-slo
+    rules:
+      - alert: LLMKBBackendP95High
+        expr: histogram_quantile(0.95, sum(rate(http_server_requests_seconds_bucket{uri=~"/api/knowledge/.*"}[5m])) by (le)) > 1.5
+        for: 10m
+        labels: {severity: warning}
+        annotations: {summary: "LLMKB backend P95 latency exceeds 1.5s"}
+      - alert: LLMKBBackend5xxRateHigh
+        expr: sum(rate(http_server_requests_seconds_count{status=~"5.."}[5m])) / clamp_min(sum(rate(http_server_requests_seconds_count[5m])), 0.001) > 0.01
+        for: 5m
+        labels: {severity: critical}
+        annotations: {summary: "LLMKB backend 5xx rate exceeds 1%"}

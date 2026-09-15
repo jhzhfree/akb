@@ -1,0 +1,62 @@
+{
+  "scale": 50000,
+  "embedding_dim": 384,
+  "content_chars": 118,
+  "index_file_mb": 111.83,
+  "generation_ms": 125.32,
+  "save_ms": 2407.82,
+  "cold_load_ms": 3578.62,
+  "lexical_build_ms": 2752.55,
+  "rss_mb": {
+    "baseline": 98.46,
+    "pre_load": 104.63,
+    "after_load": 906.15,
+    "after_lexical": 1504.17,
+    "index_delta": 801.52,
+    "lexical_delta": 598.02,
+    "total_delta": 1399.54
+  },
+  "bm25_cached_ms": {
+    "p50": 324.6,
+    "p95": 538.66,
+    "samples": [
+      302.01,
+      574.81,
+      315.4,
+      333.8
+    ]
+  },
+  "vector_scan_ms": {
+    "p50": 15.36,
+    "p95": 726.43,
+    "samples": [
+      851.89,
+      15.46,
+      15.08,
+      15.26
+    ]
+  },
+  "full_query_mock_ms": {
+    "p50": 366.19,
+    "p95": 573.24,
+    "samples": [
+      366.82,
+      365.56,
+      609.67,
+      355.22
+    ]
+  },
+  "concurrency": {
+    "workers": 4,
+    "wall_ms": 1764.94,
+    "throughput_qps": 2.27,
+    "latency_p50_ms": 1138.72,
+    "latency_p95_ms": 1694.93,
+    "samples": [
+      1761.96,
+      1315.11,
+      962.34,
+      611.48
+    ]
+  }
+}

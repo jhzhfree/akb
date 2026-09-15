@@ -1,0 +1,10 @@
+{
+  "phase": "vector",
+  "rss_start_mb": 98.08,
+  "cold_load_ms": 8278.03,
+  "rss_loaded_mb": 1713.85,
+  "count": 100000,
+  "vector_first_ms": 1013.37,
+  "rss_after_vector_mb": 1864.33,
+  "vector_warm_ms": 21.16
+}

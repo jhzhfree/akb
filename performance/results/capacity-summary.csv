@@ -1,0 +1,4 @@
+﻿objects,index_file_mb,index_plus_lexical_memory_delta_mb,warm_query_p50_ms,warm_query_p95_ms,concurrency4_qps,concurrency4_p95_ms
+10000,22.34,273.88,97.49,102.02,10.02,383.1
+50000,111.83,1399.54,366.19,573.24,2.27,1694.93
+100000,223.71,2810.0,778.19,1470.46,0.9,4229.57

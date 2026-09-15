@@ -1,0 +1,15 @@
+ALTER TABLE t_query_trace
+    ADD COLUMN trace_id VARCHAR(64) NULL AFTER knowledge_base_id,
+    ADD COLUMN rewritten_queries_json JSON NULL AFTER original_query,
+    ADD COLUMN router_decision_json JSON NULL AFTER rewritten_queries_json,
+    ADD COLUMN retrieval_json JSON NULL AFTER router_decision_json,
+    ADD COLUMN fusion_json JSON NULL AFTER retrieval_json,
+    ADD COLUMN rerank_json JSON NULL AFTER fusion_json,
+    ADD COLUMN selected_context_json JSON NULL AFTER rerank_json,
+    ADD COLUMN citations_json JSON NULL AFTER selected_context_json,
+    ADD COLUMN model_name VARCHAR(128) NULL AFTER citations_json,
+    ADD COLUMN latency_ms BIGINT NULL AFTER model_name,
+    ADD COLUMN token_usage_json JSON NULL AFTER latency_ms,
+    ADD COLUMN error_code VARCHAR(64) NULL AFTER token_usage_json,
+    ADD KEY idx_trace_trace_id(trace_id),
+    ADD KEY idx_trace_error(error_code);
