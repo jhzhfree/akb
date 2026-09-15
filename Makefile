@@ -1,4 +1,4 @@
-.PHONY: check up down logs ps clean
+.PHONY: check up down logs ps clean dev-env dev-up dev-down dev-ps dev-logs dev-app-up dev-clean
 check:
 	./scripts/check-v11.sh
 up:
@@ -20,3 +20,25 @@ e2e:
 
 diagnose:
 	./scripts/diagnose.sh
+
+# ---------- v1.1 开发环境 ----------
+dev-env:
+	@test -f .env.dev || cp .env.dev.example .env.dev
+
+dev-up: dev-env
+	docker compose --env-file .env.dev -f docker-compose.dev.yml up -d
+
+dev-app-up: dev-env
+	docker compose --env-file .env.dev -f docker-compose.dev.yml --profile app up -d --build
+
+dev-down:
+	docker compose --env-file .env.dev -f docker-compose.dev.yml down
+
+dev-ps:
+	docker compose --env-file .env.dev -f docker-compose.dev.yml ps
+
+dev-logs:
+	docker compose --env-file .env.dev -f docker-compose.dev.yml logs -f --tail=200
+
+dev-clean:
+	docker compose --env-file .env.dev -f docker-compose.dev.yml down -v --remove-orphans

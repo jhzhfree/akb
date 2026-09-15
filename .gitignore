@@ -39,5 +39,6 @@ data/
 # Secrets / local config
 .env.local
 .env.*.local
+.env.dev
 application-local.yml
 application-local.yaml

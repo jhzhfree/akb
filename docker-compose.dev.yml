@@ -1,0 +1,379 @@
+# v1.1 开发 / 联调环境编排
+#
+# 设计目标：默认只拉起基础中间件，应用与监控按需开启，避免开发机上一次性
+# 拉起 10+ 容器造成的资源占用与端口冲突。
+#
+#   基础组件（默认）      docker compose -f docker-compose.dev.yml up -d
+#   应用栈（后端/AI/前端） 追加 --profile app
+#   监控栈（Prometheus/Grafana） 追加 --profile monitoring
+#   双路检索（ES/Milvus）  追加 --profile dual-retrieval
+#
+# 环境变量文件为 .env.dev（已纳入 .gitignore），首次执行：
+#   cp .env.dev.example .env.dev
+# 或直接 make dev-up（会自动生成）。
+
+services:
+  # ---------------------------------------------------------------- MySQL
+  mysql:
+    image: mysql:8.0.36
+    container_name: kos-dev-mysql
+    restart: unless-stopped
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_0900_ai_ci
+      - --default-time-zone=+08:00
+      - --max_allowed_packet=256M
+      - --max_connections=500
+      - --innodb_buffer_pool_size=512M
+      - --slow_query_log=ON
+      - --long_query_time=2
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-knowledge_os}
+      MYSQL_USER: ${MYSQL_USER:-knowledge}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-knowledge123}
+      TZ: Asia/Shanghai
+    ports:
+      - "3306:3306"
+    volumes:
+      - dev_mysql_data:/var/lib/mysql
+    networks:
+      - knowledge-net
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - mysqladmin ping -h 127.0.0.1 -uroot -p$$MYSQL_ROOT_PASSWORD --silent
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 40s
+
+  # ---------------------------------------------------------------- Redis
+  redis:
+    image: redis:7-alpine
+    container_name: kos-dev-redis
+    restart: unless-stopped
+    command:
+      - sh
+      - -c
+      - exec redis-server --appendonly yes --maxmemory 512mb --maxmemory-policy allkeys-lru $${REDIS_PASSWORD:+--requirepass "$$REDIS_PASSWORD"}
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+      TZ: Asia/Shanghai
+    ports:
+      - "6379:6379"
+    volumes:
+      - dev_redis_data:/data
+    networks:
+      - knowledge-net
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - if [ -n "$$REDIS_PASSWORD" ]; then redis-cli -a "$$REDIS_PASSWORD" --no-auth-warning ping | grep -q PONG; else redis-cli ping | grep -q PONG; fi
+      interval: 10s
+      timeout: 5s
+      retries: 15
+      start_period: 10s
+
+  # ---------------------------------------------------------------- Neo4j
+  neo4j:
+    image: neo4j:5.26
+    container_name: kos-dev-neo4j
+    restart: unless-stopped
+    environment:
+      NEO4J_AUTH: neo4j/${NEO4J_PASSWORD:-knowledge123}
+      # 注意：Neo4j 会把所有 NEO4J_* 变量当作配置项校验，因此健康检查用的密码
+      # 必须使用非 NEO4J_ 前缀的变量名，否则启动报 "Unrecognized setting: PASSWORD"
+      KOS_NEO4J_PASSWORD: ${NEO4J_PASSWORD:-knowledge123}
+      NEO4J_server_memory_heap_initial__size: 512m
+      NEO4J_server_memory_heap_max__size: 1G
+      NEO4J_server_memory_pagecache_size: 512m
+      NEO4J_server_default__listen__address: 0.0.0.0
+      NEO4J_server_bolt_listen__address: :7687
+      NEO4J_server_http_listen__address: :7474
+      TZ: Asia/Shanghai
+    ports:
+      - "7474:7474"
+      - "7687:7687"
+    volumes:
+      - dev_neo4j_data:/data
+      - dev_neo4j_logs:/logs
+    networks:
+      - knowledge-net
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - cypher-shell -u neo4j -p "$$KOS_NEO4J_PASSWORD" 'RETURN 1' >/dev/null 2>&1 || exit 1
+      interval: 10s
+      timeout: 8s
+      retries: 20
+      start_period: 60s
+
+  # ------------------------------------------------------------- AI Service
+  ai-service:
+    profiles: ["app"]
+    build:
+      context: ./ai-service
+      args:
+        INSTALL_ML: ${INSTALL_ML:-false}
+    container_name: kos-dev-ai
+    restart: unless-stopped
+    env_file:
+      - .env.dev
+    environment:
+      KNOWLEDGE_DATA_DIR: /app/data
+      NEO4J_URI: bolt://neo4j:7687
+      NEO4J_USER: ${NEO4J_USER:-neo4j}
+      NEO4J_PASSWORD: ${NEO4J_PASSWORD:-knowledge123}
+      NEO4J_DATABASE: ${NEO4J_DATABASE:-neo4j}
+      LLM_PROVIDER: ${LLM_PROVIDER:-ollama}
+      LLM_BASE_URL: ${LLM_BASE_URL:-http://192.168.22.6:11434}
+      LLM_MODEL: ${LLM_MODEL:-qwen2.5:7b}
+      EMBEDDING_PROVIDER: ${EMBEDDING_PROVIDER:-ollama}
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-nomic-embed-text}
+      EMBEDDING_DIM: ${EMBEDDING_DIM:-768}
+      RETRIEVAL_MODE: ${RETRIEVAL_MODE:-auto}
+      RETRIEVAL_EXTERNAL_REQUIRED: ${RETRIEVAL_EXTERNAL_REQUIRED:-false}
+      ELASTICSEARCH_ENABLED: ${ELASTICSEARCH_ENABLED:-false}
+      MILVUS_ENABLED: ${MILVUS_ENABLED:-false}
+      RERANKER_ENABLED: ${RERANKER_ENABLED:-false}
+      TZ: Asia/Shanghai
+    ports:
+      - "12000:12000"
+    volumes:
+      - dev_ai_data:/app/data
+    networks:
+      - knowledge-net
+    depends_on:
+      neo4j:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - import urllib.request; urllib.request.urlopen('http://127.0.0.1:12000/health', timeout=2)
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 20s
+
+  # ---------------------------------------------------------------- Backend
+  backend:
+    profiles: ["app"]
+    build: ./backend
+    container_name: kos-dev-backend
+    restart: unless-stopped
+    env_file:
+      - .env.dev
+    environment:
+      DB_URL: jdbc:mysql://mysql:3306/${MYSQL_DATABASE:-knowledge_os}?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true
+      DB_USERNAME: ${MYSQL_USER:-knowledge}
+      DB_PASSWORD: ${MYSQL_PASSWORD:-knowledge123}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+      AI_SERVICE_BASE_URL: http://ai-service:12000
+      TZ: Asia/Shanghai
+    ports:
+      - "8080:8080"
+    networks:
+      - knowledge-net
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      ai-service:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD
+        - curl
+        - -fsS
+        - http://127.0.0.1:8080/actuator/health
+      interval: 10s
+      timeout: 5s
+      retries: 25
+      start_period: 60s
+
+  # --------------------------------------------------------------- Frontend
+  frontend:
+    profiles: ["app"]
+    build: ./frontend
+    container_name: kos-dev-frontend
+    restart: unless-stopped
+    ports:
+      - "8088:80"
+    networks:
+      - knowledge-net
+    depends_on:
+      backend:
+        condition: service_healthy
+
+  # ------------------------------------------------------------ 双路检索（可选）
+  # 开发机资源有限时保持关闭，检索自动降级为本地 BM25 + 本地向量 + Neo4j 图召回。
+  elasticsearch:
+    profiles: ["dual-retrieval"]
+    image: docker.elastic.co/elasticsearch/elasticsearch:9.5.3
+    container_name: kos-dev-es
+    restart: unless-stopped
+    environment:
+      discovery.type: single-node
+      DISABLE_INSTALL_DEMO_CONFIG: 'true'
+      DISABLE_SECURITY_PLUGIN: 'true'
+      ES_JAVA_OPTS: -Xms1g -Xmx1g
+      TZ: Asia/Shanghai
+    ports:
+      - "9200:9200"
+    volumes:
+      - dev_es_data:/usr/share/elasticsearch/data
+    networks:
+      - knowledge-net
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+      nofile:
+        soft: 65536
+        hard: 65536
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - curl -fsS http://127.0.0.1:9200/_cluster/health >/dev/null
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 60s
+
+  milvus-etcd:
+    profiles: ["dual-retrieval"]
+    image: quay.io/coreos/etcd:v3.5.18
+    container_name: kos-dev-etcd
+    environment:
+      ETCD_AUTO_COMPACTION_MODE: revision
+      ETCD_AUTO_COMPACTION_RETENTION: '1000'
+      ETCD_QUOTA_BACKEND_BYTES: '4294967296'
+      ETCD_SNAPSHOT_COUNT: '50000'
+    command: etcd -advertise-client-urls=http://127.0.0.1:2379 -listen-client-urls http://0.0.0.0:2379 --data-dir /etcd
+    volumes:
+      - dev_etcd_data:/etcd
+    networks:
+      - knowledge-net
+    healthcheck:
+      test:
+        - CMD
+        - etcdctl
+        - endpoint
+        - health
+      interval: 10s
+      timeout: 5s
+      retries: 20
+
+  milvus-minio:
+    profiles: ["dual-retrieval"]
+    image: minio/minio:RELEASE.2025-07-23T15-54-02Z
+    container_name: kos-dev-minio
+    environment:
+      MINIO_ACCESS_KEY: minioadmin
+      MINIO_SECRET_KEY: minioadmin
+    command: minio server /minio_data --console-address :9001
+    volumes:
+      - dev_minio_data:/minio_data
+    networks:
+      - knowledge-net
+    healthcheck:
+      test:
+        - CMD
+        - curl
+        - -f
+        - http://localhost:9000/minio/health/live
+      interval: 10s
+      timeout: 5s
+      retries: 20
+
+  milvus:
+    profiles: ["dual-retrieval"]
+    image: milvusdb/milvus:v3.0.1
+    container_name: kos-dev-milvus
+    command: ["milvus", "run", "standalone"]
+    environment:
+      ETCD_ENDPOINTS: milvus-etcd:2379
+      MINIO_ADDRESS: milvus-minio:9000
+    ports:
+      - "19530:19530"
+      - "9091:9091"
+    volumes:
+      - dev_milvus_data:/var/lib/milvus
+    networks:
+      - knowledge-net
+    depends_on:
+      milvus-etcd:
+        condition: service_healthy
+      milvus-minio:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD
+        - curl
+        - -f
+        - http://localhost:9091/healthz
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 60s
+
+  # ---------------------------------------------------------------- 监控（可选）
+  # 宿主 3000/9090 已被占用，此处映射到 3001/9092。
+  prometheus:
+    profiles: ["monitoring"]
+    image: prom/prometheus:v3.5.0
+    container_name: kos-dev-prometheus
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./monitoring/alerts.yml:/etc/prometheus/alerts.yml:ro
+      - dev_prometheus_data:/prometheus
+    ports:
+      - "9092:9090"
+    networks:
+      - knowledge-net
+    depends_on:
+      backend:
+        condition: service_healthy
+
+  grafana:
+    profiles: ["monitoring"]
+    image: grafana/grafana:12.1.1
+    container_name: kos-dev-grafana
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin123}
+    ports:
+      - "3001:3000"
+    volumes:
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - dev_grafana_data:/var/lib/grafana
+    networks:
+      - knowledge-net
+    depends_on:
+      - prometheus
+
+networks:
+  knowledge-net:
+    driver: bridge
+
+volumes:
+  dev_mysql_data:
+  dev_redis_data:
+  dev_neo4j_data:
+  dev_neo4j_logs:
+  dev_ai_data:
+  dev_es_data:
+  dev_etcd_data:
+  dev_minio_data:
+  dev_milvus_data:
+  dev_prometheus_data:
+  dev_grafana_data:
