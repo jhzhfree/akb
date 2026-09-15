@@ -162,3 +162,46 @@ make rc-check     # 同上（发布候选检查）
 make e2e          # python scripts/e2e-test.py
 make diagnose     # ./scripts/diagnose.sh
 ```
+
+## 六、环境前置要求与排错
+
+### 6.1 本地裸跑后端需要 JDK（不是 JRE）
+
+`make dev-backend` 走 `mvn spring-boot:run`，必须能调用 `javac`。系统只有 JRE 时会报：
+
+```
+No compiler is provided in this environment. Perhaps you are running on a JRE rather than a JDK?
+```
+
+安装 JDK 8（与生产镜像 `eclipse-temurin:8-jre` 对齐）：
+
+```bash
+sudo apt-get install -y openjdk-8-jdk-headless
+javac -version   # 应输出 javac 1.8.x
+```
+
+`make dev-backend` 已内置该检查，缺 `javac` 时会直接给出上面的安装命令而不继续。
+
+### 6.2 代理环境下 Maven 必须显式配代理
+
+本机若通过代理上网（如 `http_proxy=http://127.0.0.1:7890`），
+**JVM 不会读取 `http_proxy` / `https_proxy` 环境变量**，Maven 会直连导致：
+
+```
+Non-resolvable parent POM ... Unknown host repo.maven.apache.org: Temporary failure in name resolution
+```
+
+仓库侧：`make dev-backend` 会自动把环境变量中的 `https_proxy`/`http_proxy` 转成
+`-Dhttp.proxyHost / -Dhttps.proxyPort` 等 JVM 参数传给 Maven，无需手工干预；不设代理变量时自动留空。
+
+全局（`~/.m2/settings.xml`）：同时配置了阿里云镜像与本机代理，使命令行直接跑 `mvn` 也可用。
+若改为直连或代理未启动，把其中 `<proxies>` 的 `<active>` 改成 `false`。
+
+### 6.3 依赖坐标踩坑（已修复，勿改回）
+
+| 依赖 | 说明 |
+| --- | --- |
+| `com.mysql:mysql-connector-j` | Spring Boot 2.7.18 只管理这个新坐标；旧 `mysql:mysql-connector-java` 未被管理，省略版本会直接报 `dependencies.dependency.version is missing` |
+| `org.flywaydb:flyway-mysql` | Flyway 8.x 把 MySQL 支持从 `flyway-core` 拆出，缺它会抛 `Unsupported Database: MySQL 8.0` |
+
+两者版本均由父 POM 统一管理，不要在子 POM 里另写版本号，否则会与 Spring Boot 依赖管理脱节。

@@ -20,6 +20,20 @@ CONDA_PY := $(CONDA_BASE)/envs/$(CONDA_ENV)/bin/python
 # 通用脚本（e2e 等）用 conda 环境，未安装则回退系统 python3
 PY ?= $(shell test -x "$(CONDA_PY)" && echo "$(CONDA_PY)" || command -v python3)
 
+# ---------- Maven 代理 ----------
+# JVM 不读 http_proxy/https_proxy 环境变量，需显式转成 -D 参数，
+# 否则 Maven 会直连中央仓库并报 "Unknown host ... Temporary failure in name resolution"。
+# 未设置代理变量时自动留空，不影响直连环境。
+PROXY_URL ?= $(or $(https_proxy),$(http_proxy))
+PROXY_ADDR := $(if $(PROXY_URL),$(lastword $(subst //, ,$(PROXY_URL))),)
+MVN_PROXY_OPTS := $(if $(PROXY_ADDR),\
+	-Dhttp.proxyHost=$(firstword $(subst :, ,$(PROXY_ADDR))) \
+	-Dhttp.proxyPort=$(lastword $(subst :, ,$(PROXY_ADDR))) \
+	-Dhttps.proxyHost=$(firstword $(subst :, ,$(PROXY_ADDR))) \
+	-Dhttps.proxyPort=$(lastword $(subst :, ,$(PROXY_ADDR))) \
+	-Dhttp.nonProxyHosts="localhost|127.0.0.1",)
+MVN ?= mvn $(MVN_PROXY_OPTS)
+
 .PHONY: check up down logs ps clean \
 	dev-env dev-up dev-app-up dev-ai-up dev-backend-up dev-frontend-up dev-down dev-ps dev-logs dev-clean \
 	dev-install dev-pip dev-ai dev-backend dev-frontend dev-all \
@@ -110,9 +124,10 @@ dev-ai:
 # backend：application.yml 中 DB/Redis/AI 默认即指向 127.0.0.1，无需额外覆盖
 dev-backend:
 	@command -v mvn >/dev/null || { echo "未检测到 mvn，请先安装 Maven 3.8+，或改用 make dev-backend-up"; exit 1; }
+	@command -v javac >/dev/null || { echo "检测到 java 但无 javac：当前是 JRE 不是 JDK。请安装 JDK 8，例如 sudo apt-get install -y openjdk-8-jdk-headless"; exit 1; }
 	cd backend && DB_URL='jdbc:mysql://127.0.0.1:3306/knowledge_os?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true' \
 		REDIS_HOST=127.0.0.1 AI_SERVICE_BASE_URL=http://127.0.0.1:12000 \
-		mvn spring-boot:run
+		$(MVN) spring-boot:run
 
 # frontend：vite dev server 5173，已配置 /api 代理到 127.0.0.1:8080
 dev-frontend:
