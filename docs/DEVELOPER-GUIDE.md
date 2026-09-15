@@ -56,13 +56,19 @@ cd backend
 mvn spring-boot:run
 ```
 
+Python 侧统一使用 conda 环境 `llmkb`（Python 3.10）：
+
 ```bash
+# 仅首次：创建环境并安装依赖（等价于 make dev-install）
+conda create -y -n llmkb python=3.10
+conda activate llmkb
+pip install -r ai-service/requirements.txt
+
 cd ai-service
-python -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-PYTHONPATH=. uvicorn app.main:app --host 0.0.0.0 --port 12000
+python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 12000
 ```
+
+`make dev-ai` 与此等价，并通过环境变量把 Neo4j、模型服务、检索降级一并配好。
 
 ```bash
 cd frontend

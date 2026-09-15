@@ -31,21 +31,41 @@ make dev-logs            # 查看日志
 
 ### 1.3 本地裸跑（热更新）
 
+Python 侧统一使用 conda 环境 **`llmkb`**（Python 3.10）。
+
 ```bash
-make dev-install   # 一次性：创建 ai-service/.venv、安装 python 与 npm 依赖
+make dev-install   # 一次性：建 llmkb 环境 + 装 ai-service 依赖 + npm install
+make dev-pip       # 改了 requirements.txt 后重装 Python 依赖
 make dev-ai        # uvicorn --reload，:12000
 make dev-backend   # mvn spring-boot:run，:8080（需本地 Maven 3.8+ 与 JDK8+）
 make dev-frontend  # vite dev，:5173
 make dev-all       # 并行启动以上三个
 ```
 
-模型服务默认指向 `http://192.168.22.6:11434`，可用变量覆盖：
+不通过 Makefile、手工开发时的等价写法：
+
+```bash
+conda create -y -n llmkb python=3.10        # 仅首次
+conda activate llmkb
+pip install -r ai-service/requirements.txt
+
+cd ai-service
+NEO4J_URI=bolt://127.0.0.1:7687 LLM_BASE_URL=http://192.168.22.6:11434 \
+  python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 12000
+```
+
+模型服务地址可用变量覆盖：
 
 ```bash
 make dev-ai OLLAMA_URL=http://192.168.22.6:11434 LLM_MODEL=qwen2.5:7b
 ```
 
 本地裸跑的 `ai-service` 默认关闭 ES/Milvus，走本地 BM25 + 本地向量 + Neo4j 图召回。
+
+> **为什么 Makefile 里不用 `conda activate`**：Makefile 每条配方在独立的 `/bin/sh`
+> 中执行，无法沿用 shell 里的 conda 函数。因此 `dev-ai` 直接调用
+> `$(CONDA_BASE)/envs/llmkb/bin/python`，与激活后运行完全等价且更可靠。
+> 环境路径不同可用 `CONDA_BASE`、`CONDA_ENV` 覆盖。
 
 > 本地无 Maven 时，`make dev-backend` 会直接报错退出，此时改用
 > `make dev-backend-up` 以容器方式启动后端。

@@ -10,9 +10,19 @@ INCLUDE_MIDDLEWARE ?= 1
 OLLAMA_URL ?= http://192.168.22.6:11434
 LLM_MODEL ?= qwen2.5:7b
 
+# ---------- Python 运行环境（conda）----------
+# 开发统一使用 conda 环境 llmkb，等价于手工执行：conda activate llmkb
+# Makefile 每条配方是独立的 /bin/sh，无法沿用 shell 里的 conda 函数，
+# 因此一律通过该环境的绝对路径解释器运行，效果与激活后一致且更可靠。
+CONDA_BASE ?= $(shell command -v conda >/dev/null 2>&1 && conda info --base 2>/dev/null || echo /root/miniconda3)
+CONDA_ENV ?= llmkb
+CONDA_PY := $(CONDA_BASE)/envs/$(CONDA_ENV)/bin/python
+# 通用脚本（e2e 等）用 conda 环境，未安装则回退系统 python3
+PY ?= $(shell test -x "$(CONDA_PY)" && echo "$(CONDA_PY)" || command -v python3)
+
 .PHONY: check up down logs ps clean \
 	dev-env dev-up dev-app-up dev-ai-up dev-backend-up dev-frontend-up dev-down dev-ps dev-logs dev-clean \
-	dev-install dev-ai dev-backend dev-frontend dev-all \
+	dev-install dev-pip dev-ai dev-backend dev-frontend dev-all \
 	prod-env prod-up prod-down prod-ps prod-logs \
 	release-build release-push package
 check:
@@ -32,7 +42,7 @@ rc-check:
 	./scripts/check-v11.sh
 
 e2e:
-	python scripts/e2e-test.py
+	$(PY) scripts/e2e-test.py
 
 diagnose:
 	./scripts/diagnose.sh
@@ -72,23 +82,30 @@ dev-logs:
 dev-clean:
 	$(DEV) down -v --remove-orphans
 
-# ---------- v1.1 开发环境：本地裸跑（中间件仍走容器，改代码即时生效）----------
-PY := $(shell if [ -x $(CURDIR)/ai-service/.venv/bin/python ]; then echo $(CURDIR)/ai-service/.venv/bin/python; else command -v python3; fi)
+# ---------- v1.1 开发环境：本地裸跑（conda 环境 llmkb）----------
 
+# 创建 llmkb 环境并安装 ai-service 依赖 + 前端依赖
 dev-install:
-	python3 -m venv ai-service/.venv || echo "[warn] venv 创建失败，将使用系统 python"
-	ai-service/.venv/bin/pip install -q -r ai-service/requirements.txt || pip3 install -q -r ai-service/requirements.txt
+	@command -v conda >/dev/null 2>&1 || { echo "未检测到 conda，请先安装 Miniconda，或用 CONDA_BASE=<路径> 指定"; exit 1; }
+	@test -x "$(CONDA_PY)" || conda create -y -n $(CONDA_ENV) python=3.10
+	$(CONDA_PY) -m pip install -q --disable-pip-version-check -r ai-service/requirements.txt
 	cd frontend && npm install
 	@command -v mvn >/dev/null || echo "[warn] 未检测到 mvn；make dev-backend 不可用，可改用 make dev-backend-up 以容器方式启动后端"
+	@echo "[dev-install] 完成。手工开发时请先执行：conda activate $(CONDA_ENV)"
+
+# 仅重装 Python 依赖（改了 requirements.txt 后使用）
+dev-pip:
+	$(CONDA_PY) -m pip install -q --disable-pip-version-check -r ai-service/requirements.txt
 
 # ai-service：默认连本机 7687（容器已映射），检索降级为本地 BM25 + 本地向量 + Neo4j
 dev-ai:
+	@test -x "$(CONDA_PY)" || { echo "未找到 conda 环境 $(CONDA_ENV)：$(CONDA_PY)，请先执行 make dev-install"; exit 1; }
 	cd ai-service && KNOWLEDGE_DATA_DIR=$(CURDIR)/ai-service/data \
 		NEO4J_URI=bolt://127.0.0.1:7687 NEO4J_USER=neo4j NEO4J_PASSWORD=knowledge123 \
 		LLM_PROVIDER=ollama LLM_BASE_URL=$(OLLAMA_URL) LLM_MODEL=$(LLM_MODEL) \
 		EMBEDDING_PROVIDER=ollama EMBEDDING_MODEL=nomic-embed-text EMBEDDING_DIM=768 \
 		RETRIEVAL_MODE=auto ELASTICSEARCH_ENABLED=false MILVUS_ENABLED=false RERANKER_ENABLED=false \
-		$(PY) -m uvicorn app.main:app --reload --host 0.0.0.0 --port 12000
+		$(CONDA_PY) -m uvicorn app.main:app --reload --host 0.0.0.0 --port 12000
 
 # backend：application.yml 中 DB/Redis/AI 默认即指向 127.0.0.1，无需额外覆盖
 dev-backend:
