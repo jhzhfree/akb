@@ -102,14 +102,14 @@ dev-clean:
 dev-install:
 	@command -v conda >/dev/null 2>&1 || { echo "未检测到 conda，请先安装 Miniconda，或用 CONDA_BASE=<路径> 指定"; exit 1; }
 	@test -x "$(CONDA_PY)" || conda create -y -n $(CONDA_ENV) python=3.10
-	$(CONDA_PY) -m pip install -q --disable-pip-version-check -r ai-service/requirements.txt
+	$(CONDA_PY) -m pip install -q --disable-pip-version-check --root-user-action=ignore -r ai-service/requirements.txt
 	cd frontend && npm install
 	@command -v mvn >/dev/null || echo "[warn] 未检测到 mvn；make dev-backend 不可用，可改用 make dev-backend-up 以容器方式启动后端"
 	@echo "[dev-install] 完成。手工开发时请先执行：conda activate $(CONDA_ENV)"
 
 # 仅重装 Python 依赖（改了 requirements.txt 后使用）
 dev-pip:
-	$(CONDA_PY) -m pip install -q --disable-pip-version-check -r ai-service/requirements.txt
+	$(CONDA_PY) -m pip install -q --disable-pip-version-check --root-user-action=ignore -r ai-service/requirements.txt
 
 # ai-service：默认连本机 7687（容器已映射），检索降级为本地 BM25 + 本地向量 + Neo4j
 dev-ai:
