@@ -4,9 +4,11 @@ import asyncio
 import heapq
 import math
 import re
+import time
 
 import numpy as np
 from collections import Counter, defaultdict
+from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any, Dict, Iterable, List, Optional, Set, Tuple
 
@@ -19,6 +21,8 @@ from app.storage.index_store import store
 TOKEN_RE = re.compile(r"[A-Za-z0-9_.+-]+|[一-鿿]")
 BM25_K1 = 1.5
 BM25_B = 0.75
+# Fallback budget used when a per-channel mapping does not name the channel.
+DEFAULT_CHANNEL_TOP_K = 20
 
 
 def toks(text: str) -> List[str]:
@@ -115,50 +119,128 @@ class HybridRetriever:
         self._lexical_cache: Dict[str, Tuple[int, LexicalSnapshot]] = {}
         self._vector_cache: Dict[str, Tuple[int, VectorSnapshot]] = {}
 
+    @staticmethod
+    def size_for(top_k, channel):
+        """Resolve one channel's recall budget from either an int or a per-channel mapping."""
+        if isinstance(top_k, Mapping):
+            value = top_k.get(channel, top_k.get("default", DEFAULT_CHANNEL_TOP_K))
+            try:
+                return max(int(value), 0)
+            except (TypeError, ValueError):
+                return DEFAULT_CHANNEL_TOP_K
+        try:
+            return max(int(top_k), 0)
+        except (TypeError, ValueError):
+            return DEFAULT_CHANNEL_TOP_K
+
     async def search(self, kb, query, channels, top_k, permission_tags=None):
+        """Return recall results while preserving the historical public contract."""
+        result, _ = await self.search_with_diagnostics(kb, query, channels, top_k, permission_tags)
+        return result
+
+    async def search_with_diagnostics(self, kb, query, channels, top_k, permission_tags=None):
+        """Return recall results plus channel latency/provider/filter diagnostics.
+
+        ``top_k`` is either one budget shared by every channel, or a mapping of
+        channel -> budget, which is how the console queries-policy tunes each
+        recall channel independently.
+        """
         result = {}
+        channel_latency_ms = {}
         use_external = settings.retrieval_mode in {"auto", "external", "dual"}
         elasticsearch = get_elasticsearch_provider()
         milvus = get_milvus_provider()
 
-        async def lexical(channel, object_type=None):
+        async def measured(name, awaitable):
+            started = time.perf_counter()
+            value = await awaitable
+            channel_latency_ms[name] = int((time.perf_counter() - started) * 1000)
+            return value
+
+        async def lexical(channel, object_type=None, size=None):
+            size = self.size_for(top_k, channel) if size is None else size
             if use_external and settings.elasticsearch_enabled:
                 try:
-                    return await elasticsearch.search(kb, query, top_k, permission_tags, object_type)
+                    return await elasticsearch.search(kb, query, size, permission_tags, object_type)
                 except Exception:
                     if settings.retrieval_external_required:
                         raise
             if channel == "bm25":
-                return self._bm25(kb, query, top_k, permission_tags)
-            return self._typed(kb, object_type, query, top_k, permission_tags)
+                return self._bm25(kb, query, size, permission_tags)
+            return self._typed(kb, object_type, query, size, permission_tags)
 
         if "bm25" in channels:
-            result["bm25"] = await lexical("bm25")
+            result["bm25"] = await measured("bm25", lexical("bm25"))
         if "vector" in channels:
-            if use_external and settings.milvus_enabled:
-                try:
-                    vector = (await get_embedding_provider().embed([query]))[0]
-                    result["vector"] = await milvus.search(kb, vector, top_k, permission_tags)
-                except Exception:
-                    if settings.retrieval_external_required:
-                        raise
-                    result["vector"] = await self._vector(kb, query, top_k, permission_tags)
-            else:
-                result["vector"] = await self._vector(kb, query, top_k, permission_tags)
+            vector_size = self.size_for(top_k, "vector")
+
+            async def vector_search():
+                if use_external and settings.milvus_enabled:
+                    try:
+                        vector = (await get_embedding_provider().embed([query]))[0]
+                        return await milvus.search(kb, vector, vector_size, permission_tags)
+                    except Exception:
+                        if settings.retrieval_external_required:
+                            raise
+                return await self._vector(kb, query, vector_size, permission_tags)
+            result["vector"] = await measured("vector", vector_search())
         if "card" in channels:
-            result["card"] = await lexical("card", "CARD")
+            result["card"] = await measured("card", lexical("card", "CARD"))
         if "claim" in channels:
-            result["claim"] = await lexical("claim", "CLAIM")
+            result["claim"] = await measured("claim", lexical("claim", "CLAIM"))
         if "graph" in channels:
-            graph = get_graph_provider()
-            if graph.available():
-                try:
-                    result["graph"] = await asyncio.to_thread(graph.search, kb, query, top_k)
-                except Exception:
-                    result["graph"] = await lexical("claim", "CLAIM")
-            else:
-                result["graph"] = await lexical("claim", "CLAIM")
-        return result
+            graph_size = self.size_for(top_k, "graph")
+
+            async def graph_search():
+                graph = get_graph_provider()
+                if graph.available():
+                    try:
+                        return await asyncio.to_thread(graph.search, kb, query, graph_size, permission_tags)
+                    except Exception:
+                        return await lexical("claim", "CLAIM", graph_size)
+                return await lexical("claim", "CLAIM", graph_size)
+            result["graph"] = await measured("graph", graph_search())
+
+        external_generations = set()
+        external_missing_generation = False
+        for candidates in result.values():
+            for item in candidates or []:
+                metadata = item.get("metadata") or {}
+                if metadata.get("retrieval_provider") not in {"elasticsearch", "milvus", "neo4j"}:
+                    continue
+                generation = metadata.get("generation_id")
+                if generation:
+                    external_generations.add(str(generation))
+                else:
+                    external_missing_generation = True
+        graph = get_graph_provider()
+        if graph.available():
+            try:
+                graph_generation = await asyncio.to_thread(graph.active_generation, kb)
+                if graph_generation:
+                    external_generations.add(str(graph_generation))
+                elif external_generations:
+                    external_missing_generation = True
+            except Exception:
+                if settings.retrieval_external_required:
+                    raise
+        if len(external_generations) > 1 or (external_generations and external_missing_generation):
+            raise RuntimeError("CROSS_ENGINE_GENERATION_MISMATCH")
+
+        diagnostics = {
+            "channelLatencyMs": channel_latency_ms,
+            "generationIds": sorted(external_generations),
+            "generationBarrier": "FAIL_CLOSED_ES_MILVUS_NEO4J",
+            "filters": {
+                "status": "APPROVED_OR_EFFECTIVE_PRE_TOPK",
+                "acl": "PERMISSION_TAGS_PRE_TOPK_ALL_CHANNELS",
+                "graphAcl": "PERMISSION_TAGS_PRE_TOPK",
+                "permissionTagCount": len(permission_tags or []),
+                "dedup": "RRF_BY_OBJECT_ID",
+                "conflict": "STATUS_POLICY",
+            },
+        }
+        return result, diagnostics
 
     def _snapshot(self, kb) -> LexicalSnapshot:
         key = str(kb)
@@ -193,6 +275,11 @@ class HybridRetriever:
                 "heading_path",
                 "status",
                 "permission_tags",
+                "generation_id",
+                "evidence_code",
+                "evidence_hash",
+                "source_version",
+                "content_hash",
             ]
         }
         metadata["retrieval_provider"] = "local"

@@ -19,6 +19,8 @@ class ExtractRequest(BaseModel):
     documentId: Optional[int] = None
     text: str = ""
     chunks: Optional[List[Dict[str, Any]]] = None
+    # Normalized standard units; when supplied, extraction reads these instead of raw text.
+    units: Optional[List[Dict[str, Any]]] = None
 
 class IndexDocument(BaseModel):
     """Normalized retrieval document written to local/external indexes."""

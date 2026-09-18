@@ -24,7 +24,7 @@ Elasticsearch / Milvus / Neo4j / local JSON = retrieval views
 ### 第 1 层：入口
 
 1. `backend/.../controller/KnowledgeController.java`
-2. `frontend/src/api/knowledge.js`
+2. `frontend/src/api/knowledge.ts`
 3. `ai-service/app/routes.py`
 
 先理解“有哪些能力”，不要一开始钻 Mapper XML。

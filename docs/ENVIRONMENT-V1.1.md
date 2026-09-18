@@ -71,6 +71,36 @@ EMBEDDING_DIM=768
 4. 容器内访问该地址走默认 bridge + 宿主 NAT，**不需要** `host.docker.internal` 映射
    （该映射仅当模型服务跑在 Docker 宿主本机的 `127.0.0.1` 时才需要）。
 
+### 运行时模型配置（控制台「模型设置」）
+
+除环境变量外，AI 服务支持运行期配置模型并持久化到 `KNOWLEDGE_DATA_DIR/settings.json`：
+
+| 配置项 | 说明 | 示例 |
+| --- | --- | --- |
+| `llm.provider` | `openai`（OpenAI 兼容端点）/ `ollama` / `mock` | `openai` |
+| `llm.base_url` / `api_key` / `model` | 生成模型端点、密钥、名称 | `https://api.deepseek.com`、`deepseek-flash` |
+| `llm.temperature` / `max_tokens` / `timeout` | 采样温度、最大输出、超时（秒） | `0.2` / `4096` / `180` |
+| `embedding.provider` | `openai` / `ollama` / `hash`（零依赖哈希向量） | `openai` |
+| `embedding.base_url` / `api_key` / `model` / `dim` | 向量端点、密钥、名称与维度 | `https://open.bigmodel.cn/api/paas/v4`、`embedding-3`、`2048` |
+
+生效规则：
+
+1. **存在 `settings.json` 时以文件为准**，环境变量仅作为首次种子值，控制台的修改不会被重启回滚。
+2. 密钥读取时掩码（如 `sk-2****235b`），保存请求中携带掩码的字段视为「不修改」，因此可直接回显保存。
+3. 文件位于 `ai-service/data/`（已被 git 忽略）且权限为 `0600`，**禁止提交到版本库**。
+4. 保存后立即生效：provider 按配置指纹缓存，切换 provider / 模型 / 密钥 / 端点会即时重建客户端，无需重启。
+5. **切换向量模型或修改 `dim` 后必须重建索引**：历史向量维度与新配置不一致时余弦相似度恒为 0，向量召回静默失效。
+
+接口与页面：
+
+- `GET /api/knowledge/settings/model` 读取、`POST` 同一路径保存
+- `POST /api/knowledge/settings/model/test`（`kind=llm|embedding`）连通性测试
+- `GET /api/knowledge/settings/model/env` 查看配置来源与持久化位置
+- 前端顶部导航「模型设置」提供表单、一键连通性测试与保存
+
+> 通过 SOCKS 代理访问外部模型 API 时需要 `socksio`，已列入 `ai-service/requirements.txt`。
+> 若仍环境缺少依赖会报 `Attempted to use SOCKS support, but the socksio package is not installed`。
+
 ## 四、检索策略
 
 开发环境默认关闭双路检索，由 `RETRIEVAL_MODE=auto` 自动降级：

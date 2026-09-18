@@ -161,7 +161,7 @@ except Exception:
 
 ## 5. Vue / JavaScript 规范
 
-1. API URL 集中放在 `src/api/knowledge.js`，组件不散落 axios 调用。
+1. API URL 集中放在 `src/api/knowledge.ts`，组件不散落 axios 调用。
 2. 页面只加载当前 Tab 所需数据，避免切页 `Promise.all` 全量刷新。
 3. 多面板互不依赖时用 `Promise.allSettled`，避免一个失败清空整个工作台。
 4. `App.vue` 当前是 V1.1 单页实现；若继续增长，下一步应拆 `views/` 与 `components/`，而不是继续堆到一个文件。

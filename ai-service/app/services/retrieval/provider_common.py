@@ -3,7 +3,8 @@ from typing import Any, Dict
 
 SEARCH_METADATA_FIELDS = [
     "object_type", "document_id", "content_unit_id", "source_name", "source_uri",
-    "page_no", "heading_path", "status", "permission_tags",
+    "page_no", "heading_path", "status", "permission_tags", "generation_id",
+    "evidence_code", "evidence_hash", "source_version", "content_hash",
 ]
 
 def candidate(source: Dict[str, Any], channel: str, score: float, provider: str) -> Dict[str, Any]:

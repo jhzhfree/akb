@@ -103,6 +103,7 @@ public class IndexOutboxWorker {
             String responseJson = objectMapper.writeValueAsString(response);
             transactionRunner.required(() -> {
                 mapper.markIndexOutboxSucceeded(event.getId(), responseJson);
+                updateAclPropagationAfterSuccess(event, response, responseJson);
                 mapper.insertIndexDeliveryAttempt(
                         event.getEventId(), event.getAttemptCount(), "SUCCEEDED", duration, responseJson, null);
                 metrics.deliverySucceeded(duration);
@@ -123,6 +124,7 @@ public class IndexOutboxWorker {
         transactionRunner.required(() -> {
             if (dead) {
                 mapper.markIndexOutboxDead(event.getId(), message);
+                updateAclPropagation(event, "FAILED", null, message);
             } else {
                 mapper.markIndexOutboxRetry(event.getId(), message, nextAttempt);
             }
@@ -132,6 +134,25 @@ public class IndexOutboxWorker {
         });
         log.warn("Index outbox delivery failed eventId={} attempt={}/{} status={}: {}",
                 event.getEventId(), attempt, maxAttempts, dead ? "DEAD" : "RETRY", message);
+    }
+
+    private void updateAclPropagationAfterSuccess(IndexOutboxEvent event,
+            Map<String, Object> response, String responseJson) {
+        if (!"ACL_CHANGED".equals(event.getEventType())) {
+            return;
+        }
+        boolean rebuild = Boolean.TRUE.equals(response.get("requiresAuthoritativeRebuild"));
+        String state = rebuild ? "REBUILD_REQUIRED" : "COMPLETED";
+        updateAclPropagation(event, state, responseJson, null);
+    }
+
+    private void updateAclPropagation(IndexOutboxEvent event, String state,
+            String resultJson, String lastError) {
+        if (!"ACL_CHANGED".equals(event.getEventType())) {
+            return;
+        }
+        mapper.updateAclChangePropagation(
+                event.getIdempotencyKey(), state, resultJson, lastError);
     }
 
     private void recoverStaleLocks() {

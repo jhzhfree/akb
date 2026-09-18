@@ -19,6 +19,15 @@ public class QueryResponse {
     private String answer;
     private String model;
     private Map<String, Object> trace;
+    /** Query-rewrite stage detail (design V1.1 §8.2). */
+    private Map<String, Object> rewrite;
+    /** Fusion stage detail including quality-signal weights (design V1.1 §8.3). */
+    private Map<String, Object> fusion;
+
+    public Map<String, Object> getRewrite() { return rewrite; }
+    public void setRewrite(Map<String, Object> rewrite) { this.rewrite = rewrite; }
+    public Map<String, Object> getFusion() { return fusion; }
+    public void setFusion(Map<String, Object> fusion) { this.fusion = fusion; }
 
     public String getQueryId() { return queryId; }
     public void setQueryId(String queryId) { this.queryId = queryId; }

@@ -16,6 +16,7 @@ LINE_LIMITS = {
     ".java": 160,
     ".py": 140,
     ".js": 160,
+    ".ts": 160,
     ".vue": 180,
 }
 SOURCE_ROOTS = [
@@ -149,7 +150,11 @@ def check_python_docs_and_safety():
         "services/retrieval/milvus_provider.py",
     ]:
         text = (app_root / provider_file).read_text(encoding="utf-8")
-        assert "@lru_cache(maxsize=1)" in text, "provider must be process cached: %s" % provider_file
+        # Providers must be cached per process; configuration-aware providers cache
+        # per configuration instead, so any bounded lru_cache satisfies the rule.
+        assert re.search(r"@lru_cache\(maxsize=\d+\)", text), (
+            "provider must be process cached: %s" % provider_file
+        )
 
 
 def check_frontend_boundaries():

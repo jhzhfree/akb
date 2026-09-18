@@ -13,6 +13,7 @@ public class KnowledgeCard {
     private String content;
     private Double confidence;
     private String status;
+    private String permissionTags;
     private Integer version;
 
     public Long getId() { return id; }
@@ -35,4 +36,6 @@ public class KnowledgeCard {
     public void setStatus(String status) { this.status = status; }
     public Integer getVersion() { return version; }
     public void setVersion(Integer version) { this.version = version; }
+    public String getPermissionTags() { return permissionTags; }
+    public void setPermissionTags(String permissionTags) { this.permissionTags = permissionTags; }
 }

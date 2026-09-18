@@ -26,6 +26,9 @@ public class AuthoritativeIndexSnapshotRow {
     private String status;
     private String contentHash;
     private String permissionTags;
+    /** Evidence anchor: an answer citation without it cannot be verified, so it stays visible here. */
+    private String evidenceCode;
+    private String evidenceHash;
 
     /** Convert the typed database projection to the stable AI-service contract payload. */
     public Map<String, Object> toPayload() {
@@ -45,6 +48,8 @@ public class AuthoritativeIndexSnapshotRow {
         payload.put("status", status);
         payload.put("contentHash", contentHash);
         payload.put("permissionTags", permissionTags);
+        payload.put("evidenceCode", evidenceCode);
+        payload.put("evidenceHash", evidenceHash);
         return payload;
     }
 
@@ -78,4 +83,8 @@ public class AuthoritativeIndexSnapshotRow {
     public void setPermissionTags(String permissionTags) { this.permissionTags = permissionTags; }
     public String getContentHash() { return contentHash; }
     public void setContentHash(String contentHash) { this.contentHash = contentHash; }
+    public String getEvidenceCode() { return evidenceCode; }
+    public void setEvidenceCode(String evidenceCode) { this.evidenceCode = evidenceCode; }
+    public String getEvidenceHash() { return evidenceHash; }
+    public void setEvidenceHash(String evidenceHash) { this.evidenceHash = evidenceHash; }
 }

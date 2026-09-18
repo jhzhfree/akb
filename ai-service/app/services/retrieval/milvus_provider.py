@@ -100,6 +100,45 @@ class MilvusProvider:
         result["target"] = target
         return result
 
+
+    async def target_manifest(self, knowledge_base_id: int, schema_version: str):
+        """Calculate deterministic ACL/content manifest for one physical collection."""
+        import hashlib
+        import json
+        collection = self.schema_target(schema_version)
+        result = await self._post("/v2/vectordb/entities/query", {
+            "collectionName": collection,
+            "filter": "knowledge_base_id == %d" % int(knowledge_base_id),
+            "outputFields": ["object_id", "permission_tags", "object_key",
+                             "content_hash", "status", "generation_id"],
+            "limit": 10000,
+        })
+        rows = result.get("data") or []
+        digest = hashlib.sha256()
+        for row in sorted(rows, key=lambda item: str(item.get("object_key") or "")):
+            tags = [tag for tag in (row.get("permission_tags") or []) if tag != "__public__"]
+            canonical = {"objectKey": row.get("object_key"),
+                         "contentHash": row.get("content_hash") or "",
+                         "status": row.get("status"), "permissionTags": sorted(tags)}
+            digest.update((json.dumps(canonical, ensure_ascii=False, separators=(",", ":")) + "\n").encode("utf-8"))
+        generations = sorted({str(row.get("generation_id")) for row in rows if row.get("generation_id")})
+        return {"provider": "milvus", "manifestHash": digest.hexdigest(),
+                "count": len(rows), "generations": generations}
+
+    async def qualify_acl_target(self, knowledge_base_id: int, schema_version: str,
+                                 permission_tags, admin=False):
+        """Scan green Milvus scalar ACL fields without ANN ranking."""
+        collection = self.schema_target(schema_version)
+        result = await self._post("/v2/vectordb/entities/query", {
+            "collectionName": collection,
+            "filter": "knowledge_base_id == %d" % int(knowledge_base_id),
+            "outputFields": ["id", "object_id", "permission_tags"], "limit": 10000})
+        rows = result.get("data") or []
+        caller = set(permission_tags or [])
+        return [str(row.get("object_id") or row.get("id")) for row in rows if admin or
+                not (row.get("permission_tags") or []) or
+                caller.intersection(row.get("permission_tags") or [])]
+
     async def activate_target(self, schema_version: str) -> Dict[str, Any]:
         target = self.schema_target(schema_version)
         if target not in await self.list_collections():
@@ -162,12 +201,32 @@ class MilvusProvider:
         })
         return {"deleted": "submitted"}
 
+    async def delete_knowledge_base(self, kb: int) -> Dict[str, Any]:
+        """Delete every vector of one knowledge base, used by a knowledge-base purge."""
+        if not self.enabled:
+            return {"deleted": 0, "skipped": True}
+        await self._post("/v2/vectordb/entities/delete", {
+            "collectionName": await self.read_collection(),
+            "filter": "knowledge_base_id == %d" % kb,
+        })
+        return {"provider": "milvus", "deleted": "submitted"}
+
     async def update_object_status(self, kb: int, object_id: str, status: str,
                                    index_version: int) -> Dict[str, Any]:
         # Milvus upsert is used because scalar partial-update semantics vary by release.
         # Worker per-aggregate ordering remains the stale-write guard.
         return {"provider": "milvus", "updated": 0, "requiresReindex": True,
                 "objectId": object_id, "status": status, "indexVersion": index_version}
+
+    async def update_object_acl(self, kb: int, object_id: str, permission_tags, index_version: int) -> Dict[str, Any]:
+        return {
+            "provider": "milvus",
+            "updated": 0,
+            "requiresReindex": True,
+            "objectId": object_id,
+            "permissionTags": list(permission_tags or []),
+            "indexVersion": index_version,
+        }
 
     async def count(self, kb: int) -> Dict[str, Any]:
         payload = await self._post("/v2/vectordb/entities/query", {

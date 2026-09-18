@@ -12,10 +12,14 @@
         <el-card>
           <template #header>待审核知识</template>
           <el-table :data="pendingReviews" height="520">
-            <el-table-column prop="objectType" label="类型" width="90" />
+            <el-table-column label="类型" width="130">
+              <template #default="{ row }">{{ objectTypeLabel(row.objectType) }}</template>
+            </el-table-column>
             <el-table-column prop="displayTitle" label="对象" />
             <el-table-column prop="confidence" label="置信度" width="90" />
-            <el-table-column prop="status" label="状态" width="110" />
+            <el-table-column label="状态" width="140">
+              <template #default="{ row }">{{ statusLabel(row.status) }}</template>
+            </el-table-column>
             <el-table-column label="操作" width="190">
               <template #default="{ row }">
                 <el-button size="small" type="success" @click="$emit('review', row, 'APPROVED')">批准</el-button>
@@ -45,11 +49,15 @@
     <el-card class="assessment-card">
       <template #header>智能裁决记录</template>
       <el-table :data="assessments" height="360">
-        <el-table-column prop="objectType" label="类型" width="80" />
+        <el-table-column label="类型" width="130">
+          <template #default="{ row }">{{ objectTypeLabel(row.objectType) }}</template>
+        </el-table-column>
         <el-table-column prop="objectCode" label="对象代码" />
         <el-table-column prop="knowledgeConfidence" label="知识可信度" width="110" />
         <el-table-column prop="riskLevel" label="风险" width="90" />
-        <el-table-column prop="decision" label="系统决策" width="150" />
+        <el-table-column label="系统决策" width="160">
+          <template #default="{ row }">{{ statusLabel(row.decision) }}</template>
+        </el-table-column>
         <el-table-column prop="requiresHumanReview" label="人工复核" width="100">
           <template #default="{ row }">{{ row.requiresHumanReview ? '是' : '否' }}</template>
         </el-table-column>
@@ -58,17 +66,22 @@
     </el-card>
   </section>
 </template>
-<script setup>
-defineProps({
-  pendingReviews: { type: Array, default: () => [] },
-  conflicts: { type: Array, default: () => [] },
-  assessments: { type: Array, default: () => [] },
-  adjudicating: Boolean,
-})
-defineEmits(['adjudicate', 'review', 'resolve'])
+<script setup lang="ts">
+import type{AssessmentRow,ConflictRow,ReviewRow}from'../types'
+import{objectTypeLabel,statusLabel}from'../types'
+defineProps<{pendingReviews:ReviewRow[];conflicts:ConflictRow[];assessments:AssessmentRow[];adjudicating:boolean}>()
+defineEmits<{adjudicate:[];review:[row:ReviewRow,decision:string];resolve:[row:ConflictRow,status:string]}>()
 </script>
 <style scoped>
-.section-header { display: flex; justify-content: space-between; align-items: center; }
-.review-alert { margin-bottom: 16px; }
-.assessment-card { margin-top: 16px; }
+.section-header { display: flex;
+ justify-content: space-between;
+ align-items: center;
+ }
+
+.review-alert { margin-bottom: 16px;
+ }
+
+.assessment-card { margin-top: 16px;
+ }
+
 </style>

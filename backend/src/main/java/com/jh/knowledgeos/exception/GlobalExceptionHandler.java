@@ -44,21 +44,36 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(RestClientException.class)
     @ResponseStatus(HttpStatus.BAD_GATEWAY)
     public ApiResponse<Object> aiService(RestClientException e) {
-        log.error("AI service request failed", e);
-        return ApiResponse.fail(ApiErrorCode.AI_SERVICE_ERROR, "AI 服务调用失败");
+        log.error("AI service request failed: {}", rootCause(e), e);
+        return ApiResponse.fail(ApiErrorCode.AI_SERVICE_ERROR, "AI 服务调用失败：" + rootCause(e));
     }
 
     @ExceptionHandler(DataAccessException.class)
     @ResponseStatus(HttpStatus.INTERNAL_SERVER_ERROR)
     public ApiResponse<Object> database(DataAccessException e) {
-        log.error("Database operation failed", e);
-        return ApiResponse.fail(ApiErrorCode.DATABASE_ERROR, "数据库操作失败");
+        log.error("Database operation failed: {}", rootCause(e), e);
+        return ApiResponse.fail(ApiErrorCode.DATABASE_ERROR, "数据库操作失败：" + rootCause(e));
     }
 
     @ExceptionHandler(Exception.class)
     @ResponseStatus(HttpStatus.INTERNAL_SERVER_ERROR)
     public ApiResponse<Object> unexpected(Exception e) {
-        log.error("Unhandled request error", e);
-        return ApiResponse.fail(ApiErrorCode.INTERNAL_ERROR, "系统内部错误");
+        log.error("Unhandled request error: {}", rootCause(e), e);
+        return ApiResponse.fail(ApiErrorCode.INTERNAL_ERROR, "系统内部错误：" + rootCause(e));
+    }
+
+    /**
+     * Returns the deepest cause message so operators can diagnose a failure from the API
+     * response instead of grepping the log; long driver messages are truncated.
+     */
+    private static String rootCause(Throwable e) {
+        Throwable current = e;
+        while (current.getCause() != null && current.getCause() != current) {
+            current = current.getCause();
+        }
+        String message = current.getMessage() == null
+                ? current.getClass().getSimpleName()
+                : current.getMessage().trim();
+        return message.length() > 300 ? message.substring(0, 300) + "..." : message;
     }
 }

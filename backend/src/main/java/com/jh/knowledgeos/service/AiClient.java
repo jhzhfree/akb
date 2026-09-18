@@ -4,6 +4,7 @@ import com.jh.knowledgeos.config.KnowledgeProperties;
 import org.springframework.core.io.Resource;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
 import org.springframework.util.LinkedMultiValueMap;
@@ -38,7 +39,22 @@ public class AiClient {
     }
 
     @SuppressWarnings("unchecked")
+    public Map<String, Object> delete(String path) {
+        return restTemplate.exchange(baseUrl + path, HttpMethod.DELETE, null, Map.class).getBody();
+    }
+
+    @SuppressWarnings("unchecked")
     public Map<String, Object> parse(MultipartFile file) throws IOException {
+        return postFile(AiApiPaths.PARSE_DOCUMENT, file);
+    }
+
+    @SuppressWarnings("unchecked")
+    public Map<String, Object> inspectOkf(MultipartFile file) throws IOException {
+        return postFile(AiApiPaths.INSPECT_OKF, file);
+    }
+
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> postFile(String path, MultipartFile file) throws IOException {
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.MULTIPART_FORM_DATA);
 
@@ -48,6 +64,6 @@ public class AiClient {
 
         HttpEntity<MultiValueMap<String, Object>> request =
                 new HttpEntity<MultiValueMap<String, Object>>(body, headers);
-        return restTemplate.postForObject(baseUrl + AiApiPaths.PARSE_DOCUMENT, request, Map.class);
+        return restTemplate.postForObject(baseUrl + path, request, Map.class);
     }
 }

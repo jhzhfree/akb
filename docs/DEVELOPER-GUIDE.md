@@ -127,7 +127,7 @@ RERANKER_ENABLED=false
 │
 ├── frontend/src/
 │   ├── App.vue
-│   └── api/knowledge.js
+│   └── api/knowledge.ts
 │
 ├── monitoring/             # Prometheus/Grafana/alerts
 ├── deploy/                 # production compose
@@ -228,6 +228,13 @@ t_index_schema_snapshot_audit
 
 ```http
 GET /api/knowledge/index/outbox/{kb}/stats
+X-Ops-Token: <viewer>
+```
+
+控制台按 `page` / `size` / `status` 分页查看事件明细（`items` + `total`），避免只看最新几十条误判积压来源：
+
+```http
+GET /api/knowledge/index/outbox/{kb}/page?page=1&size=20&status=RETRY
 X-Ops-Token: <viewer>
 ```
 

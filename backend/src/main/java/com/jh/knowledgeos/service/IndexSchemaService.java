@@ -23,11 +23,13 @@ public class IndexSchemaService {
     private final KnowledgeMapper mapper;
     private final AiClient ai;
     private final ObjectMapper objectMapper;
+    private final AuthoritativeGraphGenerationService graphGeneration;
 
-    public IndexSchemaService(KnowledgeMapper mapper, AiClient ai, ObjectMapper objectMapper) {
+    public IndexSchemaService(KnowledgeMapper mapper, AiClient ai, ObjectMapper objectMapper, AuthoritativeGraphGenerationService graphGeneration) {
         this.mapper = mapper;
         this.ai = ai;
         this.objectMapper = objectMapper;
+        this.graphGeneration = graphGeneration;
     }
 
     /**
@@ -49,11 +51,17 @@ public class IndexSchemaService {
 
         try {
             SnapshotResult snapshot = streamAuthoritativeSnapshot(kb, version, releaseId);
+            String generationId = "gen-" + releaseId;
+            mapper.insertAclManifest(releaseId, kb, generationId, snapshot.checksum,
+                    snapshot.count, highWatermark);
+            mapper.updateSchemaManifest(releaseId, generationId, snapshot.checksum, snapshot.count);
+            Map<String, Object> graphValidation = graphGeneration.rebuild(kb, version, releaseId);
             long endWatermark = mapper.maxIndexOutboxId(kb);
             boolean stable = highWatermark == endWatermark;
             boolean countsMatch = snapshot.count == expected
                     && snapshot.elasticsearchCount == expected
-                    && snapshot.milvusCount == expected;
+                    && snapshot.milvusCount == expected
+                    && snapshot.neo4jCount == expected;
             String integrityState = stable && countsMatch ? "VERIFIED" : stable ? "COUNT_MISMATCH" : "SOURCE_CHANGED";
             mapper.updateIndexSchemaIntegrity(
                     releaseId,
@@ -64,13 +72,17 @@ public class IndexSchemaService {
                     integrityState);
             Map<String, Object> validation = map(
                     "releaseId", releaseId,
+                    "generationId", generationId,
+                    "aclManifestHash", snapshot.checksum,
                     "snapshotChecksum", snapshot.checksum,
                     "snapshotCount", snapshot.count,
                     "sourceHighWatermark", highWatermark,
                     "sourceEndWatermark", endWatermark,
                     "sourceStable", stable,
                     "elasticsearchCount", snapshot.elasticsearchCount,
-                    "milvusCount", snapshot.milvusCount);
+                    "milvusCount", snapshot.milvusCount,
+                    "neo4jCount", snapshot.neo4jCount,
+                    "authoritativeGraph", graphValidation);
             String state = stable && countsMatch ? "READY" : "VALIDATION_FAILED";
             mapper.completeIndexSchemaRelease(
                     releaseId,
@@ -103,6 +115,7 @@ public class IndexSchemaService {
         int pageNo = 0;
         long elasticsearchCount = 0L;
         long milvusCount = 0L;
+        long neo4jCount = 0L;
         long snapshotCount = 0L;
         String elasticsearchTarget = null;
         String milvusTarget = null;
@@ -115,7 +128,9 @@ public class IndexSchemaService {
             }
             pageNo++;
             String pageChecksum = checksumPage(rows);
-            digest.update(pageChecksum.getBytes(StandardCharsets.UTF_8));
+            for (AuthoritativeIndexSnapshotRow row : rows) {
+                digest.update(manifestRowBytes(row));
+            }
             mapper.insertIndexSnapshotAudit(
                     releaseId,
                     kb,
@@ -134,6 +149,7 @@ public class IndexSchemaService {
                     request);
             elasticsearchCount += longValue(response, "elasticsearchCount", 0L);
             milvusCount += longValue(response, "milvusCount", 0L);
+            neo4jCount += longValue(response, "neo4jCount", 0L);
             elasticsearchTarget = nestedString(response, "elasticsearch", "target", elasticsearchTarget);
             milvusTarget = nestedString(response, "milvus", "target", milvusTarget);
             snapshotCount += rows.size();
@@ -141,7 +157,8 @@ public class IndexSchemaService {
             reset = false;
         }
         return new SnapshotResult(
-                hex(digest.digest()), snapshotCount, elasticsearchCount, milvusCount, elasticsearchTarget, milvusTarget);
+                hex(digest.digest()), snapshotCount, elasticsearchCount, milvusCount,
+                neo4jCount, elasticsearchTarget, milvusTarget);
     }
 
     /** Activate a READY/ACTIVE/RETIRED release by switching external read aliases. */
@@ -184,6 +201,15 @@ public class IndexSchemaService {
         return payloads;
     }
 
+    private byte[] manifestRowBytes(AuthoritativeIndexSnapshotRow row) throws Exception {
+        Map<String, Object> item = new LinkedHashMap<String, Object>();
+        item.put("objectKey", row.getObjectKey());
+        item.put("contentHash", row.getContentHash());
+        item.put("status", row.getStatus());
+        item.put("permissionTags", canonicalPermissionTags(row.getPermissionTags()));
+        return (objectMapper.writeValueAsString(item) + "\n").getBytes(StandardCharsets.UTF_8);
+    }
+
     private String checksumPage(List<AuthoritativeIndexSnapshotRow> rows) throws Exception {
         MessageDigest digest = MessageDigest.getInstance("SHA-256");
         List<Map<String, Object>> canonical = new ArrayList<Map<String, Object>>(rows.size());
@@ -192,10 +218,24 @@ public class IndexSchemaService {
             item.put("objectKey", row.getObjectKey());
             item.put("contentHash", row.getContentHash());
             item.put("status", row.getStatus());
+            item.put("permissionTags", canonicalPermissionTags(row.getPermissionTags()));
             canonical.add(item);
         }
         digest.update(objectMapper.writeValueAsBytes(canonical));
         return hex(digest.digest());
+    }
+
+    private Object canonicalPermissionTags(String value) {
+        if (value == null || value.trim().isEmpty()) return java.util.Collections.emptyList();
+        try {
+            java.util.List<?> tags = objectMapper.readValue(value, java.util.List.class);
+            java.util.List<String> normalized = new java.util.ArrayList<String>();
+            for (Object tag : tags) normalized.add(String.valueOf(tag));
+            java.util.Collections.sort(normalized);
+            return normalized;
+        } catch (Exception ex) {
+            return value.trim();
+        }
     }
 
     private String normalize(String value) {
@@ -260,6 +300,7 @@ public class IndexSchemaService {
         private final long count;
         private final long elasticsearchCount;
         private final long milvusCount;
+        private final long neo4jCount;
         private final String elasticsearchTarget;
         private final String milvusTarget;
 
@@ -268,12 +309,14 @@ public class IndexSchemaService {
                 long count,
                 long elasticsearchCount,
                 long milvusCount,
+                long neo4jCount,
                 String elasticsearchTarget,
                 String milvusTarget) {
             this.checksum = checksum;
             this.count = count;
             this.elasticsearchCount = elasticsearchCount;
             this.milvusCount = milvusCount;
+            this.neo4jCount = neo4jCount;
             this.elasticsearchTarget = elasticsearchTarget;
             this.milvusTarget = milvusTarget;
         }

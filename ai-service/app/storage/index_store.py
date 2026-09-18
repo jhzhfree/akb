@@ -82,6 +82,27 @@ class IndexStore:
         self.save(kb, docs)
         return len(docs)
 
+    def delete_knowledge_base(self, kb: Any) -> int:
+        """Drop every retrieval document of one knowledge base.
+
+        A knowledge-base purge removes the whole fallback view instead of filtering
+        document by document: the file is the fallback view, so deleting it is both
+        faster and guarantees no orphan object survives.
+        """
+        removed = len(self.load(kb))
+        key = self._key(kb)
+        path = self._path(kb)
+        with self._lock:
+            self._cache.pop(key, None)
+            self._generation[key] = self._generation.get(key, 0) + 1
+            try:
+                if path.exists():
+                    path.unlink()
+            except OSError:
+                # A locked or already removed file only leaves an empty view behind.
+                pass
+        return removed
+
     def update_object_status(
         self, kb: Any, object_id: Any, status: str, index_version: int
     ) -> bool:
@@ -99,6 +120,15 @@ class IndexStore:
             break
         if changed:
             self.save(kb, docs)
+        return changed
+
+    def update_object_acl(self, kb: Any, object_id: Any, permission_tags, index_version: int) -> bool:
+        docs=self.load(kb); changed=False
+        for item in docs:
+            if str(item.get("id")) != str(object_id): continue
+            if int(index_version) < int(item.get("index_version") or 0): return False
+            item["permission_tags"]=list(permission_tags or []); item["index_version"]=int(index_version); changed=True; break
+        if changed: self.save(kb,docs)
         return changed
 
 

@@ -11,6 +11,7 @@ public class IndexSchemaRelease {
     private Long elasticsearchCount; private Long milvusCount; private String validationJson; private String errorText;
     private String snapshotChecksum; private Long sourceHighWatermark; private Long sourceEndWatermark;
     private Long snapshotCount; private String integrityState;
+    private String generationId; private String aclManifestHash; private Long aclManifestCount;
     private LocalDateTime createdTime; private LocalDateTime activatedTime; private LocalDateTime retiredTime;
     public Long getId(){return id;} public void setId(Long v){id=v;}
     public String getReleaseId(){return releaseId;} public void setReleaseId(String v){releaseId=v;}
@@ -29,6 +30,9 @@ public class IndexSchemaRelease {
     public Long getSourceEndWatermark(){return sourceEndWatermark;} public void setSourceEndWatermark(Long v){sourceEndWatermark=v;}
     public Long getSnapshotCount(){return snapshotCount;} public void setSnapshotCount(Long v){snapshotCount=v;}
     public String getIntegrityState(){return integrityState;} public void setIntegrityState(String v){integrityState=v;}
+    public String getGenerationId(){return generationId;} public void setGenerationId(String v){generationId=v;}
+    public String getAclManifestHash(){return aclManifestHash;} public void setAclManifestHash(String v){aclManifestHash=v;}
+    public Long getAclManifestCount(){return aclManifestCount;} public void setAclManifestCount(Long v){aclManifestCount=v;}
     public LocalDateTime getCreatedTime(){return createdTime;} public void setCreatedTime(LocalDateTime v){createdTime=v;}
     public LocalDateTime getActivatedTime(){return activatedTime;} public void setActivatedTime(LocalDateTime v){activatedTime=v;}
     public LocalDateTime getRetiredTime(){return retiredTime;} public void setRetiredTime(LocalDateTime v){retiredTime=v;}

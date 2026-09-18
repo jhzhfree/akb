@@ -55,9 +55,22 @@ class KnowledgeIndexer:
         knowledge_base_id: int,
         document_id: int,
     ) -> Dict[str, Any]:
-        """Delete one document from all retrieval views."""
+        """Delete one document from all retrieval views.
+
+        The normalized standard units are the write-side source for card generation, so
+        they are removed with the same call: leaving them behind would let a deleted
+        document keep feeding extraction and retrieval.
+        """
         total = store.delete_document(knowledge_base_id, document_id)
         external: Dict[str, Any] = {}
+        try:
+            external["standard"] = await get_elasticsearch_provider().delete_standard_document(
+                knowledge_base_id, document_id
+            )
+        except Exception as exc:
+            external["standard"] = {"error": str(exc)}
+            if settings.retrieval_external_required:
+                raise
         for name, provider in self._external_providers():
             try:
                 external[name] = await provider.delete_document(
@@ -69,6 +82,44 @@ class KnowledgeIndexer:
                 if settings.retrieval_external_required:
                     raise
         return {"total": total, "external": external}
+
+    async def purge_knowledge_base(self, knowledge_base_id: int) -> Dict[str, Any]:
+        """Delete one knowledge base from every retrieval view.
+
+        A console purge empties the authoritative tables, so leaving the retrieval
+        views populated would keep answering questions with knowledge that no longer
+        exists. Standard units are removed with them: they are the write-side source
+        for extraction, so a surviving unit would resurrect the deleted knowledge on
+        the next run.
+        """
+        removed = store.delete_knowledge_base(knowledge_base_id)
+        external: Dict[str, Any] = {}
+        try:
+            external["standard"] = await get_elasticsearch_provider().delete_standard_knowledge_base(
+                knowledge_base_id
+            )
+        except Exception as exc:
+            external["standard"] = {"error": str(exc)}
+            if settings.retrieval_external_required:
+                raise
+        for name, provider in self._external_providers():
+            try:
+                external[name] = await provider.delete_knowledge_base(knowledge_base_id)
+            except Exception as exc:
+                external[name] = {"error": str(exc)}
+                if settings.retrieval_external_required:
+                    raise
+        graph = get_graph_provider()
+        try:
+            graph_result = await asyncio.to_thread(graph.delete_knowledge_base, knowledge_base_id)
+        except Exception as exc:
+            graph_result = {"error": str(exc)}
+        return {
+            "knowledgeBaseId": knowledge_base_id,
+            "localRemoved": removed,
+            "external": external,
+            "graph": graph_result,
+        }
 
     async def rebuild_external(self, knowledge_base_id: int) -> Dict[str, Any]:
         """Rebuild external indexes from the local fallback view.
@@ -119,6 +170,10 @@ class KnowledgeIndexer:
                     "page_no": chunk.get("page_no"),
                     "heading_path": chunk.get("heading_path", ""),
                     "permission_tags": permission_tags or [],
+                    "evidence_code": chunk.get("evidence_code"),
+                    "evidence_hash": chunk.get("evidence_hash") or chunk.get("content_hash"),
+                    "source_version": chunk.get("source_version") or 1,
+                    "content_hash": chunk.get("content_hash"),
                     "index_version": int(
                         chunk.get("index_version") or index_version or 0
                     ),
@@ -133,6 +188,79 @@ class KnowledgeIndexer:
             "indexed": len(docs),
             "total": total,
             "external": external,
+        }
+
+    async def index_standard_document(
+        self,
+        knowledge_base_id: int,
+        document_id: int,
+        units: List[Dict[str, Any]],
+        source_name: str = "",
+        source_uri: str = "",
+        permission_tags: Optional[List[str]] = None,
+        index_version: int = 0,
+        standard: Optional[Dict[str, Any]] = None,
+        source_id: Optional[int] = None,
+    ) -> Dict[str, Any]:
+        """Persist the normalized standard document as the basis for card generation.
+
+        Standard units are the single source of truth for downstream extraction: they
+        are already free of format noise, so anything derived from them inherits that
+        cleanliness instead of re-learning the same cleaning rules.
+        """
+        provider = get_elasticsearch_provider()
+        result = await provider.upsert_standard(
+            knowledge_base_id,
+            document_id,
+            units,
+            source_name=source_name,
+            source_uri=source_uri,
+            doc_id=(standard or {}).get("doc_id", ""),
+            source_format=(standard or {}).get("source_format", ""),
+            title=(standard or {}).get("title", ""),
+            permission_tags=permission_tags,
+            source_id=source_id,
+            index_version=index_version,
+        )
+        return {
+            "knowledgeBaseId": knowledge_base_id,
+            "documentId": document_id,
+            "units": len(units),
+            "elasticsearch": result,
+        }
+
+    async def read_standard_units(
+        self,
+        knowledge_base_id: int,
+        document_id: int,
+    ) -> Dict[str, Any]:
+        """Read back the normalized units stored for one document."""
+        provider = get_elasticsearch_provider()
+        units = await provider.get_standard_units(knowledge_base_id, document_id)
+        return {
+            "knowledgeBaseId": knowledge_base_id,
+            "documentId": document_id,
+            "units": units,
+            "count": len(units),
+        }
+
+    async def search_standard_units(
+        self,
+        knowledge_base_id: int,
+        query: str,
+        top_k: int = 20,
+        permission_tags: Optional[List[str]] = None,
+        document_id: Optional[int] = None,
+    ) -> Dict[str, Any]:
+        """Search the standard-document store."""
+        provider = get_elasticsearch_provider()
+        hits = await provider.search_standard(
+            knowledge_base_id, query, top_k, permission_tags, document_id)
+        return {
+            "knowledgeBaseId": knowledge_base_id,
+            "query": query,
+            "hits": hits,
+            "count": len(hits),
         }
 
     async def index_knowledge_objects(
@@ -191,6 +319,21 @@ class KnowledgeIndexer:
             "external": external,
         }
 
+    @staticmethod
+    def _permission_tags(item: Dict[str, Any]) -> List[str]:
+        raw = item.get("permission_tags") or item.get("permissionTags") or []
+        if isinstance(raw, str):
+            stripped = raw.strip()
+            if stripped.startswith("["):
+                try:
+                    import json
+                    raw = json.loads(stripped)
+                except (TypeError, ValueError):
+                    raw = []
+            else:
+                raw = stripped.split(",")
+        return [str(value).strip() for value in raw if str(value).strip()]
+
     def _knowledge_rows(
         self,
         knowledge_base_id: int,
@@ -210,12 +353,26 @@ class KnowledgeIndexer:
                     "content": card.get("content") or card.get("summary", ""),
                     "source_name": "知识卡片",
                     "source_uri": "",
-                    "permission_tags": [],
+                    "permission_tags": self._permission_tags(card),
                     "status": card.get("status", "DRAFT"),
+                    # Evidence anchor carried by every indexed object: without it the answer gate
+                    # has to treat any sentence citing this card as unsupported (see phase 15 gate).
+                    "content_hash": card.get("content_hash") or card.get("contentHash") or "",
+                    "evidence_code": card.get("evidence_code") or card.get("evidenceCode"),
+                    "evidence_hash": (
+                        card.get("evidence_hash") or card.get("evidenceHash")
+                        or card.get("content_hash") or card.get("contentHash")
+                    ),
                     "index_version": int(
                         card.get("index_version") or index_version or 0
                     ),
-                    "metadata": {"confidence": card.get("confidence", 0)},
+                    "metadata": {
+                        "confidence": card.get("confidence", 0),
+                        # Quality signals used by fusion scoring (design V1.1 §8.3).
+                        "authority_score": card.get("authority_score"),
+                        "updated_at": card.get("updated_at"),
+                        "evidence_count": card.get("evidence_count", 0),
+                    },
                 }
             )
 
@@ -234,15 +391,63 @@ class KnowledgeIndexer:
                     "content": content,
                     "source_name": "断言",
                     "source_uri": "",
-                    "permission_tags": [],
+                    "permission_tags": self._permission_tags(claim),
                     "status": claim.get("status", "UNCERTAIN"),
+                    "content_hash": claim.get("content_hash") or claim.get("contentHash") or "",
+                    "evidence_code": claim.get("evidence_code") or claim.get("evidenceCode"),
+                    "evidence_hash": (
+                        claim.get("evidence_hash") or claim.get("evidenceHash")
+                        or claim.get("content_hash") or claim.get("contentHash")
+                    ),
                     "index_version": int(
                         claim.get("index_version") or index_version or 0
                     ),
-                    "metadata": {"confidence": claim.get("confidence", 0)},
+                    "metadata": {
+                        "confidence": claim.get("confidence", 0),
+                        "authority_score": claim.get("authority_score"),
+                        "updated_at": claim.get("updated_at"),
+                        "evidence_count": claim.get("evidence_count", 0),
+                    },
                 }
             )
         return rows
+
+    async def update_object_acl(
+        self, knowledge_base_id: int, object_type: str, object_id: str,
+        permission_tags, index_version: int, source_cascade: bool = False,
+    ) -> Dict[str, Any]:
+        if source_cascade:
+            return {
+                "knowledgeBaseId": knowledge_base_id,
+                "objectType": object_type,
+                "objectId": object_id,
+                "requiresAuthoritativeRebuild": True,
+                "reason": "SOURCE_ACL_CASCADE",
+            }
+        local_updated = store.update_object_acl(
+            knowledge_base_id, object_id, permission_tags, index_version
+        )
+        external = {}
+        for name, provider in self._external_providers():
+            try:
+                external[name] = await provider.update_object_acl(
+                    knowledge_base_id, object_id, permission_tags, index_version
+                )
+            except Exception as exc:
+                external[name] = {"error": str(exc)}
+                if settings.retrieval_external_required:
+                    raise
+        graph = await asyncio.to_thread(
+            get_graph_provider().update_object_acl, knowledge_base_id, object_type,
+            object_id, permission_tags, index_version
+        )
+        return {
+            "knowledgeBaseId": knowledge_base_id, "objectId": object_id,
+            "localUpdated": local_updated, "external": external, "graph": graph,
+            "requiresAuthoritativeRebuild": bool(
+                (external.get("milvus") or {}).get("requiresReindex")
+            ),
+        }
 
     async def update_object_status(
         self,
@@ -290,6 +495,21 @@ class KnowledgeIndexer:
             "graph": graph,
         }
 
+    async def rebuild_authoritative_graph(self, knowledge_base_id: int, generation_id: str, rows, evidence_bindings=None):
+        """Build graph and immutable evidence bindings in the same green generation."""
+        graph = get_graph_provider()
+        if not graph.available():
+            return {"provider": "neo4j", "available": False, "generationId": generation_id}
+        result = await asyncio.to_thread(
+            graph.rebuild_authoritative_graph, knowledge_base_id, generation_id, rows
+        )
+        if hasattr(graph, "rebuild_graph_evidence"):
+            evidence = await asyncio.to_thread(
+                graph.rebuild_graph_evidence, knowledge_base_id, generation_id, evidence_bindings or []
+            )
+            result["evidenceBinding"] = evidence
+        return result
+
     async def rebuild_schema(
         self,
         knowledge_base_id: int,
@@ -316,6 +536,8 @@ class KnowledgeIndexer:
             self._normalize_snapshot_document(knowledge_base_id, doc)
             for doc in docs or []
         ]
+        for item in normalized:
+            item["generation_id"] = schema_version
         if normalized:
             vectors = await get_embedding_provider().embed(
                 [item.get("content", "") for item in normalized]
@@ -327,6 +549,7 @@ class KnowledgeIndexer:
         milvus = get_milvus_provider()
         os_target = elasticsearch.schema_target(schema_version)
         qd_target = milvus.schema_target(schema_version)
+        graph = get_graph_provider()
         if reset:
             await self._reset_schema_targets(
                 elasticsearch,
@@ -334,6 +557,10 @@ class KnowledgeIndexer:
                 os_target,
                 qd_target,
             )
+            if graph.available():
+                await asyncio.to_thread(
+                    graph.reset_generation, knowledge_base_id, schema_version
+                )
 
         os_result = (
             await elasticsearch.upsert(normalized, target=os_target)
@@ -345,6 +572,13 @@ class KnowledgeIndexer:
             if normalized
             else {"provider": "milvus", "indexed": 0, "target": qd_target}
         )
+        graph_result = (
+            await asyncio.to_thread(
+                graph.upsert_generation, knowledge_base_id, schema_version, normalized
+            )
+            if normalized and graph.available()
+            else {"provider": "neo4j", "indexed": 0, "available": graph.available()}
+        )
         os_result["target"] = os_target
         qd_result["target"] = qd_target
         return {
@@ -353,7 +587,9 @@ class KnowledgeIndexer:
             "documents": len(normalized),
             "elasticsearch": os_result,
             "milvus": qd_result,
+            "neo4j": graph_result,
             "elasticsearchCount": int(os_result.get("indexed") or 0),
+            "neo4jCount": int(graph_result.get("indexed") or 0),
             "milvusCount": int(qd_result.get("indexed") or 0),
         }
 
@@ -395,7 +631,17 @@ class KnowledgeIndexer:
             else:
                 raw_tags = [part.strip() for part in stripped.split(",") if part.strip()]
         item["permission_tags"] = list(raw_tags or [])
-        item["metadata"] = {"content_hash": item.get("contentHash")}
+        # Evidence anchor survives the snapshot projection: retrieval metadata is read from these
+        # snake_case fields, while the Java payload uses camelCase names.
+        item["evidence_code"] = item.get("evidence_code") or item.get("evidenceCode") or None
+        item["evidence_hash"] = (
+            item.get("evidence_hash") or item.get("evidenceHash") or item.get("content_hash") or ""
+        )
+        item["content_hash"] = item.get("contentHash") or item.get("content_hash") or ""
+        item["object_key"] = item.get("objectKey") or (
+            "%s:%s" % (item.get("object_type"), item.get("id"))
+        )
+        item["metadata"] = {"content_hash": item.get("content_hash")}
         return item
 
     @staticmethod
@@ -424,12 +670,122 @@ class KnowledgeIndexer:
         """Atomically activate validated Elasticsearch and Milvus green targets."""
         os_result = await get_elasticsearch_provider().activate_target(schema_version)
         qd_result = await get_milvus_provider().activate_target(schema_version)
+        graph = get_graph_provider()
+        graph_result = (
+            await asyncio.to_thread(
+                graph.activate_generation, knowledge_base_id, schema_version
+            )
+            if graph.available()
+            else {"provider": "neo4j", "available": False}
+        )
         return {
             "knowledgeBaseId": knowledge_base_id,
             "schemaVersion": schema_version,
             "elasticsearch": os_result,
             "milvus": qd_result,
+            "neo4j": graph_result,
         }
+
+    async def qualify_schema_acl(
+        self, knowledge_base_id: int, schema_version: str,
+        expected_manifest_hash: str = "", expected_manifest_count: int = 0,
+        expected_graph_manifest_hash: str = "", expected_graph_entity_count: int = 0,
+        expected_graph_relation_count: int = 0,
+    ) -> Dict[str, Any]:
+        """Run deterministic persona leakage checks against green ES/Milvus targets.
+
+        This gate never activates aliases. It queries physical green targets directly,
+        so qualification cannot accidentally validate the currently active generation.
+        """
+        es = get_elasticsearch_provider()
+        mv = get_milvus_provider()
+        rows = await self._acl_qualification_rows(knowledge_base_id, schema_version)
+        es_manifest = await es.target_manifest(knowledge_base_id, schema_version)
+        mv_manifest = await mv.target_manifest(knowledge_base_id, schema_version)
+        graph = get_graph_provider()
+        graph_manifest = (
+            await asyncio.to_thread(
+                graph.target_manifest, knowledge_base_id, schema_version
+            )
+            if graph.available()
+            else {"provider": "neo4j", "available": False, "manifestHash": "", "count": 0}
+        )
+        graph_data_manifest = (
+            await asyncio.to_thread(graph.authoritative_graph_manifest, knowledge_base_id, schema_version)
+            if graph.available() and hasattr(graph, "authoritative_graph_manifest")
+            else {"provider": "neo4j-graph", "available": False, "manifestHash": "", "entityCount": 0, "relationCount": 0}
+        )
+        manifest_failures = []
+        if expected_graph_manifest_hash and graph_data_manifest.get("manifestHash") != expected_graph_manifest_hash:
+            manifest_failures.append({"provider": "neo4j-graph", "reason": "GRAPH_MANIFEST_HASH_MISMATCH"})
+        if expected_graph_entity_count and int(graph_data_manifest.get("entityCount") or 0) != int(expected_graph_entity_count):
+            manifest_failures.append({"provider": "neo4j-graph", "reason": "GRAPH_ENTITY_COUNT_MISMATCH"})
+        if expected_graph_relation_count and int(graph_data_manifest.get("relationCount") or 0) != int(expected_graph_relation_count):
+            manifest_failures.append({"provider": "neo4j-graph", "reason": "GRAPH_RELATION_COUNT_MISMATCH"})
+        for manifest in (es_manifest, mv_manifest, graph_manifest):
+            if expected_manifest_hash and manifest.get("manifestHash") != expected_manifest_hash:
+                manifest_failures.append({"provider": manifest.get("provider"), "reason": "MANIFEST_HASH_MISMATCH"})
+            if expected_manifest_count and int(manifest.get("count") or 0) != int(expected_manifest_count):
+                manifest_failures.append({"provider": manifest.get("provider"), "reason": "MANIFEST_COUNT_MISMATCH"})
+        personas = [
+            ("anonymous", []), ("team-a", ["team-a"]),
+            ("team-b", ["team-b"]), ("admin", ["__admin__"]),
+        ]
+        failures = list(manifest_failures)
+        evidence = []
+        for name, tags in personas:
+            allowed = self._acl_allowed_ids(rows, tags, name == "admin")
+            providers = [("elasticsearch", es), ("milvus", mv)]
+            for provider_name, provider in providers:
+                visible = await provider.qualify_acl_target(
+                    knowledge_base_id, schema_version, tags, admin=name == "admin"
+                )
+                leaked = sorted(set(visible) - allowed)
+                missing = sorted(allowed - set(visible))
+                evidence.append({"persona": name, "provider": provider_name,
+                                 "visible": sorted(visible), "allowed": sorted(allowed),
+                                 "leaked": leaked, "missing": missing})
+                if leaked:
+                    failures.append({"persona": name, "provider": provider_name,
+                                     "leaked": leaked})
+            if graph.available():
+                visible = await asyncio.to_thread(
+                    graph.qualify_acl_target, knowledge_base_id, schema_version,
+                    tags, name == "admin"
+                )
+                leaked = sorted(set(visible) - allowed)
+                missing = sorted(allowed - set(visible))
+                evidence.append({"persona": name, "provider": "neo4j",
+                                 "visible": sorted(visible), "allowed": sorted(allowed),
+                                 "leaked": leaked, "missing": missing})
+                if leaked:
+                    failures.append({"persona": name, "provider": "neo4j",
+                                     "leaked": leaked})
+        return {"qualified": not failures, "schemaVersion": schema_version,
+                "expectedManifestHash": expected_manifest_hash,
+                "expectedManifestCount": expected_manifest_count,
+                "engineManifests": [es_manifest, mv_manifest, graph_manifest],
+                "authoritativeGraphManifest": graph_data_manifest,
+                "personas": [x[0] for x in personas], "failures": failures,
+                "evidence": evidence,
+                "generationConsistency": "ES_MILVUS_NEO4J_PINNED",
+                "graph": "GENERATION_SCOPED_GOVERNED_PROJECTION"}
+
+    async def _acl_qualification_rows(self, knowledge_base_id: int, schema_version: str):
+        """Load ACL metadata from the green Elasticsearch target for expected-set calculation."""
+        return await get_elasticsearch_provider().acl_target_rows(knowledge_base_id, schema_version)
+
+    @staticmethod
+    def _acl_allowed_ids(rows, tags, admin=False):
+        if admin:
+            return {str(row.get("id")) for row in rows}
+        caller = set(tags or [])
+        allowed = set()
+        for row in rows:
+            required = set(row.get("permission_tags") or [])
+            if not required or required.intersection(caller):
+                allowed.add(str(row.get("id")))
+        return allowed
 
     async def external_stats(self, knowledge_base_id: int) -> Dict[str, Any]:
         """Return object counts for drift diagnostics across retrieval views."""

@@ -1,0 +1,8 @@
+CREATE TABLE IF NOT EXISTS t_acl_subject (
+ id BIGINT PRIMARY KEY AUTO_INCREMENT, subject_code VARCHAR(128) NOT NULL, display_name VARCHAR(255), department_code VARCHAR(128), status VARCHAR(32) NOT NULL DEFAULT 'ACTIVE', created_time TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_time TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP, UNIQUE KEY uk_acl_subject_code(subject_code));
+CREATE TABLE IF NOT EXISTS t_acl_role (id BIGINT PRIMARY KEY AUTO_INCREMENT, role_code VARCHAR(128) NOT NULL, role_name VARCHAR(255), status VARCHAR(32) NOT NULL DEFAULT 'ACTIVE', UNIQUE KEY uk_acl_role_code(role_code));
+CREATE TABLE IF NOT EXISTS t_acl_subject_role (subject_id BIGINT NOT NULL, role_id BIGINT NOT NULL, PRIMARY KEY(subject_id,role_id));
+CREATE TABLE IF NOT EXISTS t_acl_role_tag (role_id BIGINT NOT NULL, permission_tag VARCHAR(128) NOT NULL, PRIMARY KEY(role_id,permission_tag));
+CREATE TABLE IF NOT EXISTS t_acl_subject_tag (subject_id BIGINT NOT NULL, permission_tag VARCHAR(128) NOT NULL, PRIMARY KEY(subject_id,permission_tag));
+CREATE TABLE IF NOT EXISTS t_acl_department_tag (department_code VARCHAR(128) NOT NULL, permission_tag VARCHAR(128) NOT NULL, PRIMARY KEY(department_code,permission_tag));
+CREATE TABLE IF NOT EXISTS t_acl_access_audit (id BIGINT PRIMARY KEY AUTO_INCREMENT, subject_code VARCHAR(128), knowledge_base_id BIGINT, resource_type VARCHAR(64) NOT NULL, resource_code VARCHAR(255), action_name VARCHAR(64) NOT NULL, decision VARCHAR(16) NOT NULL, permission_tags JSON, reason VARCHAR(1000), created_time TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, KEY idx_acl_audit_subject_time(subject_code,created_time), KEY idx_acl_audit_kb_time(knowledge_base_id,created_time));

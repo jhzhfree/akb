@@ -41,5 +41,15 @@ def test_pipeline(tmp_path: Path):
         assert result["candidates"]
         assert result["citations"]
         assert "bm25" in result["strategies"] or "vector" in result["strategies"]
+        # llmwiki-style presentation payload consumed by the answer card.
+        assert result["traceId"] == "Q_TEST"
+        assert result["questionTypeLabel"]
+        assert result["routerNote"]
+        assert result["channels"] == result["strategies"]
+        assert 0.0 <= result["confidence"] <= 0.95
+        assert result["contextChars"] >= 0
+        assert result["durationMs"] >= 0
+        assert isinstance(result["reranked"], bool)
+        assert isinstance(result["claims"], list)
 
     asyncio.run(run())

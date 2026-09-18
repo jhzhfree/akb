@@ -49,6 +49,8 @@ management:
       enabled: ${REDIS_HEALTH_ENABLED:false}
 knowledge:
   ai-service-base-url: ${AI_SERVICE_BASE_URL:http://127.0.0.1:12000}
+  # 摄入原件保存目录，供资料与摄入页面预览源文件
+  source-storage-dir: ${SOURCE_STORAGE_DIR:data/source-files}
   ai-connect-timeout-ms: ${AI_CONNECT_TIMEOUT_MS:10000}
   ai-read-timeout-ms: ${AI_READ_TIMEOUT_MS:180000}
   startup-fail-fast: ${STARTUP_FAIL_FAST:false}
@@ -56,6 +58,9 @@ knowledge:
   ops-viewer-token: ${OPS_VIEWER_TOKEN:}
   ops-operator-token: ${OPS_OPERATOR_TOKEN:}
   ops-admin-token: ${OPS_ADMIN_TOKEN:}
+  acl:
+    identity-db-enabled: ${KNOWLEDGE_ACL_IDENTITY_DB_ENABLED:true}
+    trusted-header-enabled: ${KNOWLEDGE_ACL_TRUSTED_HEADER_ENABLED:false}
 logging:
   level:
     root: ${LOG_LEVEL:INFO}

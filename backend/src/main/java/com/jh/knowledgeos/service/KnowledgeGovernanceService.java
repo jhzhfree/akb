@@ -48,6 +48,7 @@ public class KnowledgeGovernanceService {
         updateObjectStatus(type, code, decision);
         Long kb = mapper.findKnowledgeBaseIdForObject(type, code);
         if (kb != null) {
+            mapper.snapshotKnowledgeObject(kb, type, code, "HUMAN_REVIEW", stringValue(request.get("reviewer")));
             outboxService.enqueueObjectStatus(kb, type, code, decision, MDC.get("traceId"));
         }
         mapper.insertReview(
@@ -104,6 +105,7 @@ public class KnowledgeGovernanceService {
                     finalStatus = KnowledgeStatus.PENDING_REVIEW.name();
                 }
                 updateObjectStatus(type, code, finalStatus);
+                mapper.snapshotKnowledgeObject(knowledgeBaseId, type, code, "AI_ADJUDICATION", "AI_JUDGE");
                 outboxService.enqueueObjectStatus(
                         knowledgeBaseId, type, code, finalStatus,
                         String.valueOf(MDC.get("traceId")) + ":" + type + ":" + code);

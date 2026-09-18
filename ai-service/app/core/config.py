@@ -37,6 +37,10 @@ class Settings:
     chunk_overlap = int(os.getenv("CHUNK_OVERLAP", "120"))
     rrf_k = int(os.getenv("RRF_K", "60"))
     context_max_chars = int(os.getenv("CONTEXT_MAX_CHARS", "8000"))
+    answer_evidence_gate_enabled = _env_bool("ANSWER_EVIDENCE_GATE_ENABLED", True)
+    answer_faithfulness_min = float(os.getenv("ANSWER_FAITHFULNESS_MIN", "0.03"))
+    answer_entailment_min = float(os.getenv("ANSWER_ENTAILMENT_MIN", "0.08"))
+    answer_policy_version = os.getenv("ANSWER_POLICY_VERSION", "answer-policy-v1")
 
     # Graph
     graph_provider = os.getenv("GRAPH_PROVIDER", "neo4j")
@@ -54,6 +58,20 @@ class Settings:
     reranker_concurrency = int(os.getenv("RERANKER_CONCURRENCY", "1"))
     reranker_max_length = int(os.getenv("RERANKER_MAX_LENGTH", "1024"))
     reranker_max_chars = int(os.getenv("RERANKER_MAX_CHARS", "6000"))
+
+    # Entity resolution (design V1.1 §5.4).
+    entity_resolution_enabled = _env_bool("ENTITY_RESOLUTION_ENABLED", True)
+    entity_resolution_embedding_enabled = _env_bool("ENTITY_RESOLUTION_EMBEDDING_ENABLED")
+    entity_resolution_similarity = float(os.getenv("ENTITY_RESOLUTION_SIMILARITY", "0.86"))
+
+    # Query pipeline (design V1.1 §8): rewriting and quality-signal fusion.
+    query_rewrite_enabled = _env_bool("QUERY_REWRITE_ENABLED", True)
+    query_rewrite_llm_enabled = _env_bool("QUERY_REWRITE_LLM_ENABLED")
+    fusion_quality_signals_enabled = _env_bool("FUSION_QUALITY_SIGNALS_ENABLED", True)
+    fusion_weight_authority = float(os.getenv("FUSION_WEIGHT_AUTHORITY", "0.15"))
+    fusion_weight_freshness = float(os.getenv("FUSION_WEIGHT_FRESHNESS", "0.10"))
+    fusion_weight_confidence = float(os.getenv("FUSION_WEIGHT_CONFIDENCE", "0.15"))
+    fusion_weight_evidence = float(os.getenv("FUSION_WEIGHT_EVIDENCE", "0.10"))
 
     # Retrieval mode: local, auto, external, or dual.
     retrieval_mode = os.getenv("RETRIEVAL_MODE", "auto").lower()
@@ -79,6 +97,11 @@ class Settings:
     elasticsearch_password = os.getenv("ELASTICSEARCH_PASSWORD", "")
     elasticsearch_verify_ssl = _env_bool("ELASTICSEARCH_VERIFY_SSL")
     elasticsearch_analyzer = os.getenv("ELASTICSEARCH_ANALYZER", "standard")
+    # Standard-document store: the normalized source units that card generation reads from.
+    standard_document_index = os.getenv(
+        "STANDARD_DOCUMENT_INDEX",
+        "llmkb_standard_doc_v1",
+    ).lower()
 
     # Milvus vector retrieval
     milvus_enabled = _env_bool("MILVUS_ENABLED", True)

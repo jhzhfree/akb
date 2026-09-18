@@ -24,6 +24,10 @@ public class IndexOutboxService {
     private final ObjectMapper objectMapper;
     private final int maxAttempts;
 
+    private static final int DEFAULT_LIMIT = 100;
+    private static final int MAX_LIMIT = 500;
+    private static final int PAGE_SIZE = 20;
+
     public IndexOutboxService(
             KnowledgeMapper mapper,
             ObjectMapper objectMapper,
@@ -105,8 +109,29 @@ public class IndexOutboxService {
     }
 
     public List<IndexOutboxEvent> list(Long kb, String status, Integer limit) {
-        int normalized = limit == null ? 100 : Math.min(500, Math.max(1, limit));
-        return mapper.listIndexOutbox(kb, status, normalized);
+        return mapper.listIndexOutbox(kb, status, normalizeLimit(limit, DEFAULT_LIMIT), 0);
+    }
+
+    /**
+     * Windowed read for console views: reports the filtered total so the UI can page
+     * instead of truncating the newest rows, and keeps empty windows inside range.
+     */
+    public Map<String, Object> page(Long kb, String status, Integer page, Integer size) {
+        int pageSize = normalizeLimit(size, PAGE_SIZE);
+        long total = mapper.countIndexOutbox(kb, blankToNull(status));
+        int totalPages = Math.max(1, (int) Math.ceil((double) total / (double) pageSize));
+        int current = page == null || page < 1 ? 1 : page;
+        if (current > totalPages) {
+            current = totalPages;
+        }
+        Map<String, Object> result = new LinkedHashMap<String, Object>();
+        result.put("items", mapper.listIndexOutbox(
+                kb, blankToNull(status), pageSize, (current - 1) * pageSize));
+        result.put("total", total);
+        result.put("page", current);
+        result.put("size", pageSize);
+        result.put("totalPages", totalPages);
+        return result;
     }
 
     public Map<String, Object> stats(Long kb) {
@@ -168,6 +193,16 @@ public class IndexOutboxService {
         payload.put("indexVersion", event.getObjectVersion());
         payload.put("chunks", mapper.listDocumentIndexChunks(documentId));
         return payload;
+    }
+
+    /** Keeps a caller-supplied window size inside the safe range for this table. */
+    private int normalizeLimit(Integer value, int fallback) {
+        int resolved = value == null || value < 1 ? fallback : value;
+        return Math.min(MAX_LIMIT, resolved);
+    }
+
+    private String blankToNull(String value) {
+        return value == null || value.trim().isEmpty() ? null : value.trim();
     }
 
     private Long delta(long authoritative, Object target) {

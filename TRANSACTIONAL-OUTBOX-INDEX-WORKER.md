@@ -98,6 +98,7 @@ t_document
 
 ```http
 GET  /api/knowledge/index/outbox/{kb}
+GET  /api/knowledge/index/outbox/{kb}/page?page=1&size=20&status=DEAD  # 控制台分页：返回 items/total/page/size/totalPages
 GET  /api/knowledge/index/outbox/{kb}/stats
 POST /api/knowledge/index/outbox/events/{eventId}/replay
 POST /api/knowledge/index/outbox/events/{eventId}/skip

@@ -13,7 +13,13 @@ Content-Type: application/json
 ### Outbox backlog
 GET http://localhost:8080/api/knowledge/index/outbox/1/stats
 
+### List outbox events (paged: items/total/page/size/totalPages)
+GET http://localhost:8080/api/knowledge/index/outbox/1/page?page=1&size=20
+
 ### List dead outbox events
+GET http://localhost:8080/api/knowledge/index/outbox/1/page?page=1&size=20&status=DEAD
+
+### List dead outbox events (legacy array response)
 GET http://localhost:8080/api/knowledge/index/outbox/1?status=DEAD&limit=50
 
 ### Replay a dead event

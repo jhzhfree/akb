@@ -1,0 +1,35 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html, body, #app { height: 100%; }
+  body { @apply bg-ink-50 text-ink-900 antialiased; }
+  ::-webkit-scrollbar { width: 9px; height: 9px; }
+  ::-webkit-scrollbar-thumb { @apply rounded-full bg-ink-300; }
+  ::-webkit-scrollbar-thumb:hover { @apply bg-ink-400; }
+}
+
+@layer components {
+  /* Padding belongs to .kos-main, so pages only constrain nothing and keep full width. */
+  .kb-page { @apply w-full; }
+  .kb-card { @apply rounded-xl border border-[#dfe5ee] bg-white shadow-sm; }
+  .kb-card-head { @apply flex items-center justify-between border-b border-[#eef2f7] px-4 py-3; }
+  .kb-card-body { @apply p-4; }
+  .kb-field-label { @apply block text-[12px] font-medium text-ink-600; }
+  .kb-eyebrow { @apply text-[10px] font-bold uppercase tracking-[.18em] text-[#2563eb]; }
+  .kb-title { @apply text-xl font-semibold tracking-tight text-ink-950; }
+  .kb-muted { @apply text-xs leading-5 text-ink-500; }
+  .kb-btn { @apply inline-flex items-center justify-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50; }
+  .kb-btn-primary { @apply kb-btn bg-[#2563eb] text-white hover:bg-[#1d4ed8]; }
+  .kb-btn-outline { @apply kb-btn border border-[#dfe5ee] bg-white text-ink-700 hover:border-[#c3d3ee] hover:bg-[#f7faff]; }
+  .kb-btn-ghost { @apply kb-btn text-ink-600 hover:bg-ink-100 hover:text-ink-900; }
+  .kb-btn-danger { @apply kb-btn bg-[#dc2626] text-white hover:bg-[#b91c1c]; }
+  .kb-badge { @apply inline-flex items-center rounded-md px-1.5 py-0.5 text-[11px] font-medium; }
+  .kb-input { @apply w-full rounded-lg border border-[#dfe5ee] bg-white px-3 py-2 text-sm outline-none transition focus:border-[#93b4fd] focus:ring-2 focus:ring-[#dbeafe]; }
+  .kb-metric { @apply kb-card flex min-h-[112px] flex-col justify-between p-4; }
+  .kb-metric-label { @apply text-xs font-medium text-ink-500; }
+  .kb-metric-value { @apply text-3xl font-semibold tracking-tight text-ink-950; }
+  .kb-metric-hint { @apply text-[11px] text-ink-400; }
+  .kb-section-head { @apply mb-4 flex items-end justify-between gap-4; }
+}

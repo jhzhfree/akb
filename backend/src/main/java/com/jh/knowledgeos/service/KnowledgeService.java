@@ -23,22 +23,25 @@ public class KnowledgeService {
     private final KnowledgeQueryService queryService;
     private final KnowledgeGovernanceService governanceService;
     private final KnowledgeReadService readService;
+    private final SourcePreviewService previewService;
 
     public KnowledgeService(
             DocumentIngestionService ingestionService,
             KnowledgeExtractionService extractionService,
             KnowledgeQueryService queryService,
             KnowledgeGovernanceService governanceService,
-            KnowledgeReadService readService) {
+            KnowledgeReadService readService,
+            SourcePreviewService previewService) {
         this.ingestionService = ingestionService;
         this.extractionService = extractionService;
         this.queryService = queryService;
         this.governanceService = governanceService;
         this.readService = readService;
+        this.previewService = previewService;
     }
 
-    public Map<String, Object> upload(Long kb, MultipartFile file, Double authority) throws Exception {
-        return ingestionService.upload(kb, file, authority);
+    public Map<String, Object> upload(Long kb, MultipartFile file, Double authority, String permissionTags) throws Exception {
+        return ingestionService.upload(kb, file, authority, permissionTags);
     }
 
     public Map<String, Object> extract(Map<String, Object> request) {
@@ -73,31 +76,70 @@ public class KnowledgeService {
         return governanceService.resolveConflict(id, status);
     }
 
-    public Map<String, Object> graph(Long kb, String code) {
-        return readService.graph(kb, code);
+    public Map<String, Object> graph(Long kb, String code, java.util.List<String> permissionTags,
+            Integer depth, Integer limit) {
+        return readService.graph(kb, code, permissionTags, depth, limit);
+    }
+
+    public Map<String, Object> knowledgeDetail(Long kb, String type, String code, java.util.List<String> permissionTags) {
+        return readService.knowledgeDetail(kb, type, code, permissionTags);
     }
 
     public Map<String, Object> capabilities() {
         return readService.capabilities();
     }
 
-    public List<KnowledgeCard> cards(Long kb) {
-        return readService.cards(kb);
+    public List<KnowledgeCard> cards(Long kb, java.util.List<String> permissionTags) {
+        return readService.cards(kb, permissionTags);
     }
 
-    public List<Claim> claims(Long kb) {
-        return readService.claims(kb);
+    public List<Claim> claims(Long kb, java.util.List<String> permissionTags) {
+        return readService.claims(kb, permissionTags);
     }
 
-    public List<KnowledgeSource> sources(Long kb) {
-        return readService.sources(kb);
+    public List<KnowledgeSource> sources(Long kb, java.util.List<String> permissionTags) {
+        return readService.sources(kb, permissionTags);
     }
 
     public List<Map<String, Object>> documents(Long kb) {
         return readService.documents(kb);
     }
 
+    public Map<String, Object> sourcePreview(Long kb, Long sourceId, Integer limit,
+            java.util.List<String> permissionTags) {
+        return previewService.preview(kb, sourceId, limit, permissionTags);
+    }
+
+    public com.jh.knowledgeos.domain.SourceFile sourceFile(Long kb, Long sourceId,
+            java.util.List<String> permissionTags) {
+        return previewService.file(kb, sourceId, permissionTags);
+    }
+
+    public Map<String, Object> overview(Long kb, java.util.List<String> permissionTags) {
+        return readService.overview(kb, permissionTags);
+    }
+
+    public Map<String, Object> answerQualification(String queryId) {
+        return readService.answerQualification(queryId);
+    }
+
+    public Map<String, Object> answerQualificationSummary(Long kb, Integer hours) {
+        return readService.answerQualificationSummary(kb, hours);
+    }
+
+    public Map<String, Object> contentUnitDetail(Long kb, Long contentUnitId, java.util.List<String> permissionTags) {
+        return readService.contentUnitDetail(kb, contentUnitId, permissionTags);
+    }
+
+    public Map<String, Object> evidenceDetail(Long kb, String evidenceCode, java.util.List<String> permissionTags) {
+        return readService.evidenceDetail(kb, evidenceCode, permissionTags);
+    }
+
     public Map<String, Object> trace(String queryId) {
         return readService.trace(queryId);
+    }
+
+    public List<Map<String, Object>> queryHistory(Long kb, Integer limit) {
+        return readService.queryHistory(kb, limit);
     }
 }

@@ -9,7 +9,10 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
 from app.core.config import settings
+from app.core.runtime_settings import load_model_settings
 from app.routes import router
+from app.settings_routes import router as settings_router
+from app.query_policy_routes import router as query_policy_router
 
 logging.basicConfig(
     level=getattr(logging, os.getenv("LOG_LEVEL", "INFO").upper(), logging.INFO),
@@ -29,6 +32,8 @@ class TraceAdapter(logging.LoggerAdapter):
 
 app = FastAPI(title="AI 原生企业知识库平台 - AI Service", version="1.1.0")
 app.include_router(router)
+app.include_router(settings_router)
+app.include_router(query_policy_router)
 
 
 @app.middleware("http")
@@ -80,9 +85,11 @@ def health():
 @app.get("/ready")
 def ready():
     """Return readiness state and critical provider diagnostics."""
+    model_settings = load_model_settings()
     return {
         "status": "READY",
         "llmProvider": settings.llm_provider,
+        "llmModel": model_settings.llm.model,
         "embeddingProvider": settings.embedding_provider,
         "graphProvider": settings.graph_provider,
         "rerankerConfigured": settings.reranker_enabled,

@@ -1,4 +1,4 @@
-# AI 原生企业知识库平台 V1.1
+# AI 原生企业知识库平台 1.1.0
 
 GitHub 仓库：`https://github.com/jhzhfree/llmkb`
 
@@ -53,6 +53,12 @@ make up
 3. [代码规范](docs/CODE-STANDARDS.md)
 4. [调试与测试手册](docs/DEBUGGING-TESTING-GUIDE.md)
 5. [常见改动 Playbook](docs/CHANGE-PLAYBOOK.md)
+
+发版与交付说明（版本 1.1.0）：
+
+- [V1.1 功能发布说明](docs/V1.1-RELEASE-NOTES.md)（做什么、验收标准、约束、下个版本方向）
+- [V1.1 发版清单与交付说明](docs/V1.1-RELEASE-MANIFEST.md)（功能清单与实现程度/限制、部署方式、升级包类型、交付形态）
+- [V1.1 功能清单与缺口排期](docs/V1.1-FEATURE-SCOPE.md)（首发版本规划与工程缺口）
 
 架构/历史专项说明：
 
