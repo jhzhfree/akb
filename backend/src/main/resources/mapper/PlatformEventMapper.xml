@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd"><mapper namespace="com.jh.knowledgeos.mapper.PlatformEventMapper">
+
+<insert id="insertPlatformEvent" parameterType="com.jh.knowledgeos.domain.PlatformEvent" useGeneratedKeys="true" keyProperty="id">
+INSERT INTO t_platform_event(event_id,event_time,event_type,knowledge_base_id,source,actor_type,actor_id,actor_name,target_type,target_code,summary,detail_json,trace_id,task_id,object_id,object_version,idempotency_key,retry_count)
+VALUES(#{eventId},#{eventTime},#{eventType},#{knowledgeBaseId},#{source},#{actorType},#{actorId},#{actorName},#{targetType},#{targetCode},#{summary},#{detailJson},#{traceId},#{taskId},#{objectId},#{objectVersion},#{idempotencyKey},#{retryCount})
+</insert>
+
+<select id="getPlatformEventByEventId" resultType="com.jh.knowledgeos.domain.PlatformEvent">SELECT * FROM t_platform_event WHERE event_id=#{eventId} LIMIT 1</select>
+
+<!-- One statement serves both directions: replays walk forward from the last delivered id,
+     console views walk backwards from the newest row. -->
+<select id="listPlatformEvents" resultType="com.jh.knowledgeos.domain.PlatformEvent">SELECT * FROM t_platform_event
+  <where>
+    <if test="kb != null">knowledge_base_id=#{kb}</if>
+    <if test="sinceId != null">AND id &gt; #{sinceId}</if>
+    <if test="types != null and types.size() > 0">AND event_type IN
+      <foreach collection="types" item="t" open="(" separator="," close=")">#{t}</foreach>
+    </if>
+  </where>
+  <choose>
+    <when test="ascending">ORDER BY id ASC</when>
+    <otherwise>ORDER BY id DESC</otherwise>
+  </choose>
+  LIMIT #{limit}</select>
+
+<delete id="deletePlatformEventsBefore">DELETE FROM t_platform_event WHERE created_time &lt; #{cutoff}</delete>
+
+<select id="maxPlatformEventId" resultType="long">SELECT COALESCE(MAX(id),0) FROM t_platform_event</select>
+
+</mapper>

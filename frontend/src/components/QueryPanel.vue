@@ -2,6 +2,17 @@
 <section class="kb-page max-w-[1180px]">
   <header class="kb-section-head"><div><div class="kb-eyebrow">HYBRID / GRAPH RAG</div>
     <h2 class="kb-title mt-1">智能问答</h2><p class="kb-muted mt-1">查询理解 → 多路召回 → RRF → Rerank → Evidence Context → 可追溯回答。</p></div></header>
+  <!-- §5 检索模块的二级入口：左侧不再展开二级菜单，改在默认页直接给出 -->
+  <nav class="kos-modnav" aria-label="知识检索">
+    <button
+      v-for="tool in tools"
+      :key="tool.key"
+      class="kos-modnav-chip"
+      @click="$emit('navigate',tool.key)">
+      <span class="kos-nav-ic">{{tool.icon}}</span>
+      <span>{{tool.label}}</span>
+    </button>
+  </nav>
   <div class="grid gap-4 lg:grid-cols-[1fr_280px]">
     <div>
       <article class="kb-card overflow-hidden">
@@ -94,7 +105,14 @@ import type { QueryCitation, QueryHistoryItem, QueryResult, QuerySupportClaim } 
 import { renderMarkdown } from '../utils/markdown'
 
 const props = defineProps<{ query:string; result:QueryResult|null; asking:boolean; history:QueryHistoryItem[] }>()
-defineEmits<{ ask:[]; 'update:query':[value:string]; 'open-trace':[qid:string]; 'refresh-history':[]; 'open-citation':[citation:QueryCitation] }>()
+defineEmits<{ ask:[]; 'update:query':[value:string]; 'open-trace':[qid:string]; 'refresh-history':[]; 'open-citation':[citation:QueryCitation]; navigate:[key:string] }>()
+/** 检索模块的其余入口：调试（检索测试 / Query Trace）与调优（策略 / Benchmark）。 */
+const tools = [
+  { key:'search.test', icon:'🧪', label:'检索测试' },
+  { key:'search.profile', icon:'⌗', label:'检索策略' },
+  { key:'search.trace', icon:'🛰', label:'Query Trace' },
+  { key:'search.benchmark', icon:'📈', label:'Benchmark' },
+]
 const time=(v?:string)=>v?new Date(v).toLocaleString():'—'
 
 /** Markdown 答案 + [证据N] 上标引用（llmwiki 式排版）。 */

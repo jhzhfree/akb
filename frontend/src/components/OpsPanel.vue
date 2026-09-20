@@ -185,6 +185,7 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { DriftResult, IndexSchema, OutboxEvent, OutboxStats } from '../types'
+import { errorMessage as message } from '../utils/feedback'
 import {
   activateIndexSchema, getIndexDrift, getIndexSchemas, getOutboxEvents, getOutboxStats,
   purgeKnowledgeBase,
@@ -462,10 +463,7 @@ function eventTagType(status?:string) {
     default: return 'info' as const
   }
 }
-function message(e:unknown) {
-  const x = e as { response?:{ data?:{ message?:string } }; message?:string }
-  return x.response?.data?.message || x.message || '操作失败'
-}
+
 
 watch(() => props.knowledgeBaseId, () => { eventsPage.value = 1; void load() })
 onMounted(load)

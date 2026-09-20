@@ -1,6 +1,7 @@
 package com.jh.knowledgeos.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.jh.knowledgeos.common.PlatformEventTypes;
 import com.jh.knowledgeos.mapper.KnowledgeMapper;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -22,13 +23,16 @@ public class AclAdministrationService {
     private final ObjectMapper objectMapper;
     private final IndexOutboxService outbox;
     private final AclContextResolver resolver;
+    private final PlatformEventPublisher publisher;
 
     public AclAdministrationService(KnowledgeMapper mapper, ObjectMapper objectMapper,
-            IndexOutboxService outbox, AclContextResolver resolver) {
+            IndexOutboxService outbox, AclContextResolver resolver,
+            PlatformEventPublisher publisher) {
         this.mapper = mapper;
         this.objectMapper = objectMapper;
         this.outbox = outbox;
         this.resolver = resolver;
+        this.publisher = publisher;
     }
 
     public List<Map<String, Object>> subjects() { return mapper.listAclSubjects(); }
@@ -71,6 +75,16 @@ public class AclAdministrationService {
             Map<String, Object> event = outbox.enqueue(kb, normalizedType,
                     "KB:" + kb + ":" + normalizedType + ":" + code,
                     "ACL_CHANGED", AiApiPaths.INDEX_OBJECT_ACL, payload, changeCode);
+
+            Map<String, Object> detail = new LinkedHashMap<String, Object>();
+            detail.put("changeCode", changeCode);
+            detail.put("previousTags", oldTags);
+            detail.put("permissionTags", clean);
+            detail.put("sourceCascade", "SOURCE".equals(normalizedType));
+            detail.put("requiresRetrievalPropagation", true);
+            detail.put("reason", reason);
+            publisher.emitUser(PlatformEventTypes.ACL_CHANGED, kb, PlatformEventPublisher.SOURCE_UI,
+                    normalizedType, code, "权限标签变更：" + normalizedType + " " + code, detail);
 
             Map<String, Object> result = new LinkedHashMap<String, Object>();
             result.put("changeCode", changeCode);

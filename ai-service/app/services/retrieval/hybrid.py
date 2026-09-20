@@ -147,6 +147,9 @@ class HybridRetriever:
         """
         result = {}
         channel_latency_ms = {}
+        # Degradations are part of the trace, not log noise: a query answered from the
+        # local fallback must be distinguishable from one answered by ES/Milvus (§12.5).
+        errors = {}
         use_external = settings.retrieval_mode in {"auto", "external", "dual"}
         elasticsearch = get_elasticsearch_provider()
         milvus = get_milvus_provider()
@@ -162,9 +165,10 @@ class HybridRetriever:
             if use_external and settings.elasticsearch_enabled:
                 try:
                     return await elasticsearch.search(kb, query, size, permission_tags, object_type)
-                except Exception:
+                except Exception as exc:
                     if settings.retrieval_external_required:
                         raise
+                    errors.setdefault(channel, []).append("elasticsearch degraded: %s" % exc)
             if channel == "bm25":
                 return self._bm25(kb, query, size, permission_tags)
             return self._typed(kb, object_type, query, size, permission_tags)
@@ -179,9 +183,10 @@ class HybridRetriever:
                     try:
                         vector = (await get_embedding_provider().embed([query]))[0]
                         return await milvus.search(kb, vector, vector_size, permission_tags)
-                    except Exception:
+                    except Exception as exc:
                         if settings.retrieval_external_required:
                             raise
+                        errors.setdefault("vector", []).append("milvus degraded: %s" % exc)
                 return await self._vector(kb, query, vector_size, permission_tags)
             result["vector"] = await measured("vector", vector_search())
         if "card" in channels:
@@ -196,7 +201,8 @@ class HybridRetriever:
                 if graph.available():
                     try:
                         return await asyncio.to_thread(graph.search, kb, query, graph_size, permission_tags)
-                    except Exception:
+                    except Exception as exc:
+                        errors.setdefault("graph", []).append("neo4j degraded: %s" % exc)
                         return await lexical("claim", "CLAIM", graph_size)
                 return await lexical("claim", "CLAIM", graph_size)
             result["graph"] = await measured("graph", graph_search())
@@ -229,6 +235,7 @@ class HybridRetriever:
 
         diagnostics = {
             "channelLatencyMs": channel_latency_ms,
+            "errors": errors,
             "generationIds": sorted(external_generations),
             "generationBarrier": "FAIL_CLOSED_ES_MILVUS_NEO4J",
             "filters": {
@@ -397,10 +404,18 @@ class HybridRetriever:
 
 
 def rrf(result_sets, k=60, weights=None, top_k=10):
-    """Fuse ranked recall lists with Reciprocal Rank Fusion."""
+    """Fuse ranked recall lists with Reciprocal Rank Fusion.
+
+    Besides the fused score, every surviving candidate keeps its per-channel raw
+    score and rank (design §12.4 "Score Breakdown"): the fused number alone cannot
+    explain *why* a candidate was hit or *where* it came from, and overwriting the
+    channel scores made the retrieval test page unexplainable.
+    """
     scores = defaultdict(float)
     best = {}
     channels = defaultdict(list)
+    channel_scores = defaultdict(dict)
+    channel_ranks = defaultdict(dict)
     weights = weights or {}
 
     for channel, items in result_sets.items():
@@ -409,6 +424,8 @@ def rrf(result_sets, k=60, weights=None, top_k=10):
             doc_id = item["id"]
             scores[doc_id] += weight / (k + rank)
             channels[doc_id].append(channel)
+            channel_scores[doc_id][channel] = float(item.get("score") or 0.0)
+            channel_ranks[doc_id][channel] = rank
             if doc_id not in best or item["score"] > best[doc_id]["score"]:
                 best[doc_id] = dict(item)
 
@@ -416,7 +433,10 @@ def rrf(result_sets, k=60, weights=None, top_k=10):
     output = []
     for doc_id in top_ids:
         item = best[doc_id]
+        item["rrfScore"] = scores[doc_id]
         item["score"] = scores[doc_id]
+        item["channelScores"] = dict(channel_scores[doc_id])
+        item["channelRanks"] = dict(channel_ranks[doc_id])
         item["metadata"] = dict(item.get("metadata") or {})
         item["metadata"]["matched_channels"] = channels[doc_id]
         output.append(item)

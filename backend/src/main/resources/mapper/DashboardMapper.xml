@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd"><mapper namespace="com.jh.knowledgeos.mapper.DashboardMapper">
+
+  <!-- 文档通过 source_version → source 归属知识库，与 listDocuments 保持一致。 -->
+  <sql id="docJoin">FROM t_document d JOIN t_source_version sv ON sv.id=d.source_version_id
+    JOIN t_source s ON s.id=sv.source_id WHERE s.knowledge_base_id=#{kb}</sql>
+
+  <!-- Chunk 挂在文档下，因此与文档走同一条归属链。 -->
+  <sql id="chunkJoin">FROM t_content_unit cu JOIN t_document d ON d.id=cu.document_id
+    JOIN t_source_version sv ON sv.id=d.source_version_id
+    JOIN t_source s ON s.id=sv.source_id WHERE s.knowledge_base_id=#{kb}</sql>
+
+  <select id="countCoreObjects" resultType="map">
+    SELECT
+      (SELECT COUNT(*) FROM t_source WHERE knowledge_base_id=#{kb}) sourceCount,
+      (SELECT COUNT(*) <include refid="docJoin"/>) documentCount,
+      (SELECT COUNT(*) <include refid="chunkJoin"/>) chunkCount,
+      (SELECT COUNT(*) FROM t_knowledge_card WHERE knowledge_base_id=#{kb}) cardCount,
+      (SELECT COUNT(*) FROM t_claim WHERE knowledge_base_id=#{kb}) claimCount,
+      (SELECT COUNT(*) FROM t_entity WHERE knowledge_base_id=#{kb}) entityCount,
+      (SELECT COUNT(*) FROM t_relation WHERE knowledge_base_id=#{kb}) relationCount
+  </select>
+
+  <select id="countLifecycle" resultType="map">
+    SELECT
+      (SELECT COUNT(*) FROM t_source WHERE knowledge_base_id=#{kb}) ingestSource,
+      (SELECT COUNT(*) <include refid="docJoin"/>) ingestDocument,
+      (SELECT COUNT(*) FROM t_ingestion_run WHERE knowledge_base_id=#{kb} AND status='SUCCESS') parseSuccess,
+      (SELECT COUNT(*) FROM t_ingestion_run WHERE knowledge_base_id=#{kb} AND status='FAILED') parseFailed,
+      (SELECT COUNT(*) FROM t_ingestion_run WHERE knowledge_base_id=#{kb}
+         AND status NOT IN ('SUCCESS','FAILED')) parseRunning,
+      (SELECT COUNT(*) FROM t_claim WHERE knowledge_base_id=#{kb} AND status='CANDIDATE') extractCandidate,
+      (SELECT COUNT(*) FROM t_claim WHERE knowledge_base_id=#{kb} AND status='UNCERTAIN') extractUncertain,
+      (SELECT COUNT(*) FROM t_claim WHERE knowledge_base_id=#{kb} AND status='STALE') derivedStale,
+      (SELECT COUNT(*) FROM t_knowledge_conflict WHERE knowledge_base_id=#{kb} AND status='OPEN') judgeConflict,
+      (SELECT COUNT(*) FROM t_claim WHERE knowledge_base_id=#{kb}
+         AND status IN ('DRAFT','UNCERTAIN','CONFLICTED','PENDING_REVIEW')) judgePending,
+      (SELECT COUNT(*) FROM t_knowledge_card WHERE knowledge_base_id=#{kb}
+         AND status IN ('APPROVED','EFFECTIVE','ACTIVE')) publishCardActive,
+      (SELECT COUNT(*) FROM t_claim WHERE knowledge_base_id=#{kb}
+         AND status IN ('APPROVED','EFFECTIVE','ACTIVE')) publishClaimActive,
+      (SELECT COUNT(*) <include refid="docJoin"/> AND d.status IN ('FAILED','DIRTY')) publishDirty
+  </select>
+
+  <select id="countGovernance" resultType="map">
+    SELECT
+      (SELECT COUNT(*) FROM t_claim WHERE knowledge_base_id=#{kb}
+         AND status IN ('DRAFT','UNCERTAIN','CONFLICTED','PENDING_REVIEW')) pendingReviewClaim,
+      (SELECT COUNT(*) FROM t_knowledge_card WHERE knowledge_base_id=#{kb}
+         AND status IN ('DRAFT','UNCERTAIN','CONFLICTED','PENDING_REVIEW')) pendingReviewCard,
+      (SELECT COUNT(*) FROM t_knowledge_conflict WHERE knowledge_base_id=#{kb} AND status='OPEN') conflict,
+      (SELECT COUNT(*) FROM t_claim WHERE knowledge_base_id=#{kb} AND valid_to IS NOT NULL
+         AND valid_to &lt; NOW() AND (status IS NULL OR status NOT IN ('EXPIRED','SUPERSEDED','REJECTED'))) expired,
+      (SELECT COUNT(*) FROM t_claim c WHERE c.knowledge_base_id=#{kb}
+         AND NOT EXISTS(SELECT 1 FROM t_claim_evidence ce WHERE ce.claim_code=c.claim_code)) noEvidenceClaim,
+      (SELECT COUNT(*) FROM t_knowledge_card k WHERE k.knowledge_base_id=#{kb}
+         AND NOT EXISTS(SELECT 1 FROM t_knowledge_evidence ke WHERE ke.knowledge_code=k.knowledge_code)) noEvidenceCard,
+      (SELECT COUNT(*) FROM t_claim WHERE knowledge_base_id=#{kb}
+         AND confidence IS NOT NULL AND confidence &lt; #{lowConfidence}) lowConfidenceClaim,
+      (SELECT COUNT(*) FROM t_knowledge_card WHERE knowledge_base_id=#{kb}
+         AND confidence IS NOT NULL AND confidence &lt; #{lowConfidence}) lowConfidenceCard,
+      (SELECT COUNT(*) FROM t_claim WHERE knowledge_base_id=#{kb} AND status='STALE') staleDerived
+  </select>
+
+  <select id="listRecentObjects" resultType="map">
+    SELECT objectType,objectCode,displayTitle,status,confidence,updatedTime FROM (
+      SELECT 'CARD' objectType,knowledge_code objectCode,title displayTitle,status,confidence,
+             COALESCE(updated_time,created_time) updatedTime
+        FROM t_knowledge_card WHERE knowledge_base_id=#{kb}
+      UNION ALL
+      SELECT 'CLAIM' objectType,claim_code objectCode,
+             CONCAT(subject,' ',predicate,' ',LEFT(object_value,120)) displayTitle,status,confidence,
+             COALESCE(updated_time,created_time) updatedTime
+        FROM t_claim WHERE knowledge_base_id=#{kb}
+    ) recent ORDER BY updatedTime DESC LIMIT #{limit}
+  </select>
+
+</mapper>

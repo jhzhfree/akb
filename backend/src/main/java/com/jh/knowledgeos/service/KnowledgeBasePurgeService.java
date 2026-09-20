@@ -1,5 +1,6 @@
 package com.jh.knowledgeos.service;
 
+import com.jh.knowledgeos.common.PlatformEventTypes;
 import com.jh.knowledgeos.mapper.KnowledgeMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -71,14 +72,17 @@ public class KnowledgeBasePurgeService {
     private final KnowledgeMapper mapper;
     private final SourceFileStorageService sourceFileStorage;
     private final AiClient aiClient;
+    private final PlatformEventPublisher publisher;
 
     public KnowledgeBasePurgeService(
             KnowledgeMapper mapper,
             SourceFileStorageService sourceFileStorage,
-            AiClient aiClient) {
+            AiClient aiClient,
+            PlatformEventPublisher publisher) {
         this.mapper = mapper;
         this.sourceFileStorage = sourceFileStorage;
         this.aiClient = aiClient;
+        this.publisher = publisher;
     }
 
     /**
@@ -127,6 +131,12 @@ public class KnowledgeBasePurgeService {
         for (String table : PURGE_TABLES) {
             mapper.purgeKnowledgeBaseTable(table, kb);
         }
+        // Purging a base is the most destructive action an operator can take, so it has to be
+        // announced: subscribers holding materialized views or caches need to drop them.
+        Map<String, Object> detail = new LinkedHashMap<String, Object>(result);
+        publisher.emitUser(PlatformEventTypes.KNOWLEDGE_BASE_PURGED, kb,
+                PlatformEventPublisher.SOURCE_UI, "KNOWLEDGE_BASE", String.valueOf(kb),
+                "清空知识库：" + kb, detail);
         return result;
     }
 

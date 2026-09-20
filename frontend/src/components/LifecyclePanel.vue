@@ -189,6 +189,7 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { ExpireResult, ExpiringClaim, KnowledgeSource, LifecycleSummary, SourceImpact } from '../types'
 import { objectTypeLabel, statusLabel } from '../types'
+import { errorMessage as message } from '../utils/feedback'
 import {
   expireDueKnowledge, getExpiringClaims, getLifecycleSummary, getSourceImpact, getSources,
   supersedeKnowledge, unwrap,
@@ -327,10 +328,7 @@ function remainingType(validTo?:string) {
   if (days <= 7) return 'warning' as const
   return 'success' as const
 }
-function message(e:unknown) {
-  const x = e as { response?:{ data?:{ message?:string } }; message?:string }
-  return x.response?.data?.message || x.message || '操作失败'
-}
+
 
 watch([() => props.knowledgeBaseId, withinDays], () => { void load() })
 onMounted(load)

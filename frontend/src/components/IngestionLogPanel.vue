@@ -1,5 +1,5 @@
 <template>
-<div class="ingestion-log">
+<div class="ingestion-log" :class="{fixed:!!height}" :style="height?{height:`${height}px`}:undefined">
   <div class="run-list">
     <button v-for="run in runs" :key="run.id" :class="{active:run.id===selectedId}" @click="$emit('select',run.id)">
       <span class="run-dot" :class="run.status.toLowerCase()">
@@ -40,6 +40,8 @@ const props=defineProps<{
   runs:IngestionRun[]; detail:IngestionRunDetail|null; selectedId:number|null
   /** 上传进行中：日志随运行持续刷新，跟随最新一条事件滚动。 */
   live?:boolean
+  /** 宿主指定高度（px）：固定高度后两栏各自内部滚动，避免整块被撑长。 */
+  height?:number
 }>()
 defineEmits<{select:[id:number]}>()
 const timeline=ref<HTMLElement|null>(null)
@@ -125,7 +127,11 @@ color:#475569}
 color:#94a3b8}
 .empty-run,.event-empty{padding:24px;
 text-align:center}
+/* 固定高度模式：容器不再被内容撑长，运行列表与时间线各自在内部滚动。 */
+.ingestion-log.fixed{grid-template-rows:100%;min-height:0}
+.ingestion-log.fixed>.run-list,.ingestion-log.fixed>.event-timeline{max-height:none;min-height:0;height:100%;overflow:auto}
 @media(max-width:800px){.ingestion-log{grid-template-columns:1fr}
+.ingestion-log.fixed{grid-template-rows:38% 62%}
 .run-list{border-right:0;
 border-bottom:1px solid #e5e7eb;
 max-height:180px}

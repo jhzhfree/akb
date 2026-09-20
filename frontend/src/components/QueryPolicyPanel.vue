@@ -228,6 +228,7 @@ import { computed, onMounted, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { getQueryPolicy, getQueryPolicySchema, resetQueryPolicy, saveQueryPolicy, unwrap } from '../api/knowledge'
 import type { QueryPolicy, QueryPolicySchema, RouteRule } from '../types'
+import { errorMessage } from '../utils/feedback'
 
 const policy = ref<QueryPolicy|null>(null)
 const schema = ref<QueryPolicySchema|null>(null)
@@ -241,7 +242,7 @@ const channelNames = computed(() => channels.value.length
   ? channels.value.map(c => c.name)
   : Object.keys(policy.value?.recall.channels || {}))
 
-const err = (e:unknown) => (e as Error).message || '操作失败'
+const err = (e:unknown) => errorMessage(e)
 const channelLabel = (name:string) => channels.value.find(c => c.name === name)?.label || name
 const channelDesc = (name:string) => channels.value.find(c => c.name === name)?.description || ''
 const split = (text:string) => text.split(/[、,，;；\s]+/).map(item => item.trim()).filter(Boolean)

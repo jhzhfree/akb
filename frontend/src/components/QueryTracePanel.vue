@@ -14,8 +14,11 @@
         <div class="kb-metric"><span>Latency</span><b>{{ trace.latencyMs || 0 }} ms</b></div>
         <div class="kb-metric"><span>Status</span><b>{{ trace.errorCode || 'SUCCESS' }}</b></div>
       </div>
+      <!-- 设计 §12.5：9 段时间轴优先取后端解析好的 stages，旧 Trace 回退解析 traceJson。 -->
+      <TraceTimeline class="mb-4" :stages="stages"/>
       <RetrievalPipeline class="mb-4" :candidates="candidates" :recall-counts="recallCounts"
         :selected-count="selectedCount" @open-candidate="$emit('open-candidate',$event)"/>
+      <ScoreBreakdownPanel v-if="breakdownCount" class="mb-4" :candidates="candidates"/>
       <div class="mb-4 grid gap-4 xl:grid-cols-2">
         <LatencyWaterfall :timings="timings" :channel-latency="channelLatency"/>
         <RetrievalPolicyPanel :filters="filters"/>
@@ -55,10 +58,12 @@
 </template>
 <script setup lang="ts">
 import { computed } from 'vue'
-import type { QueryCitation, QueryTrace, TraceCandidate } from '../types'
+import type { QueryCitation, QueryTrace, TraceCandidate, PipelineStage } from '../types'
 import RetrievalPipeline from './RetrievalPipeline.vue'
 import RecallChannelExplorer from './RecallChannelExplorer.vue'
 import LatencyWaterfall from './LatencyWaterfall.vue'
+import TraceTimeline from './TraceTimeline.vue'
+import ScoreBreakdownPanel from './ScoreBreakdownPanel.vue'
 import RetrievalPolicyPanel from './RetrievalPolicyPanel.vue'
 import TraceStage from './TraceStage.vue'
 import AnswerQualificationPanel from './AnswerQualificationPanel.vue'
@@ -73,8 +78,18 @@ const candidates=computed<TraceCandidate[]>(()=>{
     rerankScore:c.rerankScore==null?undefined:Number(c.rerankScore),objectType:c.objectType||c.metadata?.object_type,
     contentUnitId:c.contentUnitId||c.metadata?.content_unit_id,sourceName:c.sourceName||c.metadata?.source_name,
     pageNo:c.pageNo||c.metadata?.page_no,fusionRank:c.fusionRank,rerankRank:c.rerankRank,rankDelta:c.rankDelta,
-    channelRanks:c.channelRanks||{}}))
+    channelRanks:c.channelRanks||{},scoreBreakdown:c.scoreBreakdown}))
 })
+/** 时间轴：后端已解析的 stages → pipelineJson → traceJson 内的 trace.stages（AI 直连场景）。 */
+const stages=computed<PipelineStage[]>(()=>{
+  const direct=props.trace?.stages
+  if(Array.isArray(direct)&&direct.length)return direct
+  const fromColumn=parse(props.trace?.pipelineJson)
+  if(Array.isArray(fromColumn)&&fromColumn.length)return fromColumn as PipelineStage[]
+  const embedded=(parse(full.value.trace)||{}).stages
+  return Array.isArray(embedded)?embedded as PipelineStage[]:[]
+})
+const breakdownCount=computed(()=>candidates.value.filter(c=>c.scoreBreakdown).length)
 const recallCounts=computed<Record<string,number>>(()=>{
   const trace=parse(full.value.trace)||{}
   if(trace.recallCounts)return trace.recallCounts

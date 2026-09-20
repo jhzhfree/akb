@@ -20,6 +20,8 @@ public class QueryTraceRecord {
     private String tokenUsageJson;
     private String errorCode;
     private String traceJson;
+    /** Stage timeline (design §12.5): rewrite → recall → ACL → RRF → rerank → context → LLM → citation. */
+    private String pipelineJson;
     private String answer;
 
     public String getQueryId(){return queryId;} public void setQueryId(String v){queryId=v;}
@@ -38,5 +40,6 @@ public class QueryTraceRecord {
     public String getTokenUsageJson(){return tokenUsageJson;} public void setTokenUsageJson(String v){tokenUsageJson=v;}
     public String getErrorCode(){return errorCode;} public void setErrorCode(String v){errorCode=v;}
     public String getTraceJson(){return traceJson;} public void setTraceJson(String v){traceJson=v;}
+    public String getPipelineJson(){return pipelineJson;} public void setPipelineJson(String v){pipelineJson=v;}
     public String getAnswer(){return answer;} public void setAnswer(String v){answer=v;}
 }

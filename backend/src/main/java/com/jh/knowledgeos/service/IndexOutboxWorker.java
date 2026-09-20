@@ -125,6 +125,10 @@ public class IndexOutboxWorker {
             if (dead) {
                 mapper.markIndexOutboxDead(event.getId(), message);
                 updateAclPropagation(event, "FAILED", null, message);
+                // An index failure must not touch the authoritative model: the document is only
+                // flagged DIRTY so a rebuild can pick it up, and the knowledge it produced stays
+                // queryable from the relational store (design §16.3).
+                markDocumentDirty(event, message);
             } else {
                 mapper.markIndexOutboxRetry(event.getId(), message, nextAttempt);
             }
@@ -153,6 +157,29 @@ public class IndexOutboxWorker {
         }
         mapper.updateAclChangePropagation(
                 event.getIdempotencyKey(), state, resultJson, lastError);
+    }
+
+    /** Flags the owning document DIRTY when its index update is dead-lettered. */
+    private void markDocumentDirty(IndexOutboxEvent event, String message) {
+        Long documentId = documentIdOf(event.getAggregateKey());
+        if (documentId == null) return;
+        mapper.updateDocumentState(documentId, "DIRTY", "INDEX", abbreviate(message, 900), 0);
+    }
+
+    /** Aggregate keys look like "KB:1:DOCUMENT:12"; the segment after DOCUMENT is the object id. */
+    private Long documentIdOf(String aggregateKey) {
+        if (aggregateKey == null) return null;
+        String[] parts = aggregateKey.split(":");
+        for (int i = 0; i < parts.length - 1; i++) {
+            if ("DOCUMENT".equalsIgnoreCase(parts[i])) {
+                try {
+                    return Long.valueOf(parts[i + 1].trim());
+                } catch (NumberFormatException ex) {
+                    return null;
+                }
+            }
+        }
+        return null;
     }
 
     private void recoverStaleLocks() {

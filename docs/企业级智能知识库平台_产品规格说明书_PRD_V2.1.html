@@ -1,0 +1,356 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>企业级智能知识库平台 产品规格说明书 PRD V2.1</title>
+<style>
+:root{--primary:#0f4c81;--primary2:#1769aa;--cyan:#0b8ea8;--green:#0c8c72;--orange:#d97706;--purple:#6d4bc3;--text:#1f2937;--muted:#64748b;--line:#dbe5ef;--bg:#f5f8fc}
+*{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;background:var(--bg);color:var(--text);font:15px/1.75 "Microsoft YaHei","PingFang SC",Arial,sans-serif}
+.page{max-width:1220px;margin:auto;background:#fff;min-height:100vh;box-shadow:0 8px 30px #0f4c8114}
+.hero{padding:58px 72px 44px;background:linear-gradient(135deg,#eef6ff,#fbfdff 58%,#eefaf8);border-bottom:1px solid var(--line)}
+.hero h1{margin:0;color:#123f6b;font-size:36px}.hero .sub{margin-top:10px;color:var(--muted);font-size:18px}.meta{display:flex;gap:10px;flex-wrap:wrap;margin-top:26px}
+.badge{padding:5px 11px;border:1px solid #cfe0f1;border-radius:999px;background:#fff;color:#335f87;font-size:13px}
+main{padding:42px 70px 80px}h2{margin-top:52px;padding-bottom:9px;border-bottom:2px solid #d9e8f6;color:#164c7f;font-size:28px}h3{margin-top:30px;color:#245d8d;font-size:20px}h4{color:#2a5f7f;font-size:16px;margin-bottom:6px}
+.toc{background:#f8fbff;border:1px solid #d7e6f6;border-radius:14px;padding:22px 28px}.toc ol{columns:2}.toc a{color:#285f91;text-decoration:none}
+.lead{font-size:17px;color:#40566b}.note{border-left:4px solid var(--primary2);background:#eef8ff;padding:14px 17px;border-radius:7px;margin:16px 0}.ok{border-left-color:var(--green);background:#eefaf6}.warn{border-left-color:var(--orange);background:#fff8e8}
+.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}.card{border:1px solid var(--line);border-radius:12px;padding:17px 19px;background:#fff}.card strong{color:#164c7f}
+.menu-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px;margin:18px 0}.menu{border:1px solid #d5e4f2;border-radius:12px;padding:15px;background:#f8fbff;text-align:center}.menu b{display:block;color:#174e7d;font-size:16px;margin-bottom:6px}.menu small{color:#64748b}
+.flow{background:#0f172a;color:#e2e8f0;border-radius:12px;padding:18px 20px;white-space:pre-wrap;font:13px/1.65 Consolas,"Microsoft YaHei",monospace;overflow:auto}
+table{width:100%;border-collapse:collapse;margin:15px 0 25px;font-size:13.5px}th,td{border:1px solid #dce5ee;padding:9px 10px;vertical-align:top}th{background:#eef6fd;color:#174e7d;text-align:left}
+.arch{width:100%;border:1px solid var(--line);border-radius:12px;box-shadow:0 4px 14px #0f4c8114}.cap{text-align:center;color:#6b7f92;font-size:13px}
+.pill{display:inline-block;padding:2px 7px;border-radius:999px;background:#edf7f5;color:#176e66;font-size:12px;margin:2px}
+footer{padding:28px;text-align:center;border-top:1px solid var(--line);color:#7a8b9b;font-size:12px}
+@media(max-width:900px){main,.hero{padding-left:24px;padding-right:24px}.toc ol{columns:1}.grid,.menu-grid{grid-template-columns:1fr}}
+@media print{body{background:#fff}.page{max-width:none;box-shadow:none}}
+</style></head>
+<body><div class="page">
+<section class="hero">
+<h1>企业级智能知识库平台 产品规格说明书</h1>
+<div class="sub">以“知识资产”为中心的 AI 原生企业知识平台 · 五大一级菜单·知识集成版</div>
+<div class="meta"><span class="badge">PRD V2.1</span><span class="badge">2026-09</span><span class="badge">参考 Google Cloud Agent Search 的简洁资源组织思路</span><span class="badge">面向：产品 / 设计 / 研发 / 测试 / 实施</span></div>
+</section>
+<main>
+<div class="toc"><strong>目录</strong><ol>
+<li><a href="#p1">产品定位与设计目标</a></li><li><a href="#p2">产品布局重构原则</a></li>
+<li><a href="#p3">总体信息架构</a></li><li><a href="#p4">知识工作台</a></li>
+<li><a href="#p5">知识创建</a></li><li><a href="#p6">知识检索</a></li>
+<li><a href="#p7">知识集成</a></li><li><a href="#p8">系统配置</a></li>
+<li><a href="#p9">核心知识模型</a></li><li><a href="#p10">知识全生命周期</a></li>
+<li><a href="#p11">角色与权限</a></li><li><a href="#p12">关键业务流程</a></li>
+<li><a href="#p13">MVP 与版本规划</a></li><li><a href="#p14">产品指标与验收</a></li>
+</ol></div>
+
+<section id="p1"><h2>1. 产品定位与设计目标</h2>
+<p class="lead">企业级智能知识库平台定位为 <b>AI 原生企业知识平台（AI-Native Enterprise Knowledge Platform）</b>。产品不以“文件管理”或“RAG 参数管理”为用户的第一认知，而以“企业拥有什么知识、知识从哪里来、是否可信、如何被检索和使用”为核心。</p>
+<div class="grid">
+<div class="card"><strong>知识资产化</strong><p>将来源、文档、Chunk、实体、关系、断言、证据、知识卡片、图谱与派生知识组织为可管理的企业知识资产。</p></div>
+<div class="card"><strong>知识可信化</strong><p>通过来源、Evidence、版本、置信度、冲突、裁决、权限和审计保证知识可追溯、可判断、可治理。</p></div>
+<div class="card"><strong>知识可检索</strong><p>统一提供关键词、语义、结构化与图关系检索，并支持引用、Trace 与检索质量评测。</p></div>
+<div class="card"><strong>知识服务化</strong><p>知识既供人使用，也通过 API、MCP、SSE 等标准能力提供给业务系统、AI 应用与 Agent。</p></div>
+</div>
+<div class="note ok"><b>本次 V2.0 的核心变化：</b>从原来的“工作台 / 知识空间 / 知识生产 / 知识管理 / 知识治理 / 检索中心 / 图谱 / 应用 / 评测 / 系统管理”等多一级入口，收敛为 <b>知识工作台、知识创建、知识检索、知识应用、系统配置</b> 五个一级菜单。复杂能力进入二级页面、Tab、Drawer 和对象详情页。</div>
+</section>
+
+<section id="p2"><h2>2. 产品布局重构原则</h2>
+<p>本次布局参考 Google Cloud Agent Search 的产品思路：以 Data Store / Data Source、Document、Search App 等核心资源组织能力，创建过程围绕“选择来源 → 创建数据存储 → 连接应用 → 搜索/预览”展开。我们的平台保留这一“资源少、入口清晰、任务导向”的优点，但增加企业知识生产与可信治理能力。</p>
+<table><thead><tr><th>原则</th><th>产品设计</th></tr></thead><tbody>
+<tr><td>一级菜单少而稳定</td><td>固定五大一级入口，不把 Chunk、断言、图谱、评测等专业对象全部暴露为一级菜单。</td></tr>
+<tr><td>首页回答“知识现在怎么样”</td><td>知识工作台聚合来源、文档、卡片、断言、图谱、生命周期和治理状态。</td></tr>
+<tr><td>创建过程任务化</td><td>所有“让新知识进入系统”的动作归入知识创建，包括文档导入、连接器、裁决与衍生。</td></tr>
+<tr><td>检索能力集中</td><td>搜索、Retrieval Test、策略、Trace、Benchmark 统一放入知识检索。</td></tr>
+<tr><td>消费与开放统一</td><td>问答/搜索应用以及 API、MCP、SSE 统一归入知识应用。</td></tr>
+<tr><td>技术参数后置</td><td>模型、索引、用户、权限、字典、任务等进入系统配置；普通知识用户不需要理解底层技术。</td></tr>
+</tbody></table>
+</section>
+
+<section id="p3"><h2>3. 总体信息架构</h2>
+<div class="menu-grid">
+<div class="menu"><b>知识工作台</b><small>看全局<br>看资产<br>看健康度</small></div>
+<div class="menu"><b>知识创建</b><small>导入<br>连接<br>生产与治理</small></div>
+<div class="menu"><b>知识检索</b><small>搜索<br>测试<br>Trace</small></div>
+<div class="menu"><b>知识集成</b><small>API<br>MCP<br>SSE</small></div>
+<div class="menu"><b>系统配置</b><small>模型<br>用户<br>平台参数</small></div>
+</div>
+<div class="flow">企业级智能知识库
+├─ 01 知识工作台
+│  ├─ 总览
+│  ├─ 知识来源
+│  ├─ 文档
+│  ├─ 知识卡片
+│  ├─ 知识断言
+│  ├─ 知识图谱
+│  ├─ 知识生命周期
+│  └─ 治理状态
+│
+├─ 02 知识创建
+│  ├─ 文档导入
+│  ├─ 连接器
+│  ├─ 创建任务 / 生产流水线
+│  ├─ 知识裁决
+│  └─ 知识衍生
+│
+├─ 03 知识检索
+│  ├─ 知识搜索
+│  ├─ 检索测试
+│  ├─ 检索策略
+│  ├─ Query Trace
+│  └─ Benchmark / 评测
+│
+├─ 04 知识集成
+│  ├─ 集成概览
+│  ├─ API
+│  ├─ MCP
+│  ├─ SSE
+│  └─ 调用日志 / 凭证
+│
+└─ 05 系统配置
+   ├─ 模型配置
+   ├─ 用户 / 组织 / 角色
+   ├─ 权限与安全
+   ├─ 存储 / 索引
+   ├─ 字典 / Ontology
+   ├─ 任务与告警
+   └─ 审计日志</div>
+<div class="note"><b>知识空间（Knowledge Space）不再作为一级菜单。</b>它作为全局作用域存在于顶部空间选择器中。用户切换空间后，五个一级菜单均自动作用于当前空间；平台管理员可切换“全部空间”。</div>
+</section>
+
+<section id="p4"><h2>4. 一级菜单一：知识工作台</h2>
+<p class="lead">知识工作台是产品默认首页，目标不是展示系统功能，而是在一个页面回答：<b>“当前企业知识资产有多少？从哪里来？处于什么生命周期？是否可信？哪里需要处理？”</b></p>
+<h3>4.1 页面布局</h3>
+<div class="flow">┌ 顶部：当前知识空间 / 时间范围 / 全局搜索 / 创建知识 ┐
+├ KPI：来源 | 文档 | 卡片 | 断言 | 实体 | 关系 ┤
+├ 知识生命周期：接入 → 解析 → 抽取 → 派生 → 裁决 → 发布 → 使用 ┤
+├ 左：知识资产分布        ┃ 右：知识治理状态 ┤
+├ 最近更新 / 热门知识     ┃ 待处理任务 / 冲突 / 过期 ┤
+├ 图谱概览 / 关键实体     ┃ 检索质量 / 使用情况 ┤
+└ 快速入口：来源 文档 卡片 断言 图谱 裁决 衍生 检索 ┘</div>
+<h3>4.2 核心指标</h3>
+<table><thead><tr><th>区域</th><th>指标/内容</th><th>点击行为</th></tr></thead><tbody>
+<tr><td>知识来源</td><td>来源总数、正常/异常、最近同步</td><td>进入来源抽屉或连接器详情</td></tr>
+<tr><td>文档</td><td>总数、READY、处理中、失败、过期</td><td>进入文档列表并自动带状态过滤</td></tr>
+<tr><td>知识卡片</td><td>有效、待审核、过期、低置信</td><td>进入卡片资产视图</td></tr>
+<tr><td>知识断言</td><td>Approved、Pending、Conflicted、Expired</td><td>进入断言资产视图/裁决</td></tr>
+<tr><td>知识图谱</td><td>实体数、关系数、孤立实体、最近更新</td><td>打开图谱探索器</td></tr>
+<tr><td>治理状态</td><td>待审核、冲突、无证据、低置信、失效派生</td><td>进入对应治理任务</td></tr>
+</tbody></table>
+<h3>4.3 生命周期视图</h3>
+<p>以漏斗/流水线展示当前知识资产处于哪个阶段。用户点击阶段即可进入对应对象集合。生命周期统一定义为：</p>
+<div class="flow">Source → Document → Parse/Clean → Chunk → Extract
+→ Assertion / Entity / Relation
+→ Derive
+→ Adjudicate
+→ Knowledge Card / Graph
+→ Index / Publish
+→ Retrieve / Apply
+→ Evaluate / Feedback
+→ Update / Expire</div>
+<h3>4.4 快速入口</h3>
+<p>工作台提供 <span class="pill">新增文档</span><span class="pill">新增连接器</span><span class="pill">待裁决</span><span class="pill">知识衍生</span><span class="pill">知识搜索</span><span class="pill">检索测试</span><span class="pill">知识图谱</span>。专业对象不再占用左侧一级导航。</p>
+</section>
+
+<section id="p5"><h2>5. 一级菜单二：知识创建</h2>
+<p class="lead">“知识创建”覆盖一切让新知识进入平台、变成可信知识资产的过程。用户不需要理解后台的 Parser、Embedding 或 Index 服务，只需要选择来源、确认处理结果并完成治理。</p>
+<h3>5.1 首页</h3>
+<div class="grid">
+<div class="card"><strong>文档导入</strong><p>拖拽上传、本地文件、URL、手工文本；支持批量导入与导入历史。</p></div>
+<div class="card"><strong>连接器</strong><p>数据库、API、对象存储、企业协作平台等持续同步型来源。</p></div>
+<div class="card"><strong>知识裁决</strong><p>处理冲突、低置信、版本不一致、证据不足等待治理知识。</p></div>
+<div class="card"><strong>知识衍生</strong><p>基于可信断言、关系、规则和计算生成新的候选知识。</p></div>
+</div>
+<h3>5.2 文档导入</h3>
+<div class="flow">Step 1 选择知识空间
+→ Step 2 选择文件 / URL / 文本
+→ Step 3 设置解析策略（默认推荐，可展开高级设置）
+→ Step 4 上传并解析
+→ Step 5 查看解析结果 / Chunk
+→ Step 6 自动抽取知识
+→ Step 7 审核候选知识
+→ Step 8 发布</div>
+<p>导入页默认只展示业务友好的配置：知识类型、标签、权限、处理模式。OCR、Chunk Strategy、Embedding 等进入“高级设置”。</p>
+<h3>5.3 连接器</h3>
+<table><thead><tr><th>类别</th><th>MVP/P1</th><th>主要配置</th></tr></thead><tbody>
+<tr><td>文件/对象存储</td><td>P0/P1</td><td>目录、格式、同步方式、权限继承</td></tr>
+<tr><td>Web/URL</td><td>P0</td><td>URL、抓取范围、更新策略</td></tr>
+<tr><td>数据库</td><td>P1</td><td>连接、Schema/Table、主键、增量字段</td></tr>
+<tr><td>API</td><td>P1</td><td>Endpoint、认证、分页、字段映射</td></tr>
+<tr><td>SaaS/协作平台</td><td>P1/P2</td><td>授权、范围、同步周期、ACL 映射</td></tr>
+</tbody></table>
+<h3>5.4 知识裁决</h3>
+<p>裁决不是单独的后台管理模块，而是“知识创建完成前的可信化环节”。页面采用冲突列表 + Assertion 对比 + Evidence 原文 + 系统建议 + 人工决策。</p>
+<h3>5.5 知识衍生</h3>
+<p>衍生页分为“衍生规则”“候选衍生知识”“衍生记录”。系统必须区分原文直接知识与派生知识；派生项保存 derivedFrom、方法、规则/算法版本、证据链、置信度和状态。</p>
+</section>
+
+<section id="p6"><h2>6. 一级菜单三：知识检索</h2>
+<p class="lead">知识检索同时服务普通知识查找与知识工程调优。默认是简洁搜索体验，高级能力通过 Tab/高级模式展开。</p>
+<h3>6.1 页面结构</h3>
+<div class="flow">知识检索
+├─ 搜索             默认入口：自然语言 / 关键词
+├─ 检索测试         对召回结果与 Score 进行调试
+├─ 检索策略         Retrieval Profile
+├─ Query Trace      查看一次查询完整链路
+└─ Benchmark        批量评测与回归</div>
+<h3>6.2 知识搜索</h3>
+<p>搜索结果不只返回 Chunk，而优先展示“知识卡片 / 断言 / 文档 / 实体”等知识对象；结果卡片展示来源、Evidence、版本、状态与相关知识。支持按来源、知识类型、标签、时间、状态过滤。</p>
+<h3>6.3 检索测试</h3>
+<table><thead><tr><th>区域</th><th>能力</th></tr></thead><tbody>
+<tr><td>Query</td><td>输入问题、选择知识范围与 Retrieval Profile</td></tr>
+<tr><td>Recall</td><td>BM25 / Vector / Metadata / Graph 等候选</td></tr>
+<tr><td>Fusion</td><td>RRF/Weighted RRF 排名变化</td></tr>
+<tr><td>Rerank</td><td>重排前后排名、Score Breakdown</td></tr>
+<tr><td>Evidence</td><td>来源、页码、原文与知识对象</td></tr>
+<tr><td>Trace</td><td>耗时、过滤、模型/索引版本、Why Hit / Why Miss</td></tr>
+</tbody></table>
+<h3>6.4 检索策略</h3>
+<p>将复杂参数封装为可复用 Retrieval Profile，例如“通用知识检索”“制度精确检索”“产品技术检索”“图谱影响分析”。普通用户只选择策略名称，知识工程师才能编辑高级参数。</p>
+</section>
+
+<section id="p7"><h2>7. 一级菜单四：知识集成</h2>
+<p class="lead">知识集成负责把已经生产和治理好的知识，以标准协议和服务接口集成到业务系统、AI 应用与 Agent。V2.0 不把复杂 Agent Builder 作为 MVP 核心，而优先把企业知识服务接口标准化。</p>
+<h3>7.1 集成概览</h3>
+<p>展示已创建的知识集成服务、调用量、成功率、P95 延迟、Token/模型消耗、最近错误。支持创建“集成服务”，每个集成服务绑定知识空间、Retrieval Profile、权限策略和访问凭证。</p>
+<h3>7.2 API</h3>
+<table><thead><tr><th>能力</th><th>用途</th></tr></thead><tbody>
+<tr><td>Search API</td><td>返回排序后的知识对象</td></tr>
+<tr><td>Retrieve API</td><td>返回供外部 LLM/Agent 使用的 Evidence Context</td></tr>
+<tr><td>Answer API</td><td>平台完成检索、上下文装配、生成与 Citation</td></tr>
+<tr><td>Knowledge API</td><td>读取 Card、Assertion、Entity、Evidence、Lineage</td></tr>
+</tbody></table>
+<h3>7.3 MCP</h3>
+<p>将搜索、检索、知识对象读取等能力作为 MCP Tools/Resources 暴露，使 AI Agent 可以按权限使用企业知识。MCP 调用与 Web UI 使用同一 ACL、Retrieval Profile 与 Trace。</p>
+<h3>7.4 SSE</h3>
+<p>SSE 用于 Answer/Agent 类长耗时调用的流式输出。事件至少包含 start、retrieval、citation、delta、complete、error；前端可逐步展示“正在检索 → 已找到证据 → 正在生成 → 完成”。</p>
+<h3>7.5 凭证与调用日志</h3>
+<p>集成服务级管理 AppKey/Token、允许来源、限流、过期时间和权限范围。调用日志支持 traceId 反查 Query、检索结果、引用、耗时和错误。</p>
+</section>
+
+<section id="p8"><h2>8. 一级菜单五：系统配置</h2>
+<table><thead><tr><th>二级模块</th><th>主要能力</th></tr></thead><tbody>
+<tr><td>模型配置</td><td>LLM、Embedding、Reranker、OCR/Vision；模型别名、Endpoint、Key、超时、默认模型</td></tr>
+<tr><td>用户管理</td><td>用户、部门、用户组、状态、同步</td></tr>
+<tr><td>角色与权限</td><td>平台角色、空间角色、对象 ACL、数据源权限继承</td></tr>
+<tr><td>知识类型 / Ontology</td><td>知识类型、实体类型、关系类型、属性 Schema；高级 Ontology P2</td></tr>
+<tr><td>存储与索引</td><td>全文、向量、图、对象存储状态及重建策略</td></tr>
+<tr><td>任务与告警</td><td>解析、抽取、Embedding、索引、同步、评测任务及异常告警</td></tr>
+<tr><td>审计日志</td><td>知识变更、裁决、权限、模型配置、API 调用审计</td></tr>
+<tr><td>平台参数</td><td>默认空间策略、文件限制、生命周期、质量阈值等</td></tr>
+</tbody></table>
+<div class="note"><b>原则：</b>系统配置只承载“平台怎么运行”，不承载“企业知识是什么”。Card、Assertion、Document、Graph 等业务知识对象始终在工作台/创建/检索的业务语境中访问。</div>
+</section>
+
+<section id="p9"><h2>9. 核心知识模型</h2>
+<div class="flow">Knowledge Space（全局作用域）
+  └─ Knowledge Source
+      └─ Document / Structured Record
+          └─ Content Unit / Chunk
+              ├─ Evidence
+              ├─ Entity / Relation
+              └─ Assertion
+                    ├─ Judgment / Version
+                    ├─ Derived Assertion
+                    └─ Knowledge Card
+                          └─ Knowledge Graph / Index</div>
+<table><thead><tr><th>对象</th><th>产品定义</th><th>主要入口</th></tr></thead><tbody>
+<tr><td>Source</td><td>知识来源及同步责任边界</td><td>工作台 / 知识创建</td></tr>
+<tr><td>Document</td><td>原始信息载体</td><td>工作台 / 知识创建</td></tr>
+<tr><td>Chunk</td><td>解析后的内容与检索单元，不等于最终知识</td><td>文档详情 / 高级视图</td></tr>
+<tr><td>Assertion</td><td>带 Evidence、条件、版本和状态的明确知识陈述</td><td>工作台 / 裁决 / 搜索</td></tr>
+<tr><td>Evidence</td><td>支撑知识成立的可定位原文</td><td>对象详情 / 引用</td></tr>
+<tr><td>Knowledge Card</td><td>可独立理解和复用的标准知识单元</td><td>工作台 / 搜索</td></tr>
+<tr><td>Entity/Relation</td><td>业务对象及其关系</td><td>图谱 / 搜索</td></tr>
+<tr><td>Derived Knowledge</td><td>基于可信知识与规则/关系产生的候选新知识</td><td>知识创建 / 工作台</td></tr>
+</tbody></table>
+</section>
+
+<section id="p10"><h2>10. 知识全生命周期</h2>
+<p>生命周期是整个产品的横向主线，也是工作台的核心可视化对象：</p>
+<div class="flow">① 获取 Acquire
+文档导入 / Connector / API
+      ↓
+② 理解 Understand
+解析 / OCR / Layout / Chunk / Metadata
+      ↓
+③ 生成 Produce
+Entity / Relation / Assertion / Evidence
+      ↓
+④ 衍生 Derive
+Rule / Calculation / Graph / AI-assisted
+      ↓
+⑤ 治理 Govern
+Conflict / Review / Judgment / Version / ACL
+      ↓
+⑥ 组织 Organize
+Knowledge Card / Entity / Graph
+      ↓
+⑦ 发布 Publish
+BM25 / Vector / Graph / Structured Index
+      ↓
+⑧ 检索 Retrieve
+Search / Hybrid / Rerank / Trace
+      ↓
+⑨ 应用 Apply
+Human / API / MCP / SSE / Agent
+      ↓
+⑩ 评估与更新 Evolve
+Evaluation / Feedback / Gap / Rebuild / Expire</div>
+</section>
+
+<section id="p11"><h2>11. 角色与权限</h2>
+<table><thead><tr><th>角色</th><th>主要入口</th><th>典型任务</th></tr></thead><tbody>
+<tr><td>普通知识用户</td><td>知识工作台、知识检索</td><td>查知识、看卡片、看引用</td></tr>
+<tr><td>知识管理员</td><td>工作台、知识创建、检索</td><td>导入、同步、审核、运营</td></tr>
+<tr><td>知识审核员</td><td>知识创建</td><td>审核断言、冲突裁决、发布</td></tr>
+<tr><td>知识工程师</td><td>创建、检索、系统配置（部分）</td><td>解析策略、检索策略、Benchmark</td></tr>
+<tr><td>应用开发者</td><td>知识集成</td><td>API/MCP/SSE 集成、凭证与日志</td></tr>
+<tr><td>平台管理员</td><td>系统配置</td><td>模型、用户、权限、存储、审计</td></tr>
+</tbody></table>
+</section>
+
+<section id="p12"><h2>12. 关键业务流程</h2>
+<h3>12.1 从文档到可信知识</h3>
+<div class="flow">知识创建 → 文档导入 → 解析预览 → 自动抽取
+→ 候选 Assertion + Evidence
+→ 冲突检测
+→ 必要时裁决
+→ Knowledge Card
+→ 发布
+→ 工作台资产统计 / 知识检索可见</div>
+<h3>12.2 从连接器到持续知识</h3>
+<div class="flow">创建 Connector → 首次同步 → 生成 Document/Record
+→ 知识生产 → 发布
+→ 定时/事件增量同步
+→ 检测变更 → 旧知识失效/重算 → 新版本发布</div>
+<h3>12.3 从问题到知识服务</h3>
+<div class="flow">用户/API/MCP Query
+→ Query Rewrite
+→ BM25 + Vector (+ Graph/Structured)
+→ ACL
+→ RRF → Rerank
+→ Evidence / Card / Assertion
+→ Answer + Citation
+→ Trace + Evaluation</div>
+</section>
+
+<section id="p13"><h2>13. MVP 与版本规划</h2>
+<table><thead><tr><th>阶段</th><th>核心目标</th><th>范围</th></tr></thead><tbody>
+<tr><td>P0 MVP</td><td>知识从进入到可检索闭环</td><td>五大一级菜单骨架；File/URL/Text；Document/Chunk；BM25/Vector/RRF/Rerank；Search/Test/Trace；API/SSE；基础模型/用户配置</td></tr>
+<tr><td>P0-D</td><td>形成产品差异化</td><td>Assertion、Evidence、Knowledge Card、Lineage、工作台治理指标</td></tr>
+<tr><td>P1</td><td>可信知识生产</td><td>数据库/API Connector、增量同步、Entity/Relation、知识衍生、Conflict/Judgment、ACL、版本、Benchmark</td></tr>
+<tr><td>P2</td><td>知识智能化</td><td>Ontology、Knowledge Graph、Graph Retrieval、GraphRAG、Query Planner、Query Decomposition、MCP、Agentic Retrieval</td></tr>
+</tbody></table>
+<p><b>暂不作为一级菜单：</b>知识空间、Chunk、Entity、Relation、Assertion、Graph、Evaluation、任务中心等。它们通过工作台快速入口、对象详情、二级页面或高级模式进入。</p>
+</section>
+
+<section id="p14"><h2>14. 产品指标与验收</h2>
+<table><thead><tr><th>指标</th><th>目标/定义</th></tr></thead><tbody>
+<tr><td>Trusted Knowledge Coverage</td><td>已审核且可追溯有效知识 / 全部有效知识</td></tr>
+<tr><td>知识可追溯率</td><td>Card / Assertion 100% 可回溯到 Evidence 与来源</td></tr>
+<tr><td>文档解析成功率</td><td>MVP 常见企业文档目标 ≥95%</td></tr>
+<tr><td>Hit@5</td><td>标准评测集目标 ≥90%</td></tr>
+<tr><td>Citation Accuracy</td><td>目标 ≥95%</td></tr>
+<tr><td>治理积压</td><td>Pending/Conflict/Expired 的数量、时长与趋势</td></tr>
+<tr><td>知识新鲜度</td><td>超过更新周期仍未同步/复核的知识比例</td></tr>
+<tr><td>应用可用性</td><td>API/MCP/SSE 成功率、P95 延迟、错误率</td></tr>
+</tbody></table>
+<div class="note ok"><b>最终产品心智：</b>用户打开平台首先看到“企业知识现在是什么状态”；需要增加知识时进入“知识创建”；需要验证知识能否被找到时进入“知识检索”；需要让系统和 Agent 使用知识时进入“知识集成”；只有管理员才频繁进入“系统配置”。</div>
+</section>
+</main><footer>企业级智能知识库平台 · 产品规格说明书 PRD V2.1 · 五大一级菜单·知识集成版</footer>
+</div></body></html>

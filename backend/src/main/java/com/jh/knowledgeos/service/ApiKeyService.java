@@ -1,0 +1,154 @@
+package com.jh.knowledgeos.service;
+
+import com.jh.knowledgeos.domain.ApiKey;
+import com.jh.knowledgeos.mapper.ExternalApiMapper;
+import org.springframework.stereotype.Service;
+
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.security.SecureRandom;
+import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.Base64;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+
+/**
+ * Issues and verifies external-service credentials.
+ *
+ * <p>Plaintext secrets are handed out exactly once; afterwards only the SHA-256 hash and a
+ * short display prefix remain, so a leaked database dump cannot be replayed as a credential.</p>
+ */
+@Service
+public class ApiKeyService {
+    public static final String SECRET_PREFIX = "kos_ak_";
+    private static final int SECRET_BYTES = 24;
+    private static final SecureRandom RANDOM = new SecureRandom();
+
+    private final ExternalApiMapper mapper;
+    private final IdGenerator ids;
+
+    public ApiKeyService(ExternalApiMapper mapper, IdGenerator ids) {
+        this.mapper = mapper;
+        this.ids = ids;
+    }
+
+    public List<Map<String, Object>> list() {
+        List<Map<String, Object>> rows = new ArrayList<Map<String, Object>>();
+        for (ApiKey key : mapper.listApiKeys()) {
+            rows.add(profile(key));
+        }
+        return rows;
+    }
+
+    /**
+     * Creates a credential and returns its profile including the one-time plaintext secret.
+     */
+    public Map<String, Object> create(
+            String name,
+            Long knowledgeBaseId,
+            List<String> scopes,
+            Integer rateLimitPerMinute,
+            LocalDateTime expiresAt,
+            Long createdBy) {
+        String secret = newSecret();
+        ApiKey key = new ApiKey();
+        key.setKeyCode(ids.next("AK_"));
+        key.setName(name == null || name.trim().isEmpty() ? "未命名调用方" : name.trim());
+        key.setSecretHash(hash(secret));
+        key.setKeyPrefix(secret.substring(0, SECRET_PREFIX.length() + 6));
+        key.setKnowledgeBaseId(knowledgeBaseId);
+        key.setScopes(normalizeScopes(scopes));
+        key.setRateLimitPerMinute(rateLimitPerMinute == null || rateLimitPerMinute < 1 ? 60 : rateLimitPerMinute);
+        key.setStatus(ApiKey.STATUS_ACTIVE);
+        key.setExpiresAt(expiresAt);
+        key.setCreatedBy(createdBy);
+        mapper.insertApiKey(key);
+        Map<String, Object> result = profile(mapper.getApiKey(key.getId()));
+        // 明文只在此处出现一次，界面提示调用方立即保存。
+        result.put("secret", secret);
+        return result;
+    }
+
+    public Map<String, Object> revoke(Long id) {
+        mapper.updateApiKeyStatus(id, ApiKey.STATUS_REVOKED);
+        ApiKey key = mapper.getApiKey(id);
+        return key == null ? null : profile(key);
+    }
+
+    /** Resolves a presented secret to an active credential, or returns null. */
+    public ApiKey authenticate(String secret) {
+        if (secret == null || secret.trim().isEmpty()) return null;
+        ApiKey key = mapper.getApiKeyByHash(hash(secret.trim()));
+        if (key == null || !key.isUsable()) return null;
+        mapper.touchApiKey(key.getId());
+        return key;
+    }
+
+    public ApiKey get(Long id) {
+        return mapper.getApiKey(id);
+    }
+
+    public int countActive() {
+        return mapper.countActiveApiKeys();
+    }
+
+    public Map<String, Object> profile(ApiKey key) {
+        Map<String, Object> row = new LinkedHashMap<String, Object>();
+        if (key == null) return row;
+        row.put("id", key.getId());
+        row.put("keyCode", key.getKeyCode());
+        row.put("name", key.getName());
+        row.put("keyPrefix", key.getKeyPrefix());
+        row.put("knowledgeBaseId", key.getKnowledgeBaseId());
+        row.put("knowledgeBaseName", key.getKnowledgeBaseName());
+        row.put("scopes", key.getScopes());
+        row.put("rateLimitPerMinute", key.getRateLimitPerMinute());
+        row.put("status", key.getStatus());
+        row.put("expiresAt", key.getExpiresAt());
+        row.put("lastUsedAt", key.getLastUsedAt());
+        row.put("createdByName", key.getCreatedByName());
+        row.put("createdTime", key.getCreatedTime());
+        return row;
+    }
+
+    private String newSecret() {
+        byte[] bytes = new byte[SECRET_BYTES];
+        RANDOM.nextBytes(bytes);
+        return SECRET_PREFIX + Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
+    }
+
+    private String normalizeScopes(List<String> scopes) {
+        List<String> cleaned = new ArrayList<String>();
+        if (scopes != null) {
+            for (String scope : scopes) {
+                String value = String.valueOf(scope == null ? "" : scope).trim().toUpperCase();
+                if (value.isEmpty() || cleaned.contains(value)) continue;
+                if (ApiKey.SCOPE_READ.equals(value)
+                        || ApiKey.SCOPE_WRITE.equals(value)
+                        || ApiKey.SCOPE_INGEST.equals(value)) {
+                    cleaned.add(value);
+                }
+            }
+        }
+        if (cleaned.isEmpty()) cleaned.add(ApiKey.SCOPE_READ);
+        return String.join(",", cleaned);
+    }
+
+    /** API Key 是高熵随机串，SHA-256 查表即可，无需慢哈希。 */
+    private String hash(String secret) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            byte[] hashed = digest.digest(secret.getBytes(StandardCharsets.UTF_8));
+            StringBuilder builder = new StringBuilder();
+            for (byte b : hashed) {
+                builder.append(String.format("%02x", b));
+            }
+            return builder.toString();
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException("SHA-256 unavailable", e);
+        }
+    }
+}

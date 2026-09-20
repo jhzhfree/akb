@@ -1,5 +1,6 @@
 package com.jh.knowledgeos.service;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.jh.knowledgeos.domain.Claim;
 import com.jh.knowledgeos.domain.KnowledgeCard;
 import com.jh.knowledgeos.domain.KnowledgeSource;
@@ -18,12 +19,14 @@ public class KnowledgeReadService {
     private final KnowledgeMapper mapper;
     private final AiClient aiClient;
     private final AuthoritativeGraphNeighborhoodService authoritativeGraph;
+    private final ObjectMapper objectMapper;
 
     public KnowledgeReadService(KnowledgeMapper mapper, AiClient aiClient,
-            AuthoritativeGraphNeighborhoodService authoritativeGraph) {
+            AuthoritativeGraphNeighborhoodService authoritativeGraph, ObjectMapper objectMapper) {
         this.mapper = mapper;
         this.aiClient = aiClient;
         this.authoritativeGraph = authoritativeGraph;
+        this.objectMapper = objectMapper;
     }
 
     /**
@@ -148,12 +151,56 @@ public class KnowledgeReadService {
         return mapper.getEvidenceDetail(kb, evidenceCode, permissionTags);
     }
 
+    /** Chunk list of one document, including the metadata that explains each chunk's boundaries. */
+    public List<Map<String, Object>> documentChunks(Long documentId) {
+        return mapper.listDocumentChunks(documentId);
+    }
+
+    /**
+     * Walks one knowledge object back to its origin: object → evidence → chunk → document → source.
+     * A reviewer judging a card has to be able to inspect exactly which chunk of which document of
+     * which source supports it, so the chain is returned as one flat, ordered list of hops.
+     */
+    public Map<String, Object> lineage(Long kb, String objectType, String objectCode) {
+        String type = objectType == null || objectType.trim().isEmpty() ? "CARD" : objectType.trim().toUpperCase();
+        List<Map<String, Object>> nodes = mapper.listLineageForObject(kb, type, objectCode);
+        if (nodes.isEmpty() && !"CLAIM".equals(type)) {
+            type = "CLAIM";
+            nodes = mapper.listLineageForObject(kb, type, objectCode);
+        }
+        Map<String, Object> result = new LinkedHashMap<String, Object>();
+        result.put("knowledgeBaseId", kb);
+        result.put("objectType", type);
+        result.put("objectCode", objectCode);
+        result.put("evidenceCount", nodes.size());
+        result.put("nodes", nodes);
+        return result;
+    }
+
     public Map<String, Object> trace(String queryId) {
         Map<String, Object> trace = mapper.getTrace(queryId);
         if (trace == null) return new LinkedHashMap<String, Object>();
         Map<String, Object> qualification = answerQualification(queryId);
         trace.put("answerQualification", qualification);
+        // §12.5: expose the pipeline timeline as a parsed array; the raw column stays available
+        // for consumers that still want to parse the whole JSON document themselves.
+        trace.put("stages", parseJsonList(trace.get("pipelineJson")));
         return trace;
+    }
+
+    private List<Object> parseJsonList(Object value) {
+        if (!(value instanceof String) || ((String) value).trim().isEmpty()) {
+            return java.util.Collections.emptyList();
+        }
+        try {
+            Object parsed = objectMapper.readValue(String.valueOf(value), Object.class);
+            if (parsed instanceof List) {
+                return (List<Object>) parsed;
+            }
+        } catch (Exception ignored) {
+            // A malformed diagnostic document must not make the trace endpoint fail.
+        }
+        return java.util.Collections.emptyList();
     }
 
     public Map<String, Object> answerQualification(String queryId) {

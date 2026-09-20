@@ -32,14 +32,40 @@ body{background:var(--bg)}
 .kos-kbswitch:hover{background:rgba(255,255,255,.22)}
 .kos-kbswitch b{display:inline-block;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;vertical-align:bottom}
 .kos-kbswitch i{font-style:normal;opacity:.85}
+/* 顶栏全局搜索：回车进入搜索页并直接执行检索（设计 §2.2）。 */
+.kos-search{display:flex;align-items:center;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.2);border-radius:9px;overflow:hidden}
+.kos-search-input{
+  width:200px;background:transparent;border:0;outline:none;color:#fff;font-size:12px;padding:6px 10px;
+}
+.kos-search-input::placeholder{color:rgba(255,255,255,.55)}
+.kos-search-btn{background:transparent;border:0;color:#fff;cursor:pointer;padding:6px 9px;font-size:13px}
+.kos-search-btn:hover{background:rgba(255,255,255,.18)}
+/* 任务中心入口：失败任务以红点提示。 */
+.kos-task{
+  display:flex;align-items:center;gap:5px;font-size:12px;background:rgba(255,255,255,.12);
+  border:1px solid rgba(255,255,255,.2);border-radius:9px;padding:5px 11px;color:#fff;cursor:pointer;
+}
+.kos-task:hover{background:rgba(255,255,255,.22)}
+.kos-task.alert{border-color:#fca5a5;color:#fecaca}
+.kos-task em{
+  font-style:normal;min-width:16px;height:16px;line-height:16px;border-radius:999px;
+  background:#ef4444;color:#fff;font-size:10px;text-align:center;padding:0 4px;
+}
 .kos-status{display:flex;align-items:center;font-size:12px;opacity:.92;white-space:nowrap}
 .kos-dot{width:7px;height:7px;border-radius:50%;background:#94a3b8;margin-right:6px;display:inline-block}
 .kos-dot.ok{background:#34d399}
-.kos-avatar{width:28px;height:28px;border-radius:50%;background:rgba(255,255,255,.18);display:grid;place-items:center;font-size:12px}
+.kos-avatar{width:28px;height:28px;border-radius:50%;background:rgba(255,255,255,.18);display:grid;place-items:center;font-size:12px;flex:none}
+.kos-user{display:flex;align-items:center;gap:8px}
+.kos-user-copy{display:flex;flex-direction:column;line-height:1.25}
+.kos-user-copy b{font-size:12px;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.kos-user-copy small{font-size:11px;opacity:.72}
+.kos-logout{font-size:12px;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.2);
+  border-radius:8px;padding:4px 10px;color:#fff;cursor:pointer}
+.kos-logout:hover{background:rgba(255,255,255,.22)}
 
 /* ---------- left rail ---------- */
 .kos-side{
-  width:196px;flex:none;background:#fff;border-right:1px solid var(--line);padding:14px 10px;
+  width:216px;flex:none;background:#fff;border-right:1px solid var(--line);padding:14px 10px;
   position:sticky;top:45px;align-self:flex-start;max-height:calc(100vh - 45px);overflow:auto;
 }
 .kos-nav-title{font-size:11px;color:var(--muted);letter-spacing:1px;margin:8px 10px 6px}
@@ -53,6 +79,125 @@ body{background:var(--bg)}
 .kos-nav-ic{width:18px;text-align:center;font-size:14px;flex:none}
 .kos-nav-tx{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .kos-nav-dot{font-style:normal;font-size:10px;padding:1px 6px;border-radius:999px;background:#e8f7f0;color:var(--ok)}
+
+/* ---------- two-level navigation (IA §4) ---------- */
+.kos-nav-l1{font-weight:600}
+.kos-nav-arrow{font-style:normal;font-size:11px;color:#94a3b8;transition:transform .15s ease}
+.kos-nav-arrow.open{transform:rotate(90deg);color:#1d4ed8}
+.kos-nav-sub{margin:2px 0 8px 10px;padding-left:8px;border-left:1px solid var(--line)}
+.kos-nav-l2{padding:6px 10px;font-size:12.5px;color:#495468}
+.kos-nav-l2.planned,.kos-nav-l2:disabled{color:#9aa4b5;cursor:not-allowed}
+.kos-nav-l2.planned:hover,.kos-nav-l2:disabled:hover{background:transparent}
+.kos-nav-planned{font-style:normal;font-size:10px;color:#9aa4b5;border:1px solid var(--line);border-radius:999px;padding:0 5px}
+
+/* ---------- knowledge production pipeline ----------
+   知识创建按「文档 → Chunk → 实体归一 → 待审核 → 冲突 → 裁决 → 派生」逐段产生，
+   步骤条上的序号与箭头表达顺序，点击即在下方查看该环节产出。 */
+.kb-pipeline{display:flex;align-items:stretch;flex-wrap:wrap;gap:6px}
+.kb-step{
+  display:flex;align-items:center;gap:8px;max-width:260px;padding:7px 11px;
+  border:1px solid var(--line);border-radius:10px;background:#fff;cursor:pointer;
+  font-family:inherit;color:#2b3648;text-align:left;
+}
+.kb-step:hover{border-color:#cfe0ff;background:#f1f5fd}
+.kb-step.active{border-color:#cfe0ff;background:#eaf1ff;color:#1d4ed8}
+.kb-step-index{
+  width:19px;height:19px;flex:none;border-radius:50%;background:#eef2ff;color:#4f46e5;
+  font-size:11px;font-weight:600;display:grid;place-items:center;
+}
+.kb-step.active .kb-step-index{background:#1d4ed8;color:#fff}
+.kb-step-copy{display:flex;flex-direction:column;min-width:0;line-height:1.3}
+.kb-step-copy b{font-size:12.5px;font-weight:600;white-space:nowrap}
+.kb-step-copy small{font-size:10.5px;color:#94a3b8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.kb-step-badge,.kb-step-planned{
+  font-style:normal;font-size:10px;padding:1px 6px;border-radius:999px;flex:none;
+}
+.kb-step-badge{background:#fef3c7;color:#b45309}
+.kb-step-planned{color:#9aa4b5;border:1px solid var(--line)}
+.kb-step.planned{color:#9aa4b5}
+.kb-step-arrow{display:grid;place-items:center;color:#cbd5e1;font-size:13px;padding:0 1px}
+
+/* ---------- ingestion/creation shared blocks ----------
+   知识创建首页与文档中心共用「拖拽上传 + 运行日志 + 已解析文档」三块，
+   样式放在全局避免两个组件各写一份。 */
+.ingest-layout{display:grid;grid-template-columns:1.25fr .75fr;gap:14px}
+/* 紧凑版：两列各自按内容高度，不再互相拉高（知识创建首页整体压低）。 */
+.ingest-layout-compact{align-items:start;grid-template-columns:.82fr 1.18fr}
+.ingest-box{display:grid;grid-template-columns:1fr 190px;gap:18px;align-items:center}
+.ingest-settings{display:flex;flex-direction:column;gap:10px}
+.ingest-settings label{font-size:12px;color:#64748b}
+.picked-file{
+  display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:6px;
+  padding:6px 8px;border:1px dashed #c7d2fe;border-radius:8px;background:#f5f7ff;
+  font-size:11px;color:#475569;
+}
+.picked-file span{overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.ingest-live{
+  display:flex;align-items:center;gap:8px;padding:8px 10px;
+  border:1px solid #fcd34d;border-radius:10px;background:#fffbeb;
+}
+.ingest-live>span:last-child{display:flex;flex:1;min-width:0;flex-direction:column}
+.ingest-live b{font-size:12px;color:#92400e}
+.ingest-live small{font-size:11px;color:#a16207;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.live-dot{
+  width:8px;height:8px;flex:none;border-radius:50%;background:#f59e0b;
+  animation:live-blink 1.2s ease-in-out infinite;
+}
+@keyframes live-blink{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.35;transform:scale(.7)}}
+.upload-icon{font-size:30px;margin-bottom:4px}
+.el-upload small,.el-upload p{display:block;color:#94a3b8;font-size:11px;margin:5px 0}
+/* 紧凑拖拽区：知识创建首页的左侧只做「选文件」这一件事，高度压到最小。 */
+.upload-compact .el-upload,.upload-compact .el-upload-dragger{width:100%}
+.upload-compact .el-upload-dragger{
+  min-height:104px;padding:10px 8px;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0;
+}
+.upload-compact .el-upload-dragger .upload-icon{font-size:22px;margin-bottom:2px}
+.upload-compact .el-upload-dragger b{font-size:13px}
+.upload-compact .el-upload small,.upload-compact .el-upload p{margin:2px 0}
+/* 运行日志：固定高度 + 内部滚动，分隔条可拖动调整高度。 */
+.log-resize{
+  height:9px;display:grid;place-items:center;cursor:ns-resize;
+  border-top:1px solid var(--line);background:#fcfdff;
+  font-size:10px;color:#cbd5e1;user-select:none;
+}
+.log-resize:hover{background:#f1f5fd;color:#4f46e5}
+.log-resize>span{transform:scale(.9)}
+.ingest-actions{
+  display:flex;align-items:flex-end;gap:10px;flex-wrap:wrap;
+  padding:9px 12px;border-top:1px solid var(--line);
+}
+.ingest-actions .field{display:flex;flex-direction:column;gap:3px;min-width:112px}
+.ingest-actions .field.grow{flex:1;min-width:150px}
+.ingest-actions label{font-size:11px;color:#64748b}
+.retry-count{font-size:11px;color:#b45309}
+.retry-count.muted{color:#cbd5e1}
+.doc-hint{margin:8px 2px 0;font-size:11px;line-height:1.7;color:#64748b}
+@media(max-width:950px){.ingest-layout,.ingest-box{grid-template-columns:1fr}}
+
+/* ---------- in-page module navigation (IA §2.2) ----------
+   一级菜单点击后直达默认页，二级入口改为页面顶部的横向导航条，
+   只有「系统配置」仍在左侧保留二级列表。 */
+.kos-modnav{
+  display:flex;align-items:center;flex-wrap:wrap;gap:6px;margin-bottom:12px;
+  padding:8px 10px;background:#fff;border:1px solid var(--line);border-radius:12px;
+}
+.kos-modnav-home{
+  font-size:12.5px;color:#1d4ed8;background:#f1f5fd;border:1px solid transparent;
+  border-radius:8px;padding:4px 9px;cursor:pointer;font-family:inherit;
+}
+.kos-modnav-home:hover{border-color:#cfe0ff}
+.kos-modnav-sep{width:1px;height:16px;background:var(--line);margin:0 2px}
+.kos-modnav-chip{
+  display:inline-flex;align-items:center;gap:6px;font-size:12.5px;color:#495468;
+  background:transparent;border:1px solid transparent;border-radius:8px;padding:4px 9px;
+  cursor:pointer;font-family:inherit;
+}
+.kos-modnav-chip:hover{background:#f1f5fd}
+.kos-modnav-chip .kos-nav-ic{width:auto;font-size:13px}
+.kos-modnav-chip.active{background:#eaf1ff;color:#1d4ed8;font-weight:600;border-color:#cfe0ff}
+.kos-modnav-chip.planned,.kos-modnav-chip:disabled{color:#9aa4b5;cursor:not-allowed}
+.kos-modnav-chip.planned:hover,.kos-modnav-chip:disabled:hover{background:transparent}
 
 /* ---------- shared page language ---------- */
 .hero{display:flex;justify-content:space-between;align-items:end;margin-bottom:20px}

@@ -253,6 +253,14 @@ async def query(r: QueryRequest):
     )
 
 
+@router.post("/ai/retrieve")
+async def retrieve(r: QueryRequest):
+    """Run recall, fusion and reranking without generation: the grading path for evaluation runs."""
+    return await engine.query(
+        r.queryId or "", r.knowledgeBaseId, r.query, r.topK, r.permissionTags, generate=False
+    )
+
+
 @router.post("/ai/adjudicate")
 async def adjudicate(p: Dict[str, Any]):
     """Score one knowledge candidate for automatic or human-assisted adjudication."""

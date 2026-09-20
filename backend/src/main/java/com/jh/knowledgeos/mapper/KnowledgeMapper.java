@@ -1,5 +1,9 @@
 package com.jh.knowledgeos.mapper;
 
+import com.jh.knowledgeos.domain.EvaluationCase;
+import com.jh.knowledgeos.domain.EvaluationDataset;
+import com.jh.knowledgeos.domain.EvaluationResult;
+import com.jh.knowledgeos.domain.EvaluationRun;
 import com.jh.knowledgeos.domain.Claim;
 import com.jh.knowledgeos.domain.KnowledgeCard;
 import com.jh.knowledgeos.domain.KnowledgeDocument;
@@ -61,10 +65,16 @@ public interface KnowledgeMapper {
     int updateSchemaManifest(@Param("releaseId") String releaseId,
             @Param("generationId") String generationId, @Param("manifestHash") String manifestHash,
             @Param("objectCount") Long objectCount);
-    List<KnowledgeBase> listKnowledgeBases();
+    /** 按可见性过滤：管理员看全部，登录用户看公开 / 自己创建 / 所属用户组的库，匿名只看到公开库。 */
+    List<KnowledgeBase> listKnowledgeBases(@Param("userId") Long userId, @Param("all") boolean all);
     KnowledgeBase getKnowledgeBase(@Param("id") Long id);
     int insertKnowledgeBase(KnowledgeBase base);
     int updateKnowledgeBaseStatus(@Param("id") Long id, @Param("status") String status);
+    int updateKnowledgeBaseAccess(
+            @Param("id") Long id,
+            @Param("visibility") String visibility,
+            @Param("ownerGroupId") Long ownerGroupId);
+    int updateKnowledgeBaseOwner(@Param("id") Long id, @Param("createdBy") Long createdBy);
     int insertIngestionRun(IngestionRun run);
     int insertIngestionEvent(@Param("runId") Long runId, @Param("eventType") String eventType,
             @Param("stage") String stage, @Param("status") String status,
@@ -97,6 +107,30 @@ public interface KnowledgeMapper {
             @Param("rawText") String rawText,
             @Param("chunkCount") Integer chunkCount,
             @Param("status") String status);
+
+    /**
+     * Moves a document along the authoritative lifecycle. {@code retryCount} is passed by the
+     * caller because only it knows whether this transition is a first attempt or another retry.
+     */
+    int updateDocumentState(
+            @Param("id") Long id,
+            @Param("status") String status,
+            @Param("stage") String stage,
+            @Param("error") String error,
+            @Param("retryCount") Integer retryCount);
+
+    /** Everything a retry needs: the owning source, its stored bytes and the current chunk revision. */
+    Map<String, Object> findDocumentRetryContext(@Param("id") Long id);
+
+    /** Retires the current chunk revision instead of overwriting content Evidence already points at. */
+    int supersedeDocumentChunks(@Param("documentId") Long documentId);
+
+    int nextChunkRevision(@Param("documentId") Long documentId);
+
+    /** Parent links can only be written once the generated chunk ids are known, hence one batch update. */
+    int batchUpdateContentUnitParents(@Param("rows") List<Map<String, Object>> rows);
+
+    List<Map<String, Object>> listDocumentChunks(@Param("documentId") Long documentId);
 
     int insertContentUnit(
             @Param("documentId") Long documentId,
@@ -163,6 +197,16 @@ public interface KnowledgeMapper {
             @Param("objectCode") String objectCode);
 
     /**
+     * Full traceability chain of one knowledge object: object → evidence → chunk → document →
+     * source. Without it a citation can only be shown, never walked back to the authority it came
+     * from, which is exactly what the design requires a reviewer to do (§9.4).
+     */
+    List<Map<String, Object>> listLineageForObject(
+            @Param("kb") Long kb,
+            @Param("objectType") String objectType,
+            @Param("objectCode") String objectCode);
+
+    /**
      * Primary evidence anchor of one knowledge object: the evidence code plus the content hash of the
      * unit it quotes. Retrieval indexes need it because the answer gate refuses any citation whose
      * evidence pointer cannot be resolved back to an immutable unit.
@@ -211,12 +255,19 @@ public interface KnowledgeMapper {
 
     int updateClaimStatus(@Param("code") String code, @Param("status") String status);
 
-    int insertReview(
+    /**
+     * Appends a judgment record. A decision is only auditable when it also names what was compared,
+     * what came out of it, and under which policy version, so all of them are stored here.
+     */
+    int insertJudgment(
             @Param("type") String type,
             @Param("code") String code,
             @Param("decision") String decision,
             @Param("reviewer") String reviewer,
-            @Param("comment") String comment);
+            @Param("comment") String comment,
+            @Param("inputObjectCodes") String inputObjectCodes,
+            @Param("resultObjectCode") String resultObjectCode,
+            @Param("policyVersion") String policyVersion);
 
     int insertConflict(
             @Param("kb") Long kb,
@@ -229,7 +280,11 @@ public interface KnowledgeMapper {
             @Param("kb") Long kb,
             @Param("status") String status);
 
-    int resolveConflict(@Param("id") Long id, @Param("status") String status);
+    /** Resolution is stored next to the status: "resolved" alone says nothing about how. */
+    int resolveConflict(
+            @Param("id") Long id,
+            @Param("status") String status,
+            @Param("resolution") String resolution);
 
     List<Map<String, Object>> listPendingReviews(@Param("kb") Long kb);
 
@@ -594,4 +649,36 @@ public interface KnowledgeMapper {
     int purgeAnswerClaimAssessments(@Param("kb") Long kb);
     int purgeEntityFacetEvidence(@Param("kb") Long kb);
     int purgeRelationFacetEvidence(@Param("kb") Long kb);
+
+    /* ---- Evaluation center (design §14): dataset / case / run / result ---- */
+
+    int insertEvaluationDataset(EvaluationDataset dataset);
+
+    List<Map<String, Object>> listEvaluationDatasets(@Param("kb") Long kb);
+
+    Map<String, Object> getEvaluationDataset(@Param("code") String code);
+
+    int updateEvaluationDataset(@Param("code") String code, @Param("name") String name,
+            @Param("description") String description, @Param("status") String status);
+
+    int insertEvaluationCase(EvaluationCase evaluationCase);
+
+    List<Map<String, Object>> listEvaluationCases(@Param("datasetId") Long datasetId);
+
+    int deleteEvaluationCase(@Param("id") Long id);
+
+    int insertEvaluationRun(EvaluationRun run);
+
+    int finishEvaluationRun(EvaluationRun run);
+
+    int failEvaluationRun(@Param("runCode") String runCode, @Param("errorMessage") String errorMessage);
+
+    Map<String, Object> getEvaluationRun(@Param("runCode") String runCode);
+
+    List<Map<String, Object>> listEvaluationRuns(@Param("kb") Long kb,
+            @Param("datasetId") Long datasetId, @Param("limit") Integer limit);
+
+    int insertEvaluationResult(EvaluationResult result);
+
+    List<Map<String, Object>> listEvaluationResults(@Param("runId") Long runId);
 }

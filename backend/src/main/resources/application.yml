@@ -61,6 +61,24 @@ knowledge:
   acl:
     identity-db-enabled: ${KNOWLEDGE_ACL_IDENTITY_DB_ENABLED:true}
     trusted-header-enabled: ${KNOWLEDGE_ACL_TRUSTED_HEADER_ENABLED:false}
+  # 控制台登录认证：关闭后 API 恢复为全开放（仅供脚本/迁移期使用）
+  auth:
+    enabled: ${AUTH_ENABLED:true}
+    allow-anonymous: ${AUTH_ALLOW_ANONYMOUS:false}
+    session-hours: ${AUTH_SESSION_HOURS:12}
+    bootstrap-admin-username: ${AUTH_BOOTSTRAP_ADMIN_USERNAME:admin}
+    # 留空则首次启动时随机生成并打印在启动日志中
+    bootstrap-admin-password: ${AUTH_BOOTSTRAP_ADMIN_PASSWORD:}
+  # 对外接口服务：RESTful / MCP Server / SSE 三通道共用一个 API Key 与一套审计
+  external:
+    enabled: ${EXTERNAL_API_ENABLED:true}
+    mcp-enabled: ${EXTERNAL_MCP_ENABLED:true}
+    sse-enabled: ${EXTERNAL_SSE_ENABLED:true}
+    sse-heartbeat-seconds: ${EXTERNAL_SSE_HEARTBEAT_SECONDS:15}
+    sse-max-minutes: ${EXTERNAL_SSE_MAX_MINUTES:30}
+    answer-chunk-chars: ${EXTERNAL_ANSWER_CHUNK_CHARS:40}
+    answer-chunk-delay-millis: ${EXTERNAL_ANSWER_CHUNK_DELAY_MILLIS:40}
+    default-rate-limit-per-minute: ${EXTERNAL_DEFAULT_RATE_LIMIT:60}
 logging:
   level:
     root: ${LOG_LEVEL:INFO}

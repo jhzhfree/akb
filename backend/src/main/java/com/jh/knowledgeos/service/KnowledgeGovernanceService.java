@@ -51,12 +51,16 @@ public class KnowledgeGovernanceService {
             mapper.snapshotKnowledgeObject(kb, type, code, "HUMAN_REVIEW", stringValue(request.get("reviewer")));
             outboxService.enqueueObjectStatus(kb, type, code, decision, MDC.get("traceId"));
         }
-        mapper.insertReview(
+        // A decision is only auditable when it also records what was compared and under which policy.
+        mapper.insertJudgment(
                 type,
                 code,
                 decision,
                 stringValue(request.get("reviewer")),
-                stringValue(request.get("comment")));
+                stringValue(request.get("comment")),
+                stringValue(request.get("inputObjectCodes")),
+                stringValue(request.get("resultObjectCode")),
+                stringValue(request.get("policyVersion")));
         return request;
     }
 
@@ -153,11 +157,12 @@ public class KnowledgeGovernanceService {
     }
 
     @Transactional
-    public Map<String, Object> resolveConflict(Long id, String status) {
-        mapper.resolveConflict(id, status);
+    public Map<String, Object> resolveConflict(Long id, String status, String resolution) {
+        mapper.resolveConflict(id, status, resolution);
         Map<String, Object> result = new LinkedHashMap<String, Object>();
         result.put("id", id);
         result.put("status", status);
+        result.put("resolution", resolution);
         return result;
     }
 

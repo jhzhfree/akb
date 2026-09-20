@@ -6,6 +6,7 @@ import com.jh.knowledgeos.domain.KnowledgeSource;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -72,8 +73,8 @@ public class KnowledgeService {
         return governanceService.conflicts(kb, status);
     }
 
-    public Map<String, Object> resolveConflict(Long id, String status) {
-        return governanceService.resolveConflict(id, status);
+    public Map<String, Object> resolveConflict(Long id, String status, String resolution) {
+        return governanceService.resolveConflict(id, status, resolution);
     }
 
     public Map<String, Object> graph(Long kb, String code, java.util.List<String> permissionTags,
@@ -103,6 +104,54 @@ public class KnowledgeService {
 
     public List<Map<String, Object>> documents(Long kb) {
         return readService.documents(kb);
+    }
+
+    /** Re-runs a FAILED / DIRTY document from its stored original bytes. */
+    public Map<String, Object> retryDocument(Long documentId) throws Exception {
+        return ingestionService.retry(documentId);
+    }
+
+    public List<Map<String, Object>> documentChunks(Long documentId) {
+        return readService.documentChunks(documentId);
+    }
+
+    public Map<String, Object> lineage(Long kb, String objectType, String objectCode) {
+        return readService.lineage(kb, objectType, objectCode);
+    }
+
+    /**
+     * Retrieval without generation (design §17.1 {@code /retrieve}). Consumers that only need
+     * ranked candidates — evaluation, debugging, external systems — should not pay for, or be
+     * tempted to trust, an LLM answer.
+     */
+    public Map<String, Object> retrieve(Map<String, Object> request) throws Exception {
+        Map<String, Object> response = queryService.query(request);
+        Map<String, Object> result = new LinkedHashMap<String, Object>();
+        result.put("queryId", response.get("queryId"));
+        result.put("rewrittenQueries", response.get("rewrittenQueries"));
+        result.put("router", response.get("router"));
+        result.put("recall", response.get("recall"));
+        result.put("candidates", response.get("candidates"));
+        result.put("reranker", response.get("reranker"));
+        result.put("fusion", response.get("fusion"));
+        result.put("trace", response.get("trace"));
+        return result;
+    }
+
+    /**
+     * Generation-only view (design §17.1 {@code /answer}): answer, citations, confidence and the
+     * trace id that ties it back to the full diagnostic record.
+     */
+    public Map<String, Object> answer(Map<String, Object> request) throws Exception {
+        Map<String, Object> response = queryService.query(request);
+        Map<String, Object> result = new LinkedHashMap<String, Object>();
+        result.put("queryId", response.get("queryId"));
+        result.put("answer", response.get("answer"));
+        result.put("citations", response.get("citations"));
+        result.put("confidence", response.get("confidence"));
+        result.put("model", response.get("model"));
+        result.put("trace", response.get("trace"));
+        return result;
     }
 
     public Map<String, Object> sourcePreview(Long kb, Long sourceId, Integer limit,

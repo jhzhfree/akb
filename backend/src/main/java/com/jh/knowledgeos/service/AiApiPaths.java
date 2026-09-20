@@ -16,6 +16,8 @@ public final class AiApiPaths {
     public static final String INDEX_STANDARD_DOCUMENT = "/ai/standard/index";
     public static final String INDEX_KNOWLEDGE = "/ai/index/knowledge";
     public static final String QUERY = "/ai/query";
+    /** Retrieval-only pipeline: same recall / fusion / rerank, no generation (design §14 grading). */
+    public static final String RETRIEVE = "/ai/retrieve";
     public static final String INDEX_OBJECT_STATUS = "/ai/index/object/status";
     public static final String INDEX_OBJECT_ACL = "/ai/index/object/acl";
     public static final String INDEX_EXTERNAL_STATS_PREFIX = "/ai/index/external/stats/";

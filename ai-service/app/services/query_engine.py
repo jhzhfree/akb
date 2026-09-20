@@ -208,6 +208,74 @@ def _freshness(updated_at):
     return round(max(0.2, 0.5 ** (age_days / 365.0)), 4)
 
 
+CHANNEL_LABELS = {
+    "bm25": "BM25 全文",
+    "vector": "向量",
+    "card": "知识卡",
+    "claim": "断言",
+    "graph": "图谱",
+}
+
+
+def build_score_breakdown(candidate, channel_weights, rrf_k, rerank_depth, top_k):
+    """Explain one candidate's final score (design §12.4).
+
+    The retrieval test page must answer three questions per row: which channel hit it,
+    how each stage moved its score, and why it was dropped. Everything needed is already
+    computed upstream — this only projects it into a stable, UI-facing shape.
+    """
+    metadata = candidate.get("metadata") or {}
+    channel_scores = candidate.get("channelScores") or {}
+    channel_ranks = candidate.get("channelRanks") or {}
+    matched = metadata.get("matched_channels") or list(channel_ranks.keys())
+    weights = channel_weights or {}
+
+    channels = []
+    reasons = []
+    for channel in matched:
+        label = CHANNEL_LABELS.get(channel, channel)
+        weight = float(weights.get(channel, 1.0))
+        rank = channel_ranks.get(channel)
+        raw = channel_scores.get(channel)
+        contribution = round(weight / (rrf_k + rank), 6) if rank and rrf_k else None
+        channels.append({
+            "channel": channel,
+            "label": label,
+            "rank": rank,
+            "rawScore": raw,
+            "weight": weight,
+            "rrfContribution": contribution,
+        })
+        reasons.append(
+            "%s命中第 %s 名（原始分 %s，通道权重 %.2f）"
+            % (label, rank if rank else "-", ("%.4f" % raw) if raw is not None else "-", weight)
+        )
+
+    filtered = []
+    if rerank_depth and candidate.get("rerankScore") is None:
+        filtered.append("RERANK_DEPTH_CUTOFF")
+    rerank_rank = candidate.get("rerankRank")
+    if rerank_rank and top_k and rerank_rank > top_k:
+        filtered.append("TOPK_CUTOFF")
+
+    return {
+        "rrfScore": candidate.get("rrfScore"),
+        "rrfK": rrf_k,
+        "channelWeights": dict(weights),
+        "channels": channels,
+        "qualityBoost": candidate.get("qualityBoost"),
+        "qualitySignals": candidate.get("quality"),
+        "preRerankScore": candidate.get("preRerankScore"),
+        "rerankScore": candidate.get("rerankScore"),
+        "finalScore": candidate.get("score"),
+        "fusionRank": candidate.get("fusionRank"),
+        "rerankRank": candidate.get("rerankRank"),
+        "rankDelta": candidate.get("rankDelta"),
+        "whyMatched": reasons or ["融合后进入候选（无通道明细）"],
+        "filteredBy": filtered,
+    }
+
+
 class QueryEngine:
     """Coordinate query rewrite, multi-channel recall, fusion, reranking, context, and answer generation."""
 
@@ -220,7 +288,13 @@ class QueryEngine:
         self.rerank_semaphore = asyncio.Semaphore(max(1, settings.reranker_concurrency))
         self.rewriter = QueryRewriter()
 
-    async def query(self, qid, kb, q, topk, permission_tags=None):
+    async def query(self, qid, kb, q, topk, permission_tags=None, generate=True):
+        """Run the pipeline: recall → fusion → rerank, then generation unless `generate` is off.
+
+        `generate=False` gives the retrieval-only shape the evaluation center needs — the same
+        candidates and the same trace timeline, without an LLM call whose latency would otherwise
+        be counted as retrieval latency.
+        """
         policy = load_policy()
         total_started = time.perf_counter()
         rewrite_started = time.perf_counter()
@@ -268,19 +342,42 @@ class QueryEngine:
 
         reranker = get_reranker()
         rerank_started = time.perf_counter()
+        rerank_errors = []
+        rerank_input_count = 0
+        rerank_output_count = 0
+        rerank_depth = 0
         if policy.rerank.enabled:
-            depth = int(policy.rerank.topN) if int(policy.rerank.topN) > 0 else len(candidates)
-            async with self.rerank_semaphore:
-                head = await asyncio.to_thread(reranker.rerank, rewritten[0], candidates[:depth], depth)
-            candidates = head + candidates[depth:]
+            rerank_depth = int(policy.rerank.topN) if int(policy.rerank.topN) > 0 else len(candidates)
+            rerank_input_count = min(rerank_depth, len(candidates))
+            try:
+                async with self.rerank_semaphore:
+                    head = await asyncio.to_thread(
+                        reranker.rerank, rewritten[0], candidates[:rerank_depth], rerank_depth
+                    )
+                candidates = head + candidates[rerank_depth:]
+                rerank_output_count = len(head)
+            except Exception as exc:
+                # Reranking is an accelerator, not a gate: fall back to the fused order and
+                # surface the failure on the trace instead of failing the whole query (§16.3).
+                logger.warning("rerank failed; keeping fused order: %s", exc)
+                rerank_errors.append(str(exc))
+                rerank_output_count = len(candidates)
         rerank_ms = int((time.perf_counter() - rerank_started) * 1000)
         for rank, candidate in enumerate(candidates, 1):
             candidate["fusionRank"] = fusion_rank.get(str(candidate.get("id")))
             candidate["rerankRank"] = rank
             candidate["rankDelta"] = (candidate.get("fusionRank") or rank) - rank
             candidate["channelRanks"] = channel_ranks.get(str(candidate.get("id")), {})
+            candidate["scoreBreakdown"] = build_score_breakdown(
+                candidate, fusion_weights, policy.fusion.rrfK, rerank_depth, topk
+            )
 
-        context, citations = self._context(candidates, policy.answer.contextMaxChars)
+        # Retrieval-only callers (evaluation runs, the retrieval test page) must not pay for
+        # generation: measuring recall latency with an LLM call inside it measures the wrong thing.
+        if generate:
+            context, citations = self._context(candidates, policy.answer.contextMaxChars)
+        else:
+            context, citations = "", []
         selected_context = [
             {
                 "id": c.get("id"),
@@ -296,30 +393,50 @@ class QueryEngine:
                 "rerankRank": c.get("rerankRank"),
                 "rankDelta": c.get("rankDelta"),
                 "channelRanks": c.get("channelRanks"),
+                "scoreBreakdown": c.get("scoreBreakdown"),
             }
             for c in candidates[:topk]
         ]
 
         llm_started = time.perf_counter()
-        if not candidates:
+        if not generate:
+            # Gates stay in the payload as explicit "not run" rather than absent keys, so a
+            # consumer can tell "skipped" apart from "passed" without guessing.
+            answer = ""
+            model = "none"
+            verification = {"gateStatus": "NOT_RUN", "reason": "retrieval-only"}
+            structured_verification = {"gateStatus": "NOT_RUN", "reason": "retrieval-only"}
+            qualification = {
+                "gateStatus": "NOT_RUN", "policyVersion": policy.answer.policyVersion,
+                "claims": [], "deliveredAnswer": "",
+            }
+            llm_ms = 0
+        elif not candidates:
             answer = policy.answer.noAnswerText
             model = "none"
+            verification = {"gateStatus": "NO_EVIDENCE", "reason": "no candidate"}
+            structured_verification = {"gateStatus": "NO_EVIDENCE", "reason": "no candidate"}
+            qualification = {
+                "gateStatus": "NO_EVIDENCE", "policyVersion": policy.answer.policyVersion,
+                "claims": [], "deliveredAnswer": answer,
+            }
+            llm_ms = int((time.perf_counter() - llm_started) * 1000)
         else:
             llm = get_llm_provider()
             answer = await llm.generate(self._prompt(q, context))
             model = llm.name
-        verification = AnswerEvidenceGate(policy.answer.faithfulnessMin).verify(
-            answer, citations, candidates[:topk]
-        )
-        structured_verification = StructuredAnswerGate(policy.answer.entailmentMin).verify(
-            answer, citations, candidates[:topk]
-        )
-        qualification = AnswerQualification(policy.answer.policyVersion).qualify(
-            answer, verification, structured_verification,
-            policy.answer.evidenceGateEnabled, model
-        )
-        answer = qualification.pop("deliveredAnswer")
-        llm_ms = int((time.perf_counter() - llm_started) * 1000)
+            verification = AnswerEvidenceGate(policy.answer.faithfulnessMin).verify(
+                answer, citations, candidates[:topk]
+            )
+            structured_verification = StructuredAnswerGate(policy.answer.entailmentMin).verify(
+                answer, citations, candidates[:topk]
+            )
+            qualification = AnswerQualification(policy.answer.policyVersion).qualify(
+                answer, verification, structured_verification,
+                policy.answer.evidenceGateEnabled, model
+            )
+            answer = qualification.pop("deliveredAnswer")
+            llm_ms = int((time.perf_counter() - llm_started) * 1000)
         total_ms = int((time.perf_counter() - total_started) * 1000)
 
         recall_counts = {name: len(items) for name, items in result_sets.items()}
@@ -338,6 +455,85 @@ class QueryEngine:
             })
             for name, items in result_sets.items()
         }
+        # Design §12.5: the trace is a timeline, not a bag of latencies. Every stage
+        # reports what went in, what came out, how long it took, and what failed, so the
+        # console can answer "why did this answer look like that" without a log dive.
+        channel_latency = retrieval_diagnostics.get("channelLatencyMs", {}) or {}
+        recall_errors = retrieval_diagnostics.get("errors", {}) or {}
+        stages = [
+            {
+                "key": "rewrite", "label": "查询改写", "latencyMs": rewrite_ms,
+                "inputCount": 1, "outputCount": len(rewritten),
+                "detail": {"variants": rewritten, "used": used_rewrite or normalized,
+                           "enabled": bool(getattr(policy.rewrite, "enabled", True))},
+                "errors": [],
+            },
+            {
+                "key": "route", "label": "意图路由", "latencyMs": None,
+                "inputCount": 1, "outputCount": len(strategies),
+                "detail": {"questionType": question_type, "strategies": strategies,
+                           "reason": route.get("reason"),
+                           "enabled": bool(getattr(policy.route, "enabled", False))},
+                "errors": [],
+            },
+            {
+                "key": "recall", "label": "多通道召回", "latencyMs": retrieval_ms,
+                "inputCount": 1, "outputCount": sum(recall_counts.values()),
+                "detail": {
+                    "sizes": recall_sizes(policy, topk),
+                    "providers": retrieval_providers,
+                    "channels": [
+                        {"channel": name, "count": count,
+                         "latencyMs": channel_latency.get(name),
+                         "provider": (retrieval_providers.get(name) or ["local"])[0]}
+                        for name, count in recall_counts.items()
+                    ],
+                },
+                "errors": recall_errors,
+            },
+            {
+                "key": "acl_filter", "label": "ACL 与状态过滤", "latencyMs": None,
+                "inputCount": None, "outputCount": sum(recall_counts.values()),
+                "detail": retrieval_diagnostics.get("filters", {}),
+                "errors": [],
+            },
+            {
+                "key": "fusion", "label": "RRF 融合", "latencyMs": fusion_ms,
+                "inputCount": sum(recall_counts.values()), "outputCount": len(fused_snapshot),
+                "detail": {"algorithm": "weighted_rrf", "k": policy.fusion.rrfK,
+                           "weights": fusion_weights, "qualitySignals": signal_weights},
+                "errors": [],
+            },
+            {
+                "key": "rerank", "label": "重排", "latencyMs": rerank_ms,
+                "inputCount": rerank_input_count, "outputCount": rerank_output_count,
+                "detail": {"reranker": reranker.name, "enabled": bool(policy.rerank.enabled),
+                           "topN": policy.rerank.topN},
+                "errors": rerank_errors,
+            },
+            {
+                "key": "context", "label": "上下文装配", "latencyMs": None,
+                "inputCount": len(candidates), "outputCount": len(selected_context),
+                "detail": {"chars": len(context), "maxChars": policy.answer.contextMaxChars},
+                "errors": [],
+            },
+            {
+                "key": "llm", "label": "答案生成", "latencyMs": llm_ms,
+                "inputCount": len(selected_context), "outputCount": 1 if candidates else 0,
+                "detail": {"model": model},
+                "errors": [],
+            },
+            {
+                "key": "citation", "label": "引用校验", "latencyMs": None,
+                "inputCount": len(candidates[:topk]), "outputCount": len(citations),
+                "detail": {"evidenceGate": verification.get("gateStatus"),
+                           "structuredGate": structured_verification.get("gateStatus"),
+                           "finalGate": qualification.get("gateStatus"),
+                           "policyVersion": qualification.get("policyVersion")},
+                "errors": [],
+            },
+        ]
+
         return {
             "queryId": qid,
             "traceId": qid,
@@ -394,6 +590,8 @@ class QueryEngine:
                 "claimEntailmentContradicted": structured_verification.get("contradictedCount"),
                 "finalAnswerGate": qualification.get("gateStatus"),
                 "answerPolicyVersion": qualification.get("policyVersion"),
+                "generationIds": retrieval_diagnostics.get("generationIds", []),
+                "stages": stages,
                 "queryPolicy": policy_summary(policy),
             },
         }

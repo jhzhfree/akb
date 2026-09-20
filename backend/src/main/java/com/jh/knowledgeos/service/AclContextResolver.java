@@ -11,6 +11,8 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
+import com.jh.knowledgeos.domain.User;
+
 /** Resolves ACL tags from an authenticated enterprise identity. */
 @Component
 public class AclContextResolver {
@@ -40,7 +42,10 @@ public class AclContextResolver {
         if (!(RequestContextHolder.getRequestAttributes() instanceof ServletRequestAttributes)) return null;
         HttpServletRequest request = ((ServletRequestAttributes) RequestContextHolder.getRequestAttributes()).getRequest();
         String value = request.getHeader("X-Authenticated-User-Id");
-        return value == null || value.trim().isEmpty() ? null : value.trim();
+        if (value != null && !value.trim().isEmpty()) return value.trim();
+        // 控制台登录用户：账号编码与 ACL 主体编码一致，登录即沿用既有的权限标签体系。
+        User user = AuthContext.get();
+        return user == null ? null : user.getUserCode();
     }
 
     private List<String> parseTags(String header) {

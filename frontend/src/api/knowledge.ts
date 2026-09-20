@@ -12,8 +12,15 @@ type ApiResponse<T> = AxiosResponse<ApiEnvelope<T>>
 
 export const getKnowledgeBases = ():Promise<ApiResponse<KnowledgeBase[]>> =>
   axios.get('/api/knowledge/bases')
-export const createKnowledgeBase = (name:string, description=''):Promise<ApiResponse<KnowledgeBase>> =>
-  axios.post('/api/knowledge/bases', { name, description })
+/** 创建知识库：visibility 为 PUBLIC / PRIVATE / GROUP，GROUP 时须传 ownerGroupId。 */
+export const createKnowledgeBase = (
+  name:string, description='', visibility='PUBLIC', ownerGroupId:number|null=null,
+):Promise<ApiResponse<KnowledgeBase>> =>
+  axios.post('/api/knowledge/bases', { name, description, visibility, ownerGroupId })
+export const updateKnowledgeBaseAccess = (
+  id:number, visibility:string, ownerGroupId:number|null=null,
+):Promise<ApiResponse<KnowledgeBase>> =>
+  axios.post(`/api/knowledge/bases/${id}/access`, { visibility, ownerGroupId })
 export const archiveKnowledgeBase = (id:number):Promise<ApiResponse<KnowledgeBase>> =>
   axios.post(`/api/knowledge/bases/${id}/archive`)
 /** 清空知识库内的全部知识数据；dryRun=true 时只返回将删除的规模，供二次确认展示。 */
@@ -49,6 +56,10 @@ export const getAssessments = (kb:number, limit=100):Promise<ApiResponse<Assessm
   axios.get(`/api/knowledge/adjudication/${kb}/assessments?limit=${limit}`)
 export const getCapabilities = ():Promise<ApiResponse<Capabilities>> =>
   axios.get('/api/knowledge/capabilities')
+
+/** 运行环境：profile / 版本 / 外部依赖形态，供顶部空间上下文条展示。 */
+export const getEnvironment = ():Promise<ApiResponse<Record<string, unknown>>> =>
+  axios.get('/api/knowledge/env')
 export const getOutboxStats = (kb:number):Promise<ApiResponse<OutboxStats>> =>
   axios.get(`/api/knowledge/index/outbox/${kb}/stats`)
 export const getIndexDrift = (kb:number):Promise<ApiResponse<DriftResult>> =>
@@ -59,6 +70,38 @@ export const getIngestionRuns = (kb:number, limit=20):Promise<ApiResponse<Ingest
   axios.get(`/api/knowledge/ingestion/${kb}/runs?limit=${limit}`)
 export const getIngestionRun = (runId:number):Promise<ApiResponse<IngestionRunDetail>> =>
   axios.get(`/api/knowledge/ingestion/runs/${runId}`)
+
+/* ---- V1.0 文档状态机：失败/索引失效文档从原件重跑，Chunk 按 revision 查看 ---- */
+
+/** 重跑文档：仅 FAILED / DIRTY 可重跑，旧 Chunk revision 保留为 SUPERSEDED（设计 §16.1）。 */
+export const retryDocument = (documentId:number):Promise<ApiResponse<Record<string,unknown>>> =>
+  axios.post(`/api/knowledge/documents/${documentId}/retry`, {}, { timeout:LONG_TIMEOUT_MS })
+/** 文档 Chunk 清单与切分元数据（设计 §7.2）。 */
+export const getDocumentChunks = (
+  documentId:number,
+):Promise<ApiResponse<import('../types').DocumentChunk[]>> =>
+  axios.get(`/api/knowledge/documents/${documentId}/chunks`)
+
+/* ---- V1.0 契约端点：纯检索 / 生成式回答 / 溯源链 ---- */
+
+/** 纯检索：只返回排序候选，不生成答案（设计 §17.1）。 */
+export const retrieveKnowledge = (
+  payload:Record<string,unknown>,
+):Promise<ApiResponse<Record<string,unknown>>> =>
+  axios.post('/api/knowledge/retrieve', payload, { timeout:LONG_TIMEOUT_MS })
+/** 生成式回答：答案、引用、置信度与 traceId（设计 §17.1）。 */
+export const answerKnowledge = (
+  payload:Record<string,unknown>,
+):Promise<ApiResponse<Record<string,unknown>>> =>
+  axios.post('/api/knowledge/answer', payload, { timeout:LONG_TIMEOUT_MS })
+/** 知识对象溯源链：对象 → Evidence → Chunk → Document → Source（设计 §9.4）。 */
+export const getLineage = (
+  kb:number, objectCode:string, objectType='',
+):Promise<ApiResponse<Record<string,unknown>>> =>
+  axios.get(
+    `/api/knowledge/lineage/${kb}/${encodeURIComponent(objectCode)}`
+    + `${objectType ? `?objectType=${encodeURIComponent(objectType)}` : ''}`,
+  )
 
 export function uploadDocument(
   kb:number, file:File, authorityScore:number, permissionTags:string[]=[],
@@ -245,3 +288,88 @@ export const resetQueryPolicy = ():Promise<ApiResponse<import('../types').QueryP
 /** 读取可配置通道说明与默认值，供配置面板渲染。 */
 export const getQueryPolicySchema = ():Promise<ApiResponse<import('../types').QueryPolicySchema>> =>
   axios.get('/api/knowledge/settings/query-policy/schema')
+
+/* ---- 评测中心（设计 §14） ---- */
+
+/** 运行需要回放整个数据集：逐用例调用检索链，超时按最长等待处理。 */
+const EVAL_TIMEOUT_MS = 600000
+type EvalRow = Record<string, unknown>
+
+export const listEvaluationDatasets = (kb:number):Promise<ApiResponse<EvalRow[]>> =>
+  axios.get(`/api/knowledge/evaluations/datasets/${kb}`)
+export const createEvaluationDataset = (
+  kb:number, payload:{ name:string; description?:string; version?:string },
+):Promise<ApiResponse<EvalRow>> => axios.post(`/api/knowledge/evaluations/datasets/${kb}`, payload)
+export const updateEvaluationDataset = (
+  code:string, payload:{ name?:string; description?:string; status?:string },
+):Promise<ApiResponse<number>> => axios.put(`/api/knowledge/evaluations/datasets/${code}`, payload)
+export const listEvaluationCases = (code:string):Promise<ApiResponse<EvalRow[]>> =>
+  axios.get(`/api/knowledge/evaluations/datasets/${code}/cases`)
+export const createEvaluationCase = (
+  code:string, payload:{
+    question:string; expectedObjectCodes:string[]; expectedEvidenceCodes?:string[]
+    expectedAnswer?:string; tags?:string[]; difficulty?:string;
+  },
+):Promise<ApiResponse<EvalRow>> => axios.post(`/api/knowledge/evaluations/datasets/${code}/cases`, payload)
+export const deleteEvaluationCase = (id:number):Promise<ApiResponse<number>> =>
+  axios.delete(`/api/knowledge/evaluations/cases/${id}`)
+export const runEvaluation = (
+  kb:number, payload:{
+    datasetCode:string; mode?:'RETRIEVAL'|'FULL'; topK?:number
+    baselineRunCode?:string; permissionTags?:string[]
+  },
+):Promise<ApiResponse<EvalRow>> =>
+  axios.post(`/api/knowledge/evaluations/runs/${kb}`, payload, { timeout:EVAL_TIMEOUT_MS })
+export const listEvaluationRuns = (
+  kb:number, datasetId?:number|null, limit=20,
+):Promise<ApiResponse<EvalRow[]>> =>
+  axios.get(`/api/knowledge/evaluations/runs/${kb}`, { params:{ datasetId:datasetId ?? undefined, limit } })
+export const getEvaluationRun = (kb:number, runCode:string):Promise<ApiResponse<EvalRow>> =>
+  axios.get(`/api/knowledge/evaluations/runs/${kb}/${runCode}`)
+export const getEvaluationGaps = (kb:number, runCode:string):Promise<ApiResponse<EvalRow>> =>
+  axios.get(`/api/knowledge/evaluations/gaps/${kb}/${runCode}`)
+
+/* ---- 知识工作台聚合（详细设计 §3 / §11） ---- */
+
+/** 工作台 KPI：来源 / 文档 / 卡片 / 断言 / 实体 / 关系与健康度。 */
+export const getDashboardSummary = (
+  kb:number,
+):Promise<ApiResponse<import('../types').DashboardSummary>> =>
+  axios.get(`/api/knowledge/dashboard/summary/${kb}`)
+/** 知识生命周期分阶段统计。 */
+export const getDashboardLifecycle = (
+  kb:number,
+):Promise<ApiResponse<import('../types').DashboardLifecycle>> =>
+  axios.get(`/api/knowledge/dashboard/lifecycle/${kb}`)
+/** 治理待办：待审核 / 冲突 / 过期 / 无证据 / 低置信 / 衍生失效。 */
+export const getDashboardGovernance = (
+  kb:number, lowConfidence?:number,
+):Promise<ApiResponse<import('../types').DashboardGovernance>> =>
+  axios.get(`/api/knowledge/dashboard/governance/${kb}`, { params:{ lowConfidence:lowConfidence ?? undefined } })
+
+/* ---- 知识集成（详细设计 §6） ---- */
+
+export const getIntegrationOverview = (
+  hours=24,
+):Promise<ApiResponse<import('../types').IntegrationOverview>> =>
+  axios.get('/api/integration/overview', { params:{ hours } })
+/** 调用日志：traceId 可回到 Query Trace，形成外部调用 → 检索 → 证据的追溯链。 */
+export const getIntegrationCallLogs = (
+  params:{ hours?:number; protocol?:string; status?:string; limit?:number } = {},
+):Promise<ApiResponse<import('../types').IntegrationCallRow[]>> =>
+  axios.get('/api/integration/call-logs', { params })
+
+/* ---- 治理洞察：版本治理与知识质量（设计 §5.1 / §9.4） ---- */
+
+export const getVersionSnapshots = (
+  kb:number, params:{ objectType?:string; changeType?:string; keyword?:string; limit?:number; offset?:number } = {},
+):Promise<ApiResponse<import('../types').VersionPage>> =>
+  axios.get(`/api/knowledge/governance/versions/${kb}`, { params })
+export const getVersionEvidence = (
+  kb:number, objectType:string, objectCode:string,
+):Promise<ApiResponse<import('../types').VersionEvidence>> =>
+  axios.get(`/api/knowledge/governance/versions/${kb}/${objectType}/${objectCode}/evidence`)
+export const getQualityOverview = (
+  kb:number, withinDays=30,
+):Promise<ApiResponse<import('../types').QualityOverview>> =>
+  axios.get(`/api/knowledge/governance/quality/${kb}`, { params:{ withinDays } })

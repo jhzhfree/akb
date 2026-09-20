@@ -2,6 +2,7 @@ package com.jh.knowledgeos.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.jh.knowledgeos.common.KnowledgeStatus;
+import com.jh.knowledgeos.common.PlatformEventTypes;
 import com.jh.knowledgeos.domain.Claim;
 import com.jh.knowledgeos.domain.KnowledgeCard;
 import com.jh.knowledgeos.mapper.KnowledgeMapper;
@@ -31,6 +32,7 @@ public class KnowledgeExtractionService {
     private final TransactionRunner transactionRunner;
     private final IndexOutboxService outboxService;
     private final EntityResolutionService entityResolutionService;
+    private final PlatformEventPublisher publisher;
     private final SimpleDateFormat dateTimeFormatter = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
 
     public KnowledgeExtractionService(
@@ -40,7 +42,8 @@ public class KnowledgeExtractionService {
             IdGenerator idGenerator,
             TransactionRunner transactionRunner,
             IndexOutboxService outboxService,
-            EntityResolutionService entityResolutionService) {
+            EntityResolutionService entityResolutionService,
+            PlatformEventPublisher publisher) {
         this.mapper = mapper;
         this.aiClient = aiClient;
         this.objectMapper = objectMapper;
@@ -48,6 +51,7 @@ public class KnowledgeExtractionService {
         this.transactionRunner = transactionRunner;
         this.outboxService = outboxService;
         this.entityResolutionService = entityResolutionService;
+        this.publisher = publisher;
     }
 
     /**
@@ -109,7 +113,66 @@ public class KnowledgeExtractionService {
         response.put(
                 "entityResolution",
                 entityResolutionService.resolveAndMerge(knowledgeBaseId, response.get("entities")));
+        announceExtraction(knowledgeBaseId, documentId, savedCards, savedClaims);
         return response;
+    }
+
+    /**
+     * One EXTRACTION_COMPLETED event per batch.
+     *
+     * <p>Emission is deliberately batched rather than one event per card: a single document can
+     * yield dozens of objects, and subscribers care about the batch outcome with its identifiers,
+     * while individual objects announce themselves again when they are reviewed or superseded.</p>
+     */
+    private void announceExtraction(Long knowledgeBaseId, Long documentId,
+            List<Map<String, Object>> savedCards, List<Map<String, Object>> savedClaims) {
+        Map<String, Object> detail = new LinkedHashMap<String, Object>();
+        detail.put("documentId", documentId);
+        detail.put("cardCount", savedCards == null ? 0 : savedCards.size());
+        detail.put("claimCount", savedClaims == null ? 0 : savedClaims.size());
+        detail.put("cardCodes", codes(savedCards, "knowledge_code", 20));
+        detail.put("claimCodes", codes(savedClaims, "claim_code", 20));
+        detail.put("cardTitles", titles(savedCards, 5));
+        publisher.emitUser(PlatformEventTypes.EXTRACTION_COMPLETED, knowledgeBaseId,
+                PlatformEventPublisher.SOURCE_UI, "DOCUMENT",
+                documentId == null ? null : String.valueOf(documentId),
+                "知识抽取完成：新增 " + (savedCards == null ? 0 : savedCards.size()) + " 张卡片、"
+                        + (savedClaims == null ? 0 : savedClaims.size()) + " 条主张",
+                detail);
+        int candidateCount = (savedCards == null ? 0 : savedCards.size())
+                + (savedClaims == null ? 0 : savedClaims.size());
+        if (candidateCount > 0) {
+            // Candidates are distinguished from approved knowledge so a subscriber can follow the
+            // review pipeline instead of assuming extraction means "usable now" (§16.2).
+            publisher.emitUser(PlatformEventTypes.KNOWLEDGE_CANDIDATE_CREATED, knowledgeBaseId,
+                    PlatformEventPublisher.SOURCE_UI, "DOCUMENT",
+                    documentId == null ? null : String.valueOf(documentId),
+                    "新增 " + candidateCount + " 条待审核候选知识", detail);
+        }
+    }
+
+    private List<String> codes(List<Map<String, Object>> items, String key, int limit) {
+        List<String> values = new ArrayList<String>();
+        if (items == null) return values;
+        for (Map<String, Object> item : items) {
+            if (values.size() >= limit) break;
+            Object value = item.get(key);
+            if (value != null) values.add(String.valueOf(value));
+        }
+        return values;
+    }
+
+    private List<String> titles(List<Map<String, Object>> items, int limit) {
+        List<String> values = new ArrayList<String>();
+        if (items == null) return values;
+        for (Map<String, Object> item : items) {
+            if (values.size() >= limit) break;
+            Object value = item.get("title");
+            if (value == null) continue;
+            String text = String.valueOf(value);
+            values.add(text.length() > 80 ? text.substring(0, 80) + "…" : text);
+        }
+        return values;
     }
 
     /** Source authority from the owning source; neutral 0.5 when unresolvable. */

@@ -1,0 +1,122 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.jh.knowledgeos.mapper.GovernanceMapper">
+
+  <sql id="versionFilter">
+    WHERE knowledge_base_id=#{kb}
+    <if test="objectType != null and objectType != ''"> AND object_type=#{objectType}</if>
+    <if test="changeType != null and changeType != ''"> AND change_type=#{changeType}</if>
+    <if test="keyword != null and keyword != ''">
+      AND (object_code LIKE CONCAT('%',#{keyword},'%')
+        OR title LIKE CONCAT('%',#{keyword},'%')
+        OR COALESCE(summary,'') LIKE CONCAT('%',#{keyword},'%'))
+    </if>
+  </sql>
+
+  <select id="listVersionSnapshots" resultType="map">
+    SELECT id,object_type objectType,object_code objectCode,version_no versionNo,title,summary,
+           LEFT(COALESCE(content,''),400) excerpt,status,confidence,
+           change_type changeType,changed_by changedBy,supersedes_version_no supersedesVersionNo,
+           created_time createdTime
+    FROM t_knowledge_version
+    <include refid="versionFilter"/>
+    ORDER BY created_time DESC, id DESC
+    LIMIT #{limit} OFFSET #{offset}
+  </select>
+
+  <select id="countVersionSnapshots" resultType="long">
+    SELECT COUNT(*) FROM t_knowledge_version
+    <include refid="versionFilter"/>
+  </select>
+
+  <select id="countVersionsByGroup" resultType="map">
+    SELECT object_type objectType,change_type changeType,COUNT(*) total,
+           MAX(created_time) latestTime
+    FROM t_knowledge_version
+    WHERE knowledge_base_id=#{kb}
+    GROUP BY object_type,change_type
+    ORDER BY total DESC
+  </select>
+
+  <!-- Trusted coverage needs both object families: a card without claims is not knowledge yet. -->
+  <select id="countKnowledgeByStatus" resultType="map">
+    SELECT 'CARD' objectType,status,COUNT(*) total FROM t_knowledge_card WHERE knowledge_base_id=#{kb} GROUP BY status
+    UNION ALL
+    SELECT 'CLAIM' objectType,status,COUNT(*) total FROM t_claim WHERE knowledge_base_id=#{kb} GROUP BY status
+  </select>
+
+  <!--
+    Evidence is bound to knowledge by a link table, not by a column on the evidence itself:
+    a card is bound through t_knowledge_evidence, a claim through t_claim_evidence.
+  -->
+  <select id="listEvidenceChain" resultType="map">
+    SELECT e.evidence_code evidenceCode,e.quote_text quoteText,e.authority_score authorityScore,
+           e.freshness_score freshnessScore,e.status evidenceStatus,
+           link.support_type supportType,link.support_score supportScore,
+           s.name sourceName,s.source_type sourceType,
+           d.title documentTitle,d.document_code documentCode,
+           cu.unit_code contentUnitCode,cu.heading_path headingPath,cu.page_no pageNo,cu.page_end pageEnd
+    FROM t_evidence e
+    JOIN (
+      SELECT ce.evidence_id evidence_id,ce.support_type support_type,ce.support_score support_score
+      FROM t_claim_evidence ce WHERE #{objectType}='CLAIM' AND ce.claim_code=#{objectCode}
+      UNION ALL
+      SELECT ke.evidence_id evidence_id,ke.support_type support_type,ke.support_score support_score
+      FROM t_knowledge_evidence ke WHERE #{objectType}='CARD' AND ke.knowledge_code=#{objectCode}
+    ) link ON link.evidence_id=e.id
+    JOIN t_content_unit cu ON cu.id=e.content_unit_id
+    JOIN t_document d ON d.id=cu.document_id
+    JOIN t_source_version sv ON sv.id=d.source_version_id
+    JOIN t_source s ON s.id=sv.source_id
+    WHERE e.knowledge_base_id=#{kb}
+    ORDER BY e.id
+  </select>
+
+  <select id="aggregateAnswerSupport" resultType="map">
+    SELECT COUNT(*) answerCount,
+           COALESCE(SUM(factual_claim_count),0) claimCount,
+           COALESCE(SUM(supported_claim_count),0) supportedClaimCount,
+           COALESCE(SUM(citation_count),0) citationCount,
+           COALESCE(AVG(faithfulness_score),0) faithfulness,
+           COALESCE(AVG(completeness_score),0) completeness,
+           MAX(created_time) latestTime
+    FROM (
+      SELECT factual_claim_count,supported_claim_count,citation_count,faithfulness_score,completeness_score,created_time
+      FROM t_answer_evidence_assessment
+      WHERE knowledge_base_id=#{kb}
+      ORDER BY id DESC LIMIT #{limit}
+    ) recent
+  </select>
+
+  <select id="aggregateFreshness" resultType="map">
+    SELECT COUNT(*) total,
+           SUM(CASE WHEN updated_time >= DATE_SUB(NOW(),INTERVAL #{withinDays} DAY) THEN 1 ELSE 0 END) freshCount,
+           SUM(CASE WHEN valid_to IS NOT NULL AND valid_to &lt; NOW() AND status NOT IN ('EXPIRED','SUPERSEDED') THEN 1 ELSE 0 END) expiredCount,
+           MAX(updated_time) latestUpdate
+    FROM t_claim
+    WHERE knowledge_base_id=#{kb}
+  </select>
+
+  <select id="aggregateHealth" resultType="map">
+    SELECT
+      (SELECT COUNT(*) FROM t_claim WHERE knowledge_base_id=#{kb} AND status='PENDING_REVIEW') pendingReview,
+      (SELECT COUNT(*) FROM t_knowledge_card WHERE knowledge_base_id=#{kb} AND status='PENDING_REVIEW') pendingCardReview,
+      (SELECT COUNT(*) FROM t_knowledge_conflict WHERE knowledge_base_id=#{kb} AND status='OPEN') openConflict,
+      (SELECT COUNT(*) FROM t_ingestion_run WHERE knowledge_base_id=#{kb} AND status='FAILED') failedIngestion,
+      (SELECT COUNT(*) FROM t_claim WHERE knowledge_base_id=#{kb} AND status='UNCERTAIN') uncertainClaim,
+      (SELECT COUNT(*) FROM t_claim WHERE knowledge_base_id=#{kb} AND status='CONFLICTED') conflictedClaim
+  </select>
+
+  <select id="latestEvaluationRun" resultType="map">
+    SELECT r.run_code runCode,r.mode,r.status,r.case_count caseCount,
+           r.hit_at1_rate hitAt1Rate,r.hit_at3_rate hitAt3Rate,r.hit_at5_rate hitAt5Rate,
+           r.recall_at5 recallAt5,r.mrr,r.ndcg_at10 ndcgAt10,
+           r.latency_p50_ms latencyP50Ms,r.latency_p95_ms latencyP95Ms,
+           r.citation_accuracy citationAccuracy,r.regression_verdict regressionVerdict,
+           r.finished_time finishedTime,d.name datasetName
+    FROM t_evaluation_run r LEFT JOIN t_evaluation_dataset d ON d.id=r.dataset_id
+    WHERE r.knowledge_base_id=#{kb} AND r.status='SUCCESS'
+    ORDER BY r.id DESC LIMIT 1
+  </select>
+
+</mapper>

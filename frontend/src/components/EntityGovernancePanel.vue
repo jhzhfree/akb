@@ -156,6 +156,7 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { EntityDetail, EntityRow } from '../types'
 import { entityTypeLabel, statusLabel, statusTagType } from '../types'
+import { errorMessage as message } from '../utils/feedback'
 import {
   addEntityAlias, getEntities, getEntityDetail, mergeEntity, removeEntityAlias, updateEntityStatus, unwrap,
 } from '../api/knowledge'
@@ -297,10 +298,7 @@ async function afterChange() {
   emit('refresh')
 }
 
-function message(e:unknown) {
-  const x = e as { response?:{ data?:{ message?:string } }; message?:string }
-  return x.response?.data?.message || x.message || '操作失败'
-}
+
 
 watch(() => props.knowledgeBaseId, () => {
   selected.value = null

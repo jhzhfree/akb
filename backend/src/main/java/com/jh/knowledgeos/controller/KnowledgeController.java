@@ -2,6 +2,9 @@ package com.jh.knowledgeos.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.jh.knowledgeos.common.ApiResponse;
+import com.jh.knowledgeos.domain.User;
+import com.jh.knowledgeos.service.AuthContext;
+import com.jh.knowledgeos.service.KnowledgeBaseAccessService;
 import com.jh.knowledgeos.dto.AdjudicateRequest;
 import com.jh.knowledgeos.dto.ConflictResolveRequest;
 import com.jh.knowledgeos.dto.ExtractRequest;
@@ -65,6 +68,7 @@ public class KnowledgeController {
     private final KnowledgeLifecycleService knowledgeLifecycleService;
     private final EntityGovernanceService entityGovernanceService;
     private final KnowledgeBasePurgeService purgeService;
+    private final KnowledgeBaseAccessService accessService;
 
     public KnowledgeController(
             KnowledgeService service,
@@ -79,7 +83,8 @@ public class KnowledgeController {
             IngestionObservabilityService ingestionObservabilityService,
             KnowledgeLifecycleService knowledgeLifecycleService,
             EntityGovernanceService entityGovernanceService,
-            KnowledgeBasePurgeService purgeService) {
+            KnowledgeBasePurgeService purgeService,
+            KnowledgeBaseAccessService accessService) {
         this.service = service;
         this.objectMapper = objectMapper;
         this.aclContextResolver = aclContextResolver;
@@ -93,6 +98,7 @@ public class KnowledgeController {
         this.knowledgeLifecycleService = knowledgeLifecycleService;
         this.entityGovernanceService = entityGovernanceService;
         this.purgeService = purgeService;
+        this.accessService = accessService;
     }
 
     @PostMapping("/lifecycle/{kb}/expire")
@@ -194,9 +200,21 @@ public class KnowledgeController {
     public ApiResponse<Object> bases() { return ApiResponse.ok(knowledgeBaseService.list()); }
 
     @PostMapping("/bases")
-    @Operation(summary = "创建知识库工作区")
+    @Operation(summary = "创建知识库工作区，并指定创建人与可见范围（公开 / 私有 / 用户组）")
     public ApiResponse<Object> createBase(@Valid @RequestBody KnowledgeBaseRequest request) {
-        return ApiResponse.ok(knowledgeBaseService.create(request.getName(), request.getDescription()));
+        return ApiResponse.ok(knowledgeBaseService.create(
+                request.getName(),
+                request.getDescription(),
+                request.getVisibility(),
+                request.getOwnerGroupId(),
+                AuthContext.get()));
+    }
+
+    @PostMapping("/bases/{id}/access")
+    @Operation(summary = "调整知识库可见范围与所属用户组")
+    public ApiResponse<Object> updateBaseAccess(@PathVariable Long id, @RequestBody KnowledgeBaseRequest request) {
+        return ApiResponse.ok(knowledgeBaseService.updateAccess(
+                id, request.getVisibility(), request.getOwnerGroupId()));
     }
 
     @PostMapping("/bases/{id}/archive")
@@ -298,9 +316,43 @@ public class KnowledgeController {
         return ApiResponse.ok(service.documents(kb));
     }
 
+    @PostMapping("/documents/{documentId}/retry")
+    @Operation(summary = "重跑失败/索引失效的文档：从原始文件重新解析，旧 Chunk 版本保留为 SUPERSEDED（设计 §16.1）")
+    public ApiResponse<Object> retryDocument(@PathVariable Long documentId) throws Exception {
+        return ApiResponse.ok(service.retryDocument(documentId));
+    }
+
+    @GetMapping("/documents/{documentId}/chunks")
+    @Operation(summary = "文档 Chunk 清单与元数据：切分策略、页码/字符区间、token 数、revision（设计 §7.2）")
+    public ApiResponse<Object> documentChunks(@PathVariable Long documentId) {
+        return ApiResponse.ok(service.documentChunks(documentId));
+    }
+
+    @GetMapping("/lineage/{kb}/{objectCode}")
+    @Operation(summary = "知识对象溯源链：对象 → Evidence → Chunk → Document → Source（设计 §9.4）")
+    public ApiResponse<Object> lineage(
+            @PathVariable Long kb,
+            @PathVariable String objectCode,
+            @RequestParam(value = "objectType", required = false) String objectType) {
+        return ApiResponse.ok(service.lineage(kb, objectType, objectCode));
+    }
+
+    @PostMapping("/retrieve")
+    @Operation(summary = "纯检索：返回排序后的候选 Chunk，不生成答案（设计 §17.1）")
+    public ApiResponse<Object> retrieve(@RequestBody Map<String, Object> request) throws Exception {
+        return ApiResponse.ok(service.retrieve(request));
+    }
+
+    @PostMapping("/answer")
+    @Operation(summary = "生成式回答：答案、引用、置信度与 traceId（设计 §17.1）")
+    public ApiResponse<Object> answer(@RequestBody Map<String, Object> request) throws Exception {
+        return ApiResponse.ok(service.answer(request));
+    }
+
     @PostMapping("/extract")
     @Operation(summary = "抽取候选知识")
     public ApiResponse<Object> extract(@Valid @RequestBody ExtractRequest request) {
+        accessService.assertWrite(request.getKnowledgeBaseId());
         return ApiResponse.ok(service.extract(request.toMap()));
     }
 
@@ -315,6 +367,7 @@ public class KnowledgeController {
     public ApiResponse<QueryResponse> query(
             @Valid @RequestBody QueryRequest request,
             @RequestHeader(value = "X-Authenticated-Permission-Tags", required = false) String permissionTags) throws Exception {
+        accessService.assertRead(request.getKnowledgeBaseId());
         request.setPermissionTags(aclContextResolver.resolve(permissionTags));
         return ApiResponse.ok(
                 objectMapper.convertValue(service.query(request.toMap()), QueryResponse.class));
@@ -328,6 +381,13 @@ public class KnowledgeController {
 
     @GetMapping("/claims/{kb}")
     public ApiResponse<Object> claims(@PathVariable Long kb,
+            @RequestHeader(value = "X-Authenticated-Permission-Tags", required = false) String permissionTags) {
+        return ApiResponse.ok(service.claims(kb, aclContextResolver.resolve(permissionTags)));
+    }
+
+    @GetMapping("/assertions/{kb}")
+    @Operation(summary = "断言（Assertion）清单，与 /claims 同义，供外部系统按领域术语调用（设计 §17.1）")
+    public ApiResponse<Object> assertions(@PathVariable Long kb,
             @RequestHeader(value = "X-Authenticated-Permission-Tags", required = false) String permissionTags) {
         return ApiResponse.ok(service.claims(kb, aclContextResolver.resolve(permissionTags)));
     }
@@ -360,7 +420,7 @@ public class KnowledgeController {
     public ApiResponse<Object> resolveConflict(
             @PathVariable Long id,
             @Valid @RequestBody ConflictResolveRequest request) {
-        return ApiResponse.ok(service.resolveConflict(id, request.getStatus()));
+        return ApiResponse.ok(service.resolveConflict(id, request.getStatus(), request.getResolution()));
     }
 
     @GetMapping("/graph/{kb}/{code}")

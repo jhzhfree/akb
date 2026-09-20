@@ -1,9 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?><!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd"><mapper namespace="com.jh.knowledgeos.mapper.KnowledgeMapper">
 
-<select id="listKnowledgeBases" resultType="com.jh.knowledgeos.domain.KnowledgeBase">SELECT * FROM t_knowledge_base WHERE status&lt;&gt;'ARCHIVED' ORDER BY created_time DESC</select>
-<select id="getKnowledgeBase" resultType="com.jh.knowledgeos.domain.KnowledgeBase">SELECT * FROM t_knowledge_base WHERE id=#{id}</select>
-<insert id="insertKnowledgeBase" parameterType="com.jh.knowledgeos.domain.KnowledgeBase" useGeneratedKeys="true" keyProperty="id">INSERT INTO t_knowledge_base(base_code,name,description,status) VALUES(#{baseCode},#{name},#{description},#{status})</insert>
+<select id="listKnowledgeBases" resultType="com.jh.knowledgeos.domain.KnowledgeBase">SELECT b.*,u.display_name AS created_by_name,g.name AS owner_group_name FROM t_knowledge_base b LEFT JOIN t_user u ON u.id=b.created_by LEFT JOIN t_user_group g ON g.id=b.owner_group_id WHERE b.status&lt;&gt;'ARCHIVED'<choose><when test="all"></when><when test="userId != null"> AND (b.visibility='PUBLIC' OR b.created_by=#{userId} OR (b.owner_group_id IS NOT NULL AND EXISTS(SELECT 1 FROM t_user_group_member m WHERE m.group_id=b.owner_group_id AND m.user_id=#{userId})))</when><otherwise> AND b.visibility='PUBLIC'</otherwise></choose> ORDER BY b.created_time DESC</select>
+<select id="getKnowledgeBase" resultType="com.jh.knowledgeos.domain.KnowledgeBase">SELECT b.*,u.display_name AS created_by_name,g.name AS owner_group_name FROM t_knowledge_base b LEFT JOIN t_user u ON u.id=b.created_by LEFT JOIN t_user_group g ON g.id=b.owner_group_id WHERE b.id=#{id}</select>
+<insert id="insertKnowledgeBase" parameterType="com.jh.knowledgeos.domain.KnowledgeBase" useGeneratedKeys="true" keyProperty="id">INSERT INTO t_knowledge_base(base_code,name,description,status,created_by,visibility,owner_group_id) VALUES(#{baseCode},#{name},#{description},#{status},#{createdBy},#{visibility},#{ownerGroupId})</insert>
 <update id="updateKnowledgeBaseStatus">UPDATE t_knowledge_base SET status=#{status} WHERE id=#{id}</update>
+<update id="updateKnowledgeBaseAccess">UPDATE t_knowledge_base SET visibility=#{visibility},owner_group_id=#{ownerGroupId} WHERE id=#{id}</update>
+<update id="updateKnowledgeBaseOwner">UPDATE t_knowledge_base SET created_by=#{createdBy} WHERE id=#{id} AND created_by IS NULL</update>
 <insert id="insertIngestionRun" parameterType="com.jh.knowledgeos.domain.IngestionRun" useGeneratedKeys="true" keyProperty="id">INSERT INTO t_ingestion_run(run_code,knowledge_base_id,source_name,status,current_stage,chunk_count,card_count,claim_count) VALUES(#{runCode},#{knowledgeBaseId},#{sourceName},#{status},#{currentStage},#{chunkCount},#{cardCount},#{claimCount})</insert>
 <insert id="insertIngestionEvent">INSERT INTO t_ingestion_event(run_id,event_type,stage,status,message,detail_json) VALUES(#{runId},#{eventType},#{stage},#{status},#{message},#{detailJson})</insert>
 <update id="updateIngestionRunStage">UPDATE t_ingestion_run SET current_stage=#{stage} WHERE id=#{runId} AND status='RUNNING'</update>
@@ -14,11 +16,18 @@
 <insert id="insertSource" parameterType="com.jh.knowledgeos.domain.KnowledgeSource" useGeneratedKeys="true" keyProperty="id">INSERT INTO t_source(source_code,knowledge_base_id,name,source_type,source_uri,storage_path,authority_score,status,permission_tags)VALUES(#{sourceCode},#{knowledgeBaseId},#{name},#{sourceType},#{sourceUri},#{storagePath},#{authorityScore},#{status},CAST(#{permissionTags} AS JSON))</insert>
 <insert id="insertSourceVersion">INSERT INTO t_source_version(source_id,version_no,source_hash,object_uri,status)VALUES(#{sourceId},#{versionNo},#{sourceHash},#{objectUri},'ACTIVE')</insert>
 <select id="findSourceVersionId" resultType="long">SELECT id FROM t_source_version WHERE source_id=#{sourceId} AND version_no=#{versionNo}</select>
-<insert id="insertDocument" parameterType="com.jh.knowledgeos.domain.KnowledgeDocument" useGeneratedKeys="true" keyProperty="id">INSERT INTO t_document(source_version_id,document_code,title,mime_type,parse_status,chunk_count)VALUES(#{sourceVersionId},#{documentCode},#{title},#{mimeType},#{parseStatus},0)</insert>
+<insert id="insertDocument" parameterType="com.jh.knowledgeos.domain.KnowledgeDocument" useGeneratedKeys="true" keyProperty="id">INSERT INTO t_document(source_version_id,document_code,title,mime_type,parse_status,status,current_stage,chunk_count)VALUES(#{sourceVersionId},#{documentCode},#{title},#{mimeType},#{parseStatus},#{status},#{currentStage},0)</insert>
 <update id="updateDocumentParsed">UPDATE t_document SET raw_text=#{rawText},chunk_count=#{chunkCount},parse_status=#{status} WHERE id=#{id}</update>
+<update id="updateDocumentState">UPDATE t_document SET status=#{status},current_stage=#{stage},error_message=#{error},retry_count=#{retryCount},updated_time=NOW() WHERE id=#{id}</update>
+<select id="findDocumentRetryContext" resultType="map">SELECT d.id,d.document_code documentCode,d.title,d.status,d.retry_count retryCount,s.id sourceId,s.name sourceName,s.storage_path storagePath,s.authority_score authorityScore,s.permission_tags permissionTags,s.source_type sourceType,sv.version_no sourceVersion,sv.id sourceVersionId,s.knowledge_base_id knowledgeBaseId,COALESCE((SELECT MAX(cu.revision) FROM t_content_unit cu WHERE cu.document_id=d.id),1) chunkRevision FROM t_document d JOIN t_source_version sv ON sv.id=d.source_version_id JOIN t_source s ON s.id=sv.source_id WHERE d.id=#{id}</select>
+<update id="supersedeDocumentChunks">UPDATE t_content_unit SET status='SUPERSEDED' WHERE document_id=#{documentId} AND status='ACTIVE'</update>
+<select id="nextChunkRevision" resultType="int">SELECT COALESCE(MAX(revision),0)+1 FROM t_content_unit WHERE document_id=#{documentId}</select>
+<update id="batchUpdateContentUnitParents">UPDATE t_content_unit SET parent_id = CASE unit_code <foreach collection="rows" item="row" separator=" ">WHEN #{row.unitCode} THEN #{row.parentId}</foreach> END WHERE unit_code IN <foreach collection="rows" item="row" open="(" separator="," close=")">#{row.unitCode}</foreach></update>
+<select id="listLineageForObject" resultType="map">SELECT e.evidence_code evidenceCode,e.content_hash evidenceHash,cu.id contentUnitId,cu.unit_code unitCode,cu.heading_path headingPath,cu.chunk_type chunkType,cu.page_no pageNo,cu.page_end pageEnd,cu.char_start charStart,cu.char_end charEnd,cu.revision chunkRevision,cu.status chunkStatus,LEFT(cu.content,240) excerpt,d.id documentId,d.document_code documentCode,d.title documentTitle,d.status documentStatus,s.id sourceId,s.name sourceName,s.source_type sourceType,sv.version_no sourceVersion,s.authority_score authorityScore FROM t_evidence e JOIN t_content_unit cu ON cu.id=e.content_unit_id JOIN t_document d ON d.id=cu.document_id JOIN t_source_version sv ON sv.id=d.source_version_id JOIN t_source s ON s.id=sv.source_id WHERE e.knowledge_base_id=#{kb} AND e.object_type=#{objectType} AND e.object_code=#{objectCode} ORDER BY e.id</select>
+<select id="listDocumentChunks" resultType="map">SELECT id,unit_code unitCode,chunk_type chunkType,heading_path headingPath,page_no pageNo,page_end pageEnd,char_start charStart,char_end charEnd,token_count tokenCount,status,source_version sourceVersion,revision,parent_id parentId,LEFT(content,200) excerpt,CHAR_LENGTH(content) contentLength,created_time createdTime FROM t_content_unit WHERE document_id=#{documentId} ORDER BY id</select>
 <insert id="insertContentUnit">INSERT INTO t_content_unit(document_id,unit_code,heading_path,page_no,content,content_hash)VALUES(#{documentId},#{unitCode},#{headingPath},#{pageNo},#{content},#{contentHash})</insert>
 <select id="findContentUnitId" resultType="long">SELECT id FROM t_content_unit WHERE unit_code=#{unitCode}</select>
-<insert id="batchInsertContentUnits">INSERT INTO t_content_unit(document_id,unit_code,heading_path,page_no,content,content_hash) VALUES <foreach collection="rows" item="row" separator=",">(#{row.documentId},#{row.unitCode},#{row.headingPath},#{row.pageNo},#{row.content},#{row.contentHash})</foreach></insert>
+<insert id="batchInsertContentUnits">INSERT INTO t_content_unit(document_id,unit_code,parent_id,heading_path,chunk_type,page_no,page_end,char_start,char_end,content,content_hash,token_count,status,acl_tags,source_version,revision) VALUES <foreach collection="rows" item="row" separator=",">(#{row.documentId},#{row.unitCode},#{row.parentId},#{row.headingPath},#{row.chunkType},#{row.pageNo},#{row.pageEnd},#{row.charStart},#{row.charEnd},#{row.content},#{row.contentHash},#{row.tokenCount},'ACTIVE',CAST(#{row.aclTags} AS JSON),#{row.sourceVersion},#{row.revision})</foreach></insert>
 <select id="findContentUnitIdsByCodes" resultType="map">SELECT id,unit_code unitCode FROM t_content_unit WHERE unit_code IN <foreach collection="codes" item="code" open="(" separator="," close=")">#{code}</foreach></select>
 <insert id="batchInsertEvidence">INSERT INTO t_evidence(evidence_code,knowledge_base_id,content_unit_id,source_id,quote_text,location_json,authority_score,freshness_score,status) VALUES <foreach collection="rows" item="row" separator=",">(#{row.evidenceCode},#{row.knowledgeBaseId},#{row.contentUnitId},#{row.sourceId},#{row.quoteText},CAST(#{row.locationJson} AS JSON),#{row.authorityScore},1.0,'ACTIVE')</foreach></insert>
 <insert id="insertEvidence">INSERT INTO t_evidence(evidence_code,knowledge_base_id,content_unit_id,source_id,quote_text,location_json,authority_score,freshness_score,status)VALUES(#{evidenceCode},#{kb},#{contentUnitId},#{sourceId},#{quoteText},CAST(#{locationJson} AS JSON),#{authorityScore},1.0,'ACTIVE')</insert>
@@ -176,18 +185,18 @@ WHERE s.knowledge_base_id=#{kb} AND s.id=#{sourceId} AND (s.permission_tags IS N
  </if>)
 LIMIT 1
 </select>
-<select id="listDocuments" resultType="map">SELECT d.id,d.document_code documentCode,d.title,d.mime_type mimeType,d.parse_status parseStatus,d.chunk_count chunkCount,s.name sourceName,s.id sourceId,d.created_time createdTime FROM t_document d JOIN t_source_version sv ON sv.id=d.source_version_id JOIN t_source s ON s.id=sv.source_id WHERE s.knowledge_base_id=#{kb} ORDER BY d.created_time DESC</select>
+<select id="listDocuments" resultType="map">SELECT d.id,d.document_code documentCode,d.title,d.mime_type mimeType,d.parse_status parseStatus,d.status,d.current_stage currentStage,d.error_message errorMessage,d.retry_count retryCount,d.chunk_count chunkCount,s.name sourceName,s.id sourceId,d.created_time createdTime FROM t_document d JOIN t_source_version sv ON sv.id=d.source_version_id JOIN t_source s ON s.id=sv.source_id WHERE s.knowledge_base_id=#{kb} ORDER BY d.created_time DESC</select>
 <update id="updateCardStatus">UPDATE t_knowledge_card SET status=#{status} WHERE knowledge_code=#{code}</update><update id="updateClaimStatus">UPDATE t_claim SET status=#{status} WHERE claim_code=#{code}</update>
-<insert id="insertReview">INSERT INTO t_knowledge_review(object_type,object_code,decision,reviewer,comment_text)VALUES(#{type},#{code},#{decision},#{reviewer},#{comment})</insert>
+<insert id="insertJudgment">INSERT INTO t_knowledge_review(object_type,object_code,decision,reviewer,comment_text,input_object_codes,result_object_code,policy_version,judgment_time)VALUES(#{type},#{code},#{decision},#{reviewer},#{comment},CAST(#{inputObjectCodes} AS JSON),#{resultObjectCode},#{policyVersion},NOW())</insert>
 <insert id="insertConflict">INSERT IGNORE INTO t_knowledge_conflict(knowledge_base_id,object_a_code,object_b_code,conflict_type,conflict_score,status) VALUES(#{kb},#{a},#{b},#{type},#{score},'OPEN')</insert>
 <select id="listConflicts" resultType="map">SELECT id,knowledge_base_id knowledgeBaseId,object_a_code objectACode,object_b_code objectBCode,conflict_type conflictType,conflict_score conflictScore,status,created_time createdTime FROM t_knowledge_conflict WHERE knowledge_base_id=#{kb} AND (#{status} IS NULL OR status=#{status}) ORDER BY conflict_score DESC,created_time DESC</select>
-<update id="resolveConflict">UPDATE t_knowledge_conflict SET status=#{status} WHERE id=#{id}</update>
+<update id="resolveConflict">UPDATE t_knowledge_conflict SET status=#{status},resolution=#{resolution},updated_time=NOW() WHERE id=#{id}</update>
 <select id="listPendingReviews" resultType="map">SELECT 'CARD' objectType,knowledge_code objectCode,title displayTitle,confidence,status FROM t_knowledge_card WHERE knowledge_base_id=#{kb} AND status IN ('DRAFT','UNCERTAIN','CONFLICTED','PENDING_REVIEW') UNION ALL SELECT 'CLAIM' objectType,claim_code objectCode,CONCAT(subject,' ',predicate,' ',LEFT(object_value,120)) displayTitle,confidence,status FROM t_claim WHERE knowledge_base_id=#{kb} AND status IN ('DRAFT','UNCERTAIN','CONFLICTED','PENDING_REVIEW') ORDER BY confidence ASC</select>
 <insert id="insertTrace" parameterType="com.jh.knowledgeos.domain.QueryTraceRecord">INSERT INTO t_query_trace(query_id,knowledge_base_id,trace_id,original_query,rewritten_queries_json,router_decision_json,retrieval_json,fusion_json,rerank_json,selected_context_json,citations_json,model_name,latency_ms,token_usage_json,error_code,trace_json,answer) VALUES(#{queryId},#{knowledgeBaseId},#{traceId},#{originalQuery},CAST(#{rewrittenQueriesJson} AS JSON),CAST(#{routerDecisionJson} AS JSON),CAST(#{retrievalJson} AS JSON),CAST(#{fusionJson} AS JSON),CAST(#{rerankJson} AS JSON),CAST(#{selectedContextJson} AS JSON),CAST(#{citationsJson} AS JSON),#{modelName},#{latencyMs},CAST(#{tokenUsageJson} AS JSON),#{errorCode},CAST(#{traceJson} AS JSON),#{answer})</insert>
 <insert id="insertAnswerEvidenceAssessment">
 INSERT INTO t_answer_evidence_assessment(query_id,knowledge_base_id,gate_status,completeness_score,faithfulness_score,factual_claim_count,supported_claim_count,citation_count,unsupported_claims_json,verification_json)
 VALUES(#{queryId},#{kb},#{gateStatus},#{completeness},#{faithfulness},#{claimCount},#{supportedCount},#{citationCount},CAST(#{unsupportedJson} AS JSON),CAST(#{verificationJson} AS JSON))
-</insert><select id="getTrace" resultType="map">SELECT id,query_id queryId,knowledge_base_id knowledgeBaseId,trace_id traceId,original_query originalQuery,rewritten_queries_json rewrittenQueriesJson,router_decision_json routerDecisionJson,retrieval_json retrievalJson,fusion_json fusionJson,rerank_json rerankJson,selected_context_json selectedContextJson,citations_json citationsJson,model_name modelName,latency_ms latencyMs,token_usage_json tokenUsageJson,error_code errorCode,trace_json traceJson,answer,created_time createdTime FROM t_query_trace WHERE query_id=#{qid}</select>
+</insert><select id="getTrace" resultType="map">SELECT id,query_id queryId,knowledge_base_id knowledgeBaseId,trace_id traceId,original_query originalQuery,rewritten_queries_json rewrittenQueriesJson,router_decision_json routerDecisionJson,retrieval_json retrievalJson,fusion_json fusionJson,rerank_json rerankJson,selected_context_json selectedContextJson,citations_json citationsJson,model_name modelName,latency_ms latencyMs,token_usage_json tokenUsageJson,error_code errorCode,trace_json traceJson,pipeline_json pipelineJson,answer,created_time createdTime FROM t_query_trace WHERE query_id=#{qid}</select>
 <insert id="insertAnswerQualification">
 INSERT INTO t_answer_qualification(query_id,knowledge_base_id,policy_version,gate_status,evidence_gate_status,structured_gate_status,decision_reasons_json,original_answer_hash,delivered_answer_hash,claim_count)
 VALUES(#{queryId},#{kb},#{policyVersion},#{gateStatus},#{evidenceGateStatus},#{structuredGateStatus},CAST(#{reasonsJson} AS JSON),#{originalHash},#{deliveredHash},#{claimCount})
@@ -634,5 +643,87 @@ SELECT
 <delete id="purgeAnswerClaimAssessments">DELETE FROM t_answer_claim_assessment WHERE query_id IN (SELECT query_id FROM t_query_trace WHERE knowledge_base_id=#{kb})</delete>
 <delete id="purgeEntityFacetEvidence">DELETE FROM t_entity_facet_evidence WHERE facet_code IN (SELECT facet_code FROM t_entity_facet WHERE knowledge_base_id=#{kb}) OR evidence_id IN (SELECT id FROM t_evidence WHERE knowledge_base_id=#{kb})</delete>
 <delete id="purgeRelationFacetEvidence">DELETE FROM t_relation_facet_evidence WHERE facet_code IN (SELECT facet_code FROM t_relation_facet WHERE knowledge_base_id=#{kb}) OR evidence_id IN (SELECT id FROM t_evidence WHERE knowledge_base_id=#{kb})</delete>
+
+
+<insert id="insertEvaluationDataset" parameterType="com.jh.knowledgeos.domain.EvaluationDataset" useGeneratedKeys="true" keyProperty="id">
+INSERT INTO t_evaluation_dataset(dataset_code,knowledge_base_id,name,description,version,status,created_by)
+VALUES(#{datasetCode},#{knowledgeBaseId},#{name},#{description},#{version},#{status},#{createdBy})
+</insert>
+<select id="listEvaluationDatasets" resultType="map">
+SELECT id,dataset_code datasetCode,knowledge_base_id knowledgeBaseId,name,description,version,status,created_by createdBy,created_time createdTime,
+  (SELECT COUNT(*) FROM t_evaluation_case c WHERE c.dataset_id=t_evaluation_dataset.id AND c.status='ACTIVE') caseCount
+FROM t_evaluation_dataset WHERE knowledge_base_id=#{kb} ORDER BY id DESC
+</select>
+<select id="getEvaluationDataset" resultType="map">
+SELECT id,dataset_code datasetCode,knowledge_base_id knowledgeBaseId,name,description,version,status,created_by createdBy,created_time createdTime
+FROM t_evaluation_dataset WHERE dataset_code=#{code}
+</select>
+<update id="updateEvaluationDataset">
+UPDATE t_evaluation_dataset SET name=#{name},description=#{description},status=#{status} WHERE dataset_code=#{code}
+</update>
+
+<insert id="insertEvaluationCase" parameterType="com.jh.knowledgeos.domain.EvaluationCase" useGeneratedKeys="true" keyProperty="id">
+INSERT INTO t_evaluation_case(case_code,dataset_id,question,expected_object_codes_json,expected_evidence_codes_json,expected_answer,tags_json,difficulty,version,status)
+VALUES(#{caseCode},#{datasetId},#{question},CAST(#{expectedObjectCodesJson} AS JSON),CAST(#{expectedEvidenceCodesJson} AS JSON),#{expectedAnswer},CAST(#{tagsJson} AS JSON),#{difficulty},#{version},#{status})
+</insert>
+<select id="listEvaluationCases" resultType="map">
+SELECT id,case_code caseCode,dataset_id datasetId,question,expected_object_codes_json expectedObjectCodesJson,
+  expected_evidence_codes_json expectedEvidenceCodesJson,expected_answer expectedAnswer,tags_json tagsJson,difficulty,version,status,created_time createdTime
+FROM t_evaluation_case WHERE dataset_id=#{datasetId} AND status='ACTIVE' ORDER BY id
+</select>
+<delete id="deleteEvaluationCase">DELETE FROM t_evaluation_case WHERE id=#{id}</delete>
+
+<insert id="insertEvaluationRun" parameterType="com.jh.knowledgeos.domain.EvaluationRun" useGeneratedKeys="true" keyProperty="id">
+INSERT INTO t_evaluation_run(run_code,dataset_id,knowledge_base_id,status,mode,top_k,baseline_run_code,case_count)
+VALUES(#{runCode},#{datasetId},#{knowledgeBaseId},#{status},#{mode},#{topK},#{baselineRunCode},#{caseCount})
+</insert>
+<update id="finishEvaluationRun" parameterType="com.jh.knowledgeos.domain.EvaluationRun">
+UPDATE t_evaluation_run SET status=#{status},policy_version=#{policyVersion},case_count=#{caseCount},
+  hit_at1_rate=#{hitAt1Rate},hit_at3_rate=#{hitAt3Rate},hit_at5_rate=#{hitAt5Rate},recall_at5=#{recallAt5},
+  mrr=#{mrr},ndcg_at10=#{ndcgAt10},latency_p50_ms=#{latencyP50Ms},latency_p95_ms=#{latencyP95Ms},
+  citation_accuracy=#{citationAccuracy},faithfulness=#{faithfulness},regression_verdict=#{regressionVerdict},
+  baseline_delta_json=CAST(#{baselineDeltaJson} AS JSON),gaps_json=CAST(#{gapsJson} AS JSON),finished_time=NOW()
+WHERE run_code=#{runCode}
+</update>
+<update id="failEvaluationRun">
+UPDATE t_evaluation_run SET status='FAILED',error_message=#{errorMessage},finished_time=NOW() WHERE run_code=#{runCode}
+</update>
+<select id="getEvaluationRun" resultType="map">
+SELECT id,run_code runCode,dataset_id datasetId,knowledge_base_id knowledgeBaseId,status,mode,top_k topK,
+  policy_version policyVersion,baseline_run_code baselineRunCode,case_count caseCount,
+  hit_at1_rate hitAt1Rate,hit_at3_rate hitAt3Rate,hit_at5_rate hitAt5Rate,recall_at5 recallAt5,mrr,ndcg_at10 ndcgAt10,
+  latency_p50_ms latencyP50Ms,latency_p95_ms latencyP95Ms,citation_accuracy citationAccuracy,faithfulness,
+  regression_verdict regressionVerdict,baseline_delta_json baselineDeltaJson,gaps_json gapsJson,
+  error_message errorMessage,started_time startedTime,finished_time finishedTime
+FROM t_evaluation_run WHERE run_code=#{runCode}
+</select>
+<select id="listEvaluationRuns" resultType="map">
+SELECT r.id,r.run_code runCode,r.dataset_id datasetId,r.knowledge_base_id knowledgeBaseId,r.status,r.mode,r.top_k topK,
+  r.policy_version policyVersion,r.baseline_run_code baselineRunCode,r.case_count caseCount,
+  r.hit_at1_rate hitAt1Rate,r.hit_at3_rate hitAt3Rate,r.hit_at5_rate hitAt5Rate,r.recall_at5 recallAt5,r.mrr,
+  r.ndcg_at10 ndcgAt10,r.latency_p50_ms latencyP50Ms,r.latency_p95_ms latencyP95Ms,
+  r.citation_accuracy citationAccuracy,r.faithfulness,r.regression_verdict regressionVerdict,
+  r.error_message errorMessage,r.started_time startedTime,r.finished_time finishedTime,
+  d.name datasetName,d.dataset_code datasetCode
+FROM t_evaluation_run r LEFT JOIN t_evaluation_dataset d ON d.id=r.dataset_id
+WHERE r.knowledge_base_id=#{kb}
+  <if test="datasetId != null">AND r.dataset_id=#{datasetId}</if>
+ORDER BY r.id DESC LIMIT #{limit}
+</select>
+
+<insert id="insertEvaluationResult" parameterType="com.jh.knowledgeos.domain.EvaluationResult">
+INSERT INTO t_evaluation_result(run_id,case_id,case_code,query_id,status,expected_codes_json,retrieved_codes_json,
+  hit_at1,hit_at3,hit_at5,reciprocal_rank,recall_at5,ndcg_at10,latency_ms,citation_total,citation_hit,citation_accuracy,faithfulness,error_message)
+VALUES(#{runId},#{caseId},#{caseCode},#{queryId},#{status},CAST(#{expectedCodesJson} AS JSON),CAST(#{retrievedCodesJson} AS JSON),
+  #{hitAt1},#{hitAt3},#{hitAt5},#{reciprocalRank},#{recallAt5},#{ndcgAt10},#{latencyMs},#{citationTotal},#{citationHit},#{citationAccuracy},#{faithfulness},#{errorMessage})
+</insert>
+<select id="listEvaluationResults" resultType="map">
+SELECT id,run_id runId,case_id caseId,case_code caseCode,query_id queryId,status,
+  expected_codes_json expectedCodesJson,retrieved_codes_json retrievedCodesJson,
+  hit_at1 hitAt1,hit_at3 hitAt3,hit_at5 hitAt5,reciprocal_rank reciprocalRank,recall_at5 recallAt5,
+  ndcg_at10 ndcgAt10,latency_ms latencyMs,citation_total citationTotal,citation_hit citationHit,
+  citation_accuracy citationAccuracy,faithfulness,error_message errorMessage,created_time createdTime
+FROM t_evaluation_result WHERE run_id=#{runId} ORDER BY id
+</select>
 
 </mapper>

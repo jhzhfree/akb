@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd"><mapper namespace="com.jh.knowledgeos.mapper.AuthMapper">
+
+<select id="getUserByUsername" resultType="com.jh.knowledgeos.domain.User">SELECT * FROM t_user WHERE username=#{username} LIMIT 1</select>
+<select id="getUserById" resultType="com.jh.knowledgeos.domain.User">SELECT * FROM t_user WHERE id=#{id} LIMIT 1</select>
+<select id="listUsers" resultType="com.jh.knowledgeos.domain.User">SELECT * FROM t_user ORDER BY created_time DESC</select>
+<select id="countUsers" resultType="int">SELECT COUNT(1) FROM t_user</select>
+<insert id="insertUser" parameterType="com.jh.knowledgeos.domain.User" useGeneratedKeys="true" keyProperty="id">INSERT INTO t_user(user_code,username,display_name,email,password_hash,role,status) VALUES(#{userCode},#{username},#{displayName},#{email},#{passwordHash},#{role},#{status})</insert>
+<update id="updateUserProfile" parameterType="com.jh.knowledgeos.domain.User">UPDATE t_user SET display_name=#{displayName},email=#{email},role=#{role} WHERE id=#{id}</update>
+<update id="updateUserStatus">UPDATE t_user SET status=#{status} WHERE id=#{id}</update>
+<update id="updateUserPassword">UPDATE t_user SET password_hash=#{passwordHash} WHERE id=#{id}</update>
+<update id="updateUserLoginTime">UPDATE t_user SET last_login_time=CURRENT_TIMESTAMP WHERE id=#{id}</update>
+<insert id="insertAclSubject">INSERT IGNORE INTO t_acl_subject(subject_code,display_name) VALUES(#{subjectCode},#{displayName})</insert>
+
+<select id="listGroups" resultType="com.jh.knowledgeos.domain.UserGroup">SELECT g.*,(SELECT COUNT(1) FROM t_user_group_member m WHERE m.group_id=g.id) AS member_count FROM t_user_group g WHERE g.status='ACTIVE' ORDER BY g.created_time DESC</select>
+<select id="getGroup" resultType="com.jh.knowledgeos.domain.UserGroup">SELECT g.*,(SELECT COUNT(1) FROM t_user_group_member m WHERE m.group_id=g.id) AS member_count FROM t_user_group g WHERE g.id=#{id} LIMIT 1</select>
+<insert id="insertGroup" parameterType="com.jh.knowledgeos.domain.UserGroup" useGeneratedKeys="true" keyProperty="id">INSERT INTO t_user_group(group_code,name,description,status) VALUES(#{groupCode},#{name},#{description},#{status})</insert>
+<update id="updateGroup" parameterType="com.jh.knowledgeos.domain.UserGroup">UPDATE t_user_group SET name=#{name},description=#{description} WHERE id=#{id}</update>
+<update id="updateGroupStatus">UPDATE t_user_group SET status=#{status} WHERE id=#{id}</update>
+<insert id="insertGroupMember">INSERT IGNORE INTO t_user_group_member(group_id,user_id) VALUES(#{groupId},#{userId})</insert>
+<delete id="deleteGroupMember">DELETE FROM t_user_group_member WHERE group_id=#{groupId} AND user_id=#{userId}</delete>
+<delete id="deleteGroupMembers">DELETE FROM t_user_group_member WHERE group_id=#{groupId}</delete>
+<select id="countGroupMember" resultType="int">SELECT COUNT(1) FROM t_user_group_member WHERE group_id=#{groupId} AND user_id=#{userId}</select>
+<select id="listAllGroupMembers" resultType="map">SELECT m.group_id AS groupId,m.user_id AS userId,g.name AS groupName FROM t_user_group_member m JOIN t_user_group g ON g.id=m.group_id</select>
+
+<select id="getSession" resultType="com.jh.knowledgeos.domain.AuthSession">SELECT * FROM t_auth_session WHERE token=#{token} LIMIT 1</select>
+<insert id="insertSession" parameterType="com.jh.knowledgeos.domain.AuthSession" useGeneratedKeys="true" keyProperty="id">INSERT INTO t_auth_session(token,user_id,issued_at,expires_at,last_accessed_at,status,user_agent) VALUES(#{token},#{userId},#{issuedAt},#{expiresAt},#{lastAccessedAt},#{status},#{userAgent})</insert>
+<update id="touchSession">UPDATE t_auth_session SET last_accessed_at=CURRENT_TIMESTAMP WHERE token=#{token}</update>
+<update id="revokeSession">UPDATE t_auth_session SET status='REVOKED' WHERE token=#{token}</update>
+<update id="revokeUserSessions">UPDATE t_auth_session SET status='REVOKED' WHERE user_id=#{userId} AND status='ACTIVE'</update>
+<delete id="deleteExpiredSessions">DELETE FROM t_auth_session WHERE expires_at &lt; CURRENT_TIMESTAMP</delete>
+
+</mapper>

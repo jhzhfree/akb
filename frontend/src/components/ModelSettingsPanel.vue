@@ -97,6 +97,7 @@ import { onMounted, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { getModelSettings, saveModelSettings, testModelSettings, unwrap } from '../api/knowledge'
 import type { ModelSettings, ModelTestResult } from '../types'
+import { errorMessage } from '../utils/feedback'
 
 const settings = ref<ModelSettings|null>(null)
 const saving = ref(false)
@@ -104,7 +105,7 @@ const testing = ref('')
 const message = ref('')
 const error = ref('')
 
-const err = (e:unknown) => (e as Error).message || '操作失败'
+const err = (e:unknown) => errorMessage(e)
 
 async function load() {
   error.value = ''

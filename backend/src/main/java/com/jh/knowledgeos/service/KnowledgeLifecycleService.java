@@ -1,6 +1,7 @@
 package com.jh.knowledgeos.service;
 
 import com.jh.knowledgeos.common.KnowledgeStatus;
+import com.jh.knowledgeos.common.PlatformEventTypes;
 import com.jh.knowledgeos.mapper.KnowledgeMapper;
 import org.springframework.stereotype.Service;
 
@@ -23,14 +24,17 @@ public class KnowledgeLifecycleService {
     private final KnowledgeMapper mapper;
     private final IndexOutboxService indexOutboxService;
     private final TransactionRunner transactionRunner;
+    private final PlatformEventPublisher publisher;
 
     public KnowledgeLifecycleService(
             KnowledgeMapper mapper,
             IndexOutboxService indexOutboxService,
-            TransactionRunner transactionRunner) {
+            TransactionRunner transactionRunner,
+            PlatformEventPublisher publisher) {
         this.mapper = mapper;
         this.indexOutboxService = indexOutboxService;
         this.transactionRunner = transactionRunner;
+        this.publisher = publisher;
     }
 
     /**
@@ -76,6 +80,15 @@ public class KnowledgeLifecycleService {
         // In preview mode the candidate list is what the operator reviews; after a real sweep it is
         // the audit trail, so both shapes stay available under the same key.
         summary.put("candidateClaimCodes", due);
+        if (!dryRun && !expired.isEmpty()) {
+            Map<String, Object> detail = new LinkedHashMap<String, Object>();
+            detail.put("scanned", rows.size());
+            detail.put("expiredCount", expired.size());
+            detail.put("expiredClaimCodes", expired.size() > 20 ? expired.subList(0, 20) : expired);
+            publisher.emitUser(PlatformEventTypes.KNOWLEDGE_OBJECT_EXPIRED, knowledgeBaseId,
+                    PlatformEventPublisher.SOURCE_UI, "CLAIM",
+                    expired.get(0), "有效期到期：失效 " + expired.size() + " 条主张", detail);
+        }
         return summary;
     }
 
@@ -208,6 +221,14 @@ public class KnowledgeLifecycleService {
         summary.put("objectType", objectType);
         summary.put("superseded", oldObjectCode);
         summary.put("supersededBy", newObjectCode);
+
+        Map<String, Object> detail = new LinkedHashMap<String, Object>();
+        detail.put("objectType", objectType == null ? null : objectType.toUpperCase());
+        detail.put("superseded", oldObjectCode);
+        detail.put("supersededBy", newObjectCode);
+        publisher.emitUser(PlatformEventTypes.KNOWLEDGE_OBJECT_SUPERSEDED, knowledgeBaseId,
+                PlatformEventPublisher.SOURCE_UI, objectType == null ? null : objectType.toUpperCase(),
+                oldObjectCode, "知识对象被替代：" + oldObjectCode + " → " + newObjectCode, detail);
         return summary;
     }
 

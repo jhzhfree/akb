@@ -1,6 +1,8 @@
 package com.jh.knowledgeos.exception;
 
 import com.jh.knowledgeos.common.ApiErrorCode;
+import com.jh.knowledgeos.exception.RateLimitException;
+import com.jh.knowledgeos.exception.UnauthorizedException;
 import com.jh.knowledgeos.common.ApiResponse;
 import java.util.stream.Collectors;
 import org.slf4j.Logger;
@@ -39,6 +41,30 @@ public class GlobalExceptionHandler {
     @ResponseStatus(HttpStatus.BAD_REQUEST)
     public ApiResponse<Object> illegalArgument(IllegalArgumentException e) {
         return ApiResponse.fail(ApiErrorCode.INVALID_ARGUMENT, e.getMessage());
+    }
+
+    /**
+     * Authorization failures raised by knowledge-base sharing rules and role checks.
+     * The message is safe to show in the console: it names the account right, not data.
+     */
+    @ExceptionHandler(SecurityException.class)
+    @ResponseStatus(HttpStatus.FORBIDDEN)
+    public ApiResponse<Object> forbidden(SecurityException e) {
+        return ApiResponse.fail(ApiErrorCode.FORBIDDEN, e.getMessage());
+    }
+
+    /** External callers without a usable API key: told to authenticate rather than to give up. */
+    @ExceptionHandler(UnauthorizedException.class)
+    @ResponseStatus(HttpStatus.UNAUTHORIZED)
+    public ApiResponse<Object> unauthorized(UnauthorizedException e) {
+        return ApiResponse.fail(ApiErrorCode.UNAUTHORIZED, e.getMessage());
+    }
+
+    /** Quota breach: 429 so well-behaved clients can back off and retry later. */
+    @ExceptionHandler(RateLimitException.class)
+    @ResponseStatus(HttpStatus.TOO_MANY_REQUESTS)
+    public ApiResponse<Object> rateLimited(RateLimitException e) {
+        return ApiResponse.fail(ApiErrorCode.RATE_LIMITED, e.getMessage());
     }
 
     @ExceptionHandler(RestClientException.class)

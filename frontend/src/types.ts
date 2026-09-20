@@ -3,8 +3,21 @@ export type KnowledgeStatus =
   | 'REJECTED' | 'EXPIRED' | 'SUPERSEDED' | string
 
 export interface ApiEnvelope<T> { success:boolean; code?:string; message?:string; data?:T }
+/** 空间上下文条上的索引状态：漂移、待投递与死信来自 Outbox / 漂移检测。 */
+export interface IndexState {
+  drift:number
+  pending:number
+  dead:number
+  loading:boolean
+}
+
 export interface KnowledgeBase {
   id:number; baseCode:string; name:string; description?:string; status:string; createdTime?:string
+  /** 创建人：私有与用户组可见的知识库以此判定归属。 */
+  createdBy?:number|null; createdByName?:string|null
+  /** 可见范围：PUBLIC 公开 / PRIVATE 私有 / GROUP 用户组。 */
+  visibility?:'PUBLIC'|'PRIVATE'|'GROUP'|string
+  ownerGroupId?:number|null; ownerGroupName?:string|null
 }
 export interface Overview {
   knowledgeBaseId:number; sourceCount:number; documentCount:number; chunkCount:number
@@ -29,6 +42,22 @@ export interface KnowledgeDocument {
   id:number; documentCode:string; title:string; mimeType?:string; parseStatus:string
   chunkCount:number; createdTime?:string
   sourceId?:number; sourceName?:string
+  /** 文档状态机（设计 §16.1）：UPLOADED→PROCESSING→READY/FAILED→RETRYING→PROCESSING。 */
+  status?:string; currentStage?:string; retryCount?:number; errorMessage?:string|null
+}
+/** 可重跑的状态：其余状态重跑会破坏已生效的知识对象，后端同样拒绝。 */
+export const RETRYABLE_DOCUMENT_STATUS = ['FAILED', 'DIRTY'] as const
+export const isRetryableDocument = (doc:KnowledgeDocument):boolean =>
+  RETRYABLE_DOCUMENT_STATUS.includes(String(doc.status || '').toUpperCase() as 'FAILED')
+
+/** 文档 Chunk 元数据（设计 §7.2）：切分策略、页码/字符区间、token 数、revision。 */
+export interface DocumentChunk {
+  id:number; unitCode:string; chunkType?:string; headingPath?:string|null
+  pageNo?:number|null; pageEnd?:number|null
+  charStart?:number|null; charEnd?:number|null
+  tokenCount?:number|null; status?:string
+  sourceVersion?:number; revision?:number; parentId?:number|null
+  excerpt?:string; contentLength?:number; createdTime?:string
 }
 
 /** 源文件预览：文本格式展示原文，二进制格式回退到解析文本。 */
@@ -177,9 +206,30 @@ const STAGE_LABELS:Record<string,string> = {
   PARSE:'文档解析', PERSIST:'权威数据持久化',
   INDEX:'索引入队', STANDARD:'标准化入队', EXTRACT:'知识抽取',
   COMPLETED:'已完成', FAILED:'失败',
+  /** 文档状态机新增阶段：重跑需要重新切分，旧 revision 保留为 SUPERSEDED。 */
+  CHUNK:'内容切分', RETRY:'重跑', RETRYING:'重跑中', READY:'已就绪',
+  PROCESSING:'处理中', REINDEXING:'重建索引', UPLOADED:'已上传', DIRTY:'索引失效',
 }
 export const stageLabel = (stage?:string):string =>
   STAGE_LABELS[String(stage || '').toUpperCase()] || String(stage || '')
+
+/** 文档状态（设计 §16.1）：与后端 t_document.status 取值一一对应。 */
+const DOCUMENT_STATUS_LABELS:Record<string,string> = {
+  UPLOADED:'已上传', PROCESSING:'处理中', READY:'已就绪', FAILED:'失败',
+  RETRYING:'重跑中', DIRTY:'索引失效', REINDEXING:'重建索引', ARCHIVED:'已归档',
+}
+export const documentStatusLabel = (status?:string):string =>
+  DOCUMENT_STATUS_LABELS[String(status || '').toUpperCase()] || String(status || '—')
+/** 状态到 Element Tag 语义色的映射，失败与失效需要一眼可见。 */
+export const documentStatusTag = (status?:string):'success'|'danger'|'warning'|'info'|'primary' => {
+  switch (String(status || '').toUpperCase()) {
+    case 'READY': return 'success'
+    case 'FAILED': return 'danger'
+    case 'DIRTY': case 'RETRYING': return 'warning'
+    case 'PROCESSING': case 'REINDEXING': case 'UPLOADED': return 'primary'
+    default: return 'info'
+  }
+}
 
 /**
  * 界面枚举值统一展示为「中文（英文原值）」：中文保证可读，括号内的原值保证
@@ -191,6 +241,7 @@ const STATUS_LABELS:Record<string,string> = {
   APPROVED:'已审批', EFFECTIVE:'已生效', CONFLICTED:'存在冲突', REJECTED:'已驳回',
   SUPERSEDED:'已替代', EXPIRED:'已过期', INVALID:'已作废',
   ACTIVE:'有效', MERGED:'已合并', ARCHIVED:'已归档', RESOLVED:'已处理', UNKNOWN:'未知',
+  DISABLED:'已停用',
 }
 /** 知识卡片类型：取值来自 ai-service 抽取词表 FACT|PROCEDURE|RULE|PROBLEM_SOLUTION|CONCEPT。 */
 const CARD_TYPE_LABELS:Record<string,string> = {
@@ -218,6 +269,17 @@ function labeled(labels:Record<string,string>, value?:unknown):string {
 }
 
 export const statusLabel = (status?:unknown):string => labeled(STATUS_LABELS, status)
+
+/** 平台角色：决定能否管理用户、治理知识库与写入知识。 */
+const USER_ROLE_LABELS:Record<string,string> = {
+  ADMIN:'系统管理员', KNOWLEDGE_ADMIN:'知识库管理员', EDITOR:'编辑者', VIEWER:'浏览者',
+}
+/** 知识库可见范围。 */
+const VISIBILITY_LABELS:Record<string,string> = {
+  PUBLIC:'公开', PRIVATE:'私有', GROUP:'用户组',
+}
+export const userRoleLabel = (role?:unknown):string => labeled(USER_ROLE_LABELS, role)
+export const visibilityLabel = (visibility?:unknown):string => labeled(VISIBILITY_LABELS, visibility)
 export const cardTypeLabel = (type?:unknown):string => labeled(CARD_TYPE_LABELS, type)
 export const polarityLabel = (polarity?:unknown):string => labeled(POLARITY_LABELS, polarity)
 export const entityTypeLabel = (type?:unknown):string => labeled(ENTITY_TYPE_LABELS, type)
@@ -267,6 +329,8 @@ export interface QueryTrace extends QueryHistoryItem {
   retrievalJson?:unknown; fusionJson?:unknown; rerankJson?:unknown
   selectedContextJson?:unknown; citationsJson?:unknown; tokenUsageJson?:unknown; traceJson?:unknown
   answerQualification?:AnswerQualification
+  /** 9 段流水线时间轴（设计 §12.5），后端已解析为数组；缺失时回退解析 traceJson。 */
+  stages?:PipelineStage[]; pipelineJson?:unknown
 }
 
 export interface AnswerClaimAssessment {
@@ -292,8 +356,37 @@ export interface TraceCandidate {
   id:string; title?:string; channel?:string; score?:number; rerankScore?:number
   objectType?:string; contentUnitId?:number; sourceName?:string; pageNo?:number
   fusionRank?:number; rerankRank?:number; rankDelta?:number; channelRanks?:Record<string,number>
+  /** 分数构成（设计 §12.4）：候选为什么被召回、各阶段如何改分。 */
+  scoreBreakdown?:ScoreBreakdown
   [key:string]:unknown
 }
+/** 单通道命中明细：原始分与融合贡献分离，避免融合后无法解释来源。 */
+export interface ScoreChannelHit {
+  channel:string; label?:string; rank?:number|null; rawScore?:number|null
+  weight?:number; rrfContribution?:number|null
+}
+/** 候选分数构成：RRF → 质量加权 → 重排 → 最终分，外加命中与过滤解释。 */
+export interface ScoreBreakdown {
+  rrfScore?:number; rrfK?:number; channelWeights?:Record<string,number>
+  channels?:ScoreChannelHit[]; qualityBoost?:number; qualitySignals?:Record<string,number>
+  preRerankScore?:number; rerankScore?:number; finalScore?:number
+  fusionRank?:number; rerankRank?:number; rankDelta?:number
+  whyMatched?:string[]; filteredBy?:string[]
+  [key:string]:unknown
+}
+/** Trace 时间轴的一段（设计 §12.5）：输入输出数量、耗时、模型/索引版本与错误。 */
+export interface PipelineStage {
+  key:string; label?:string; latencyMs?:number|null
+  inputCount?:number|null; outputCount?:number|null
+  detail?:Record<string,unknown>; errors?:unknown
+}
+/** 被过滤原因的展示文案：与 ai-service 的 filteredBy 取值对应。 */
+const FILTER_REASON_LABELS:Record<string,string> = {
+  RERANK_DEPTH_CUTOFF:'未进入重排深度', TOPK_CUTOFF:'未进入 TopK',
+  ACL_DENIED:'权限不足', STATUS_FILTERED:'状态不可见', DEDUP:'去重合并',
+}
+export const filterReasonLabel = (reason?:string):string =>
+  FILTER_REASON_LABELS[String(reason || '').toUpperCase()] || String(reason || '')
 export interface AclSubject { subjectCode:string; displayName?:string; departmentCode?:string; status:string }
 export interface AclRole { roleCode:string; roleName?:string; status:string }
 export interface AclAudit {
@@ -353,4 +446,221 @@ export interface QueryPolicy {
 export interface QueryPolicySchema {
   channels:{ name:string; label:string; description:string }[]
   defaults:QueryPolicy; policyFile:string; policyVersionDefault:string
+}
+
+/* ---- 用户、用户组与登录会话 ---- */
+
+export type UserRoleValue = 'ADMIN'|'KNOWLEDGE_ADMIN'|'EDITOR'|'VIEWER'
+export interface UserAccount {
+  id:number; userCode:string; username:string; displayName:string; email:string
+  role:UserRoleValue|string; status:string; lastLoginTime?:string|null
+  groupIds:number[]; groupNames:string[]
+}
+export interface UserGroupRow {
+  id:number; groupCode:string; name:string; description:string; status:string
+  memberCount:number; memberIds:number[]
+}
+export interface AuthSessionResult { token:string; expiresAt:string; user:UserAccount }
+/** 后端是否开启认证、是否允许匿名只读、以及是否已完成初始管理员创建。 */
+export interface AuthStatus { enabled:boolean; allowAnonymous:boolean; initialized:boolean }
+export interface AuthMe extends AuthStatus {
+  user:UserAccount|null; canManageUsers:boolean; canWriteKnowledge:boolean
+}
+
+/* ---- 对外接口服务：RESTful / MCP Server / SSE ---- */
+
+export interface ExternalEndpoint { method:string; path:string; summary:string }
+export interface ExternalRestChannel {
+  enabled:boolean; basePath:string; auth:string; endpoints:ExternalEndpoint[]
+}
+export interface ExternalMcpChannel {
+  enabled:boolean; endpoint:string; protocolVersion:string; methods:string[]; tools:string[]
+}
+export interface ExternalSseChannel {
+  enabled:boolean; heartbeatSeconds:number; maxMinutes:number; endpoints:ExternalEndpoint[]
+}
+export interface ExternalServiceOverview {
+  rest:ExternalRestChannel; mcp:ExternalMcpChannel; sse:ExternalSseChannel
+  activeKeys:number; docs:{ openapi:string; swaggerUi:string }
+}
+export interface ExternalKeyRow {
+  id:number; keyCode:string; name:string; keyPrefix:string
+  knowledgeBaseId:number|null; knowledgeBaseName:string|null
+  scopes:string; rateLimitPerMinute:number; status:string
+  expiresAt:string|null; lastUsedAt:string|null; createdByName:string|null; createdTime:string
+  /** 明文仅创建响应携带一次。 */
+  secret?:string
+}
+export interface ExternalAuditRow {
+  id:number; keyId:number|null; keyCode:string|null; channel:string; method:string
+  knowledgeBaseId:number|null; statusCode:number; durationMs:number
+  traceId:string|null; message:string|null; createdTime:string
+}
+
+/* ---- 评测中心（设计 §14）：数据集 / 用例 / 运行 / 知识缺口 ---- */
+
+export interface EvaluationDataset {
+  id:number; datasetCode:string; knowledgeBaseId:number; name:string; description?:string
+  version?:string; status:string; createdBy?:string; createdTime?:string; caseCount?:number
+}
+export interface EvaluationCase {
+  id:number; caseCode:string; datasetId:number; question:string
+  /** 期望命中的知识标识 JSON 字符串：内容单元 id / 文档名 / 证据码皆可。 */
+  expectedObjectCodesJson?:string; expectedEvidenceCodesJson?:string; expectedAnswer?:string
+  tagsJson?:string; difficulty?:string; version?:string; status?:string; createdTime?:string
+}
+/** 一次评测运行的聚合指标；delta 与 verdict 只在指定基线时才有值。 */
+export interface EvaluationRun {
+  id:number; runCode:string; datasetId:number; knowledgeBaseId:number; status:string
+  mode:string; topK:number; policyVersion?:string; baselineRunCode?:string|null
+  caseCount:number; hitAt1Rate?:number|null; hitAt3Rate?:number|null; hitAt5Rate?:number|null
+  recallAt5?:number|null; mrr?:number|null; ndcgAt10?:number|null
+  latencyP50Ms?:number|null; latencyP95Ms?:number|null
+  citationAccuracy?:number|null; faithfulness?:number|null
+  regressionVerdict?:string|null; baselineDeltaJson?:string|null; gapsJson?:string|null
+  errorMessage?:string|null; startedTime?:string; finishedTime?:string
+  datasetName?:string; datasetCode?:string
+  results?:EvaluationResult[]; baseline?:EvaluationRun
+}
+/** 逐用例证据：没有它，平均值无法回答"哪道题坏了"。 */
+export interface EvaluationResult {
+  id:number; runId:number; caseId:number; caseCode:string; queryId?:string; status:string
+  expectedCodesJson?:string; retrievedCodesJson?:string
+  hitAt1?:number; hitAt3?:number; hitAt5?:number
+  reciprocalRank?:number; recallAt5?:number; ndcgAt10?:number; latencyMs?:number
+  citationTotal?:number; citationHit?:number; citationAccuracy?:number; faithfulness?:number
+  errorMessage?:string; createdTime?:string
+}
+export interface EvaluationGap {
+  runCode:string; knowledgeBaseId:number; caseCount:number; gapCount:number
+  gaps:{ caseCode:string; queryId?:string; expectedCodes?:string; retrievedCodes?:string }[]
+}
+
+/* ---- 治理洞察（设计 §5.1 知识质量 / §9.4 Lineage + 版本溯源） ---- */
+
+/** 版本快照列表项：正文只回前 400 字符，差异比对用得上，列表渲染不至于拖垮页面。 */
+export interface VersionSnapshotRow {
+  id:number; objectType:string; objectCode:string; versionNo:number
+  title?:string; summary?:string; excerpt?:string; status?:string; confidence?:number
+  changeType?:string; changedBy?:string; supersedesVersionNo?:number|null; createdTime?:string
+}
+export interface VersionGroupRow { objectType:string; changeType:string; total:number; latestTime?:string }
+export interface VersionPage {
+  total:number; rows:VersionSnapshotRow[]; groups:VersionGroupRow[]
+}
+/** 证据原文定位链：source → document → page → heading → contentUnit（设计：不另建第二份原文）。 */
+export interface VersionEvidenceRow {
+  evidenceCode:string; quoteText?:string; authorityScore?:number; freshnessScore?:number
+  evidenceStatus?:string; sourceName?:string; sourceType?:string
+  documentTitle?:string; documentCode?:string; contentUnitCode?:string
+  headingPath?:string; pageNo?:number|null; pageEnd?:number|null
+}
+export interface VersionEvidence {
+  objectType:string; objectCode:string; items:VersionEvidenceRow[]
+}
+/** 质量概览：每一项都来自库里已有的数据，没有为看板凭空造的指标。 */
+export interface QualityOverview {
+  trustedCoverage:{ approved:number; total:number; ratio:number; byStatus:Record<string, number> }
+  citation:{
+    answerCount:number; claimCount:number; supportedClaimCount:number; citationCount:number
+    accuracy:number; faithfulness:number; completeness:number; latestTime?:string
+  }
+  /** 最近一次成功的评测运行；没有跑过评测就是 null，不能用 0 假装测过。 */
+  retrieval:{
+    runCode:string; mode:string; status:string; caseCount:number
+    hitAt1Rate?:number|null; hitAt5Rate?:number|null; recallAt5?:number|null; mrr?:number|null
+    ndcgAt10?:number|null; latencyP50Ms?:number|null; latencyP95Ms?:number|null
+    regressionVerdict?:string|null; finishedTime?:string; datasetName?:string
+  } | null
+  freshness:{
+    total:number; freshCount:number; staleCount:number; expiredCount:number
+    ratio:number; latestUpdate?:string
+  }
+  health:{
+    pendingReview:number; pendingCardReview:number; openConflict:number
+    failedIngestion:number; uncertainClaim:number; conflictedClaim:number
+  }
+  statusBreakdown:{ objectType:string; status:string; total:number }[]
+  withinDays:number
+}
+
+/* ---- MCP 服务管理与调用审计 ---- */
+
+/** 单个 MCP 工具的入参定义：智能体只能按 schema 调用，页面把它原样展示出来。 */
+export interface McpToolProperty { type:string; description:string }
+export interface McpTool {
+  name:string; description:string
+  inputSchema:{ type:string; properties:Record<string, McpToolProperty>; required:string[] }
+}
+export interface McpManifest {
+  protocolVersion:string; serverName:string; serverVersion:string
+  endpoint:string; enabled:boolean; auth:string
+  tools:McpTool[]
+  initialize:Record<string, unknown>
+}
+export interface McpCallAudit {
+  id:number; keyId:number|null; keyCode:string|null; channel:string; method:string
+  knowledgeBaseId:number|null; statusCode:number; durationMs:number
+  traceId:string|null; message:string|null; createdTime:string
+}
+
+/* ---- 知识工作台聚合（详细设计 §3 / §11） ---- */
+
+/** 最近更新的知识对象：工作台「最近更新」列表。 */
+export interface RecentObject {
+  objectType:'CARD'|'CLAIM'|string; objectCode:string; displayTitle:string
+  status:string; confidence?:number|null; updatedTime?:string
+}
+/** KPI 卡：来源 / 文档 / 卡片 / 断言 / 实体 / 关系，均可点击进入资产浏览。 */
+export interface DashboardSummary {
+  knowledgeBaseId:number
+  sourceCount:number; documentCount:number; chunkCount:number
+  cardCount:number; claimCount:number; entityCount:number; relationCount:number
+  /** 知识健康度：按治理待办的加权扣分模型，满分 100。 */
+  healthScore:number
+  pendingReviewCount:number; openConflictCount:number
+  recent:RecentObject[]
+}
+/** 生命周期单阶段：接入 → 解析 → 抽取 → 衍生 → 裁决 → 发布。 */
+export interface LifecycleStage {
+  code:'INGEST'|'PARSE'|'EXTRACT'|'DERIVE'|'JUDGE'|'PUBLISH'|string
+  label:string; count:number; abnormal:number
+  /** 点击目标：IA 二级入口 key。 */
+  target:string
+}
+export interface DashboardLifecycle { knowledgeBaseId:number; stages:LifecycleStage[] }
+/** 治理卡片条目：只展示需要行动的数字，level 决定配色。 */
+export interface GovernanceItem {
+  key:string; label:string; count:number
+  level:'ok'|'warn'|'block'; target:string
+}
+export interface DashboardGovernance {
+  knowledgeBaseId:number; healthScore:number
+  pendingReview:number; conflict:number; expired:number
+  noEvidence:number; lowConfidence:number; staleDerived:number
+  items:GovernanceItem[]
+}
+
+/* ---- 知识集成（详细设计 §6） ---- */
+
+export interface IntegrationService {
+  code:string; name:string; purpose:string; endpoint:string
+  /** 集成服务状态：DRAFT → TESTING → PUBLISHED → DISABLED → ARCHIVED。 */
+  status:'DRAFT'|'TESTING'|'PUBLISHED'|'DISABLED'|'ARCHIVED'|string
+}
+export interface ProtocolStat { protocol:string; calls:number; successCount:number; errorCount:number }
+export interface IntegrationHealthRow { name:string; status:string; errorRate:number; p95Ms:number }
+export interface IntegrationCallRow {
+  time?:string; client?:string|null; protocol?:string; method?:string
+  status?:number|null; latencyMs?:number|null; traceId?:string|null; message?:string|null
+}
+export interface IntegrationOverview {
+  windowHours:number
+  serviceCount:number; credentialCount:number; activeCredentialCount:number
+  calls:number; successCount:number; errorCount:number; successRate:number
+  p95Ms:number; avgDurationMs:number; maxDurationMs:number
+  services:IntegrationService[]
+  protocolDistribution:ProtocolStat[]
+  health:IntegrationHealthRow[]
+  recentCalls:IntegrationCallRow[]
 }
