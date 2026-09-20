@@ -122,7 +122,7 @@ body{background:var(--bg)}
    样式放在全局避免两个组件各写一份。 */
 .ingest-layout{display:grid;grid-template-columns:1.25fr .75fr;gap:14px}
 /* 紧凑版：两列各自按内容高度，不再互相拉高（知识创建首页整体压低）。 */
-.ingest-layout-compact{align-items:start;grid-template-columns:.82fr 1.18fr}
+.ingest-layout-compact{align-items:start;grid-template-columns:1fr 1fr}
 .ingest-box{display:grid;grid-template-columns:1fr 190px;gap:18px;align-items:center}
 .ingest-settings{display:flex;flex-direction:column;gap:10px}
 .ingest-settings label{font-size:12px;color:#64748b}
@@ -170,6 +170,8 @@ body{background:var(--bg)}
 .ingest-actions .field{display:flex;flex-direction:column;gap:3px;min-width:112px}
 .ingest-actions .field.grow{flex:1;min-width:150px}
 .ingest-actions label{font-size:11px;color:#64748b}
+/* 卡片内部版本：沿用卡片自身内边距，不再额外加边框与 padding。 */
+.ingest-actions.inside{border-top:0;padding:0}
 .retry-count{font-size:11px;color:#b45309}
 .retry-count.muted{color:#cbd5e1}
 .doc-hint{margin:8px 2px 0;font-size:11px;line-height:1.7;color:#64748b}

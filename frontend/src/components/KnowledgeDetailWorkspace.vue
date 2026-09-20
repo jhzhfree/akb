@@ -13,8 +13,8 @@
           </div>
           <div class="flex items-center gap-2">
             <span class="kb-badge">{{ status }}</span>
-            <span class="kb-badge">可信度 {{ confidence }}</span>
-            <button class="kb-btn kb-btn-outline" @click="$emit('open-graph',code)">打开图谱</button>
+            <span class="kb-badge">{{ isChunk?`Token ${tokenCount}`:`可信度 ${confidence}` }}</span>
+            <button v-if="!isChunk" class="kb-btn kb-btn-outline" @click="$emit('open-graph',code)">打开图谱</button>
           </div>
         </header>
 
@@ -27,6 +27,35 @@
 
         <!-- 设计 §8：统一详情框架——概览 / 关联 / Evidence / 版本 / 权限 / 审计，所有对象共用。 -->
         <el-tabs v-model="tab" class="kb-tabs">
+          <!-- 原文：完整正文 + 切分边界 + 同文档上下文，引用对不上时先来这里核对 -->
+          <el-tab-pane label="原文" name="raw">
+            <section class="kb-card p-5">
+              <div class="kb-section-head">
+                <div><small>RAW TEXT</small><h3>原始正文</h3></div>
+                <button class="kb-btn kb-btn-outline" @click="copy(rawText)">复制原文</button>
+              </div>
+              <div class="max-h-[46vh] overflow-auto whitespace-pre-wrap break-words rounded-lg bg-ink-50 p-4 text-[13px] leading-7 text-ink-700">{{ rawText }}</div>
+              <div class="mt-3 flex flex-wrap gap-3 text-[11px] text-ink-400">
+                <span>字符 {{ rawText.length }}</span>
+                <span>估算 Token {{ estimateTokens(rawText) }}</span>
+                <span v-if="obj.charStart!=null">原文区间 {{ obj.charStart }} – {{ obj.charEnd }}</span>
+                <span v-if="obj.pageNo">P{{ obj.pageNo }}<template v-if="obj.pageEnd && obj.pageEnd!==obj.pageNo"> – P{{ obj.pageEnd }}</template></span>
+              </div>
+            </section>
+            <section v-if="neighbors.length" class="kb-card mt-4 p-5">
+              <div class="kb-section-head"><div><small>CONTEXT</small><h3>同文档上下文</h3></div></div>
+              <article
+                v-for="n in neighbors" :key="String(n.unitCode)"
+                class="mb-2 rounded-lg border p-3 text-xs"
+                :class="String(n.unitCode)===String(obj.unitCode||code)?'border-indigo-200 bg-indigo-50':'border-ink-100 bg-white'">
+                <div class="mb-1 font-semibold text-ink-700">
+                  {{ n.pos==='PREV'?'上文':(n.pos==='NEXT'?'下文':'本块') }} · {{ n.headingPath || '—' }}
+                </div>
+                <p class="leading-6 text-ink-500">{{ n.excerpt }}</p>
+              </article>
+            </section>
+          </el-tab-pane>
+
           <el-tab-pane label="概览" name="overview">
             <section class="kb-card p-5">
               <div class="kb-section-head"><div><small>KNOWLEDGE</small><h3>知识正文</h3></div></div>
@@ -124,6 +153,18 @@
             </section>
           </el-tab-pane>
 
+          <!-- 原始 JSON：接口原生报文，字段对不上契约时直接在这里比对 -->
+          <el-tab-pane label="原始 JSON" name="json">
+            <section class="kb-card p-5">
+              <div class="kb-section-head">
+                <div><small>RAW JSON</small><h3>接口原生报文</h3></div>
+                <button class="kb-btn kb-btn-outline" @click="copy(jsonText)">复制 JSON</button>
+              </div>
+              <pre class="max-h-[60vh] overflow-auto rounded-lg bg-ink-900 p-4 text-[12px] leading-6 text-emerald-200">{{ jsonText }}</pre>
+              <p class="kb-muted">与 GET /api/knowledge/objects/{kb}/{type}/{code} 返回一致，用于对照接口契约核对字段。</p>
+            </section>
+          </el-tab-pane>
+
           <el-tab-pane label="审计" name="audit">
             <section class="kb-card p-5">
               <div class="kb-section-head"><div><small>GOVERNANCE</small><h3>智能裁决记录</h3></div></div>
@@ -153,23 +194,55 @@
 </template>
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import type { GraphNode, KnowledgeObjectDetail } from '../types'
+import { ElMessage } from 'element-plus'
+import type { DocumentChunk, GraphNode, KnowledgeObjectDetail } from '../types'
 import { statusLabel, visibilityLabel } from '../types'
 import VersionDiffPanel from './VersionDiffPanel.vue'
-const props=defineProps<{visible:boolean;mode:'CARD'|'CLAIM';code:string;detail:KnowledgeObjectDetail|null;loading:boolean}>()
+const props=defineProps<{visible:boolean;mode:'CARD'|'CLAIM'|'CHUNK';code:string;detail:KnowledgeObjectDetail|null;loading:boolean}>()
 defineEmits<{close:[];'open-graph':[code:string];'open-evidence':[evidenceCode:string]}>()
 /** 统一详情框架的当前 Tab：概览 / 关联 / Evidence / 版本 / 权限 / 审计。 */
 const tab=ref('overview')
 /** 切换对象时回到概览，避免把上一个对象的 Tab 状态带到下一个对象。 */
 watch(()=>props.code,()=>{tab.value='overview'})
 const obj=computed(()=>props.detail?.object||{})
-const title=computed(()=>String(obj.value.title||obj.value.subject||props.code))
-const summary=computed(()=>String(obj.value.summary||obj.value.predicate||''))
+/** Chunk 与知识对象共用抽屉：Chunk 没有状态与可信度，展示的是切分事实。 */
+const isChunk=computed(()=>props.mode==='CHUNK')
+const title=computed(()=>isChunk.value
+  ? String(obj.value.headingPath||obj.value.unitCode||props.code)
+  : String(obj.value.title||obj.value.subject||props.code))
+const summary=computed(()=>isChunk.value
+  ? String(obj.value.documentTitle||obj.value.documentCode||'')
+  : String(obj.value.summary||obj.value.predicate||''))
 const content=computed(()=>String(obj.value.content||obj.value.objectValue||obj.value.summary||''))
-const status=computed(()=>statusLabel(obj.value.status))
+const status=computed(()=>isChunk.value
+  ? String(obj.value.chunkType||'CHUNK')
+  : statusLabel(obj.value.status))
 const confidence=computed(()=>score(Number(obj.value.confidence||0)))
-/** 概览属性：只取治理相关的关键字段，字段缺失显示 — 而不是渲染 undefined。 */
-const attributes=computed(()=>[
+const tokenCount=computed(()=>Number(obj.value.tokenCount||0))
+const rawText=computed(()=>String(obj.value.content||''))
+const neighbors=computed<DocumentChunk[]>(()=>props.detail?.neighbors||[])
+/** 原生报文：与接口返回逐字一致，便于对照契约排查字段。 */
+const jsonText=computed(()=>JSON.stringify(props.detail, null, 2))
+function estimateTokens(text:string):number{
+  const cjk=text.match(/[\u4e00-\u9fff]/g)?.length||0
+  return Math.max(1, Math.round(cjk*0.7+(text.length-cjk)/4))
+}
+async function copy(text:string){
+  if(!text){ElMessage.warning('没有可复制的内容');return}
+  try{
+    await navigator.clipboard.writeText(text)
+    ElMessage.success('已复制到剪贴板')
+  }catch{ElMessage.warning('浏览器拒绝了剪贴板访问，请手动选择复制')}
+}
+/** 概览属性：按对象类型取治理或切分关键字段，字段缺失显示 — 而不是渲染 undefined。 */
+const attributes=computed(()=>isChunk.value?[
+  { label:'块类型', value:String(obj.value.chunkType||'—') },
+  { label:'序号', value:String(obj.value.seq??'—') },
+  { label:'页码', value:obj.value.pageNo?`P${obj.value.pageNo}${obj.value.pageEnd&&obj.value.pageEnd!==obj.value.pageNo?` – P${obj.value.pageEnd}`:''}`:'—' },
+  { label:'字符区间', value:obj.value.charStart!=null?`${obj.value.charStart} – ${obj.value.charEnd}`:'—' },
+  { label:'Token', value:String(obj.value.tokenCount||'—') },
+  { label:'所属文档', value:String(obj.value.documentTitle||obj.value.documentCode||'—') },
+]:[
   { label:'状态', value:status.value },
   { label:'可信度', value:confidence.value },
   { label:'知识类型', value:String(obj.value.knowledgeType||obj.value.cardType||'—') },

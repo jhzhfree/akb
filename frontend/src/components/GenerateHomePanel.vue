@@ -2,39 +2,44 @@
   <section class="kb-page">
     <header class="kb-section-head">
       <div>
-        <div class="kb-eyebrow">KNOWLEDGE CREATION</div>
-        <h1 class="kb-title mt-1">知识创建</h1>
+        <div class="kb-eyebrow">KNOWLEDGE GENERATION</div>
+        <h1 class="kb-title mt-1">生成概览</h1>
         <p class="kb-muted mt-1">
-          拖入资料即可走完「解析 → 抽取 → 索引」：右侧实时跟踪运行日志，按流水线逐段核对知识产出。
+          从原始数据到可信知识资产：拖入资料即可走完「接入 → 解析 → 抽取 → 索引」，右侧实时跟踪运行日志。
         </p>
       </div>
       <div class="flex shrink-0 gap-2">
-        <button class="kb-btn-outline" @click="$emit('navigate','create.sources')">连接器</button>
-        <button class="kb-btn-outline" @click="selectStep('documents')">文档中心</button>
+        <button class="kb-btn-primary" @click="$emit('navigate','create.import')">导入文档</button>
       </div>
     </header>
 
-    <!-- §4 知识生产流水线：按步骤推进，任一环节都能在下方看到当前产物 -->
-    <nav class="kb-pipeline mt-4" aria-label="知识生产流水线">
-      <template v-for="(step,i) in steps" :key="step.key">
-        <button
-          class="kb-step"
-          :class="{active:current===step.key,planned:step.planned}"
-          :title="step.planned?'规划中：该能力尚未实现':step.desc"
-          @click="selectStep(step.key)">
-          <span class="kb-step-index">{{ i+1 }}</span>
-          <span class="kb-step-copy">
-            <b>{{ step.icon }} {{ step.label }}</b>
-            <small>{{ step.desc }}</small>
-          </span>
-          <em v-if="stepBadge(step)" class="kb-step-badge">{{ stepBadge(step) }}</em>
-          <em v-else-if="step.planned" class="kb-step-planned">规划</em>
-        </button>
-        <span v-if="i<steps.length-1" class="kb-step-arrow" aria-hidden="true">→</span>
-      </template>
-    </nav>
+    <!-- §4：知识生成首页以四个任务卡为核心，其余能力都在 Tab 内，不再占左侧菜单。 -->
+    <div class="gen-task-grid mt-4">
+      <button
+        v-for="task in tasks"
+        :key="task.key"
+        class="gen-task"
+        :class="{planned:task.planned}"
+        :disabled="task.planned"
+        :title="task.planned?'规划中：该能力尚未实现':task.desc"
+        @click="$emit('navigate',task.key)">
+        <span class="gen-task-ic">{{ task.icon }}</span>
+        <b>{{ task.label }}</b>
+        <small>{{ task.desc }}</small>
+        <em v-if="task.badge" class="gen-task-badge">{{ task.badge }}</em>
+        <em v-else-if="task.planned" class="gen-task-planned">规划</em>
+      </button>
+    </div>
 
-    <!-- §4.1 拖拽上传 + 运行日志：知识创建的主操作区，与文档中心同一套区块语言 -->
+    <!-- §4 生成概览：四个数字说明「今天进来多少、正在跑多少、多少卡在人工环节」。 -->
+    <div class="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <div class="kb-metric"><span>今日导入</span><b>{{ todayRuns }}</b><small class="kb-muted">已接收的资料运行</small></div>
+      <div class="kb-metric"><span>运行中</span><b>{{ runningRuns }}</b><small class="kb-muted">Pipeline 未结束</small></div>
+      <div class="kb-metric"><span>待裁决</span><b>{{ pendingTotal }}</b><small class="kb-muted">待审核 + 冲突</small></div>
+      <div class="kb-metric"><span>候选衍生</span><b>—</b><small class="kb-muted">衍生能力规划中</small></div>
+    </div>
+
+    <!-- §4.1 拖拽上传 + 运行日志：知识生成的主操作区，与文档导入同一套区块语言 -->
     <div class="ingest-layout ingest-layout-compact mt-4">
       <!-- 左侧只保留拖拽与实时进度：高度压到最小，设置与操作移到右列底部。 -->
       <article class="kb-card p-3">
@@ -42,12 +47,15 @@
           <b class="text-sm">拖入资料</b>
           <span class="kb-muted">Source 保存后即入摄入流水线</span>
         </div>
+        <!-- 关闭内置文件列表：已选文件由下方 .picked-file 一行呈现并提供「移除」，
+             避免同一文件在拖拽区下方再叠一层列表，让上传区保持紧凑。 -->
         <el-upload
           ref="uploadRef"
           class="upload-compact"
           drag
           :auto-upload="false"
           :limit="1"
+          :show-file-list="false"
           :on-change="onPick"
           :on-remove="onRemove"
           :on-exceed="onExceed">
@@ -59,6 +67,28 @@
           <span>已选择：{{ pickedName }}</span>
           <el-button link type="primary" :disabled="uploading" @click="clearPicked">移除</el-button>
         </div>
+        <!-- 来源属性与上传操作紧跟拖拽区，同一块区域完成「选文件 → 定属性 → 提交」。 -->
+        <div class="ingest-actions inside mt-3">
+          <div class="field">
+            <label>来源权威分</label>
+            <el-input-number
+              size="small"
+              controls-position="right"
+              :model-value="authority" :min="0" :max="1" :step=".05"
+              @update:model-value="updateAuthority" />
+          </div>
+          <div class="field grow">
+            <label>来源 ACL 标签</label>
+            <el-input
+              size="small"
+              :model-value="permissionTags"
+              placeholder="如 team-a,ops；留空=公开"
+              @update:model-value="$emit('update:permission-tags',String($event))" />
+          </div>
+          <el-button type="primary" size="small" :loading="uploading" :disabled="!pickedName" @click="$emit('upload')">
+            上传并生成知识
+          </el-button>
+        </div>
         <div v-if="uploading" class="ingest-live">
           <span class="live-dot"></span>
           <span>
@@ -68,7 +98,7 @@
         </div>
       </article>
 
-      <!-- 右侧：运行日志固定高度且可拖动调整；权威分 / ACL 标签 / 上传按钮收在同一列底部。 -->
+      <!-- 右侧：只放运行日志，内部再分「已上传文件列表」与「事件时间线」两栏各自滚动。 -->
       <article class="kb-card">
         <div class="kb-card-head">
           <b class="text-sm">运行日志</b>
@@ -91,39 +121,23 @@
           @mousedown="startResize">
           <span>⋯ 拖动调整高度 · {{ logHeight }}px</span>
         </div>
-        <div class="ingest-actions">
-          <div class="field">
-            <label>来源权威分</label>
-            <el-input-number
-              size="small"
-              controls-position="right"
-              :model-value="authority" :min="0" :max="1" :step=".05"
-              @update:model-value="updateAuthority" />
-          </div>
-          <div class="field grow">
-            <label>来源 ACL 标签</label>
-            <el-input
-              size="small"
-              :model-value="permissionTags"
-              placeholder="如 team-a,ops；留空=公开"
-              @update:model-value="$emit('update:permission-tags',String($event))" />
-          </div>
-          <el-button type="primary" size="small" :loading="uploading" :disabled="!pickedName" @click="$emit('upload')">
-            上传并生成知识
-          </el-button>
-        </div>
       </article>
     </div>
 
-    <!-- §4.2 流水线产出：当前步骤的产物就在这里查看，不再跳到其他页面 -->
+    <!-- §4.2 生成产出：文档是默认产物，Chunk 与实体归一作为专业入口在同一区块内切换 -->
     <article class="kb-card mt-4">
       <div class="kb-card-head">
         <b class="text-sm">{{ currentTitle }}</b>
-        <span class="kb-muted">{{ currentHint }}</span>
+        <div class="flex items-center gap-2">
+          <span class="kb-muted">{{ currentHint }}</span>
+          <button class="kb-btn-outline" :class="{'kb-btn-primary':tool===''}" @click="tool=''">文档</button>
+          <button class="kb-btn-outline" :class="{'kb-btn-primary':tool==='chunk'}" @click="tool='chunk'">Chunk</button>
+          <button class="kb-btn-outline" :class="{'kb-btn-primary':tool==='entity'}" @click="tool='entity'">实体归一</button>
+        </div>
       </div>
       <div class="p-3">
         <!-- 已解析文档：状态机 + 重跑，完成后即可在工作台检索到 -->
-        <template v-if="current==='documents'">
+        <template v-if="tool===''">
           <el-table :data="documents" max-height="360" size="small">
             <el-table-column prop="title" label="文档" min-width="200" show-overflow-tooltip />
             <el-table-column label="状态" width="110">
@@ -143,7 +157,7 @@
             </el-table-column>
             <el-table-column label="操作" width="130">
               <template #default="{ row }">
-                <el-button link type="primary" size="small" @click="selectStep('create.chunk')">Chunk</el-button>
+                <el-button link type="primary" size="small" @click="tool='chunk'">Chunk</el-button>
                 <el-button
                   link type="warning" size="small"
                   :disabled="!isRetryableDocument(row)||retryingId===row.id"
@@ -161,38 +175,41 @@
         </template>
 
         <!-- Chunk：按文档查看切分结果，核对切分是否符合预期 -->
-        <ChunkExplorerPanel v-else-if="current==='create.chunk'" :documents="documents" />
+        <ChunkExplorerPanel
+          v-else-if="tool==='chunk'"
+          :knowledge-base-id="knowledgeBaseId" :documents="documents" />
         <!-- 实体归一：同名实体合并与图谱回看 -->
         <EntityGovernancePanel
-          v-else-if="current==='create.entity'"
+          v-else
           :knowledge-base-id="knowledgeBaseId"
           @refresh="$emit('refresh')" @open-graph="$emit('open-graph',$event)" />
-        <!-- 待审核 / 冲突 / 裁决：三块共享同一组件，用 focus 决定主区块（设计 §4.3） -->
-        <ReviewPanel
-          v-else-if="reviewFocus"
-          :focus="reviewFocus"
-          :pending-reviews="pendingReviews"
-          :conflicts="conflicts"
-          :assessments="assessments"
-          :adjudicating="adjudicating"
-          @adjudicate="$emit('adjudicate')"
-          @review="(row,decision)=>$emit('review',row,decision)"
-          @resolve="(row,status)=>$emit('resolveConflict',row,status)" />
-        <!-- 知识派生：IA 保留但当前版本未实现，不提供假数据页面 -->
-        <PanelState
-          v-else
-          :empty="true"
-          empty-text="知识派生：规划中"
-          empty-hint="信息架构已保留该位置，能力落地后会在此开放" />
       </div>
     </article>
   </section>
 </template>
+<style scoped>
+/* §4 任务入口卡：四个任务就是知识生成的全部入口，Tab 只承载工作区。 */
+.gen-task-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.gen-task{
+  position:relative;padding:14px 16px;text-align:left;background:#fff;
+  border:1px solid #e2e9f2;border-radius:11px;box-shadow:0 2px 9px #1d35570a;cursor:pointer}
+.gen-task:hover{border-color:#77aff8}
+.gen-task.planned{cursor:not-allowed;opacity:.9}
+.gen-task-ic{display:block;font-size:18px;line-height:1}
+.gen-task b{display:block;margin-top:6px;font-size:14px;color:#164e8b}
+.gen-task small{display:block;margin-top:3px;font-size:11.5px;color:#748399}
+.gen-task-badge,.gen-task-planned{
+  position:absolute;right:12px;top:12px;min-width:20px;padding:0 6px;
+  border-radius:999px;font-size:11px;font-style:normal;text-align:center;line-height:20px}
+.gen-task-badge{background:#fdeceb;color:#c0392b}
+.gen-task-planned{background:var(--ink-100,#f1f4f8);color:#9aa4b5}
+@media(max-width:1100px){.gen-task-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+</style>
 <script setup lang="ts">
 import { computed, onUnmounted, ref, watch } from 'vue'
 import type { UploadFile, UploadInstance, UploadRawFile } from 'element-plus'
 import type {
-  AssessmentRow, ConflictRow, IngestionRun, IngestionRunDetail,
+  ConflictRow, IngestionRun, IngestionRunDetail,
   KnowledgeDocument, ReviewRow,
 } from '../types'
 import { documentStatusLabel, documentStatusTag, isRetryableDocument, stageLabel } from '../types'
@@ -201,16 +218,13 @@ import { confirmAction, notifyError, notifySuccess } from '../utils/feedback'
 import IngestionLogPanel from './IngestionLogPanel.vue'
 import ChunkExplorerPanel from './ChunkExplorerPanel.vue'
 import EntityGovernancePanel from './EntityGovernancePanel.vue'
-import ReviewPanel from './ReviewPanel.vue'
-import PanelState from './PanelState.vue'
+
 
 const props = defineProps<{
   knowledgeBaseId:number
   pendingReviews:ReviewRow[]
   conflicts:ConflictRow[]
-  assessments:AssessmentRow[]
-  adjudicating:boolean
-  /** 上传相关的状态由 App 持有：知识创建首页与文档中心共用同一条摄入链路。 */
+  /** 上传相关的状态由 App 持有：生成概览与文档导入共用同一条摄入链路。 */
   authority:number
   permissionTags:string
   documents:KnowledgeDocument[]
@@ -221,8 +235,8 @@ const props = defineProps<{
   ingestLive:boolean
   ingestStage:string
   ingestMessage:string
-  /** 外部跳转进来的流水段：工作台治理入口与任务中心直接落到对应环节。 */
-  step?:string
+  /** 上传复位令牌：一次摄入完成后由外壳自增，面板收到后清空已选文件。 */
+  resetToken?:number
 }>()
 const emit = defineEmits<{
   navigate:[key:string]
@@ -234,51 +248,38 @@ const emit = defineEmits<{
   'select-run':[id:number]
   refresh:[]
   'open-graph':[code:string]
-  adjudicate:[]
-  review:[row:ReviewRow,decision:string]
-  resolveConflict:[row:ConflictRow,status:string]
   /** 重跑结束：文档与运行日志都已变化，交由父组件重新拉取。 */
   reloaded:[]
 }>()
 
 /**
- * 流水线：知识按「文档 → Chunk → 实体归一 → 待审核 → 冲突 → 裁决 → 派生」逐段产生，
- * 点击任一步骤即在下方查看该环节的产物，而不是离开当前页。
+ * 生成概览的产出区块：文档是默认视图，Chunk 与实体归一作为专业入口，
+ * 与设计 §1「Chunk / 实体归一不再占用一级或二级菜单」一致。
  */
-type StepKey = 'documents'|'create.chunk'|'create.entity'|'create.review'|'create.conflict'|'create.judgment'|'create.derivation'
-const STEPS: {key:StepKey;icon:string;label:string;desc:string;hint:string;planned?:boolean}[] = [
-  { key:'documents', icon:'📄', label:'已解析文档', desc:'Source 解析后的文档与状态机',
-    hint:'失败与索引失效可重跑' },
-  { key:'create.chunk', icon:'▦', label:'Chunk', desc:'切分策略与 revision', hint:'Chunk 清单与版本' },
-  { key:'create.entity', icon:'⬡', label:'实体归一', desc:'同名实体合并与图谱回看', hint:'合并后可回看图谱' },
-  { key:'create.review', icon:'🕘', label:'待审核', desc:'等待人工确认的知识', hint:'待人工介入的知识' },
-  { key:'create.conflict', icon:'⚠', label:'冲突', desc:'同一对象的多版本冲突', hint:'待处理的冲突' },
-  { key:'create.judgment', icon:'⚖', label:'知识裁决', desc:'采用 / 拒绝的最终判定', hint:'冲突与待审核的裁决' },
-  { key:'create.derivation', icon:'⑃', label:'知识派生', desc:'由基础断言推导衍生知识', hint:'规划中', planned:true },
-]
-const steps = computed(() => STEPS)
-const current = ref<StepKey>(resolveStep(props.step))
-/** step 由父组件的视图 key 给出：同一容器可承接多个入口，值无效时回到第一步。 */
-function resolveStep(step?:string):StepKey{
-  return (STEPS.find(v => v.key === step)?.key || 'documents') as StepKey
+const tool = ref<''|'chunk'|'entity'>('')
+const VIEWS: Record<''|'chunk'|'entity', { title:string; hint:string }> = {
+  '': { title:'已解析文档', hint:'失败与索引失效可重跑' },
+  chunk: { title:'Chunk', hint:'Chunk 清单与版本' },
+  entity: { title:'实体归一', hint:'合并后可回看图谱' },
 }
-watch(() => props.step, step => { current.value = resolveStep(step) })
-function selectStep(key:StepKey){current.value=key}
-const currentStep = computed(() => STEPS.find(step => step.key === current.value) || STEPS[0])
-const currentTitle = computed(() => currentStep.value.label)
-const currentHint = computed(() => currentStep.value.hint)
-/** 治理三步共享 ReviewPanel：裁决入口同时能处理待审核与冲突。 */
-const reviewFocus = computed<'review'|'conflict'|'judgment'|''>(() =>
-  current.value === 'create.review' ? 'review'
-    : current.value === 'create.conflict' ? 'conflict'
-      : current.value === 'create.judgment' ? 'judgment' : '')
-/** 徽标只用于需要人工介入的环节：待审核与未解决冲突。 */
-function stepBadge(step:{key:StepKey}):string|number{
-  if(step.key==='create.review')return props.pendingReviews.length||''
-  if(step.key==='create.conflict')return props.conflicts.length||''
-  if(step.key==='create.judgment')return props.pendingReviews.length+props.conflicts.length||''
-  return ''
-}
+const currentTitle = computed(() => VIEWS[tool.value].title)
+const currentHint = computed(() => VIEWS[tool.value].hint)
+/** §4 四个任务入口：文档导入 / 连接器 / 知识裁决 / 知识衍生，替代原有的左侧二级菜单。 */
+const tasks = computed(() => [
+  { key:'create.import', icon:'📄', label:'文档导入', desc:'文件 / URL / 文本走完整条摄入流水线', badge:'' },
+  { key:'create.connector', icon:'⇪', label:'连接器', desc:'外部系统的增量同步与字段权限映射', badge:'' },
+  { key:'create.judgment', icon:'⚖', label:'知识裁决', desc:'冲突与待审核的采用 / 拒绝判定',
+    badge: props.pendingReviews.length + props.conflicts.length || '' },
+  { key:'create.derive', icon:'⑃', label:'知识衍生', desc:'由基础断言推导衍生知识', badge:'', planned:true },
+])
+/** 概览四数：只统计本次已加载的运行数据，缺失字段按 0 处理，不臆造。 */
+const todayRuns = computed(() => {
+  const today = new Date().toISOString().slice(0, 10)
+  return props.runs.filter(v => String(v.startedTime || '').slice(0, 10) === today).length
+})
+const runningRuns = computed(() =>
+  props.runs.filter(v => ['RUNNING', 'PENDING', 'QUEUED'].includes(String(v.status || '').toUpperCase())).length)
+const pendingTotal = computed(() => props.pendingReviews.length + props.conflicts.length)
 
 const stageText = computed(() => stageLabel(props.ingestStage) || '准备中')
 
@@ -317,6 +318,8 @@ function clearPicked(){uploadRef.value?.clearFiles();pickedName.value='';emit('r
 /** 摄入完成后由父组件复位上传区：清空 el-upload 内部列表，否则名额被占用无法再选下一个文件。 */
 function resetUpload(){clearPicked()}
 defineExpose({resetUpload})
+/** 面板已下沉到模块页面内部，外壳拿不到实例，改用令牌触发上传区复位。 */
+watch(() => props.resetToken, value => { if (value) resetUpload() })
 function updateAuthority(value:number|undefined){emit('update:authority',value??.8)}
 
 /** 文档状态机：失败/失效文档从原件重跑（设计 §16.1）。 */

@@ -13,7 +13,7 @@
           <div class="text-[11px] text-ink-500">知识健康度</div>
           <div class="text-xl font-semibold" :class="healthClass">{{ healthScore }}%</div>
         </div>
-        <button class="kb-btn-primary" @click="$emit('navigate','create.home')">＋ 创建知识</button>
+        <button class="kb-btn-primary" @click="$emit('navigate','create.overview')">＋ 生成知识</button>
         <button class="kb-btn-outline" @click="$emit('navigate','search.query')">知识搜索</button>
         <div class="flex flex-col items-start gap-0.5">
           <button class="text-xs font-medium text-indigo-600 hover:text-indigo-700" @click="$emit('navigate','workbench.version')">版本 →</button>
@@ -156,7 +156,7 @@
       <article class="kb-card">
         <div class="kb-card-head">
           <b class="text-sm">图谱概览</b>
-          <button class="text-xs font-medium text-indigo-600 hover:text-indigo-700" @click="$emit('navigate','workbench.graph')">
+          <button class="text-xs font-medium text-indigo-600 hover:text-indigo-700" @click="$emit('navigate','search.graph')">
             进入图谱 →
           </button>
         </div>
@@ -245,10 +245,10 @@ const healthClass = computed(() => {
 const stages = computed(() => {
   if (props.lifecycle?.stages?.length) return props.lifecycle.stages
   return [
-    { code:'INGEST', label:'接入', count:props.overview.sourceCount ?? 0, abnormal:0, target:'create.sources' },
+    { code:'INGEST', label:'接入', count:props.overview.sourceCount ?? 0, abnormal:0, target:'create.connector' },
     { code:'PARSE', label:'解析', count:props.overview.documentCount ?? 0, abnormal:0, target:'create.jobs' },
     { code:'EXTRACT', label:'抽取', count:props.overview.chunkCount ?? 0, abnormal:0, target:'create.jobs' },
-    { code:'DERIVE', label:'衍生', count:0, abnormal:0, target:'create.derivation' },
+    { code:'DERIVE', label:'衍生', count:0, abnormal:0, target:'create.derive' },
     { code:'JUDGE', label:'裁决', count:props.overview.pendingReviewCount ?? 0, abnormal:props.overview.openConflictCount ?? 0, target:'create.judgment' },
     { code:'PUBLISH', label:'发布', count:props.overview.effectiveCardCount ?? 0, abnormal:0, target:'workbench.assets' },
   ]

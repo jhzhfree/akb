@@ -77,6 +77,14 @@ public class KnowledgeService {
         return governanceService.resolveConflict(id, status, resolution);
     }
 
+    public Map<String, Object> conflictTargets(Long id) {
+        return governanceService.conflictTargets(id);
+    }
+
+    public Map<String, Object> adjudicateConflict(Long id, String decision, String comment, String reviewer) {
+        return governanceService.adjudicateConflict(id, decision, comment, reviewer);
+    }
+
     public Map<String, Object> graph(Long kb, String code, java.util.List<String> permissionTags,
             Integer depth, Integer limit) {
         return readService.graph(kb, code, permissionTags, depth, limit);

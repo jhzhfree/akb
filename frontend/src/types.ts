@@ -58,7 +58,33 @@ export interface DocumentChunk {
   tokenCount?:number|null; status?:string
   sourceVersion?:number; revision?:number; parentId?:number|null
   excerpt?:string; contentLength?:number; createdTime?:string
+  /** 详情视图带回全文与文档归属，便于核对引用落点。 */
+  content?:string; documentCode?:string; documentTitle?:string
+  evidenceCount?:number; seq?:number; /** 上下文块的相对位置：PREV / NEXT */
+  pos?:'PREV'|'NEXT'
 }
+/** 分块策略：知识库自己决定怎么切，接入时下发给 AI 服务（设计 §4.1）。 */
+export interface ChunkPolicy {
+  strategy?:string; chunkSize?:number; chunkOverlap?:number; minChunkSize?:number
+  measure?:string; keepStructure?:boolean; respectSentence?:boolean; parentChild?:boolean
+}
+export interface ChunkPolicySchema {
+  default?:ChunkPolicy
+  strategies?:{name:string;label:string;description?:string}[]
+  measures?:{name:string;label:string}[]
+  ranges?:Record<string,{min:number;max:number}>
+}
+export interface ChunkPolicyState {
+  policy:ChunkPolicy; customized?:boolean; updatedBy?:string; updatedTime?:string
+  schema?:ChunkPolicySchema
+}
+/** 检索策略档案：多套策略并存，切换即刻生效（设计 §14）。 */
+export interface QueryPolicyProfile {
+  name:string; label?:string; updatedAt?:string; active?:boolean
+  summary?:{ channels?:string[]; routingEnabled?:boolean; rerankEnabled?:boolean
+    rrfK?:number; recallMultiplier?:number }
+}
+export interface QueryPolicyProfiles { active:string; profiles:QueryPolicyProfile[] }
 
 /** 源文件预览：文本格式展示原文，二进制格式回退到解析文本。 */
 export interface SourcePreviewMeta {
@@ -152,11 +178,37 @@ export interface OutboxEventPage {
   items:OutboxEvent[]; total:number; page:number; size:number; totalPages:number
 }
 export interface ReviewRow {
-  id?:number; objectType:string; objectCode:string; status?:string; [key:string]:unknown
+  id?:number; objectType:string; objectCode:string; displayTitle?:string; status?:string
+  confidence?:number; conflictCount?:number; [key:string]:unknown
 }
-export interface ConflictRow { id:number; status:string; [key:string]:unknown }
+/** 冲突双方摘要：列表直接展示 A/B 标题与状态，避免只看到对象编码。 */
+export interface ConflictRow {
+  id:number; status:string; conflictType?:string; conflictScore?:number; resolution?:string
+  objectACode?:string; objectBCode?:string; objectAType?:string; objectBType?:string
+  objectATitle?:string; objectBTitle?:string; objectAContent?:string; objectBContent?:string
+  objectAStatus?:string; objectBStatus?:string; objectAConfidence?:number; objectBConfidence?:number
+  objectAVersion?:number; objectBVersion?:number; createdTime?:string; [key:string]:unknown
+}
 export interface AssessmentRow {
-  id?:number; objectType?:string; objectCode?:string; decision?:string; [key:string]:unknown
+  id?:number; objectType?:string; objectCode?:string; decision?:string
+  knowledgeConfidence?:number; riskLevel?:string; requiresHumanReview?:boolean
+  policyVersion?:string; reasonText?:string; createdTime?:string; [key:string]:unknown
+}
+/** 裁决工作台右侧 Evidence：原文 / 来源 / 页码 / 权威度。 */
+export interface AdjudicationEvidence {
+  evidenceCode?:string; quoteText?:string; authorityScore?:number; freshnessScore?:number
+  sourceName?:string; documentTitle?:string; documentCode?:string
+  pageNo?:number; headingPath?:string; contentUnitCode?:string; [key:string]:unknown
+}
+/** 冲突的一方：值 / 条件 / 版本 / 置信度 + 支撑证据。 */
+export interface AdjudicationSide {
+  objectType?:string; objectCode?:string; content?:string; conditionJson?:string
+  confidence?:number; status?:string; versionNo?:number
+  evidenceCount?:number; evidence?:AdjudicationEvidence[]; [key:string]:unknown
+}
+export interface ConflictDetail {
+  id?:number; conflictType?:string; conflictScore?:number; status?:string
+  objectACode?:string; objectBCode?:string; sides?:AdjudicationSide[]; [key:string]:unknown
 }
 export interface QueryCitation {
   objectId?:string; objectType?:'CARD'|'CLAIM'|string; objectCode?:string; evidenceCode?:string
@@ -239,6 +291,7 @@ export const documentStatusTag = (status?:string):'success'|'danger'|'warning'|'
 const STATUS_LABELS:Record<string,string> = {
   DRAFT:'草稿', PENDING:'处理中', PENDING_REVIEW:'待评审', UNCERTAIN:'待确认',
   APPROVED:'已审批', EFFECTIVE:'已生效', CONFLICTED:'存在冲突', REJECTED:'已驳回',
+  SUPPORTED:'证据支持', PARTIALLY_SUPPORTED:'部分支持',
   SUPERSEDED:'已替代', EXPIRED:'已过期', INVALID:'已作废',
   ACTIVE:'有效', MERGED:'已合并', ARCHIVED:'已归档', RESOLVED:'已处理', UNKNOWN:'未知',
   DISABLED:'已停用',
@@ -318,6 +371,8 @@ export interface ReviewHistory { id:number; decision:string; reviewer?:string; c
 export interface KnowledgeObjectDetail {
   object:Record<string,unknown>; evidence:EvidenceRow[]; conflicts:ConflictRow[];
   reviews:ReviewHistory[]; assessments:AssessmentRow[]; graph:GraphResult; versions:KnowledgeVersion[]
+  /** Chunk 详情才有：同文档上下相邻块，用于把命中的片段放回上下文中读。 */
+  neighbors?:DocumentChunk[]
 }
 
 export interface QueryHistoryItem {

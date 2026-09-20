@@ -189,9 +189,36 @@ LIMIT 1
 <update id="updateCardStatus">UPDATE t_knowledge_card SET status=#{status} WHERE knowledge_code=#{code}</update><update id="updateClaimStatus">UPDATE t_claim SET status=#{status} WHERE claim_code=#{code}</update>
 <insert id="insertJudgment">INSERT INTO t_knowledge_review(object_type,object_code,decision,reviewer,comment_text,input_object_codes,result_object_code,policy_version,judgment_time)VALUES(#{type},#{code},#{decision},#{reviewer},#{comment},CAST(#{inputObjectCodes} AS JSON),#{resultObjectCode},#{policyVersion},NOW())</insert>
 <insert id="insertConflict">INSERT IGNORE INTO t_knowledge_conflict(knowledge_base_id,object_a_code,object_b_code,conflict_type,conflict_score,status) VALUES(#{kb},#{a},#{b},#{type},#{score},'OPEN')</insert>
-<select id="listConflicts" resultType="map">SELECT id,knowledge_base_id knowledgeBaseId,object_a_code objectACode,object_b_code objectBCode,conflict_type conflictType,conflict_score conflictScore,status,created_time createdTime FROM t_knowledge_conflict WHERE knowledge_base_id=#{kb} AND (#{status} IS NULL OR status=#{status}) ORDER BY conflict_score DESC,created_time DESC</select>
+<select id="listConflicts" resultType="map">SELECT c.id,c.knowledge_base_id knowledgeBaseId,c.object_a_code objectACode,c.object_b_code objectBCode,
+       c.conflict_type conflictType,c.conflict_score conflictScore,c.status,c.resolution,c.created_time createdTime,
+       a.objectType objectAType,a.displayTitle objectATitle,a.content objectAContent,a.status objectAStatus,a.confidence objectAConfidence,a.versionNo objectAVersion,
+       b.objectType objectBType,b.displayTitle objectBTitle,b.content objectBContent,b.status objectBStatus,b.confidence objectBConfidence,b.versionNo objectBVersion
+FROM t_knowledge_conflict c
+LEFT JOIN (
+  SELECT 'CARD' objectType,knowledge_code code,title displayTitle,CONCAT(title,'：',LEFT(COALESCE(summary,content),200)) content,status,confidence,version versionNo FROM t_knowledge_card
+  UNION ALL
+  SELECT 'CLAIM' objectType,claim_code code,CONCAT(subject,' ',predicate,' ',LEFT(object_value,120)) displayTitle,CONCAT(subject,' ',predicate,' ',object_value) content,status,confidence,
+    COALESCE((SELECT MAX(v.version_no) FROM t_knowledge_version v WHERE v.object_type='CLAIM' AND v.object_code=cv.claim_code),1) versionNo FROM t_claim cv
+) a ON a.code=c.object_a_code
+LEFT JOIN (
+  SELECT 'CARD' objectType,knowledge_code code,title displayTitle,CONCAT(title,'：',LEFT(COALESCE(summary,content),200)) content,status,confidence,version versionNo FROM t_knowledge_card
+  UNION ALL
+  SELECT 'CLAIM' objectType,claim_code code,CONCAT(subject,' ',predicate,' ',LEFT(object_value,120)) displayTitle,CONCAT(subject,' ',predicate,' ',object_value) content,status,confidence,
+    COALESCE((SELECT MAX(v.version_no) FROM t_knowledge_version v WHERE v.object_type='CLAIM' AND v.object_code=cv.claim_code),1) versionNo FROM t_claim cv
+) b ON b.code=c.object_b_code
+WHERE c.knowledge_base_id=#{kb} AND (#{status} IS NULL OR c.status=#{status}) ORDER BY c.conflict_score DESC,c.created_time DESC</select>
 <update id="resolveConflict">UPDATE t_knowledge_conflict SET status=#{status},resolution=#{resolution},updated_time=NOW() WHERE id=#{id}</update>
-<select id="listPendingReviews" resultType="map">SELECT 'CARD' objectType,knowledge_code objectCode,title displayTitle,confidence,status FROM t_knowledge_card WHERE knowledge_base_id=#{kb} AND status IN ('DRAFT','UNCERTAIN','CONFLICTED','PENDING_REVIEW') UNION ALL SELECT 'CLAIM' objectType,claim_code objectCode,CONCAT(subject,' ',predicate,' ',LEFT(object_value,120)) displayTitle,confidence,status FROM t_claim WHERE knowledge_base_id=#{kb} AND status IN ('DRAFT','UNCERTAIN','CONFLICTED','PENDING_REVIEW') ORDER BY confidence ASC</select>
+<select id="getConflict" resultType="map">SELECT id,knowledge_base_id knowledgeBaseId,object_a_code objectACode,object_b_code objectBCode,conflict_type conflictType,conflict_score conflictScore,status,resolution,created_time createdTime FROM t_knowledge_conflict WHERE id=#{id}</select>
+<select id="listAdjudicationTargets" resultType="map">SELECT 'CLAIM' objectType,claim_code objectCode,CONCAT(subject,' ',predicate,' ',LEFT(object_value,200)) content,condition_json conditionJson,confidence,status,COALESCE((SELECT MAX(v.version_no) FROM t_knowledge_version v WHERE v.object_type='CLAIM' AND v.object_code=claim_code),1) versionNo FROM t_claim WHERE claim_code IN <foreach collection="codes" item="code" open="(" separator="," close=")">#{code}</foreach> UNION ALL SELECT 'CARD' objectType,knowledge_code objectCode,CONCAT(title,'：',LEFT(COALESCE(summary,content),200)) content,NULL conditionJson,confidence,status,COALESCE(version,1) versionNo FROM t_knowledge_card WHERE knowledge_code IN <foreach collection="codes" item="code" open="(" separator="," close=")">#{code}</foreach></select>
+<select id="listPendingReviews" resultType="map">SELECT pending.* FROM (
+  SELECT 'CARD' objectType,t.knowledge_code objectCode,t.title displayTitle,t.confidence,t.status,
+    (SELECT COUNT(*) FROM t_knowledge_conflict c WHERE c.status='OPEN' AND (c.object_a_code=t.knowledge_code OR c.object_b_code=t.knowledge_code)) conflictCount
+  FROM t_knowledge_card t WHERE t.knowledge_base_id=#{kb} AND t.status IN ('DRAFT','UNCERTAIN','CONFLICTED','PENDING_REVIEW')
+  UNION ALL
+  SELECT 'CLAIM' objectType,t.claim_code objectCode,CONCAT(t.subject,' ',t.predicate,' ',LEFT(t.object_value,120)) displayTitle,t.confidence,t.status,
+    (SELECT COUNT(*) FROM t_knowledge_conflict c WHERE c.status='OPEN' AND (c.object_a_code=t.claim_code OR c.object_b_code=t.claim_code)) conflictCount
+  FROM t_claim t WHERE t.knowledge_base_id=#{kb} AND t.status IN ('DRAFT','UNCERTAIN','CONFLICTED','PENDING_REVIEW')
+) pending ORDER BY CASE WHEN pending.status='CONFLICTED' THEN 0 ELSE 1 END,pending.conflictCount DESC,pending.confidence ASC</select>
 <insert id="insertTrace" parameterType="com.jh.knowledgeos.domain.QueryTraceRecord">INSERT INTO t_query_trace(query_id,knowledge_base_id,trace_id,original_query,rewritten_queries_json,router_decision_json,retrieval_json,fusion_json,rerank_json,selected_context_json,citations_json,model_name,latency_ms,token_usage_json,error_code,trace_json,answer) VALUES(#{queryId},#{knowledgeBaseId},#{traceId},#{originalQuery},CAST(#{rewrittenQueriesJson} AS JSON),CAST(#{routerDecisionJson} AS JSON),CAST(#{retrievalJson} AS JSON),CAST(#{fusionJson} AS JSON),CAST(#{rerankJson} AS JSON),CAST(#{selectedContextJson} AS JSON),CAST(#{citationsJson} AS JSON),#{modelName},#{latencyMs},CAST(#{tokenUsageJson} AS JSON),#{errorCode},CAST(#{traceJson} AS JSON),#{answer})</insert>
 <insert id="insertAnswerEvidenceAssessment">
 INSERT INTO t_answer_evidence_assessment(query_id,knowledge_base_id,gate_status,completeness_score,faithfulness_score,factual_claim_count,supported_claim_count,citation_count,unsupported_claims_json,verification_json)
@@ -725,5 +752,58 @@ SELECT id,run_id runId,case_id caseId,case_code caseCode,query_id queryId,status
   citation_accuracy citationAccuracy,faithfulness,error_message errorMessage,created_time createdTime
 FROM t_evaluation_result WHERE run_id=#{runId} ORDER BY id
 </select>
+
+<select id="getChunkPolicy" resultType="map">SELECT knowledge_base_id knowledgeBaseId,strategy,
+  chunk_size chunkSize,chunk_overlap chunkOverlap,min_chunk_size minChunkSize,measure,
+  keep_structure keepStructure,respect_sentence respectSentence,parent_child parentChild,
+  updated_by updatedBy,updated_time updatedTime
+FROM t_chunk_policy WHERE knowledge_base_id=#{kb}</select>
+
+<insert id="saveChunkPolicy">INSERT INTO t_chunk_policy(knowledge_base_id,strategy,chunk_size,chunk_overlap,
+  min_chunk_size,measure,keep_structure,respect_sentence,parent_child,updated_by)
+VALUES(#{kb},#{strategy},#{chunkSize},#{chunkOverlap},#{minChunkSize},#{measure},
+  #{keepStructure},#{respectSentence},#{parentChild},#{updatedBy})
+ON DUPLICATE KEY UPDATE strategy=VALUES(strategy),chunk_size=VALUES(chunk_size),
+  chunk_overlap=VALUES(chunk_overlap),min_chunk_size=VALUES(min_chunk_size),measure=VALUES(measure),
+  keep_structure=VALUES(keep_structure),respect_sentence=VALUES(respect_sentence),
+  parent_child=VALUES(parent_child),updated_by=VALUES(updated_by),updated_time=CURRENT_TIMESTAMP</insert>
+
+<delete id="resetChunkPolicy">DELETE FROM t_chunk_policy WHERE knowledge_base_id=#{kb}</delete>
+
+<!-- A chunk knows its knowledge base only through its document, source version and
+     source, so the knowledge base filter walks that path instead of a column the
+     content unit does not have. -->
+<select id="getContentUnitObject" resultType="map">SELECT c.id,c.document_id documentId,
+  c.unit_code unitCode,c.parent_id parentId,c.heading_path headingPath,
+  c.chunk_type chunkType,c.page_no pageNo,c.page_end pageEnd,c.char_start charStart,
+  c.char_end charEnd,c.token_count tokenCount,c.content,c.content_hash contentHash,
+  c.status,c.revision,
+  (SELECT COUNT(*) FROM t_content_unit x
+    WHERE x.document_id=c.document_id AND x.id&lt;=c.id) seq,
+  doc.title documentTitle,doc.document_code documentCode,
+  (SELECT COUNT(*) FROM t_evidence e WHERE e.content_unit_id=c.id) evidenceCount
+FROM t_content_unit c LEFT JOIN t_document doc ON doc.id=c.document_id
+WHERE c.unit_code=#{code} AND EXISTS(SELECT 1 FROM t_source_version sv
+  JOIN t_source s ON s.id=sv.source_id
+  WHERE sv.id=doc.source_version_id AND s.knowledge_base_id=#{kb})</select>
+
+<select id="listEvidenceForContentUnit" resultType="map">SELECT e.evidence_code evidenceCode,
+  e.quote_text quoteText,e.location_json locationJson,e.authority_score authorityScore,
+  e.freshness_score freshnessScore,e.created_time createdTime,
+  s.name sourceName,s.source_code sourceCode,
+  doc.title documentTitle,doc.document_code documentCode
+FROM t_evidence e JOIN t_content_unit c ON c.id=e.content_unit_id
+LEFT JOIN t_source s ON s.id=e.source_id
+LEFT JOIN t_document doc ON doc.id=c.document_id
+WHERE c.unit_code=#{code} AND e.knowledge_base_id=#{kb}
+ORDER BY e.id</select>
+
+<!-- Context of a hit: the chunk immediately before and after it in the same document. -->
+<select id="listNeighborContentUnits" resultType="map">(SELECT unit_code unitCode,'PREV' pos,
+  heading_path headingPath,page_no pageNo,chunk_type chunkType,LEFT(content,180) excerpt
+FROM t_content_unit WHERE document_id=#{documentId} AND id&lt;#{id} ORDER BY id DESC LIMIT 1)
+UNION ALL (SELECT unit_code unitCode,'NEXT' pos,
+  heading_path headingPath,page_no pageNo,chunk_type chunkType,LEFT(content,180) excerpt
+FROM t_content_unit WHERE document_id=#{documentId} AND id&gt;#{id} ORDER BY id ASC LIMIT 1)</select>
 
 </mapper>

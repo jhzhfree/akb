@@ -1,6 +1,6 @@
 import axios, { type AxiosResponse } from 'axios'
 import type {
-  ApiEnvelope, AssessmentRow, Capabilities, Claim, ConflictRow, DriftResult, GraphResult,
+  ApiEnvelope, AssessmentRow, Capabilities, Claim, ConflictDetail, ConflictRow, DriftResult, GraphResult,
   IndexSchema, IngestionRun, IngestionRunDetail, KnowledgeBase, KnowledgeCard,
   KnowledgeDocument, KnowledgeSource, OutboxStats, Overview, QueryHistoryItem, QueryResult, QueryTrace, ReviewRow,
   SourcePreview,
@@ -126,18 +126,30 @@ export const queryKnowledge = (
 export const runAdjudication = (kb:number):Promise<ApiResponse<Record<string,unknown>>> =>
   axios.post(`/api/knowledge/adjudication/${kb}/run`, {}, { timeout:LONG_TIMEOUT_MS })
 
+/** 人工裁决：审核人缺省由后端取登录态，备注必须能由审核人填写（设计 §4.4）。 */
 export const reviewKnowledge = (
-  row:ReviewRow, decision:string,
+  row:ReviewRow, decision:string, comment='',
 ):Promise<ApiResponse<Record<string,unknown>>> =>
   axios.post('/api/knowledge/adjudicate', {
-    objectType:row.objectType, objectCode:row.objectCode, decision,
-    reviewer:'admin', comment:'知识治理工作台人工裁决',
+    objectType:row.objectType, objectCode:row.objectCode, decision, comment,
   })
 
 export const resolveKnowledgeConflict = (
-  id:number, status:string,
+  id:number, status:string, resolution='',
 ):Promise<ApiResponse<Record<string,unknown>>> =>
-  axios.post(`/api/knowledge/conflicts/${id}/resolve`, { status })
+  axios.post(`/api/knowledge/conflicts/${id}/resolve`, { status, resolution })
+
+/** 冲突双方对照：值 / 条件 / 版本 / 置信度 + 各自证据，供裁决工作台并排比较。 */
+export const getConflictTargets = (
+  id:number,
+):Promise<ApiResponse<ConflictDetail>> =>
+  axios.get(`/api/knowledge/conflicts/${id}/targets`)
+
+/** 冲突裁决：KEEP_A / KEEP_B / MERGE / REJECT_BOTH / REQUEST_EVIDENCE / IGNORE。 */
+export const adjudicateConflict = (
+  id:number, decision:string, comment='',
+):Promise<ApiResponse<Record<string,unknown>>> =>
+  axios.post(`/api/knowledge/conflicts/${id}/adjudicate`, { decision, comment })
 
 export const getGraph = (
   kb:number, code:string, depth=2, limit=80,
@@ -236,8 +248,9 @@ export function unwrap<T>(response:ApiResponse<T>, fallback:T):T {
   return response.data.data ?? fallback
 }
 
+/** Chunk 也可寻址：详情接口按类型分派到知识对象或内容单元。 */
 export const getKnowledgeObjectDetail = (
-  kb:number, type:'CARD'|'CLAIM', code:string,
+  kb:number, type:'CARD'|'CLAIM'|'CHUNK', code:string,
 ):Promise<ApiResponse<import('../types').KnowledgeObjectDetail>> =>
   axios.get(`/api/knowledge/objects/${kb}/${type}/${encodeURIComponent(code)}`)
 
@@ -288,6 +301,54 @@ export const resetQueryPolicy = ():Promise<ApiResponse<import('../types').QueryP
 /** 读取可配置通道说明与默认值，供配置面板渲染。 */
 export const getQueryPolicySchema = ():Promise<ApiResponse<import('../types').QueryPolicySchema>> =>
   axios.get('/api/knowledge/settings/query-policy/schema')
+/** 列出已保存的检索策略与当前生效策略。 */
+export const listQueryPolicyProfiles = (
+):Promise<ApiResponse<import('../types').QueryPolicyProfiles>> =>
+  axios.get('/api/knowledge/settings/query-policy/profiles')
+/** 新增检索策略：默认克隆当前策略，也可用 base 指定来源。 */
+export const createQueryPolicyProfile = (
+  payload:{name:string; label?:string; base?:string; policy?:Record<string,unknown>},
+):Promise<ApiResponse<import('../types').QueryPolicyProfiles>> =>
+  axios.post('/api/knowledge/settings/query-policy/profiles', payload)
+/** 修改指定检索策略（增量合并）。 */
+export const updateQueryPolicyProfile = (
+  name:string, policy:Record<string,unknown>,
+):Promise<ApiResponse<import('../types').QueryPolicyProfiles>> =>
+  axios.put(`/api/knowledge/settings/query-policy/profiles/${encodeURIComponent(name)}`, { policy })
+/** 重命名检索策略或修改展示名。 */
+export const renameQueryPolicyProfile = (
+  name:string, payload:{label?:string; newName?:string},
+):Promise<ApiResponse<import('../types').QueryPolicyProfiles>> =>
+  axios.post(`/api/knowledge/settings/query-policy/profiles/${encodeURIComponent(name)}/rename`,
+    payload)
+/** 切换生效策略：下一次问答起使用新策略。 */
+export const activateQueryPolicyProfile = (
+  name:string,
+):Promise<ApiResponse<import('../types').QueryPolicyProfiles>> =>
+  axios.post(`/api/knowledge/settings/query-policy/profiles/${encodeURIComponent(name)}/activate`)
+/** 删除检索策略：正在使用或最后一个策略不允许删除。 */
+export const deleteQueryPolicyProfile = (
+  name:string,
+):Promise<ApiResponse<import('../types').QueryPolicyProfiles>> =>
+  axios.delete(`/api/knowledge/settings/query-policy/profiles/${encodeURIComponent(name)}`)
+
+/* ---- 分块策略（设计 §4.1） ---- */
+
+/** 读取知识库分块策略与可选算法。 */
+export const getChunkPolicy = (
+  kb:number,
+):Promise<ApiResponse<import('../types').ChunkPolicyState>> =>
+  axios.get('/api/knowledge/settings/chunk-policy', { params: { kb } })
+/** 保存分块策略：下一次接入生效，已有文档需重新接入才能按新策略重切。 */
+export const saveChunkPolicy = (
+  kb:number, policy:import('../types').ChunkPolicy,
+):Promise<ApiResponse<import('../types').ChunkPolicyState>> =>
+  axios.put('/api/knowledge/settings/chunk-policy', policy, { params: { kb } })
+/** 恢复内置默认分块策略。 */
+export const resetChunkPolicy = (
+  kb:number,
+):Promise<ApiResponse<import('../types').ChunkPolicyState>> =>
+  axios.post('/api/knowledge/settings/chunk-policy/reset', null, { params: { kb } })
 
 /* ---- 评测中心（设计 §14） ---- */
 

@@ -1,5 +1,6 @@
 package com.jh.knowledgeos.service;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.jh.knowledgeos.config.KnowledgeProperties;
 import org.springframework.core.io.Resource;
 import org.springframework.http.HttpEntity;
@@ -22,10 +23,13 @@ import java.util.Map;
 public class AiClient {
     private final RestTemplate restTemplate;
     private final String baseUrl;
+    private final ObjectMapper objectMapper;
 
-    public AiClient(RestTemplate restTemplate, KnowledgeProperties properties) {
+    public AiClient(RestTemplate restTemplate, KnowledgeProperties properties,
+            ObjectMapper objectMapper) {
         this.restTemplate = restTemplate;
         this.baseUrl = properties.getAiServiceBaseUrl();
+        this.objectMapper = objectMapper;
     }
 
     @SuppressWarnings("unchecked")
@@ -39,28 +43,49 @@ public class AiClient {
     }
 
     @SuppressWarnings("unchecked")
+    public Map<String, Object> put(String path, Object body) {
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        HttpEntity<Object> request = new HttpEntity<Object>(body, headers);
+        return restTemplate.exchange(baseUrl + path, HttpMethod.PUT, request, Map.class).getBody();
+    }
+
+    @SuppressWarnings("unchecked")
     public Map<String, Object> delete(String path) {
         return restTemplate.exchange(baseUrl + path, HttpMethod.DELETE, null, Map.class).getBody();
     }
 
     @SuppressWarnings("unchecked")
     public Map<String, Object> parse(MultipartFile file) throws IOException {
-        return postFile(AiApiPaths.PARSE_DOCUMENT, file);
+        return parse(file, null);
+    }
+
+    /**
+     * Parse with an explicit chunking policy: the knowledge base decides how its own
+     * documents are cut, and the parser only applies it.
+     */
+    @SuppressWarnings("unchecked")
+    public Map<String, Object> parse(MultipartFile file, Map<String, Object> policy) throws IOException {
+        return postFile(AiApiPaths.PARSE_DOCUMENT, file, policy);
     }
 
     @SuppressWarnings("unchecked")
     public Map<String, Object> inspectOkf(MultipartFile file) throws IOException {
-        return postFile(AiApiPaths.INSPECT_OKF, file);
+        return postFile(AiApiPaths.INSPECT_OKF, file, null);
     }
 
     @SuppressWarnings("unchecked")
-    private Map<String, Object> postFile(String path, MultipartFile file) throws IOException {
+    private Map<String, Object> postFile(String path, MultipartFile file,
+            Map<String, Object> policy) throws IOException {
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.MULTIPART_FORM_DATA);
 
         MultiValueMap<String, Object> body = new LinkedMultiValueMap<String, Object>();
         Resource resource = file.getResource();
         body.add("file", resource);
+        if (policy != null && !policy.isEmpty()) {
+            body.add("policy", objectMapper.writeValueAsString(policy));
+        }
 
         HttpEntity<MultiValueMap<String, Object>> request =
                 new HttpEntity<MultiValueMap<String, Object>>(body, headers);

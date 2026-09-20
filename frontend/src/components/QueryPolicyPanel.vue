@@ -11,6 +11,42 @@
       </div>
     </div>
 
+    <!-- 策略档案：多套检索策略并存，切换即刻生效，改坏一套可以立刻切回（设计 §14） -->
+    <div class="mb-3 rounded-lg border border-ink-100 bg-ink-50 p-3">
+      <div class="mb-2 flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <b class="text-xs text-ink-700">检索策略档案</b>
+          <p class="mt-1 text-[11px] leading-5 text-ink-500">
+            当前生效：{{ activeProfile?.label || activeProfile?.name || '默认策略' }} ·
+            下面编辑的是这套策略；切换只影响之后的问答，历史问答与评测结果不受影响。
+          </p>
+        </div>
+        <div class="flex flex-wrap items-center gap-2">
+          <el-select v-model="profileName" size="small" class="!w-48" placeholder="选择策略">
+            <el-option v-for="p in profiles" :key="p.name" :label="p.label || p.name" :value="p.name">
+              <span>{{ p.label || p.name }}</span>
+              <span v-if="p.name===activeName" class="ml-2 text-[11px] text-indigo-500">生效中</span>
+            </el-option>
+          </el-select>
+          <el-button size="small" :disabled="!profileName || profileName===activeName" @click="activateProfile">切换</el-button>
+          <el-button size="small" @click="openCreate">新增</el-button>
+          <el-button size="small" :disabled="!profileName" @click="openRename">重命名</el-button>
+          <el-button size="small" type="danger" plain :disabled="!profileName" @click="removeProfile">删除</el-button>
+        </div>
+      </div>
+      <div class="flex flex-wrap gap-2">
+        <button
+          v-for="p in profiles" :key="p.name" class="rounded border px-2 py-1 text-[11px]"
+          :class="p.name===activeName?'border-indigo-300 bg-indigo-50 text-indigo-700':'border-ink-100 bg-white text-ink-600'"
+          @click="profileName=p.name">
+          {{ p.label || p.name }}
+          <span v-if="p.summary?.routingEnabled" class="ml-1 text-ink-400">路由</span>
+          <span v-if="p.summary?.rerankEnabled" class="ml-1 text-ink-400">重排</span>
+        </button>
+        <span v-if="!profiles.length" class="text-[11px] text-ink-400">暂无已保存策略</span>
+      </div>
+    </div>
+
     <div v-if="message" class="mb-3 rounded-lg bg-emerald-50 px-3 py-2 text-[11px] leading-5 text-emerald-700">{{ message }}</div>
     <div v-if="error" class="mb-3 rounded-lg bg-rose-50 px-3 py-2 text-[11px] leading-5 text-rose-700">{{ error }}</div>
 
@@ -221,14 +257,57 @@
       保存后下一次问答起生效，无需重启；每一次问答的链路追踪都会记录当时生效的策略指纹（通道、权重、RRF k、门控阈值），便于回溯结果差异。
       当前为平台级策略，对所有知识库生效。
     </p>
+
+    <el-dialog v-model="createVisible" title="新增检索策略" width="440px">
+      <label class="field"><span>策略标识（英文，用于接口与切换，创建后即为唯一键）</span>
+        <el-input v-model="createForm.name" size="small" placeholder="strict" /></label>
+      <label class="field mt-3"><span>展示名</span>
+        <el-input v-model="createForm.label" size="small" placeholder="严格模式" /></label>
+      <label class="field mt-3"><span>克隆自</span>
+        <el-select v-model="createForm.base" size="small" class="!w-full">
+          <el-option v-for="p in profiles" :key="p.name" :label="p.label || p.name" :value="p.name" />
+        </el-select></label>
+      <p class="mt-2 text-[11px] leading-5 text-ink-500">新策略默认为克隆，不会改动正在使用的策略。</p>
+      <template #footer>
+        <el-button size="small" @click="createVisible=false">取消</el-button>
+        <el-button size="small" type="primary" :loading="profileBusy" @click="createProfile">创建并保存</el-button>
+      </template>
+    </el-dialog>
+
+    <el-dialog v-model="renameVisible" title="重命名检索策略" width="440px">
+      <label class="field"><span>展示名</span>
+        <el-input v-model="renameForm.label" size="small" /></label>
+      <label class="field mt-3"><span>策略标识（留空表示不改）</span>
+        <el-input v-model="renameForm.newName" size="small" placeholder="strict" /></label>
+      <template #footer>
+        <el-button size="small" @click="renameVisible=false">取消</el-button>
+        <el-button size="small" type="primary" :loading="profileBusy" @click="renameProfile">保存</el-button>
+      </template>
+    </el-dialog>
   </section>
 </template>
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
-import { ElMessage } from 'element-plus'
-import { getQueryPolicy, getQueryPolicySchema, resetQueryPolicy, saveQueryPolicy, unwrap } from '../api/knowledge'
-import type { QueryPolicy, QueryPolicySchema, RouteRule } from '../types'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import {
+  activateQueryPolicyProfile, createQueryPolicyProfile, deleteQueryPolicyProfile,
+  getQueryPolicy, getQueryPolicySchema, listQueryPolicyProfiles, renameQueryPolicyProfile,
+  resetQueryPolicy, saveQueryPolicy, unwrap,
+} from '../api/knowledge'
+import type { QueryPolicy, QueryPolicyProfiles, QueryPolicySchema, RouteRule } from '../types'
 import { errorMessage } from '../utils/feedback'
+
+/** 已保存的多套策略与当前生效的那套；编辑区展示的始终是生效策略。 */
+const profilesState = ref<QueryPolicyProfiles>({ active:'', profiles:[] })
+const profileName = ref('')
+const profileBusy = ref(false)
+const createVisible = ref(false)
+const renameVisible = ref(false)
+const createForm = ref({ name:'', label:'', base:'' })
+const renameForm = ref({ label:'', newName:'' })
+const profiles = computed(() => profilesState.value.profiles || [])
+const activeName = computed(() => profilesState.value.active || '')
+const activeProfile = computed(() => profiles.value.find(p => p.name === activeName.value))
 
 const policy = ref<QueryPolicy|null>(null)
 const schema = ref<QueryPolicySchema|null>(null)
@@ -281,6 +360,95 @@ async function load() {
   } catch (e) {
     error.value = err(e)
   }
+  await loadProfiles()
+}
+
+/** 策略档案：新增 / 切换 / 重命名 / 删除，全部走同一份列表接口回读。 */
+async function loadProfiles() {
+  try {
+    profilesState.value = unwrap(await listQueryPolicyProfiles(), { active:'', profiles:[] })
+    if (!profileName.value || !profiles.value.some(p => p.name === profileName.value)) {
+      profileName.value = profilesState.value.active || ''
+    }
+  } catch (e) {
+    error.value = err(e)
+  }
+}
+function openCreate() {
+  createForm.value = { name:'', label:'', base:profilesState.value.active || '' }
+  createVisible.value = true
+}
+function openRename() {
+  const current = profiles.value.find(p => p.name === profileName.value)
+  renameForm.value = { label:current?.label || profileName.value, newName:'' }
+  renameVisible.value = true
+}
+async function createProfile() {
+  const name = createForm.value.name.trim()
+  if (!name) { ElMessage.warning('请填写策略标识'); return }
+  profileBusy.value = true
+  try {
+    await createQueryPolicyProfile({
+      name, label:createForm.value.label.trim() || name, base:createForm.value.base || undefined,
+    })
+    createVisible.value = false
+    await loadProfiles()
+    // 新策略默认不接管流量：想让它生效需要显式切换一次。
+    ElMessage.success('策略已创建，需要切换后才会生效')
+  } catch (e) {
+    error.value = err(e)
+  } finally {
+    profileBusy.value = false
+  }
+}
+async function activateProfile() {
+  if (!profileName.value) return
+  profileBusy.value = true
+  try {
+    await activateQueryPolicyProfile(profileName.value)
+    await Promise.all([load(), loadProfiles()])
+    ElMessage.success(`已切换到 ${profileName.value}，下一次问答起生效`)
+  } catch (e) {
+    error.value = err(e)
+  } finally {
+    profileBusy.value = false
+  }
+}
+async function renameProfile() {
+  if (!profileName.value) return
+  profileBusy.value = true
+  try {
+    await renameQueryPolicyProfile(profileName.value, {
+      label:renameForm.value.label.trim() || undefined,
+      newName:renameForm.value.newName.trim() || undefined,
+    })
+    renameVisible.value = false
+    await loadProfiles()
+    ElMessage.success('策略已重命名')
+  } catch (e) {
+    error.value = err(e)
+  } finally {
+    profileBusy.value = false
+  }
+}
+async function removeProfile() {
+  if (!profileName.value) return
+  try {
+    await ElMessageBox.confirm(
+      `删除策略「${profileName.value}」后无法恢复，正在使用的策略不允许删除。`,
+      '删除检索策略', { type:'warning' })
+  } catch { return }
+  profileBusy.value = true
+  try {
+    await deleteQueryPolicyProfile(profileName.value)
+    profileName.value = ''
+    await Promise.all([load(), loadProfiles()])
+    ElMessage.success('策略已删除')
+  } catch (e) {
+    error.value = err(e)
+  } finally {
+    profileBusy.value = false
+  }
 }
 
 async function save() {
@@ -295,6 +463,7 @@ async function save() {
     policy.value = unwrap(await saveQueryPolicy(payload), null as unknown as QueryPolicy)
     message.value = '问答策略已保存，下一次问答起生效'
     ElMessage.success('问答策略已生效')
+    await loadProfiles()
   } catch (e) {
     error.value = err(e)
   } finally {
@@ -310,6 +479,7 @@ async function reset() {
     synonyms.value = Object.entries(policy.value?.rewrite.synonyms || {})
       .map(([source, targets]) => ({ source, targets:[...targets] }))
     message.value = '已恢复内置默认策略'
+    await loadProfiles()
   } catch (e) {
     error.value = err(e)
   }

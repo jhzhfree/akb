@@ -2,15 +2,21 @@ package com.jh.knowledgeos.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.jh.knowledgeos.common.KnowledgeStatus;
+import com.jh.knowledgeos.domain.User;
 import com.jh.knowledgeos.mapper.KnowledgeMapper;
 import org.springframework.stereotype.Service;
 import org.slf4j.MDC;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Application service for adjudication, conflict resolution, lifecycle status changes, and corresponding index events.
@@ -19,6 +25,11 @@ import java.util.Map;
 public class KnowledgeGovernanceService {
     private static final int DEFAULT_ASSESSMENT_LIMIT = 100;
     private static final int MAX_ASSESSMENT_LIMIT = 500;
+    /** Accepted verdicts for conflict adjudication; anything else is rejected early rather than silently ignored. */
+    private static final Set<String> SUPPORTED_VERDICTS = Collections.unmodifiableSet(new HashSet<String>(
+            Arrays.asList("KEEP_A", "KEEP_B", "MERGE", "REJECT_BOTH", "REQUEST_EVIDENCE", "IGNORE")));
+    /** Conflict stays open while evidence is being collected: closing it would hide the pending work. */
+    private static final String CONFLICT_STATUS_EVIDENCE_PENDING = "OPEN";
 
     private final KnowledgeMapper mapper;
     private final AiClient aiClient;
@@ -45,10 +56,11 @@ public class KnowledgeGovernanceService {
         String type = stringValue(request.get("objectType"));
         String code = stringValue(request.get("objectCode"));
         String decision = stringValue(request.get("decision"));
+        String reviewer = reviewerOrDefault(request.get("reviewer"));
         updateObjectStatus(type, code, decision);
         Long kb = mapper.findKnowledgeBaseIdForObject(type, code);
         if (kb != null) {
-            mapper.snapshotKnowledgeObject(kb, type, code, "HUMAN_REVIEW", stringValue(request.get("reviewer")));
+            mapper.snapshotKnowledgeObject(kb, type, code, "HUMAN_REVIEW", reviewer);
             outboxService.enqueueObjectStatus(kb, type, code, decision, MDC.get("traceId"));
         }
         // A decision is only auditable when it also records what was compared and under which policy.
@@ -56,7 +68,7 @@ public class KnowledgeGovernanceService {
                 type,
                 code,
                 decision,
-                stringValue(request.get("reviewer")),
+                reviewer,
                 stringValue(request.get("comment")),
                 stringValue(request.get("inputObjectCodes")),
                 stringValue(request.get("resultObjectCode")),
@@ -82,12 +94,11 @@ public class KnowledgeGovernanceService {
             List<Map<String, Object>> evidence = mapper.listEvidenceForObject(type, code);
             List<Map<String, Object>> conflicts = mapper.listObjectConflicts(code);
 
+            // Evidence support is scored once, inside the AI adjudication engine, from evidenceCount;
+            // a second formula here would silently diverge from the published weights.
             Map<String, Object> payload = new LinkedHashMap<String, Object>(candidate);
             payload.put("evidenceSamples", evidence);
             payload.put("conflicts", conflicts);
-            payload.put(
-                    "evidenceSupportScore",
-                    evidence.isEmpty() ? 0.0D : Math.min(1.0D, 0.55D + evidence.size() * 0.12D));
 
             Map<String, Object> result = aiClient.post(AiApiPaths.ADJUDICATE, payload);
             String decision = stringValue(result.get("decision"));
@@ -166,6 +177,161 @@ public class KnowledgeGovernanceService {
         return result;
     }
 
+    /**
+     * Side-by-side content of the two objects in conflict, so the reviewer compares facts instead of codes.
+     * Each side carries its own evidence list: source, page and authority are what a verdict is justified by.
+     */
+    public Map<String, Object> conflictTargets(Long id) {
+        Map<String, Object> conflict = mapper.getConflict(id);
+        if (conflict == null) {
+            throw new IllegalArgumentException("Conflict not found: " + id);
+        }
+        String codeA = stringValue(conflict.get("objectACode"));
+        String codeB = stringValue(conflict.get("objectBCode"));
+        List<String> codes = new ArrayList<String>(2);
+        for (String code : Arrays.asList(codeA, codeB)) {
+            if (!code.isEmpty()) {
+                codes.add(code);
+            }
+        }
+        Map<String, String> types = objectTypes(codes);
+        Map<String, Map<String, Object>> rows = new LinkedHashMap<String, Map<String, Object>>();
+        if (!codes.isEmpty()) {
+            for (Map<String, Object> row : mapper.listAdjudicationTargets(codes)) {
+                rows.put(stringValue(row.get("objectCode")), row);
+            }
+        }
+        List<Map<String, Object>> sides = new ArrayList<Map<String, Object>>(codes.size());
+        for (String code : codes) {
+            String type = types.get(code);
+            Map<String, Object> side = rows.get(code) == null
+                    ? new LinkedHashMap<String, Object>()
+                    : new LinkedHashMap<String, Object>(rows.get(code));
+            side.put("objectType", type);
+            side.put("objectCode", code);
+            List<Map<String, Object>> evidence = mapper.listEvidenceForObject(type, code);
+            side.put("evidenceCount", evidence.size());
+            side.put("evidence", evidence);
+            sides.add(side);
+        }
+        Map<String, Object> result = new LinkedHashMap<String, Object>();
+        result.put("id", id);
+        result.put("conflictType", stringValue(conflict.get("conflictType")));
+        result.put("conflictScore", conflict.get("conflictScore"));
+        result.put("status", stringValue(conflict.get("status")));
+        result.put("objectACode", codeA);
+        result.put("objectBCode", codeB);
+        result.put("sides", sides);
+        return result;
+    }
+
+    @Transactional
+    /**
+     * Applies a verdict to both sides of a conflict: the surviving object is approved, the losing one rejected,
+     * and every status change is snapshot and published so the index and the audit trail agree with the decision.
+     */
+    public Map<String, Object> adjudicateConflict(Long id, String decision, String comment, String reviewer) {
+        Map<String, Object> conflict = mapper.getConflict(id);
+        if (conflict == null) {
+            throw new IllegalArgumentException("Conflict not found: " + id);
+        }
+        String verdict = decision == null || decision.trim().isEmpty()
+                ? "MERGE"
+                : decision.trim().toUpperCase(Locale.ROOT);
+        if (!SUPPORTED_VERDICTS.contains(verdict)) {
+            throw new IllegalArgumentException("Unsupported adjudication verdict: " + decision);
+        }
+        String codeA = stringValue(conflict.get("objectACode"));
+        String codeB = stringValue(conflict.get("objectBCode"));
+        Object kbValue = conflict.get("knowledgeBaseId");
+        Long kb = kbValue == null ? null : Long.valueOf(stringValue(kbValue));
+        Map<String, String> types = objectTypes(Arrays.asList(codeA, codeB));
+        String resolvedReviewer = reviewerOrDefault(reviewer);
+
+        boolean evidenceRequested = "REQUEST_EVIDENCE".equals(verdict);
+        String winner = "IGNORE".equals(verdict) || evidenceRequested ? "" : resolveWinner(verdict, codeA, codeB);
+        String loser = winner.isEmpty() ? "" : (winner.equals(codeA) ? codeB : codeA);
+        Map<String, String> pendingStatus = new LinkedHashMap<String, String>();
+        if (evidenceRequested) {
+            // Nothing is approved or rejected yet: both sides wait for better evidence.
+            pendingStatus.put(codeA, KnowledgeStatus.PENDING_REVIEW.name());
+            pendingStatus.put(codeB, KnowledgeStatus.PENDING_REVIEW.name());
+        } else if ("REJECT_BOTH".equals(verdict)) {
+            pendingStatus.put(codeA, KnowledgeStatus.REJECTED.name());
+            pendingStatus.put(codeB, KnowledgeStatus.REJECTED.name());
+        } else if (!"IGNORE".equals(verdict)) {
+            pendingStatus.put(winner, KnowledgeStatus.APPROVED.name());
+            if (!winner.equals(loser)) {
+                // A merge absorbs B into A: B stays traceable as superseded, a rejection would erase the lineage.
+                pendingStatus.put(loser, "MERGE".equals(verdict)
+                        ? KnowledgeStatus.SUPERSEDED.name()
+                        : KnowledgeStatus.REJECTED.name());
+            }
+        }
+
+        for (Map.Entry<String, String> entry : pendingStatus.entrySet()) {
+            String code = entry.getKey();
+            String type = types.get(code);
+            updateObjectStatus(type, code, entry.getValue());
+            if (kb != null) {
+                mapper.snapshotKnowledgeObject(kb, type, code, "CONFLICT_ADJUDICATION", resolvedReviewer);
+                outboxService.enqueueObjectStatus(
+                        kb, type, code, entry.getValue(),
+                        MDC.get("traceId") + ":" + type + ":" + code);
+            }
+        }
+
+        String conflictStatus = evidenceRequested
+                ? CONFLICT_STATUS_EVIDENCE_PENDING
+                : ("IGNORE".equals(verdict) ? "IGNORED" : "RESOLVED");
+        mapper.resolveConflict(id, conflictStatus, adjudicationNote(verdict, winner, comment));
+
+        Map<String, Object> result = new LinkedHashMap<String, Object>();
+        result.put("id", id);
+        result.put("verdict", verdict);
+        result.put("winner", winner);
+        result.put("status", conflictStatus);
+        result.put("objectStatus", pendingStatus);
+        return result;
+    }
+
+    /** KEEP_A / KEEP_B name the survivor explicitly; MERGE keeps A as the surviving object by convention. */
+    private String resolveWinner(String verdict, String codeA, String codeB) {
+        return "KEEP_B".equals(verdict) ? codeB : codeA;
+    }
+
+    /** Object type must come from storage: conflicting codes are not always claims, and a wrong update would be silent. */
+    private Map<String, String> objectTypes(List<String> codes) {
+        Map<String, String> types = new LinkedHashMap<String, String>();
+        for (String code : codes) {
+            types.put(code, "CLAIM");
+        }
+        List<String> known = new ArrayList<String>(codes.size());
+        for (String code : codes) {
+            if (!code.isEmpty()) {
+                known.add(code);
+            }
+        }
+        if (known.isEmpty()) {
+            return types;
+        }
+        for (Map<String, Object> row : mapper.listAdjudicationTargets(known)) {
+            String code = stringValue(row.get("objectCode"));
+            String type = stringValue(row.get("objectType"));
+            if (!code.isEmpty() && !type.isEmpty()) {
+                types.put(code, type);
+            }
+        }
+        return types;
+    }
+
+    /** The resolution text must record the verdict itself, otherwise "RESOLVED" says nothing about how. */
+    private String adjudicationNote(String verdict, String winner, String comment) {
+        String trimmed = comment == null ? "" : comment.trim();
+        String note = "VERDICT=" + verdict + (winner.isEmpty() ? "" : ";KEEP=" + winner);
+        return trimmed.isEmpty() ? note : note + ";COMMENT=" + trimmed;
+    }
+
     @SuppressWarnings("unchecked")
     private void persistAssessment(
             Long kb,
@@ -197,6 +363,16 @@ public class KnowledgeGovernanceService {
         } else {
             mapper.updateCardStatus(code, status);
         }
+    }
+
+    /** A verdict without an author cannot be audited, so the signed-in user is the fallback reviewer. */
+    private String reviewerOrDefault(Object reviewer) {
+        String value = stringValue(reviewer).trim();
+        if (!value.isEmpty()) {
+            return value;
+        }
+        User current = AuthContext.get();
+        return current == null ? "" : stringValue(current.getUsername());
     }
 
     private String stringValue(Object value) {

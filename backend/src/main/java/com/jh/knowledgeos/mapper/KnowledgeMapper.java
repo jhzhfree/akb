@@ -280,6 +280,12 @@ public interface KnowledgeMapper {
             @Param("kb") Long kb,
             @Param("status") String status);
 
+    /** Single conflict record including its resolution text; needed to turn a conflict into a judgment. */
+    Map<String, Object> getConflict(@Param("id") Long id);
+
+    /** Side-by-side view of the objects being compared during adjudication. */
+    List<Map<String, Object>> listAdjudicationTargets(@Param("codes") List<String> codes);
+
     /** Resolution is stored next to the status: "resolved" alone says nothing about how. */
     int resolveConflict(
             @Param("id") Long id,
@@ -681,4 +687,26 @@ public interface KnowledgeMapper {
     int insertEvaluationResult(EvaluationResult result);
 
     List<Map<String, Object>> listEvaluationResults(@Param("runId") Long runId);
+
+    /** Persisted chunking policy of a knowledge base; null when it still uses defaults. */
+    Map<String, Object> getChunkPolicy(@Param("kb") Long kb);
+
+    int saveChunkPolicy(@Param("kb") Long kb, @Param("strategy") String strategy,
+            @Param("chunkSize") int chunkSize, @Param("chunkOverlap") int chunkOverlap,
+            @Param("minChunkSize") int minChunkSize, @Param("measure") String measure,
+            @Param("keepStructure") boolean keepStructure,
+            @Param("respectSentence") boolean respectSentence,
+            @Param("parentChild") boolean parentChild, @Param("updatedBy") String updatedBy);
+
+    int resetChunkPolicy(@Param("kb") Long kb);
+
+    /** One content unit addressed by its unit code, for the chunk detail view. */
+    Map<String, Object> getContentUnitObject(@Param("kb") Long kb, @Param("code") String code);
+
+    /** Evidence rows citing one content unit, for the chunk detail view. */
+    List<Map<String, Object>> listEvidenceForContentUnit(@Param("kb") Long kb, @Param("code") String code);
+
+    /** The chunk before and after one chunk: reading a hit in its own context. */
+    List<Map<String, Object>> listNeighborContentUnits(@Param("documentId") Long documentId,
+            @Param("id") Long id);
 }

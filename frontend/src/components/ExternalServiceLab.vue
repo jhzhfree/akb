@@ -395,9 +395,11 @@ import { unwrap } from '../api/knowledge'
 import { getToken } from '../api/auth'
 import { errorMessage as message } from '../utils/feedback'
 
-const props = defineProps<{ bases:KnowledgeBase[] }>()
+/** protocol：知识集成按 Tab 直接进入对应协议的联调台（API → RESTful，SSE → SSE）。 */
+const props = defineProps<{ bases:KnowledgeBase[]; protocol?:'rest'|'mcp'|'sse'|'bus' }>()
 
-const tab = ref<'rest' | 'mcp' | 'sse' | 'bus'>('rest')
+const tab = ref<'rest' | 'mcp' | 'sse' | 'bus'>(props.protocol || 'rest')
+watch(() => props.protocol, value => { if (value) tab.value = value })
 const showKey = ref(false)
 
 const cfg = reactive({

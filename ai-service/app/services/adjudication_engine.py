@@ -159,7 +159,9 @@ class AdjudicationEngine:
         hard_block = (
             conflict_count > 0
             or base["riskLevel"] == "HIGH"
-            or ai_decision in ("REJECTED", "UNCERTAIN")
+            # "ERROR" means the model judge was unavailable: an unusable judge must
+            # fall back to the human queue, never to silent automatic approval.
+            or ai_decision in ("REJECTED", "UNCERTAIN", "ERROR")
         )
 
         if (

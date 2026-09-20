@@ -176,7 +176,7 @@
 </section>
 </template>
 <script setup lang="ts">
-import{computed,ref}from'vue'
+import{computed,ref,watch}from'vue'
 import type{UploadFile,UploadInstance,UploadRawFile}from'element-plus'
 import type{
   DocumentChunk, IngestionRun, IngestionRunDetail, KnowledgeDocument, KnowledgeSource, SourcePreview,
@@ -194,8 +194,10 @@ const props=defineProps<{
   preview:SourcePreview|null; previewLoading:boolean; previewError:string; previewId:number|null;
   /** 上传期间实时跟踪最新一次运行，日志随阶段推进刷新。 */
   ingestLive:boolean; ingestStage:string; ingestMessage:string;
-  /** IA 二级入口聚焦：知识空间下为「数据源 / 文档」，知识生产下为「解析任务」。 */
+  /** IA 入口聚焦：知识生成的「文档导入 / 连接器 / 生成任务」共用同一面板。 */
   focus?:'sources'|'documents'|'ingestion';
+  /** 上传复位令牌：一次摄入完成后由外壳自增，面板收到后清空已选文件。 */
+  resetToken?:number;
 }>()
 const emit=defineEmits<{
   pick:[file:UploadFile]; remove:[]; upload:[]
@@ -244,6 +246,8 @@ function clearPicked(){uploadRef.value?.clearFiles();pickedName.value='';emit('r
 /** 摄入完成后由父组件复位上传区：清空 el-upload 内部列表，否则名额被占用无法再选下一个文件。 */
 function resetUpload(){clearPicked()}
 defineExpose({resetUpload})
+/** 面板已下沉到模块页面内部，外壳拿不到实例，改用令牌触发上传区复位。 */
+watch(() => props.resetToken, value => { if (value) resetUpload() })
 function updateAuthority(value:number|undefined){emit('update:authority',value??.8)}
 /** 预览弹窗：点击资料行的「预览」按钮（或整行）打开，同时通知父组件拉取源文件。 */
 const dialogVisible=ref(false)

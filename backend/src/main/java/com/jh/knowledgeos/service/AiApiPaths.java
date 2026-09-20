@@ -30,5 +30,10 @@ public final class AiApiPaths {
     public static final String QUERY_POLICY_RESET = "/ai/settings/query-policy/reset";
     public static final String QUERY_POLICY_SCHEMA = "/ai/settings/query-policy/schema";
     public static final String QUERY_POLICY_DEFAULTS = "/ai/settings/query-policy/defaults";
+    /** Named retrieval strategies: clone, tune, then switch the live one (design §14). */
+    public static final String QUERY_POLICY_PROFILES = "/ai/settings/query-policy/profiles";
+    public static final String QUERY_POLICY_PROFILE_PREFIX = "/ai/settings/query-policy/profiles/";
+    /** Chunking vocabulary and defaults exposed by the AI service parser. */
+    public static final String CHUNK_POLICY = "/ai/settings/chunk-policy";
     private AiApiPaths() {}
 }

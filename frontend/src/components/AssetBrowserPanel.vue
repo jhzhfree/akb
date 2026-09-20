@@ -128,7 +128,7 @@ const currentLabel = computed(() => tabs.find(v => v.type === props.type)?.label
 /** 关系没有独立清单接口：通过图谱邻域查看，避免为列表另造数据。 */
 const hint = computed(() => props.type === 'relation'
   ? { empty:'请在图谱中查看关系', detail:'关系依附于实体，选中实体后展开邻域即可看到关系边与证据' }
-  : { empty:`暂无${currentLabel.value}`, detail:'先在「知识创建 / 文档导入」接入资料并完成解析' })
+  : { empty:`暂无${currentLabel.value}`, detail:'先在「知识生成 / 文档导入」接入资料并完成解析' })
 
 const filtered = computed(() => {
   const key = keyword.value.trim().toLowerCase()
@@ -157,7 +157,7 @@ function onRowClick(row:AssetRow) {
     emit('openGraph', String(row.entityCode))
     return
   }
-  if (props.type === 'relation') emit('navigate', 'workbench.graph')
+  if (props.type === 'relation') emit('navigate', 'search.graph')
 }
 
 async function load() {

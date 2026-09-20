@@ -52,29 +52,29 @@
         <div>
           <b class="text-xs font-medium text-ink-700">生产健康度</b>
           <div class="mt-2 grid grid-cols-2 gap-2 md:grid-cols-3">
-            <button class="health-tile" @click="go('governance.review')">
+            <button class="health-tile" @click="go('create.judgment')">
               <span>待审核知识</span>
               <b :class="data.health.pendingReview + data.health.pendingCardReview ? 'text-amber-600' : ''">
                 {{ data.health.pendingReview + data.health.pendingCardReview }}
               </b>
             </button>
-            <button class="health-tile" @click="go('governance.conflict')">
+            <button class="health-tile" @click="go('create.judgment')">
               <span>开放冲突</span>
               <b :class="data.health.openConflict ? 'text-rose-600' : ''">{{ data.health.openConflict }}</b>
             </button>
-            <button class="health-tile" @click="go('production.parsing')">
+            <button class="health-tile" @click="go('create.jobs')">
               <span>解析失败任务</span>
               <b :class="data.health.failedIngestion ? 'text-rose-600' : ''">{{ data.health.failedIngestion }}</b>
             </button>
-            <button class="health-tile" @click="go('governance.judgment')">
+            <button class="health-tile" @click="go('create.judgment')">
               <span>不确定声明</span>
               <b :class="data.health.uncertainClaim ? 'text-amber-600' : ''">{{ data.health.uncertainClaim }}</b>
             </button>
-            <button class="health-tile" @click="go('governance.conflict')">
+            <button class="health-tile" @click="go('create.judgment')">
               <span>冲突中声明</span>
               <b :class="data.health.conflictedClaim ? 'text-rose-600' : ''">{{ data.health.conflictedClaim }}</b>
             </button>
-            <button class="health-tile" @click="go('evaluation.run')">
+            <button class="health-tile" @click="go('search.benchmark')">
               <span>已过期声明</span>
               <b :class="data.freshness.expiredCount ? 'text-amber-600' : ''">{{ data.freshness.expiredCount }}</b>
             </button>

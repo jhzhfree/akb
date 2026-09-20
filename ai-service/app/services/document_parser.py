@@ -9,8 +9,9 @@ now the cleaned standard units rather than raw text slices.
 
 import hashlib
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
+from app.core import chunk_policy
 from app.core.config import settings
 from app.services.standard_document import (
     SOURCE_FORMATS,
@@ -29,7 +30,8 @@ SUPPORTED_EXTENSIONS = set(SOURCE_FORMATS)
 class DocumentParser:
     """Parse supported files into the canonical standard document model."""
 
-    def parse(self, file_path: str, filename: str = "") -> Dict[str, Any]:
+    def parse(self, file_path: str, filename: str = "",
+              policy: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         path = Path(file_path)
         ext = path.suffix.lower()
         if ext not in SUPPORTED_EXTENSIONS:
@@ -48,12 +50,13 @@ class DocumentParser:
 
         name = filename or path.name
         sha256 = hashlib.sha256(path.read_bytes()).hexdigest()
-        standard = build_standard_document(name, ext, sha256, blocks, page_count)
+        standard = build_standard_document(name, ext, sha256, blocks, page_count, policy)
         return {
             "filename": name,
             "extension": ext,
             "sha256": sha256,
             "page_count": page_count,
+            "chunk_policy": chunk_policy.normalize(policy) if policy else chunk_policy.default_policy(),
             # Clean text: format markers are gone before anything consumes it.
             "text": standard["text"],
             "chunks": to_legacy_chunks(standard),

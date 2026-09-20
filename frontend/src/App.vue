@@ -2,8 +2,8 @@
 <LoginView v-if="needLogin" :hint="loginHint" @success="onLogin"/>
 <div v-else class="kos-shell">
 <header class="kos-topbar">
-  <div class="kos-brand"><span class="kos-logo">◈</span>AI 原生企业知识库平台</div>
-  <span class="kos-pill">V1.0</span>
+  <div class="kos-brand"><span class="kos-logo">◈</span>智能知识平台</div>
+  <span class="kos-pill">V2.2</span>
   <div class="kos-grow"></div>
   <!-- 设计 §2.2：知识空间选择器固定在顶栏；全局搜索回车后进入搜索页并直接执行检索。 -->
   <button class="kos-kbswitch" @click="showBases=true">
@@ -30,30 +30,21 @@
   </div>
 </header>
 <div class="kos-body">
-<!-- 设计 §2.2：一级导航固定为五个入口，点击直接进入该模块的默认页面；
-     仅「系统配置」在左侧保留二级页面列表，其余模块的二级入口在默认页面与页面顶部导航条内提供。 -->
+<!-- 设计 §1 / §2.2：左侧只放五个一级入口，且不挂任何二级菜单；
+     Chunk、Assertion、Graph、Evaluation、凭证等全部进入模块页面内部的 Tab、卡片与抽屉。 -->
 <aside class="kos-side">
   <div class="kos-nav-title">信息架构</div>
-  <template v-for="section in navSections" :key="section.key">
-    <button class="kos-nav-item kos-nav-l1" :class="{active:activeSection===section.key}" @click="enterSection(section)">
-      <span class="kos-nav-ic">{{section.icon}}</span>
-      <span class="kos-nav-tx">{{section.label}}</span>
-      <em v-if="hasSubNav(section)" class="kos-nav-arrow" :class="{open:activeSection===section.key}">›</em>
-      <em v-else-if="sectionBadge(section)" class="kos-nav-dot">{{sectionBadge(section)}}</em>
-    </button>
-    <div v-if="hasSubNav(section)&&activeSection===section.key" class="kos-nav-sub">
-      <button v-for="leaf in leavesOf(section)" :key="leaf.key" class="kos-nav-item kos-nav-l2"
-        :class="{active:active===leaf.key,planned:leaf.planned}"
-        :disabled="leaf.planned"
-        :title="leaf.planned?'规划中：该能力尚未实现':''"
-        @click="selectLeaf(leaf)">
-        <span class="kos-nav-ic">{{leaf.icon}}</span>
-        <span class="kos-nav-tx">{{leaf.label}}</span>
-        <em v-if="leafBadge(leaf)" class="kos-nav-dot">{{leafBadge(leaf)}}</em>
-        <em v-else-if="leaf.planned" class="kos-nav-planned">规划</em>
-      </button>
-    </div>
-  </template>
+  <button
+    v-for="section in navSections"
+    :key="section.key"
+    class="kos-nav-item kos-nav-l1"
+    :class="{active:activeSection===section.key}"
+    :title="section.desc"
+    @click="enterSection(section)">
+    <span class="kos-nav-ic">{{section.icon}}</span>
+    <span class="kos-nav-tx">{{section.label}}</span>
+    <em v-if="sectionBadge(section)" class="kos-nav-dot">{{sectionBadge(section)}}</em>
+  </button>
 </aside>
 <main class="kos-main">
   <div v-if="failure" class="mb-3 flex items-start gap-3 rounded-lg border border-rose-200 bg-rose-50 px-4 py-3">
@@ -70,116 +61,55 @@
     :base="activeBase" :environment="environmentLabel" :index="indexState" :loading="contextLoading"
     @switch="showBases=true" @refresh="loadSpaceContext"/>
 
-  <!-- 模块内导航：一级菜单的二级入口不再挂在左侧，改为进入子页面后在页面顶部横向切换。 -->
-  <nav v-if="moduleNav" class="kos-modnav" :aria-label="moduleNav.label">
-    <button class="kos-modnav-home" @click="enterSection(moduleNav.section)">
-      ‹ {{moduleNav.section.label}}首页
-    </button>
-    <span class="kos-modnav-sep"></span>
-    <button
-      v-for="leaf in moduleNav.leaves"
-      :key="leaf.key"
-      class="kos-modnav-chip"
-      :class="{active:active===leaf.key,planned:leaf.planned}"
-      :disabled="leaf.planned"
-      :title="leaf.planned?'规划中：该能力尚未实现':''"
-      @click="selectLeaf(leaf)">
-      <span class="kos-nav-ic">{{leaf.icon}}</span>
-      <span>{{leaf.label}}</span>
-      <em v-if="leafBadge(leaf)" class="kos-nav-dot">{{leafBadge(leaf)}}</em>
-    </button>
-  </nav>
-
-  <!-- 知识工作台：工作台首页 / 资产浏览 / 图谱概览 / 版本 / 质量（设计 §3） -->
-  <OverviewPanel
-    v-if="active==='workbench'"
-    :knowledge-base-id="knowledgeBaseId" :overview="overview" :capabilities="capabilities"
+  <!-- 设计 §1：五个一级页面各自内部用 Tab 组织能力，App 只负责选择模块页面。 -->
+  <WorkbenchPage
+    v-if="activeSection==='workbench'"
+    :active="active" :knowledge-base-id="knowledgeBaseId"
+    :overview="overview" :capabilities="capabilities"
     :summary="dashboard" :lifecycle="lifecycle" :governance="governance"
-    @navigate="navigate" @open-assets="openAssets"/>
-  <AssetBrowserPanel
-    v-else-if="active==='workbench.assets'"
-    :knowledge-base-id="knowledgeBaseId" v-model:type="assetType"
-    @open-detail="openDetail" @open-graph="openGraph" @navigate="navigate"/>
-  <GraphPanel v-else-if="active==='workbench.graph'" :knowledge-base-id="knowledgeBaseId" v-model:code="graphCode"/>
-  <VersionGovernancePanel v-else-if="active==='workbench.version'" :knowledge-base-id="knowledgeBaseId" @open-detail="openDetailFromVersion"/>
-  <QualityPanel v-else-if="active==='workbench.quality'" :knowledge-base-id="knowledgeBaseId" @navigate="navigate"/>
-  <!-- 知识创建：流水线首页承载 Chunk / 实体归一 / 待审核 / 冲突 / 裁决五个环节，
-       外部（工作台治理入口、任务中心）跳这些 key 时也落到同一页对应流水段（设计 §4）。 -->
-  <CreateHomePanel
-    v-else-if="createHomeKey"
-    ref="homePanel"
-    :knowledge-base-id="knowledgeBaseId"
+    :asset-type="assetType" @update:asset-type="assetType=$event"
+    @select="selectKey"/>
+
+  <GeneratePage
+    v-else-if="activeSection==='create'"
+    :active="active" :knowledge-base-id="knowledgeBaseId"
     :pending-reviews="pendingReviews" :conflicts="conflicts" :assessments="assessments"
     :adjudicating="adjudicating"
-    :step="createHomeKey"
-    v-model:authority="authority"
+    :selected-conflict-id="selectedConflictId" :conflict-detail="conflictDetail"
+    :conflict-detail-loading="conflictDetailLoading"
+    :selected-review="selectedReview" :review-detail="reviewDetail"
+    :authority="authority" @update:authority="authority=$event"
     :permission-tags="sourcePermissionTags" @update:permission-tags="sourcePermissionTags=$event"
-    :documents="documents"
-    :runs="runs"
-    :run-detail="runDetail"
-    :selected-run-id="selectedRunId"
+    :documents="documents" :sources="sources"
+    :runs="runs" :run-detail="runDetail" :selected-run-id="selectedRunId"
     :uploading="uploading"
-    :ingest-live="ingestLive"
-    :ingest-stage="ingestStage"
-    :ingest-message="ingestMessage"
-    @navigate="navigate" @pick="pick" @remove="remove" @upload="upload"
-    @select-run="selectRun" @reloaded="reloadAfterRetry"
-    @refresh="loadOverview" @open-graph="openGraph"
-    @adjudicate="runIntelligentAdjudication" @review="review" @resolve-conflict="resolveConflict"/>
-  <SpacePanel v-else-if="active==='create.space'" :bases="bases" :overview="overview"
-    :active-id="knowledgeBaseId" @select="selectBase" @create="showBases=true"/>
-  <DataCenterPanel
-    v-else-if="dcFocus"
-    :focus="dcFocus"
-    ref="dataPanel"
-    v-model:authority="authority"
-    :permission-tags="sourcePermissionTags" @update:permission-tags="sourcePermissionTags=$event"
-    :documents="documents"
-    :sources="sources"
-    :runs="runs"
-    :run-detail="runDetail"
-    :selected-run-id="selectedRunId"
-    :uploading="uploading"
-    :ingest-live="ingestLive"
-    :ingest-stage="ingestStage"
-    :ingest-message="ingestMessage"
-    :preview="preview"
-    :preview-loading="previewLoading"
-    :preview-error="previewError"
-    :preview-id="previewId"
-    @preview="previewSource"
-    @pick="pick"
-    @remove="remove"
-    @upload="upload"
-    @select-run="selectRun"
-    @reloaded="reloadAfterRetry"/>
-  <!-- 知识检索：搜索 / 检索测试 / 检索策略 / Query Trace / Benchmark（设计 §5） -->
-  <QueryPanel v-else-if="active==='search.query'"
-    v-model:query="q" :result="result" :asking="asking"
-    :history="queryHistory" @ask="ask" @open-trace="openTrace" @refresh-history="loadQueryHistory" @open-citation="openCitation"
-    @navigate="navigate"/>
-  <RetrievalTestPanel v-else-if="active==='search.test'" :knowledge-base-id="knowledgeBaseId" @open-trace="openTrace"/>
-  <QueryPolicyPanel v-else-if="active==='search.profile'||active==='system.policy'"/>
-  <TraceCenterPanel v-else-if="active==='search.trace'" :history="queryHistory" :loading="historyLoading"
-    @open-trace="openTrace" @refresh="loadQueryHistory"/>
-  <EvaluationPanel v-else-if="active==='search.benchmark'" :knowledge-base-id="knowledgeBaseId"/>
-  <!-- 知识集成：概览 / 服务与 API / MCP / SSE / 凭证 / 调用日志（设计 §6） -->
-  <IntegrationOverviewPanel
-    v-else-if="active==='integration.overview'"
-    :knowledge-base-id="knowledgeBaseId" @navigate="navigate" @open-trace="openTrace"/>
-  <ExternalServicePanel v-else-if="active==='integration.services'||active==='integration.credentials'" :bases="bases"/>
-  <McpServicePanel v-else-if="active==='integration.mcp'"/>
-  <ExternalServiceLab v-else-if="active==='integration.sse'||active==='system.lab'" :bases="bases"/>
-  <CallLogPanel v-else-if="active==='integration.logs'" :knowledge-base-id="knowledgeBaseId" @open-trace="openTrace"/>
-  <!-- 系统配置：模型 / 用户与组织 / 权限 / 存储索引 / 问答策略 / 接口联调（设计 §7） -->
-  <ModelSettingsPanel v-else-if="active==='system.model'"/>
-  <UserAdminPanel v-else-if="active==='system.users'"/>
-  <AclAdministrationPanel v-else-if="active==='system.acl'" :subjects="aclSubjects" :roles="aclRoles" :changes="aclChanges" :audits="aclAudits" @refresh="loadAcl" @change="changeAcl"/>
-  <OpsPanel v-else-if="active==='system.index'" :knowledge-base-id="knowledgeBaseId"
-    :base-name="activeBase?.name||''" @refresh="loadOverview"/>
-  <!-- IA 中保留但尚未实现的入口：不提供假数据页面，明确说明状态。 -->
-  <PanelState v-else :empty="true" empty-text="该入口尚未实现"
-    empty-hint="信息架构已保留该位置，能力落地后会在此开放"/>
+    :ingest-live="ingestLive" :ingest-stage="ingestStage" :ingest-message="ingestMessage"
+    :preview="preview" :preview-loading="previewLoading" :preview-error="previewError" :preview-id="previewId"
+    :reset-token="uploadReset"
+    @select="selectKey"/>
+
+  <SearchPage
+    v-else-if="activeSection==='search'"
+    :active="active" :knowledge-base-id="knowledgeBaseId"
+    :query="q" @update:query="q=$event"
+    :result="result" :asking="asking"
+    :history="queryHistory" :history-loading="historyLoading"
+    :graph-code="graphCode" @update:graph-code="graphCode=$event"
+    @select="selectKey" @ask="ask" @refresh-history="loadQueryHistory"/>
+
+  <IntegrationPage
+    v-else-if="activeSection==='integration'"
+    :active="active" :knowledge-base-id="knowledgeBaseId" :bases="bases"
+    @select="selectKey"/>
+
+  <SystemPage
+    v-else
+    :active="active" :knowledge-base-id="knowledgeBaseId" :base-name="activeBase?.name||''"
+    :bases="bases" :overview="overview"
+    :acl-subjects="aclSubjects" :acl-roles="aclRoles" :acl-changes="aclChanges" :acl-audits="aclAudits"
+    :can-manage-users="!!me?.canManageUsers"
+    @select="selectKey" @acl-change="changeAcl"
+    @select-base="selectBase" @create-base="showBases=true" @refresh="loadOverview"/>
 </main>
 </div>
 <KnowledgeBaseDialog :visible="showBases" :bases="bases" :groups="groups" :active-id="knowledgeBaseId" @close="showBases=false" @select="selectBase" @create="createBase"/>
@@ -200,56 +130,41 @@
 </div>
 </template>
 <script setup lang="ts">
-import{computed,onMounted,onUnmounted,ref,watch}from'vue'
+import{computed,onMounted,onUnmounted,provide,ref,watch}from'vue'
 import{ElMessage,type UploadFile}from'element-plus'
 import type {
   AssessmentRow, Capabilities, Claim, ConflictRow,
   IngestionRun, IngestionRunDetail, KnowledgeBase, KnowledgeCard, KnowledgeDocument,
-  KnowledgeSource, Overview, AclSubject, AclRole, AclAudit, AclChange,
+  KnowledgeSource, Overview, AclSubject, AclRole, AclAudit, AclChange, ConflictDetail,
   QueryCitation, QueryHistoryItem, QueryResult, QueryTrace, ReviewRow, EvidenceDetail,
   SourcePreview,
   KnowledgeObjectDetail, AuthMe, AuthStatus, UserGroupRow,
   IndexState, OutboxStats, DriftResult,
   DashboardSummary, DashboardLifecycle, DashboardGovernance,
 } from './types'
-import OverviewPanel from'./components/OverviewPanel.vue';
-import AssetBrowserPanel from './components/AssetBrowserPanel.vue'
 import type { AssetType } from './components/AssetBrowserPanel.vue'
-import CreateHomePanel from './components/CreateHomePanel.vue'
-import IntegrationOverviewPanel from './components/IntegrationOverviewPanel.vue'
-import CallLogPanel from './components/CallLogPanel.vue'
 import TaskCenterDrawer from './components/TaskCenterDrawer.vue'
-import SpacePanel from'./components/SpacePanel.vue';
 import SpaceContextBar from'./components/SpaceContextBar.vue';
-import TraceCenterPanel from'./components/TraceCenterPanel.vue';
-import RetrievalTestPanel from'./components/RetrievalTestPanel.vue';
-import EvaluationPanel from'./components/EvaluationPanel.vue';
-import McpServicePanel from'./components/McpServicePanel.vue';
-import VersionGovernancePanel from'./components/VersionGovernancePanel.vue';
-import QualityPanel from'./components/QualityPanel.vue';
-import PanelState from'./components/PanelState.vue';
-import DataCenterPanel from'./components/DataCenterPanel.vue';
-import QueryPanel from'./components/QueryPanel.vue';
-import KnowledgeListPanel from'./components/KnowledgeListPanel.vue';
-import GraphPanel from'./components/GraphPanel.vue';
-import OpsPanel from'./components/OpsPanel.vue';
-import AclAdministrationPanel from './components/AclAdministrationPanel.vue'
 import KnowledgeBaseDialog from './components/KnowledgeBaseDialog.vue'
 import KnowledgeDetailWorkspace from './components/KnowledgeDetailWorkspace.vue'
 import QueryTracePanel from './components/QueryTracePanel.vue'
 import EvidenceViewer from './components/EvidenceViewer.vue'
-import ModelSettingsPanel from './components/ModelSettingsPanel.vue'
-import QueryPolicyPanel from './components/QueryPolicyPanel.vue'
-import UserAdminPanel from './components/UserAdminPanel.vue'
-import ExternalServicePanel from './components/ExternalServicePanel.vue'
-import ExternalServiceLab from './components/ExternalServiceLab.vue'
 import LoginView from './components/LoginView.vue'
+/** 五个一级模块页面：左侧导航不再挂二级菜单，模块内部自持 Tab（设计 §1）。 */
+import WorkbenchPage from './components/WorkbenchPage.vue'
+import GeneratePage from './components/GeneratePage.vue'
+import SearchPage from './components/SearchPage.vue'
+import IntegrationPage from './components/IntegrationPage.vue'
+import SystemPage from './components/SystemPage.vue'
+import { KOS_SHELL } from './shell'
+import type { KosShell } from './shell'
 import {
   createKnowledgeBase, getKnowledgeBases, getOverview, getSources, getDocuments, getCards,
   getClaims, getPendingReviews, getOpenConflicts, getCapabilities, getAssessments,
   getIngestionRuns, getIngestionRun,
   uploadDocument, queryKnowledge, runAdjudication, reviewKnowledge,
-  resolveKnowledgeConflict, getAclSubjects, getAclRoles, getAclAudits, getAclChanges,
+  resolveKnowledgeConflict, getConflictTargets, adjudicateConflict,
+  getAclSubjects, getAclRoles, getAclAudits, getAclChanges,
   changeResourceAcl, getKnowledgeObjectDetail, getEvidenceDetail,
   getContentUnitDetail, getQueryHistory, getTrace, unwrap,
   getSourcePreview, getEnvironment, getOutboxStats, getIndexDrift,
@@ -283,10 +198,16 @@ const sources=ref<KnowledgeSource[]>([]),
     pendingReviews=ref<ReviewRow[]>([]),
     conflicts=ref<ConflictRow[]>([]),
     assessments=ref<AssessmentRow[]>([])
+/** 裁决工作台选中态：冲突选中的是双方对照，待审核选中的是对象详情与证据链。 */
+const selectedConflictId=ref<number|null>(null),
+    conflictDetail=ref<ConflictDetail|null>(null),
+    conflictDetailLoading=ref(false),
+    selectedReview=ref<ReviewRow|null>(null),
+    reviewDetail=ref<Record<string,unknown>|null>(null)
 const queryHistory=ref<QueryHistoryItem[]>([])
 const queryTrace=ref<QueryTrace|null>(null), traceVisible=ref(false), traceLoading=ref(false)
 const evidenceDetail=ref<EvidenceDetail|null>(null), evidenceVisible=ref(false), evidenceLoading=ref(false)
-const detailVisible=ref(false), detailLoading=ref(false), detailMode=ref<'CARD'|'CLAIM'>('CARD')
+const detailVisible=ref(false), detailLoading=ref(false), detailMode=ref<'CARD'|'CLAIM'|'CHUNK'>('CARD')
 const detailCode=ref(''), knowledgeDetail=ref<KnowledgeObjectDetail|null>(null)
 const capabilities=ref<Capabilities|null>(null),
     q=ref('知识为什么需要裁决？'),
@@ -318,9 +239,11 @@ let liveBaseline=0, liveBusy=false
 const uploading=ref(false),
     asking=ref(false),
     adjudicating=ref(false)
-/** 摄入面板引用：一次摄入结束后复位上传区，让下一个文件可以立刻继续上传。 */
-const dataPanel=ref<InstanceType<typeof DataCenterPanel>|null>(null)
-const homePanel=ref<InstanceType<typeof CreateHomePanel>|null>(null)
+/**
+ * 上传复位令牌：一次摄入结束后自增，摄入面板收到后清空 el-upload 内部文件列表。
+ * 面板已下沉到模块页面内部，App 拿不到组件实例，改用令牌广播（limit=1 时否则无法继续选文件）。
+ */
+const uploadReset=ref(0)
 /** 卡片/断言列表的加载与错误状态，交由面板统一样式呈现。 */
 const listLoading=ref(false), listError=ref('')
 /** 最近一次操作失败信息：错误需要在页面上停留可见，而不是一闪而过的 toast。 */
@@ -375,7 +298,7 @@ const loginHint=computed(()=>{
 })
 const avatarText=computed(()=>
   String(me.value?.user?.displayName||activeBase.value?.name||'知识库').trim().slice(0,1)||'K')
-/** 一级导航固定为 IA 的 10 个入口，二级为页面入口。 */
+/** 一级导航固定为 IA 的五个入口，二级入口全部下沉到模块页面内部的 Tab。 */
 const navSections=NAV_SECTIONS
 const activeLocation=computed(()=>locate(active.value))
 const activeSection=computed(()=>activeLocation.value?.section.key||'workbench')
@@ -390,25 +313,19 @@ function sectionBadge(section:NavSection):string{
   }
   return total?String(total):''
 }
-/** 只有「系统配置」在左侧保留二级列表，其余模块走默认页 + 页面顶部导航条。 */
-function hasSubNav(section:NavSection){return section.key==='system'}
-/** 子页面的顶部导航：给出当前模块的同级入口，避免二级菜单消失后失去跨页能力。 */
-const moduleNav=computed(()=>{
-  const section=activeLocation.value?.section
-  if(!section||hasSubNav(section))return null
-  if(active.value===defaultLeafOf(section).key)return null
-  return {section,label:section.label,leaves:leavesOf(section)}
-})
 /** 用户与用户组管理只对系统管理员开放，避免普通账号看到无权操作的入口。 */
 function leavesOf(section:NavSection){
-  return section.children.filter(leaf=>!leaf.adminOnly||me.value?.canManageUsers)
+  return section.tabs.filter(leaf=>!leaf.adminOnly||me.value?.canManageUsers)
 }
 function enterSection(section:NavSection){
   active.value=defaultLeafOf(section).key
 }
-function selectLeaf(leaf:NavLeaf){
-  if(leaf.planned)return
-  active.value=leaf.key
+/** 模块页面回传的视图 key：规划中的入口不进入，避免落到未实现页面。 */
+function selectKey(key:string){
+  const leaf=locate(key)?.leaf
+  if(!leaf||leaf.planned)return
+  if(leaf.adminOnly&&!me.value?.canManageUsers)return
+  active.value=key
 }
 /** 角标只用于需要人工介入的入口：待审核与未解决冲突。 */
 function leafBadge(leaf:NavLeaf):number|string{
@@ -416,25 +333,6 @@ function leafBadge(leaf:NavLeaf):number|string{
   if(leaf.badge==='openConflict')return conflicts.value.length||''
   return ''
 }
-/** 资料中心服务三个入口：数据源 / 文档 / 解析任务，用 focus 决定区块顺序。 */
-const dcFocus=computed<'sources'|'documents'|'ingestion'|''>(()=>
-  (activeLocation.value?.leaf?.focus as 'sources'|'documents'|'ingestion')||'')
-/** 治理工作台服务三个入口：待审核 / 冲突 / 裁决，focus 来自 IA 定义。 */
-const govFocus=computed<'review'|'conflict'|'judgment'|''>(()=>
-  (activeLocation.value?.leaf?.focus as 'review'|'conflict'|'judgment')||'')
-/**
- * 知识创建的五个环节不再是独立页面：统一落在流水线首页的对应步骤上，
- * 从流水线条、工作台治理入口或任务中心跳转，看到的都是同一个容器。
- */
-const CREATE_HOME_STEPS:Record<string,string>={
-  'create.home':'documents',
-  'create.chunk':'create.chunk',
-  'create.entity':'create.entity',
-  'create.review':'create.review',
-  'create.conflict':'create.conflict',
-  'create.judgment':'create.judgment',
-}
-const createHomeKey=computed(()=>CREATE_HOME_STEPS[active.value]||'')
 const navigate=(tab:string)=>{active.value=normalizeViewKey(tab)}
 /** 工作台 KPI 下钻：按对象类型进入资产浏览（设计 §3.1）。 */
 function openAssets(type:AssetType){assetType.value=type;
@@ -576,13 +474,17 @@ if(r[1].status==='fulfilled')conflicts.value=unwrap(r[1].value,[]);
 if(r[2].status==='fulfilled')assessments.value=unwrap(r[2].value,[])}
 /** 卡片与断言列表改由资产浏览面板按需加载，这里只保留失败提示的写入口。 */
 function loadList(){listError.value=''}
+/** 各视图需要的后台数据：进入模块 Tab 时按需加载，避免一次性拉取全站数据。 */
+const DATA_KEYS=['create.overview','create.import','create.connector','create.jobs']
+const REVIEW_KEYS=['create.judgment']
+const QUERY_KEYS=['search.query','search.test','search.trace']
+const ACL_KEYS=['system.acl','system.audit']
 async function loadActive(){try{
 if(active.value==='workbench')await Promise.all([loadOverview(),loadDashboard()]);
-else if(dcFocus.value)await loadData();
-else if(govFocus.value)await loadReview();
-else if(active.value==='create.entity')await loadOverview();
-else if(active.value==='search.query'||active.value==='search.test'||active.value==='search.trace')await loadQueryHistory();
-else if(active.value==='system.acl')await loadAcl()}catch(e){err(e)}}
+else if(DATA_KEYS.includes(active.value))await loadData();
+else if(REVIEW_KEYS.includes(active.value))await loadReview();
+else if(QUERY_KEYS.includes(active.value))await loadQueryHistory();
+else if(ACL_KEYS.includes(active.value))await loadAcl()}catch(e){err(e)}}
 async function upload(){if(!file.value)return ElMessage.warning('请先选择文件');
 uploading.value=true;
 failure.value='';
@@ -595,8 +497,7 @@ try{const d=unwrap(await uploadDocument(knowledgeBaseId.value,
 ElMessage.success(`处理完成：${Number(d.chunkCount||0)} 个内容块，可继续上传下一个文件`);
 // 复位上传区：清空 el-upload 内部文件列表与已选文件，否则 limit=1 会占着名额无法再选。
 file.value=null;
-dataPanel.value?.resetUpload();
-homePanel.value?.resetUpload();
+uploadReset.value++;
 selectedRunId.value=Number(d.runId||0)||null;
 await Promise.all([loadData(),loadOverview()]);
 if(selectedRunId.value)await selectRun(selectedRunId.value)}catch(e){err(e)}
@@ -619,7 +520,8 @@ catch(e){err(e)}finally{evidenceLoading.value=false}
 return}
 const type=String(citation.objectType||'').toUpperCase()
 const code=String(citation.objectCode||citation.objectId||'')
-if((type==='CARD'||type==='CLAIM')&&code){await openDetail(type as 'CARD'|'CLAIM',code);return}
+if((type==='CARD'||type==='CLAIM'||type==='CHUNK')&&code){
+  await openDetail(type as 'CARD'|'CLAIM'|'CHUNK',code);return}
 ElMessage.info('该引用暂未返回 Evidence/Object 定位标识')
 }
 async function loadQueryHistory(){
@@ -628,11 +530,12 @@ try{queryHistory.value=unwrap(await getQueryHistory(knowledgeBaseId.value),[])}c
 finally{historyLoading.value=false}}
 /** 版本治理页点开详情：版本快照只带类型与对象码，详情仍走统一的详情抽屉。 */
 function openDetailFromVersion(type:string,code:string){
-  if((type==='CARD'||type==='CLAIM')&&code)openDetail(type,code)
+  const normalized=String(type||'').toUpperCase()
+  if((normalized==='CARD'||normalized==='CLAIM')&&code)openDetail(normalized as 'CARD'|'CLAIM',code)
 }
 async function openTrace(qid:string){traceVisible.value=true;traceLoading.value=true;try{
 queryTrace.value=unwrap(await getTrace(qid),null)}catch(e){err(e)}finally{traceLoading.value=false}}
-async function openDetail(mode:'CARD'|'CLAIM',code:string){detailMode.value=mode;detailCode.value=code;
+async function openDetail(mode:'CARD'|'CLAIM'|'CHUNK',code:string){detailMode.value=mode;detailCode.value=code;
 detailVisible.value=true;detailLoading.value=true;try{
 knowledgeDetail.value=unwrap(await getKnowledgeObjectDetail(knowledgeBaseId.value,mode,code),null)
 }catch(e){err(e)}finally{detailLoading.value=false}}
@@ -641,13 +544,38 @@ try{const d=unwrap(await runAdjudication(knowledgeBaseId.value),
     {});
 ElMessage.success(`裁决完成：自动批准 ${Number(d.autoApproved||0)}，人工复核 ${Number(d.requiresHumanReview||0)}`);
 await Promise.all([loadReview(),loadOverview()])}catch(e){err(e)}finally{adjudicating.value=false}}
-async function review(row:ReviewRow, decision:string){try{await reviewKnowledge(row,decision);
-await loadReview()}catch(e){err(e)}} async function resolveConflict(row:ConflictRow,
+async function review(row:ReviewRow, decision:string, comment=''){
+try{await reviewKnowledge(row,decision,comment);
+ElMessage.success('裁决已提交');
+selectedReview.value=null;reviewDetail.value=null;
+await Promise.all([loadReview(),loadOverview()])}catch(e){err(e)}}
+async function resolveConflict(row:ConflictRow,
     status:string){try{await resolveKnowledgeConflict(row.id,status);
 await loadReview()}catch(e){err(e)}}
-/** 打开图谱页：起点编码写入 graphCode，GraphPanel 监听后自动加载邻域。 */
+/** 选中冲突：拉取双方的值 / 条件 / 版本 / 置信度与各自证据，裁决才有依据（设计 §4.4）。 */
+async function selectConflict(id:number){
+selectedConflictId.value=id;selectedReview.value=null;reviewDetail.value=null
+conflictDetailLoading.value=true
+try{conflictDetail.value=unwrap(await getConflictTargets(id),null)}
+catch(e){err(e);conflictDetail.value=null}finally{conflictDetailLoading.value=false}}
+/** 选中待审核对象：详情接口带 Evidence 与历史裁决记录，右栏据此展示原文与权威度。 */
+async function selectReview(row:ReviewRow){
+selectedReview.value=row;selectedConflictId.value=null;conflictDetail.value=null
+const type=String(row.objectType||'').toUpperCase()
+const code=String(row.objectCode||'')
+if((type==='CARD'||type==='CLAIM')&&code){
+  try{reviewDetail.value=unwrap(await getKnowledgeObjectDetail(knowledgeBaseId.value,type as 'CARD'|'CLAIM',code),null) as unknown as Record<string,unknown>}
+  catch(e){err(e);reviewDetail.value=null}
+  return}
+reviewDetail.value=null}
+async function adjudicateConflicted(id:number, decision:string, comment=''){
+try{await adjudicateConflict(id,decision,comment);
+ElMessage.success('冲突裁决已提交');
+selectedConflictId.value=null;conflictDetail.value=null;
+await Promise.all([loadReview(),loadOverview()])}catch(e){err(e)}}
+/** 打开图谱：V2.1 基线变更②——知识图谱归入知识检索，起点编码写入 graphCode 后由图谱面板加载邻域。 */
 function openGraph(code:string){graphCode.value=code;
-active.value='graph'}
+active.value='search.graph'}
 /** 用户组列表：知识库可见范围选择「用户组」时需要，非管理员也加载（创建者可选自己所在组）。 */
 async function loadGroups(){
   try{groups.value=unwrap(await listGroups(),[])}catch{groups.value=[]}
@@ -678,6 +606,26 @@ async function doLogout(){
   setToken('')
   me.value=null
 }
+/**
+ * 模块页面统一从这里取动作：左侧导航收起二级菜单后，
+ * 跳转详情、打开 Trace、执行裁决等跨模块能力不必在页面间层层透传。
+ */
+const shell:KosShell={
+  navigate, openAssets, openGraph, openRun, openTrace, openDetail, openEvidence, openCitation,
+  upload, pick, remove,
+  selectRun:id=>{void selectRun(id)},
+  refresh:()=>{void loadOverview()},
+  reloadAfterRetry:()=>{void reloadAfterRetry()},
+  adjudicate:()=>{void runIntelligentAdjudication()},
+  review:(row,decision,comment)=>{void review(row,decision,comment)},
+  resolveConflict:(row,status)=>{void resolveConflict(row,status)},
+  selectConflict:id=>{void selectConflict(id)},
+  selectReview:row=>{void selectReview(row)},
+  adjudicateConflict:(id,decision,comment)=>{void adjudicateConflicted(id,decision,comment)},
+  previewSource:id=>{void previewSource(id)},
+}
+provide(KOS_SHELL, shell)
+
 /** 任意请求返回 401 时回到登录页，避免半登录状态下反复报错。 */
 function onAuthExpired(){
   me.value=null
@@ -686,7 +634,7 @@ function onAuthExpired(){
 async function initialLoad(){
   try{await loadBases();
   await Promise.all([loadOverview(),loadReview(),loadDashboard(),loadTasks()]);
-  if(active.value!=='workbench'&&!govFocus.value)await loadActive();
+  if(active.value!=='workbench')await loadActive();
   void loadEnvironment();
   void loadSpaceContext()}catch(e){err(e)}
 }

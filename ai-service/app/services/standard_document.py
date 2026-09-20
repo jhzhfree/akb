@@ -27,6 +27,7 @@ from docx.table import Table as DocxTable
 from docx.text.paragraph import Paragraph as DocxParagraph
 from pypdf import PdfReader
 
+from app.core import chunk_policy
 from app.core.config import settings
 
 # Block types are the vocabulary shared by every normalizer.
@@ -550,20 +551,286 @@ def build_sections(blocks: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     return sections
 
 
+def estimate_tokens(text: str) -> int:
+    """Token estimate good enough for chunk budgeting (no tokenizer dependency).
+
+    CJK characters carry far more meaning per character than latin ones, so a
+    pure ``len / 4`` estimate under-counts Chinese documents badly and lets a
+    "900 token" chunk grow to several thousand real tokens.
+    """
+    if not text:
+        return 0
+    cjk = len(_CJK.findall(text))
+    rest = max(0, len(text) - cjk)
+    return max(1, int(round(cjk * 0.7 + rest / 4.0)))
+
+
+def _measure(text: str, policy: Dict[str, Any]) -> int:
+    """Window measurement in the unit declared by the policy."""
+    return estimate_tokens(text) if policy.get("measure") == "TOKEN" else len(text)
+
+
+def _block_spans(blocks: List[Dict[str, Any]]) -> Dict[str, Tuple[int, int]]:
+    """Character span of every block inside the joined document text.
+
+    The canonical text is the block texts joined by a blank line, so these offsets
+    are exact and a chunk can later report where in the source it starts and ends.
+    """
+    spans: Dict[str, Tuple[int, int]] = {}
+    cursor = 0
+    for item in blocks:
+        text = item.get("text") or ""
+        spans[item["block_id"]] = (cursor, cursor + len(text))
+        cursor += len(text) + 2
+    return spans
+
+
+def _locate(blocks: List[Dict[str, Any]], spans: Dict[str, Tuple[int, int]], offset: int
+            ) -> Tuple[str, Optional[int]]:
+    """Heading path and page number covering a character offset."""
+    for item in blocks:
+        span = spans.get(item["block_id"])
+        if span and span[0] <= offset < max(span[1], span[0] + 1):
+            return item.get("heading_path", ""), item.get("page_no")
+    for item in blocks:
+        span = spans.get(item["block_id"])
+        if span and offset < span[0]:
+            return item.get("heading_path", ""), item.get("page_no")
+    last = blocks[-1] if blocks else {}
+    return last.get("heading_path", ""), last.get("page_no")
+
+
+def _snap_to_boundary(text: str, limit: int) -> int:
+    """Move a hard cut back to the last sentence boundary inside the window."""
+    if limit >= len(text):
+        return len(text)
+    window = text[:limit]
+    best = 0
+    for match in re.finditer(r"[。！？!？；;\n]", window):
+        best = match.end()
+    # Only honour the boundary when it does not throw away most of the window.
+    return best if best >= int(limit * 0.6) else limit
+
+
+def _next_cut(text: str, start: int, budget: int, policy: Dict[str, Any]) -> int:
+    """End offset of the window that starts at ``start`` under the policy budget."""
+    if start >= len(text):
+        return len(text)
+    if policy.get("measure") == "TOKEN":
+        consumed = 0
+        position = start
+        raw = len(text)
+        while position < len(text):
+            step = min(64, len(text) - position)
+            consumed += estimate_tokens(text[position:position + step])
+            position += step
+            if consumed >= budget:
+                raw = position
+                break
+    else:
+        raw = min(len(text), start + budget)
+    if policy.get("respectSentence"):
+        raw = start + _snap_to_boundary(text[start:raw], raw - start)
+    if raw <= start:
+        raw = min(len(text), start + max(1, budget // 2))
+    return max(raw, start + 1) if raw < len(text) else len(text)
+
+
+def _overlap_chars(policy: Dict[str, Any]) -> int:
+    """Overlap expressed in characters; a token overlap is roughly two chars."""
+    overlap = int(policy.get("chunkOverlap") or 0)
+    return overlap * 2 if policy.get("measure") == "TOKEN" else overlap
+
+
+def _chunk_type_for(block_type: str) -> str:
+    if block_type == BLOCK_TABLE:
+        return "TABLE"
+    if block_type == BLOCK_CODE:
+        return "CODE"
+    if block_type == BLOCK_HEADING:
+        return "HEADING"
+    return "PARAGRAPH"
+
+
+def _make_unit(seq: int, content: str, heading_path: str, page_no: Optional[int],
+               block_type: str, block_ids: List[str], spans: Dict[str, Tuple[int, int]],
+               policy: Dict[str, Any], parent_unit_id: Optional[str] = None,
+               chunk_type: Optional[str] = None, overlap_prefix: str = "") -> Dict[str, Any]:
+    """One retrieval unit carrying every boundary a citation may need to explain."""
+    start = spans.get(block_ids[0], (None, None))[0] if block_ids else None
+    end = spans.get(block_ids[-1], (None, None))[1] if block_ids else None
+    return {
+        "unit_id": "U%d" % seq,
+        "seq": seq,
+        "heading_path": heading_path or "",
+        "page_no": page_no,
+        "page_end": page_no,
+        "block_type": block_type,
+        "chunk_type": chunk_type or _chunk_type_for(block_type),
+        "block_ids": list(block_ids),
+        "content": content,
+        "content_hash": hashlib.sha256(content.encode("utf-8")).hexdigest(),
+        "char_start": start,
+        "char_end": end,
+        "token_count": estimate_tokens(content),
+        "parent_unit_id": parent_unit_id,
+        "overlap_prefix": overlap_prefix,
+        "strategy": policy.get("strategy", "SEMANTIC"),
+    }
+
+
+def _unit_text(items: List[Dict[str, Any]]) -> str:
+    return "\n\n".join(item["text"] for item in items if item.get("text"))
+
+
 def build_units(
     blocks: List[Dict[str, Any]],
     size: Optional[int] = None,
     overlap: Optional[int] = None,
+    policy: Optional[Dict[str, Any]] = None,
 ) -> List[Dict[str, Any]]:
-    """Group blocks into retrieval/extraction units that fit the configured window.
+    """Group blocks into retrieval/extraction units under a chunking policy.
 
     Tables and code blocks are never merged with prose: mixing them would make the
     resulting unit unreadable for an operator reviewing the source of a card.
     """
-    window = int(size or settings.chunk_size)
-    margin = int(overlap or settings.chunk_overlap)
+    active = chunk_policy.normalize(policy) if policy else chunk_policy.default_policy(size, overlap)
+    strategy = active["strategy"]
+    if strategy == "FIXED":
+        units = _units_fixed(blocks, active)
+    elif strategy == "SENTENCE":
+        units = _units_sentence(blocks, active)
+    elif strategy == "STRUCTURE":
+        units = _units_structure(blocks, active)
+    elif strategy == "PARENT_CHILD":
+        units = _units_parent_child(blocks, active)
+    else:
+        units = _units_semantic(blocks, active)
+    return _finalize(units, blocks, active)
+
+
+def _units_semantic(blocks: List[Dict[str, Any]], policy: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """Accumulate blocks up to the window, cutting on heading changes."""
+    window = int(policy["chunkSize"])
+    keep_structure = bool(policy.get("keepStructure"))
     units: List[Dict[str, Any]] = []
     buffer: List[Dict[str, Any]] = []
+    tail = ""
+
+    def flush() -> None:
+        nonlocal tail
+        if not buffer:
+            return
+        content = _unit_text(buffer)
+        if not has_content(content):
+            buffer.clear()
+            return
+        first = buffer[0]
+        units.append(_make_unit(
+            len(units) + 1, content, first.get("heading_path", ""), first.get("page_no"),
+            first["block_type"], [item["block_id"] for item in buffer], {},
+            policy, overlap_prefix=tail))
+        # The next unit carries the tail of this one as context without duplicating it
+        # in the indexed text: retrieval gains the bridge, storage stays clean.
+        gap = _overlap_chars(policy)
+        tail = content[-gap:] if gap else ""
+        buffer.clear()
+
+    for item in blocks:
+        if keep_structure and item["block_type"] in {BLOCK_TABLE, BLOCK_CODE}:
+            flush()
+            buffer = [item]
+            flush()
+            buffer = []
+            continue
+        projected = _measure(_unit_text(buffer + [item]), policy)
+        if buffer and projected > window and (
+                not keep_structure or item["heading_path"] == buffer[-1]["heading_path"]):
+            flush()
+        buffer.append(item)
+        if _measure(_unit_text(buffer), policy) >= window:
+            flush()
+    flush()
+    return _merge_small_units(units, policy)
+
+
+def _units_sentence(blocks: List[Dict[str, Any]], policy: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """Group whole sentences up to the window, so no unit ends mid-sentence."""
+    window = int(policy["chunkSize"])
+    units: List[Dict[str, Any]] = []
+    buffer: List[str] = []
+    ids: List[str] = []
+    meta: Dict[str, Any] = {}
+
+    def flush() -> None:
+        if not buffer:
+            return
+        content = " ".join(buffer).strip()
+        if not has_content(content):
+            buffer.clear()
+            ids.clear()
+            return
+        units.append(_make_unit(
+            len(units) + 1, content, meta.get("heading_path", ""), meta.get("page_no"),
+            meta.get("block_type", BLOCK_PARAGRAPH), list(ids), {}, policy))
+        buffer.clear()
+        ids.clear()
+
+    for item in blocks:
+        text = item.get("text") or ""
+        if not text.strip():
+            continue
+        for sentence in re.split(r"(?<=[。！？!？；;])\s*|\n+", text):
+            piece = sentence.strip()
+            if not piece:
+                continue
+            if buffer and _measure(" ".join(buffer + [piece]), policy) > window:
+                flush()
+                meta = {"heading_path": item.get("heading_path", ""),
+                        "page_no": item.get("page_no"),
+                        "block_type": item["block_type"]}
+            elif not buffer:
+                meta = {"heading_path": item.get("heading_path", ""),
+                        "page_no": item.get("page_no"),
+                        "block_type": item["block_type"]}
+            buffer.append(piece)
+            if item["block_id"] not in ids:
+                ids.append(item["block_id"])
+    flush()
+    return _merge_small_units(units, policy)
+
+
+def _units_fixed(blocks: List[Dict[str, Any]], policy: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """Sliding window over the cleaned text with a real overlap."""
+    spans = _block_spans(blocks)
+    text = "\n\n".join(item.get("text") or "" for item in blocks)
+    window = int(policy["chunkSize"])
+    gap = _overlap_chars(policy)
+    units: List[Dict[str, Any]] = []
+    start = 0
+    while start < len(text):
+        end = _next_cut(text, start, window, policy)
+        piece = text[start:end]
+        if has_content(piece):
+            heading_path, page_no = _locate(blocks, spans, start)
+            block_ids = [item["block_id"] for item in blocks
+                         if spans[item["block_id"]][0] < end and spans[item["block_id"]][1] > start]
+            units.append(_make_unit(
+                len(units) + 1, piece, heading_path, page_no, BLOCK_PARAGRAPH,
+                block_ids, spans, policy))
+        if end >= len(text):
+            break
+        start = max(end - gap, start + 1)
+    return units
+
+
+def _units_structure(blocks: List[Dict[str, Any]], policy: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """One unit per heading path; only oversized sections are split."""
+    window = int(policy["chunkSize"])
+    limit = max(window, int(window * 1.5))
+    units: List[Dict[str, Any]] = []
+    buffer: List[Dict[str, Any]] = []
+    current_path = None
 
     def flush() -> None:
         if not buffer:
@@ -573,71 +840,130 @@ def build_units(
             buffer.clear()
             return
         first = buffer[0]
-        units.append({
-            "unit_id": "U%d" % (len(units) + 1),
-            "seq": len(units) + 1,
-            "heading_path": first.get("heading_path", ""),
-            "page_no": first.get("page_no"),
-            "block_type": first["block_type"],
-            "block_ids": [item["block_id"] for item in buffer],
-            "content": content,
-            "content_hash": hashlib.sha256(content.encode("utf-8")).hexdigest(),
-        })
+        block_ids = [item["block_id"] for item in buffer]
+        if _measure(content, policy) <= limit:
+            units.append(_make_unit(
+                len(units) + 1, content, first.get("heading_path", ""), first.get("page_no"),
+                first["block_type"], block_ids, {}, policy))
+        else:
+            for piece in _hard_split(content, window, policy):
+                units.append(_make_unit(
+                    len(units) + 1, piece, first.get("heading_path", ""), first.get("page_no"),
+                    first["block_type"], block_ids, {}, policy))
         buffer.clear()
 
     for item in blocks:
-        if item["block_type"] in {BLOCK_TABLE, BLOCK_CODE}:
+        path = item.get("heading_path", "")
+        if current_path is not None and path != current_path:
             flush()
-            buffer = [item]
-            flush()
-            buffer = []
-            continue
-        projected = len(_unit_text(buffer + [item]))
-        if buffer and projected > window and item["heading_path"] == buffer[-1]["heading_path"]:
-            flush()
+        current_path = path
         buffer.append(item)
-        if len(_unit_text(buffer)) >= window:
-            flush()
     flush()
-    return _split_oversized(units, window, margin)
+    return units
 
 
-def _unit_text(items: List[Dict[str, Any]]) -> str:
-    return "\n\n".join(item["text"] for item in items if item.get("text"))
+def _units_parent_child(blocks: List[Dict[str, Any]], policy: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """Section-level parent units, each followed by its window-sized children.
 
+    Retrieval matches the precise child; the parent keeps the surrounding context
+    that makes an answer readable. Parents are emitted first so persistence can link
+    every child to an id that already exists.
+    """
+    window = int(policy["chunkSize"])
+    units: List[Dict[str, Any]] = []
+    groups: List[Tuple[str, List[Dict[str, Any]]]] = []
+    current_path = None
+    for item in blocks:
+        path = item.get("heading_path", "") or ""
+        if not groups or path != current_path:
+            groups.append((path, []))
+            current_path = path
+        groups[-1][1].append(item)
 
-def _split_oversized(
-    units: List[Dict[str, Any]], window: int, margin: int
-) -> List[Dict[str, Any]]:
-    """Hard-split any unit still above the window and renumber the result."""
-    if margin >= window:
-        margin = max(0, window // 4)
-    result: List[Dict[str, Any]] = []
-    for unit in units:
-        content = unit["content"]
-        if len(content) <= window:
-            result.append(unit)
+    def new_unit(content: str, heading_path: str, page_no: Optional[int], block_type: str,
+                 block_ids: List[str], parent_unit_id: Optional[str] = None,
+                 chunk_type: Optional[str] = None) -> None:
+        units.append(_make_unit(len(units) + 1, content, heading_path, page_no, block_type,
+                                block_ids, {}, policy, parent_unit_id=parent_unit_id,
+                                chunk_type=chunk_type))
+
+    for _path, group in groups:
+        content = _unit_text(group)
+        if not has_content(content):
             continue
-        start = 0
-        while start < len(content):
-            piece = content[start:start + window]
-            if has_content(piece):
-                result.append({
-                    "unit_id": "U%d" % (len(result) + 1),
-                    "seq": len(result) + 1,
-                    "heading_path": unit["heading_path"],
-                    "page_no": unit["page_no"],
-                    "block_type": unit["block_type"],
-                    "block_ids": unit["block_ids"],
-                    "content": piece,
-                    "content_hash": hashlib.sha256(piece.encode("utf-8")).hexdigest(),
-                })
-            if start + window >= len(content):
-                break
-            start = max(start + window - margin, start + 1)
-    for index, unit in enumerate(result, start=1):
+        block_ids = [item["block_id"] for item in group]
+        heading_path = group[0].get("heading_path", "")
+        page_no = group[0].get("page_no")
+        new_unit(content, heading_path, page_no, BLOCK_HEADING, block_ids, chunk_type="SECTION")
+        parent_unit_id = units[-1]["unit_id"]
+        if _measure(content, policy) <= window:
+            continue
+        child_policy = dict(policy)
+        child_policy["strategy"] = "SEMANTIC"
+        for child in _units_semantic(group, child_policy):
+            if not has_content(child["content"]):
+                continue
+            new_unit(child["content"], child["heading_path"], child["page_no"],
+                     child["block_type"], child["block_ids"], parent_unit_id=parent_unit_id,
+                     chunk_type=child.get("chunk_type"))
+    return units
+
+
+def _hard_split(content: str, window: int, policy: Dict[str, Any]) -> List[str]:
+    """Split an oversized piece at sentence boundaries when the policy asks for it."""
+    pieces: List[str] = []
+    start = 0
+    gap = _overlap_chars(policy)
+    while start < len(content):
+        end = _next_cut(content, start, window, policy)
+        piece = content[start:end]
+        if has_content(piece):
+            pieces.append(piece)
+        if end >= len(content):
+            break
+        start = max(end - gap, start + 1)
+    return pieces
+
+
+def _merge_small_units(units: List[Dict[str, Any]], policy: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """Fold orphan fragments into a neighbour so no chunk is too thin to answer from."""
+    min_size = int(policy.get("minChunkSize") or 0)
+    window = int(policy["chunkSize"])
+    if min_size <= 0 or len(units) < 2:
+        return units
+    merged: List[Dict[str, Any]] = []
+    for unit in units:
+        if merged and _measure(unit["content"], policy) < min_size \
+                and unit.get("heading_path") == merged[-1].get("heading_path") \
+                and _measure(merged[-1]["content"], policy) + _measure(
+                    unit["content"], policy) <= window * 1.5:
+            previous = merged[-1]
+            previous["content"] = previous["content"] + "\n\n" + unit["content"]
+            previous["content_hash"] = hashlib.sha256(
+                previous["content"].encode("utf-8")).hexdigest()
+            previous["block_ids"] = previous["block_ids"] + unit["block_ids"]
+            previous["token_count"] = estimate_tokens(previous["content"])
+            continue
+        merged.append(unit)
+    return merged
+
+
+def _finalize(units: List[Dict[str, Any]], blocks: List[Dict[str, Any]],
+              policy: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """Renumber units and fill spans / token counts from the canonical text."""
+    spans = _block_spans(blocks)
+    result: List[Dict[str, Any]] = []
+    for index, unit in enumerate(units, start=1):
+        block_ids = [bid for bid in unit.get("block_ids", []) if bid in spans]
         unit["unit_id"] = "U%d" % index
         unit["seq"] = index
+        unit["block_ids"] = block_ids
+        unit["char_start"] = spans[block_ids[0]][0] if block_ids else None
+        unit["char_end"] = spans[block_ids[-1]][1] if block_ids else None
+        unit["page_end"] = unit.get("page_end") or unit.get("page_no")
+        unit["token_count"] = estimate_tokens(unit.get("content", ""))
+        unit["strategy"] = policy.get("strategy", "SEMANTIC")
+        result.append(unit)
     return result
 
 
@@ -664,10 +990,11 @@ def build_standard_document(
     sha256: str,
     blocks: List[Dict[str, Any]],
     page_count: int = 0,
+    policy: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     """Assemble the canonical document model shared by every consumer."""
     text = "\n\n".join(item["text"] for item in blocks if item.get("text"))
-    units = build_units(blocks)
+    units = build_units(blocks, policy=policy)
     sections = build_sections(blocks)
     return {
         "doc_id": hashlib.sha256(("%s:%s" % (filename, sha256)).encode("utf-8")).hexdigest()[:32],
@@ -687,6 +1014,10 @@ def build_standard_document(
             "units": len(units),
             "tables": sum(1 for item in blocks if item["block_type"] == BLOCK_TABLE),
             "chars": len(text),
+            "tokens": sum(int(unit.get("token_count") or 0) for unit in units),
+            "chunkStrategy": (units[0].get("strategy") if units
+                              else (policy or {}).get("strategy", "SEMANTIC")),
+            "chunkPolicy": policy or chunk_policy.default_policy(),
         },
     }
 
@@ -695,10 +1026,18 @@ def to_legacy_chunks(standard: Dict[str, Any]) -> List[Dict[str, Any]]:
     """Render units in the historical chunk shape so persistence stays unchanged."""
     return [{
         "seq": unit["seq"],
+        "unit_id": unit["unit_id"],
         "page_no": unit.get("page_no"),
+        "page_end": unit.get("page_end"),
+        "char_start": unit.get("char_start"),
+        "char_end": unit.get("char_end"),
+        "token_count": unit.get("token_count"),
         "heading_path": unit.get("heading_path", ""),
         "content": unit["content"],
         "content_hash": unit["content_hash"],
-        "unit_id": unit["unit_id"],
+        "chunk_type": unit.get("chunk_type") or "PARAGRAPH",
         "block_type": unit.get("block_type", ""),
+        "parent_unit_id": unit.get("parent_unit_id"),
+        "overlap_prefix": unit.get("overlap_prefix", ""),
+        "strategy": unit.get("strategy", ""),
     } for unit in standard.get("units", [])]

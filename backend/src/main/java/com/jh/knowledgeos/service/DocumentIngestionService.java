@@ -35,6 +35,7 @@ public class DocumentIngestionService {
     private final IngestionObservabilityService observabilityService;
     private final SourceFileStorageService sourceFileStorage;
     private final PlatformEventPublisher publisher;
+    private final ChunkPolicyService chunkPolicyService;
 
     public DocumentIngestionService(
             KnowledgeMapper mapper,
@@ -46,7 +47,8 @@ public class DocumentIngestionService {
             IndexOutboxService outboxService,
             IngestionObservabilityService observabilityService,
             SourceFileStorageService sourceFileStorage,
-            PlatformEventPublisher publisher) {
+            PlatformEventPublisher publisher,
+            ChunkPolicyService chunkPolicyService) {
         this.mapper = mapper;
         this.aiClient = aiClient;
         this.extractionService = extractionService;
@@ -57,6 +59,7 @@ public class DocumentIngestionService {
         this.observabilityService = observabilityService;
         this.sourceFileStorage = sourceFileStorage;
         this.publisher = publisher;
+        this.chunkPolicyService = chunkPolicyService;
     }
 
     /**
@@ -125,7 +128,10 @@ public class DocumentIngestionService {
             }
             observabilityService.event(run.getId(), "PARSE_STARTED", "PARSE", "RUNNING",
                     "开始解析文档", null);
-            Map<String, Object> parsed = aiClient.parse(file);
+            // The knowledge base owns its chunking policy: the parser only applies it, so a
+            // manual can be re-cut by section while a report stays window-based.
+            Map<String, Object> parsed =
+                    aiClient.parse(file, chunkPolicyService.policyFor(knowledgeBaseId));
             List<Map<String, Object>> parsedChunks =
                     parsed.get("chunks") instanceof List
                             ? (List<Map<String, Object>>) parsed.get("chunks")
@@ -376,11 +382,15 @@ public class DocumentIngestionService {
         // Parent-child linking walks the heading hierarchy, so the stack has to survive across
         // batches: a top-level section in batch two still belongs to a heading in batch one.
         Map<String, Long> unitIdByHeading = new LinkedHashMap<String, Long>();
+        // Parser unit ids (P1, U2, ...) map to database ids, so a parent-child split can
+        // link a child to the section the parser emitted immediately before it.
+        Map<String, Long> idByParserUnitId = new LinkedHashMap<String, Long>();
 
         for (int start = 0; start < parsedChunks.size(); start += DB_BATCH_SIZE) {
             int end = Math.min(start + DB_BATCH_SIZE, parsedChunks.size());
             List<Map<String, Object>> batch = parsedChunks.subList(start, end);
-            persistChunkBatch(knowledgeBaseId, source, document, batch, indexChunks, revision, unitIdByHeading);
+            persistChunkBatch(knowledgeBaseId, source, document, batch, indexChunks, revision,
+                    unitIdByHeading, idByParserUnitId);
         }
         return indexChunks;
     }
@@ -392,7 +402,8 @@ public class DocumentIngestionService {
             List<Map<String, Object>> batch,
             List<Map<String, Object>> output,
             int revision,
-            Map<String, Long> unitIdByHeading) throws Exception {
+            Map<String, Long> unitIdByHeading,
+            Map<String, Long> idByParserUnitId) throws Exception {
         List<Map<String, Object>> contentRows = new ArrayList<Map<String, Object>>(batch.size());
         List<String> unitCodes = new ArrayList<String>(batch.size());
         List<Map<String, Object>> copiedChunks = new ArrayList<Map<String, Object>>(batch.size());
@@ -451,7 +462,7 @@ public class DocumentIngestionService {
             }
 
             String headingPath = nullableString(chunk.get("heading_path"));
-            Long parentId = parentIdFor(headingPath, unitIdByHeading);
+            Long parentId = parentIdFor(chunk, headingPath, unitIdByHeading, idByParserUnitId);
             if (parentId != null) {
                 Map<String, Object> parentRow = new LinkedHashMap<String, Object>();
                 parentRow.put("unitCode", unitCode);
@@ -459,6 +470,10 @@ public class DocumentIngestionService {
                 parentRows.add(parentRow);
             }
             unitIdByHeading.put(headingPath, contentUnitId);
+            String parserUnitId = nullableString(chunk.get("unit_id"));
+            if (parserUnitId != null && !parserUnitId.isEmpty()) {
+                idByParserUnitId.put(parserUnitId, contentUnitId);
+            }
 
             Integer pageNo = toInteger(chunk.get("page_no"));
             Map<String, Object> location = new LinkedHashMap<String, Object>();
@@ -498,6 +513,22 @@ public class DocumentIngestionService {
      * This is what the design calls parent-child chunking: retrieval hits the precise chunk, then
      * expands to the parent for enough context to answer.
      */
+    /**
+     * Parent of a chunk: the parser knows it exactly under parent-child chunking, the
+     * heading hierarchy is the fallback when the parser did not say.
+     */
+    private Long parentIdFor(Map<String, Object> chunk, String headingPath,
+            Map<String, Long> unitIdByHeading, Map<String, Long> idByParserUnitId) {
+        String explicit = nullableString(chunk.get("parent_unit_id"));
+        if (explicit != null && !explicit.isEmpty()) {
+            Long parentId = idByParserUnitId.get(explicit);
+            if (parentId != null) {
+                return parentId;
+            }
+        }
+        return parentIdFor(headingPath, unitIdByHeading);
+    }
+
     private Long parentIdFor(String headingPath, Map<String, Long> unitIdByHeading) {
         if (headingPath == null || headingPath.isEmpty()) return null;
         String best = null;

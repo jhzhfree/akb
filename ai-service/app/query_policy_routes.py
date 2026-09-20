@@ -2,16 +2,49 @@
 
 The operations console edits one policy object and every node of the consumer pipeline
 (routing, rewrite, recall, fusion, rerank, answer gate) reads from it on the next query.
+
+Several named strategies can coexist: an operator clones the running one, tunes the
+clone, and switches the whole console over only when the benchmark agrees. That is what
+makes a retrieval change reversible instead of a one-way edit of the live policy.
 """
 
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, HTTPException
-from pydantic import ValidationError
+from pydantic import BaseModel, Field, ValidationError
 
-from app.core.query_policy import default_policy, load_policy, policy_schema, public_policy, reset_policy, save_policy
+from app.core.query_policy import (
+    activate_profile,
+    create_profile,
+    default_policy,
+    delete_profile,
+    list_profiles,
+    load_policy,
+    policy_schema,
+    public_policy,
+    rename_profile,
+    reset_policy,
+    save_policy,
+    update_profile,
+)
 
 router = APIRouter()
+
+
+class ProfileCreate(BaseModel):
+    name: str = Field(..., min_length=1, max_length=40)
+    label: Optional[str] = None
+    base: Optional[str] = None
+    policy: Optional[Dict[str, Any]] = None
+
+
+class ProfilePatch(BaseModel):
+    policy: Optional[Dict[str, Any]] = None
+
+
+class ProfileRename(BaseModel):
+    label: Optional[str] = None
+    newName: Optional[str] = None
 
 
 @router.get("/ai/settings/query-policy")
@@ -46,3 +79,58 @@ def read_query_policy_schema() -> Dict[str, Any]:
 def read_query_policy_defaults() -> Dict[str, Any]:
     """Return the environment-seeded defaults without touching the stored policy."""
     return {"policy": default_policy().model_dump()}
+
+
+@router.get("/ai/settings/query-policy/profiles")
+def read_query_policy_profiles() -> Dict[str, Any]:
+    """List every saved strategy and which one is live."""
+    return list_profiles()
+
+
+@router.post("/ai/settings/query-policy/profiles")
+def add_query_policy_profile(body: ProfileCreate) -> Dict[str, Any]:
+    """Create a strategy by cloning the active one, the defaults, or a named one."""
+    try:
+        return create_profile(body.name, body.label, body.base, body.policy)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except ValidationError as exc:
+        raise HTTPException(status_code=400, detail="查询策略配置无效：%s" % exc.errors())
+
+
+@router.put("/ai/settings/query-policy/profiles/{name}")
+def patch_query_policy_profile(name: str, body: ProfilePatch) -> Dict[str, Any]:
+    """Merge a console patch into one saved strategy."""
+    try:
+        return update_profile(name, body.policy or {})
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except ValidationError as exc:
+        raise HTTPException(status_code=400, detail="查询策略配置无效：%s" % exc.errors())
+
+
+@router.post("/ai/settings/query-policy/profiles/{name}/rename")
+def rename_query_policy_profile(name: str, body: ProfileRename) -> Dict[str, Any]:
+    """Rename a strategy or change its display label."""
+    try:
+        return rename_profile(name, body.label, body.newName)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@router.post("/ai/settings/query-policy/profiles/{name}/activate")
+def activate_query_policy_profile(name: str) -> Dict[str, Any]:
+    """Switch every following query to another saved strategy."""
+    try:
+        return activate_profile(name)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@router.delete("/ai/settings/query-policy/profiles/{name}")
+def delete_query_policy_profile(name: str) -> Dict[str, Any]:
+    """Delete a saved strategy; the live one and the last survivor are protected."""
+    try:
+        return delete_profile(name)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))

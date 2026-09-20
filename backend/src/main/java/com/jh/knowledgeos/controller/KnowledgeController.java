@@ -2,10 +2,13 @@ package com.jh.knowledgeos.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.jh.knowledgeos.common.ApiResponse;
+import com.jh.knowledgeos.domain.KnowledgeBase;
 import com.jh.knowledgeos.domain.User;
 import com.jh.knowledgeos.service.AuthContext;
+import com.jh.knowledgeos.service.ChunkPolicyService;
 import com.jh.knowledgeos.service.KnowledgeBaseAccessService;
 import com.jh.knowledgeos.dto.AdjudicateRequest;
+import com.jh.knowledgeos.dto.ConflictAdjudicateRequest;
 import com.jh.knowledgeos.dto.ConflictResolveRequest;
 import com.jh.knowledgeos.dto.ExtractRequest;
 import com.jh.knowledgeos.dto.QueryRequest;
@@ -29,6 +32,7 @@ import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -44,6 +48,7 @@ import javax.validation.Valid;
 import java.io.UnsupportedEncodingException;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -69,6 +74,7 @@ public class KnowledgeController {
     private final EntityGovernanceService entityGovernanceService;
     private final KnowledgeBasePurgeService purgeService;
     private final KnowledgeBaseAccessService accessService;
+    private final ChunkPolicyService chunkPolicyService;
 
     public KnowledgeController(
             KnowledgeService service,
@@ -84,7 +90,8 @@ public class KnowledgeController {
             KnowledgeLifecycleService knowledgeLifecycleService,
             EntityGovernanceService entityGovernanceService,
             KnowledgeBasePurgeService purgeService,
-            KnowledgeBaseAccessService accessService) {
+            KnowledgeBaseAccessService accessService,
+            ChunkPolicyService chunkPolicyService) {
         this.service = service;
         this.objectMapper = objectMapper;
         this.aclContextResolver = aclContextResolver;
@@ -99,6 +106,41 @@ public class KnowledgeController {
         this.entityGovernanceService = entityGovernanceService;
         this.purgeService = purgeService;
         this.accessService = accessService;
+        this.chunkPolicyService = chunkPolicyService;
+    }
+
+    @GetMapping("/settings/chunk-policy")
+    @Operation(summary = "读取知识库分块策略与可选算法（设计 §4.1 分块策略）")
+    public ApiResponse<Object> readChunkPolicy(
+            @RequestParam(value = "kb", required = false) Long kb) {
+        Map<String, Object> payload = new LinkedHashMap<String, Object>();
+        payload.putAll(chunkPolicyService.policy(resolveKb(kb)));
+        payload.put("schema", chunkPolicyService.schema());
+        return ApiResponse.ok(payload);
+    }
+
+    @PutMapping("/settings/chunk-policy")
+    @Operation(summary = "保存知识库分块策略（下次接入生效，已有文档需重新接入才能重切）")
+    public ApiResponse<Object> saveChunkPolicy(
+            @RequestParam(value = "kb", required = false) Long kb,
+            @RequestBody(required = false) Map<String, Object> payload) {
+        return ApiResponse.ok(chunkPolicyService.save(resolveKb(kb), payload));
+    }
+
+    @PostMapping("/settings/chunk-policy/reset")
+    @Operation(summary = "恢复内置默认分块策略")
+    public ApiResponse<Object> resetChunkPolicy(
+            @RequestParam(value = "kb", required = false) Long kb) {
+        return ApiResponse.ok(chunkPolicyService.reset(resolveKb(kb)));
+    }
+
+    /** Knowledge base of the request, defaulting to the first one the caller may see. */
+    private Long resolveKb(Long kb) {
+        if (kb != null) {
+            return kb;
+        }
+        List<KnowledgeBase> bases = knowledgeBaseService.list();
+        return bases.isEmpty() ? 1L : bases.get(0).getId();
     }
 
     @PostMapping("/lifecycle/{kb}/expire")
@@ -421,6 +463,21 @@ public class KnowledgeController {
             @PathVariable Long id,
             @Valid @RequestBody ConflictResolveRequest request) {
         return ApiResponse.ok(service.resolveConflict(id, request.getStatus(), request.getResolution()));
+    }
+
+    @GetMapping("/conflicts/{id}/targets")
+    @Operation(summary = "冲突双方对象对照：返回待比对的两侧内容，而非仅对象编码")
+    public ApiResponse<Object> conflictTargets(@PathVariable Long id) {
+        return ApiResponse.ok(service.conflictTargets(id));
+    }
+
+    @PostMapping("/conflicts/{id}/adjudicate")
+    @Operation(summary = "裁决知识冲突：保留一方或双弃，并同步两侧对象状态与快照")
+    public ApiResponse<Object> adjudicateConflict(
+            @PathVariable Long id,
+            @Valid @RequestBody ConflictAdjudicateRequest request) {
+        return ApiResponse.ok(service.adjudicateConflict(
+                id, request.getDecision(), request.getComment(), request.getReviewer()));
     }
 
     @GetMapping("/graph/{kb}/{code}")

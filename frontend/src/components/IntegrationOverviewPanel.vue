@@ -167,7 +167,8 @@ const loading = ref(false)
 
 /** 集成模块的二级入口：协议适配与凭证管理。 */
 const entries = [
-  { key:'integration.services', icon:'🔌', label:'服务与 API' },
+  { key:'integration.services', icon:'🔌', label:'服务' },
+  { key:'integration.api', icon:'⌁', label:'API' },
   { key:'integration.mcp', icon:'🧩', label:'MCP' },
   { key:'integration.sse', icon:'⇉', label:'SSE' },
   { key:'integration.credentials', icon:'🔑', label:'凭证' },

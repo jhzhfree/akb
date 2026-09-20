@@ -3,8 +3,9 @@
 import asyncio
 import shutil
 import uuid
-from typing import Dict, Any
-from fastapi import APIRouter, UploadFile, File, HTTPException
+from typing import Any, Dict, Optional
+from fastapi import APIRouter, UploadFile, File, Form, HTTPException
+from app.core import chunk_policy
 from app.core.config import UPLOAD_DIR
 from app.models.schemas import ExtractRequest, QueryRequest
 from app.services.document_parser import DocumentParser
@@ -33,16 +34,40 @@ entity_resolver = get_entity_resolver()
 
 
 @router.post("/ai/documents/parse")
-async def parse_document(file: UploadFile = File(...)):
-    """Parse an uploaded document into normalized text and chunks."""
+async def parse_document(
+    file: UploadFile = File(...),
+    policy: Optional[str] = Form(None),
+    strategy: Optional[str] = Form(None),
+    chunk_size: Optional[int] = Form(None),
+    chunk_overlap: Optional[int] = Form(None),
+):
+    """Parse an uploaded document into normalized text and chunks.
+
+    The backend owns the chunking policy of each knowledge base and forwards it here,
+    so a re-upload can be re-cut without restarting the AI service.
+    """
     safe = (file.filename or "upload").replace("/", "_").replace("\\", "_")
     path = UPLOAD_DIR / (uuid.uuid4().hex + "_" + safe)
     with path.open("wb") as f:
         shutil.copyfileobj(file.file, f)
+    payload: Dict[str, Any] = chunk_policy.parse_json(policy) or {}
+    if strategy:
+        payload["strategy"] = strategy
+    if chunk_size:
+        payload["chunkSize"] = chunk_size
+    if chunk_overlap:
+        payload["chunkOverlap"] = chunk_overlap
+    active = chunk_policy.normalize(payload) if payload else None
     try:
-        return await asyncio.to_thread(parser.parse, str(path), safe)
+        return await asyncio.to_thread(parser.parse, str(path), safe, active)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.get("/ai/settings/chunk-policy")
+def read_chunk_policy() -> Dict[str, Any]:
+    """Vocabulary, bounds and defaults of the chunking policy the parser accepts."""
+    return chunk_policy.schema()
 
 
 @router.post("/ai/okf/inspect")

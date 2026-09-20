@@ -19,9 +19,11 @@ corrupted or partial file can never disable querying.
 
 from __future__ import annotations
 
+import datetime
 import json
 import logging
 import os
+import re
 import threading
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -355,55 +357,242 @@ def default_policy() -> QueryPolicy:
     return QueryPolicy()
 
 
-def load_policy(force: bool = False) -> QueryPolicy:
-    """Return the effective policy, reading the persisted file on first use."""
+DEFAULT_PROFILE = "default"
+
+
+def _now() -> str:
+    return datetime.datetime.utcnow().replace(microsecond=0).isoformat() + "Z"
+
+
+def _summary_of(policy: "QueryPolicy") -> Dict[str, Any]:
+    """Console fingerprint of a profile: enough to compare two strategies at a glance."""
+    return {
+        "channels": [name for name, channel in policy.recall.channels.items() if channel.enabled],
+        "routingEnabled": policy.route.enabled,
+        "rerankEnabled": policy.rerank.enabled,
+        "rrfK": policy.fusion.rrfK,
+        "recallMultiplier": policy.recall.recallMultiplier,
+    }
+
+
+def _profile_name(raw: Any) -> str:
+    """Console-supplied profile ids are constrained: they end up in a file name space."""
+    name = str(raw or "").strip()
+    if not name:
+        raise ValueError("策略名称不能为空")
+    if len(name) > 40:
+        raise ValueError("策略名称不能超过 40 个字符")
+    if not re.fullmatch(r"[A-Za-z0-9_\-\u4e00-\u9fff]+", name):
+        raise ValueError("策略名称只能包含中英文、数字、下划线与短横线")
+    return name
+
+
+def _read_store() -> Dict[str, Any]:
+    """Read the persisted policy store, promoting a legacy single-policy file on the fly."""
+    store: Dict[str, Any] = {"active": DEFAULT_PROFILE, "profiles": {}}
+    if POLICY_FILE.exists():
+        try:
+            raw = json.loads(POLICY_FILE.read_text(encoding="utf-8"))
+        except Exception as exc:
+            logger.warning("query policy unreadable, falling back to defaults: %s", exc)
+            raw = {}
+        if isinstance(raw, dict):
+            profiles = raw.get("profiles")
+            if isinstance(profiles, dict) and profiles:
+                for name, entry in profiles.items():
+                    body = entry if isinstance(entry, dict) else {}
+                    payload = body.get("policy")
+                    store["profiles"][str(name)] = {
+                        "label": str(body.get("label") or name),
+                        "updatedAt": str(body.get("updatedAt") or ""),
+                        "policy": payload if isinstance(payload, dict) else {},
+                    }
+                store["active"] = str(raw.get("active") or DEFAULT_PROFILE)
+            else:
+                # Legacy layout: one anonymous policy becomes the default profile.
+                store["profiles"][DEFAULT_PROFILE] = {
+                    "label": "默认策略", "updatedAt": "", "policy": raw,
+                }
+    if store["active"] not in store["profiles"]:
+        store["active"] = next(iter(store["profiles"]), DEFAULT_PROFILE)
+    if not store["profiles"]:
+        store["profiles"][DEFAULT_PROFILE] = {"label": "默认策略", "updatedAt": "", "policy": {}}
+    return store
+
+
+def _validate(payload: Dict[str, Any]) -> "QueryPolicy":
+    """Validate a stored payload against the defaults so partial files still load."""
+    return QueryPolicy.model_validate(_deep_merge(default_policy().model_dump(), payload or {}))
+
+
+def _write_store(store: Dict[str, Any]) -> None:
+    """Write the whole store atomically so a crash cannot leave a half-written file."""
+    POLICY_FILE.parent.mkdir(parents=True, exist_ok=True)
+    tmp = POLICY_FILE.with_suffix(".json.tmp")
+    tmp.write_text(json.dumps(store, ensure_ascii=False, indent=2), encoding="utf-8")
+    os.chmod(tmp, POLICY_FILE_MODE)
+    tmp.replace(POLICY_FILE)
+
+
+def load_policy(force: bool = False) -> "QueryPolicy":
+    """Return the effective policy: the active profile's policy."""
     global _cache
     with _lock:
         if _cache is not None and not force:
             return _cache
-        seeded = default_policy()
-        if POLICY_FILE.exists():
-            try:
-                raw = json.loads(POLICY_FILE.read_text(encoding="utf-8"))
-                payload = raw if isinstance(raw, dict) else {}
-                _cache = QueryPolicy.model_validate(_deep_merge(seeded.model_dump(), payload))
-            except Exception as exc:
-                # A corrupted policy must not take question answering down.
-                logger.warning("query policy unreadable, falling back to defaults: %s", exc)
-                _cache = seeded
-        else:
-            _cache = seeded
+        store = _read_store()
+        entry = store["profiles"].get(store["active"]) or {}
+        _cache = _validate(entry.get("policy") if isinstance(entry, dict) else {})
         return _cache
 
 
-def save_policy(payload: Dict[str, Any]) -> QueryPolicy:
-    """Merge a console update into the stored policy and refresh the cache."""
+def save_policy(payload: Dict[str, Any]) -> "QueryPolicy":
+    """Merge a console update into the active profile and refresh the cache."""
     global _cache
     with _lock:
-        merged = _deep_merge(load_policy().model_dump(), payload or {})
+        store = _read_store()
+        name = store["active"]
+        entry = store["profiles"].get(name) or {"label": name, "updatedAt": "", "policy": {}}
+        merged = _deep_merge(_validate(entry.get("policy") or {}).model_dump(), payload or {})
         policy = QueryPolicy.model_validate(merged)
-        _persist(policy)
+        store["profiles"][name] = {
+            "label": entry.get("label") or name,
+            "updatedAt": _now(),
+            "policy": policy.model_dump(),
+        }
+        _write_store(store)
         _cache = policy
         return policy
 
 
-def reset_policy() -> QueryPolicy:
-    """Restore the built-in defaults and discard every console customization."""
+def reset_policy() -> "QueryPolicy":
+    """Restore the built-in defaults for the active profile, keeping other profiles."""
     global _cache
     with _lock:
+        store = _read_store()
+        name = store["active"]
+        entry = store["profiles"].get(name) or {}
         policy = default_policy()
-        _persist(policy)
+        store["profiles"][name] = {
+            "label": entry.get("label") or name,
+            "updatedAt": _now(),
+            "policy": policy.model_dump(),
+        }
+        _write_store(store)
         _cache = policy
         return policy
 
 
-def _persist(policy: QueryPolicy) -> None:
-    """Write the policy atomically so a crash cannot leave a half-written file."""
-    POLICY_FILE.parent.mkdir(parents=True, exist_ok=True)
-    tmp = POLICY_FILE.with_suffix(".json.tmp")
-    tmp.write_text(json.dumps(policy.model_dump(), ensure_ascii=False, indent=2), encoding="utf-8")
-    os.chmod(tmp, POLICY_FILE_MODE)
-    tmp.replace(POLICY_FILE)
+def list_profiles() -> Dict[str, Any]:
+    """Every saved strategy with the fingerprint the console compares them by."""
+    with _lock:
+        store = _read_store()
+        items: List[Dict[str, Any]] = []
+        for name, entry in store["profiles"].items():
+            policy = _validate(entry.get("policy") or {})
+            items.append({
+                "name": name,
+                "label": entry.get("label") or name,
+                "updatedAt": entry.get("updatedAt") or "",
+                "active": name == store["active"],
+                "summary": _summary_of(policy),
+            })
+        items.sort(key=lambda item: (not item["active"], item["name"]))
+        return {"active": store["active"], "profiles": items}
+
+
+def create_profile(name: str, label: Optional[str] = None, base: Optional[str] = None,
+                   policy: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    """Create a strategy by cloning another one (or the defaults), without activating it."""
+    with _lock:
+        clean = _profile_name(name)
+        store = _read_store()
+        if clean in store["profiles"]:
+            raise ValueError("策略已存在：%s" % clean)
+        source = policy if isinstance(policy, dict) and policy else None
+        if source is None:
+            donor = base or store["active"]
+            source = (store["profiles"].get(donor) or {}).get("policy") or {}
+        store["profiles"][clean] = {
+            "label": str(label or clean),
+            "updatedAt": _now(),
+            "policy": _validate(source).model_dump(),
+        }
+        _write_store(store)
+        return list_profiles()
+
+
+def update_profile(name: str, payload: Dict[str, Any]) -> Dict[str, Any]:
+    """Merge a console patch into one profile; only the active one invalidates the cache."""
+    global _cache
+    with _lock:
+        store = _read_store()
+        if name not in store["profiles"]:
+            raise ValueError("策略不存在：%s" % name)
+        entry = store["profiles"][name] or {}
+        merged = _deep_merge(_validate(entry.get("policy") or {}).model_dump(), payload or {})
+        policy = QueryPolicy.model_validate(merged)
+        store["profiles"][name] = {
+            "label": entry.get("label") or name,
+            "updatedAt": _now(),
+            "policy": policy.model_dump(),
+        }
+        _write_store(store)
+        if name == store["active"]:
+            _cache = policy
+        return list_profiles()
+
+
+def rename_profile(name: str, label: Optional[str] = None,
+                   new_name: Optional[str] = None) -> Dict[str, Any]:
+    """Rename a profile or change its display label, keeping it the active one if it was."""
+    with _lock:
+        store = _read_store()
+        if name not in store["profiles"]:
+            raise ValueError("策略不存在：%s" % name)
+        entry = store["profiles"].pop(name)
+        target = _profile_name(new_name) if new_name else name
+        if target in store["profiles"]:
+            store["profiles"][name] = entry
+            raise ValueError("策略已存在：%s" % target)
+        entry["label"] = str(label or entry.get("label") or target)
+        entry["updatedAt"] = _now()
+        store["profiles"][target] = entry
+        if store["active"] == name:
+            store["active"] = target
+        _write_store(store)
+        reset_cache()
+        return list_profiles()
+
+
+def delete_profile(name: str) -> Dict[str, Any]:
+    """Delete a profile; the active one and the last survivor are protected."""
+    global _cache
+    with _lock:
+        store = _read_store()
+        if name not in store["profiles"]:
+            raise ValueError("策略不存在：%s" % name)
+        if len(store["profiles"]) <= 1:
+            raise ValueError("至少需要保留一个检索策略")
+        if store["active"] == name:
+            raise ValueError("不能删除正在使用的策略，请先切换到其它策略")
+        del store["profiles"][name]
+        _write_store(store)
+        _cache = None
+        return list_profiles()
+
+
+def activate_profile(name: str) -> Dict[str, Any]:
+    """Switch every following query to another saved strategy."""
+    global _cache
+    with _lock:
+        store = _read_store()
+        if name not in store["profiles"]:
+            raise ValueError("策略不存在：%s" % name)
+        store["active"] = name
+        _write_store(store)
+        _cache = None
+        return list_profiles()
 
 
 def reset_cache() -> None:
@@ -419,6 +608,9 @@ def public_policy(policy: Optional[QueryPolicy] = None) -> Dict[str, Any]:
     data["source"] = "file" if POLICY_FILE.exists() else "default"
     data["policyFile"] = str(POLICY_FILE)
     data["policyVersionDefault"] = POLICY_VERSION
+    profiles = list_profiles()
+    data["activeProfile"] = profiles["active"]
+    data["profiles"] = profiles["profiles"]
     return data
 
 

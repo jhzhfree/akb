@@ -7,6 +7,7 @@ import com.jh.knowledgeos.domain.KnowledgeSource;
 import com.jh.knowledgeos.mapper.KnowledgeMapper;
 import org.springframework.stereotype.Service;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.LinkedHashMap;
@@ -69,7 +70,13 @@ public class KnowledgeReadService {
     }
 
     public Map<String, Object> knowledgeDetail(Long kb, String objectType, String objectCode, List<String> permissionTags) {
-        Map<String, Object> object = mapper.getKnowledgeObject(kb, objectType, objectCode, permissionTags);
+        String type = objectType == null ? "" : objectType.toUpperCase();
+        // A chunk is addressable too: an operator reviewing a citation needs the raw unit,
+        // its evidence and its neighbours, not only the cards derived from it.
+        if ("CHUNK".equals(type) || "CONTENT_UNIT".equals(type)) {
+            return chunkDetail(kb, objectCode);
+        }
+        Map<String, Object> object = mapper.getKnowledgeObject(kb, type, objectCode, permissionTags);
         if (object == null) return new LinkedHashMap<String, Object>();
         Map<String, Object> result = new LinkedHashMap<String, Object>();
         result.put("object", object);
@@ -77,13 +84,54 @@ public class KnowledgeReadService {
         result.put("conflicts", mapper.listObjectConflicts(objectCode));
         result.put("reviews", mapper.listReviewsForObject(objectType, objectCode));
         result.put("assessments", mapper.listAssessmentsForObject(kb, objectType, objectCode));
-        result.put("versions", mapper.listKnowledgeVersions(kb, objectType, objectCode));
+        result.put("versions", mapper.listKnowledgeVersions(kb, type, objectCode));
         try {
             result.put("graph", graph(kb, objectCode, permissionTags, null, null));
         } catch (RuntimeException ex) {
             result.put("graph", new LinkedHashMap<String, Object>());
         }
         return result;
+    }
+
+    /**
+     * Detail of one content unit: the raw text a citation points at, the evidence that
+     * quotes it, and the neighbouring chunks that give the hit its context.
+     */
+    private Map<String, Object> chunkDetail(Long kb, String unitCode) {
+        Map<String, Object> object = mapper.getContentUnitObject(kb, unitCode);
+        Map<String, Object> result = new LinkedHashMap<String, Object>();
+        if (object == null) {
+            return result;
+        }
+        result.put("object", object);
+        result.put("evidence", mapper.listEvidenceForContentUnit(kb, unitCode));
+        Long documentId = toLong(object.get("documentId"));
+        Long unitId = toLong(object.get("id"));
+        if (documentId != null && unitId != null) {
+            result.put("neighbors", mapper.listNeighborContentUnits(documentId, unitId));
+        } else {
+            result.put("neighbors", new ArrayList<Map<String, Object>>());
+        }
+        result.put("conflicts", new ArrayList<Map<String, Object>>());
+        result.put("reviews", new ArrayList<Map<String, Object>>());
+        result.put("assessments", new ArrayList<Map<String, Object>>());
+        result.put("versions", new ArrayList<Map<String, Object>>());
+        result.put("graph", new LinkedHashMap<String, Object>());
+        return result;
+    }
+
+    private static Long toLong(Object value) {
+        if (value instanceof Number) {
+            return ((Number) value).longValue();
+        }
+        if (value == null) {
+            return null;
+        }
+        try {
+            return Long.valueOf(String.valueOf(value).trim());
+        } catch (NumberFormatException ignored) {
+            return null;
+        }
     }
 
     public Map<String, Object> capabilities() {

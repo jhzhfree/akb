@@ -10,11 +10,14 @@
         </p>
       </div>
       <div class="flex shrink-0 items-center gap-2">
+        <!-- V2.2：服务与凭证在知识集成内是两个 Tab，同一面板按入口聚焦到对应区块。 -->
+        <button class="kb-btn-outline" :class="{'kb-btn-primary':section==='services'}" @click="section='services'">服务</button>
+        <button class="kb-btn-outline" :class="{'kb-btn-primary':section==='credentials'}" @click="section='credentials'">凭证</button>
         <button class="kb-btn-outline" :disabled="loading" @click="loadAll">刷新</button>
       </div>
     </header>
 
-    <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+    <div v-if="section==='services'" class="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
       <MetricCard label="RESTful" :value="overview?.rest?.endpoints?.length ?? 0" hint="对外接口数" />
       <MetricCard label="MCP Tools" :value="overview?.mcp?.tools?.length ?? 0" hint="智能体可用工具" />
       <MetricCard label="SSE" :value="overview?.sse?.endpoints?.length ?? 0" hint="推送通道" />
@@ -91,7 +94,7 @@
       </article>
     </div>
 
-    <article class="kb-card mt-4">
+    <article v-if="section==='credentials'" class="kb-card mt-4">
       <div class="kb-card-head">
         <b class="text-sm">API Key 凭证</b>
         <div class="flex items-center gap-2">
@@ -146,7 +149,7 @@
       </div>
     </article>
 
-    <div class="mt-4 grid grid-cols-1 gap-4 xl:grid-cols-2">
+    <div v-if="section==='services'" class="mt-4 grid grid-cols-1 gap-4 xl:grid-cols-2">
       <article class="kb-card">
         <div class="kb-card-head"><b class="text-sm">接入示例</b><span class="kb-muted">复制即可联调</span></div>
         <div class="p-3">
@@ -266,7 +269,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { ExternalAuditRow, ExternalKeyRow, ExternalServiceOverview, KnowledgeBase } from '../types'
 import {
@@ -278,7 +281,12 @@ import { errorMessage as message } from '../utils/feedback'
 import MetricCard from './MetricCard.vue'
 import PanelState from './PanelState.vue'
 
-const props = defineProps<{ bases:KnowledgeBase[] }>()
+/** focus 由知识集成的 Tab 决定：服务 Tab 看协议与接入示例，凭证 Tab 看 API Key 与调用审计。 */
+const props = defineProps<{ bases:KnowledgeBase[]; focus?:'services'|'credentials' }>()
+const section = ref<'services'|'credentials'>(props.focus === 'credentials' ? 'credentials' : 'services')
+watch(() => props.focus, value => {
+  section.value = value === 'credentials' ? 'credentials' : 'services'
+})
 
 const overview = ref<ExternalServiceOverview | null>(null)
 const keys = ref<ExternalKeyRow[]>([])

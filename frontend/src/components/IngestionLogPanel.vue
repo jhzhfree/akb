@@ -1,5 +1,7 @@
 <template>
-<div class="ingestion-log" :class="{fixed:!!height}" :style="height?{height:`${height}px`}:undefined">
+<!-- 高度用 CSS 变量下发而非内联 height：窄屏列布局时可由媒体查询改回 auto，
+     且类名必须避开 Tailwind 的 .fixed（position:fixed），否则整块会脱离文档流浮在页面上。 -->
+<div class="ingestion-log" :class="{'log-fixed':!!height}" :style="height?{'--log-h':`${height}px`}:undefined">
   <div class="run-list">
     <button v-for="run in runs" :key="run.id" :class="{active:run.id===selectedId}" @click="$emit('select',run.id)">
       <span class="run-dot" :class="run.status.toLowerCase()">
@@ -54,15 +56,21 @@ if(el)el.scrollTop=el.scrollHeight})
 const tagType=(s:string):'success'|'danger'|'warning'|'info'=>s==='SUCCEEDED'?'success':s==='FAILED'?'danger':s==='RUNNING'?'warning':'info'
 </script>
 <style scoped>
-.ingestion-log{display:grid;
-grid-template-columns:300px 1fr;
+.ingestion-log{
+display:flex;
+align-items:stretch;
+align-content:stretch;
 min-height:330px;
 border:1px solid #e5e7eb;
 border-radius:10px;
+background:#fff;
 overflow:hidden}
-.run-list{border-right:1px solid #e5e7eb;
+/* 已上传文件列表：弹性定宽一列，自身独立滚动，不与右侧时间线互相挤压。 */
+.run-list{flex:0 0 clamp(220px,32%,300px);
+min-width:0;
+min-height:0;
+border-right:1px solid #e5e7eb;
 background:#fafafa;
-max-height:430px;
 overflow:auto}
 .run-list button{width:100%;
 border:0;
@@ -93,7 +101,11 @@ text-overflow:ellipsis;
 white-space:nowrap}
 .run-copy small{font-size:10px;
 color:#94a3b8}
-.event-timeline{padding:18px 22px;
+/* 日志时间线：吃掉剩余宽度，min-width/min-height:0 保证内容只在自身内部滚动。 */
+.event-timeline{flex:1;
+min-width:0;
+min-height:0;
+padding:18px 22px;
 overflow:auto}
 .run-summary{display:flex;
 justify-content:space-between;
@@ -127,14 +139,18 @@ color:#475569}
 color:#94a3b8}
 .empty-run,.event-empty{padding:24px;
 text-align:center}
-/* 固定高度模式：容器不再被内容撑长，运行列表与时间线各自在内部滚动。 */
-.ingestion-log.fixed{grid-template-rows:100%;min-height:0}
-.ingestion-log.fixed>.run-list,.ingestion-log.fixed>.event-timeline{max-height:none;min-height:0;height:100%;overflow:auto}
-@media(max-width:800px){.ingestion-log{grid-template-columns:1fr}
-.ingestion-log.fixed{grid-template-rows:38% 62%}
-.run-list{border-right:0;
+/* 固定高度模式：高度由宿主的 --log-h 决定，容器不再被内容撑长，两栏各自内部滚动。 */
+.ingestion-log.log-fixed{min-height:0;
+height:var(--log-h,330px)}
+/* 窄屏改为上下两栏：固定高度会把两栏一起压扁，这里交回内容高度、各自限高滚动。 */
+@media(max-width:800px){.ingestion-log{flex-direction:column}
+.ingestion-log.log-fixed{height:auto}
+.run-list{flex:none;
+width:auto;
+border-right:0;
 border-bottom:1px solid #e5e7eb;
 max-height:180px}
+.event-timeline{max-height:320px}
 }
 
 </style>
