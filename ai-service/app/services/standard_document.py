@@ -18,7 +18,7 @@ matter whether the source was a markdown file, a web page, a PDF or a Word docum
 
 import hashlib
 import re
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 from bs4 import BeautifulSoup
 from docx import Document as DocxDocument
@@ -28,7 +28,6 @@ from docx.text.paragraph import Paragraph as DocxParagraph
 from pypdf import PdfReader
 
 from app.core import chunk_policy
-from app.core.config import settings
 
 # Block types are the vocabulary shared by every normalizer.
 BLOCK_HEADING = "HEADING"
@@ -126,9 +125,9 @@ def block(
     text: str,
     heading_path: str = "",
     level: int = 0,
-    page_no: Optional[int] = None,
-    table: Optional[Dict[str, Any]] = None,
-) -> Dict[str, Any]:
+    page_no: int | None = None,
+    table: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     """Build one canonical block record."""
     return {
         "block_id": block_id,
@@ -147,15 +146,15 @@ def block(
 # ---------------------------------------------------------------------------
 
 
-def render_table_text(header: List[str], rows: List[List[str]]) -> str:
+def render_table_text(header: list[str], rows: list[list[str]]) -> str:
     """Render a table as prose rows so no pipe separators leak into knowledge objects.
 
     ``| 市内交通 | 80 元/天 |`` is fine as a table but meaningless as a card title or a
     claim object, so tables are flattened into ``列名: 值`` pairs instead.
     """
-    lines: List[str] = []
+    lines: list[str] = []
     for row in rows:
-        pairs: List[str] = []
+        pairs: list[str] = []
         for index, cell in enumerate(row):
             value = cell.strip()
             if not value:
@@ -168,14 +167,14 @@ def render_table_text(header: List[str], rows: List[List[str]]) -> str:
     return "\n".join(lines)
 
 
-def from_markdown(raw: str) -> List[Dict[str, Any]]:
+def from_markdown(raw: str) -> list[dict[str, Any]]:
     """Convert markdown to blocks, dropping fences, rules and table alignment."""
     text = _FRONT_MATTER.sub("", raw or "")
     text = _HTML_COMMENT.sub("", text)
     lines = text.split("\n")
-    blocks: List[Dict[str, Any]] = []
-    heading_stack: List[Tuple[int, str]] = []
-    paragraph: List[str] = []
+    blocks: list[dict[str, Any]] = []
+    heading_stack: list[tuple[int, str]] = []
+    paragraph: list[str] = []
     seq = 0
     index = 0
 
@@ -188,6 +187,7 @@ def from_markdown(raw: str) -> List[Dict[str, Any]]:
         if has_content(joined):
             seq += 1
             blocks.append(block("B%d" % seq, seq, BLOCK_PARAGRAPH, joined, heading_path()))
+
     def heading_path() -> str:
         return " / ".join(title for _, title in heading_stack)
 
@@ -198,7 +198,7 @@ def from_markdown(raw: str) -> List[Dict[str, Any]]:
         if fence:
             flush_paragraph()
             language = fence.group(2)
-            body: List[str] = []
+            body: list[str] = []
             index += 1
             while index < len(lines) and not _FENCE.match(lines[index]):
                 body.append(lines[index])
@@ -207,10 +207,16 @@ def from_markdown(raw: str) -> List[Dict[str, Any]]:
             code = "\n".join(body).strip()
             if has_content(code):
                 seq += 1
-                blocks.append(block(
-                    "B%d" % seq, seq, BLOCK_CODE, code, heading_path(),
-                    table={"language": language or ""},
-                ))
+                blocks.append(
+                    block(
+                        "B%d" % seq,
+                        seq,
+                        BLOCK_CODE,
+                        code,
+                        heading_path(),
+                        table={"language": language or ""},
+                    )
+                )
             continue
 
         if not stripped:
@@ -229,8 +235,9 @@ def from_markdown(raw: str) -> List[Dict[str, Any]]:
             table_block, consumed = _parse_markdown_table(lines, index)
             if table_block:
                 seq += 1
-                item = block("B%d" % seq, seq, BLOCK_TABLE, table_block["text"],
-                             heading_path(), table=table_block["table"])
+                item = block(
+                    "B%d" % seq, seq, BLOCK_TABLE, table_block["text"], heading_path(), table=table_block["table"]
+                )
                 blocks.append(item)
             index = consumed
             continue
@@ -243,8 +250,9 @@ def from_markdown(raw: str) -> List[Dict[str, Any]]:
             if has_content(title):
                 _push_heading(heading_stack, level, title)
                 seq += 1
-                blocks.append(block("B%d" % seq, seq, BLOCK_HEADING, title,
-                                    " / ".join(t for _, t in heading_stack), level))
+                blocks.append(
+                    block("B%d" % seq, seq, BLOCK_HEADING, title, " / ".join(t for _, t in heading_stack), level)
+                )
             index += 1
             continue
 
@@ -255,8 +263,7 @@ def from_markdown(raw: str) -> List[Dict[str, Any]]:
             level = 1 if line.strip().startswith("=") else 2
             _push_heading(heading_stack, level, title)
             seq += 1
-            blocks.append(block("B%d" % seq, seq, BLOCK_HEADING, title,
-                                " / ".join(t for _, t in heading_stack), level))
+            blocks.append(block("B%d" % seq, seq, BLOCK_HEADING, title, " / ".join(t for _, t in heading_stack), level))
             index += 1
             continue
 
@@ -289,26 +296,26 @@ def from_markdown(raw: str) -> List[Dict[str, Any]]:
     return blocks
 
 
-def _push_heading(stack: List[Tuple[int, str]], level: int, title: str) -> None:
+def _push_heading(stack: list[tuple[int, str]], level: int, title: str) -> None:
     while stack and stack[-1][0] >= level:
         stack.pop()
     stack.append((level, title))
 
 
-def _parse_markdown_table(lines: List[str], start: int) -> Tuple[Optional[Dict[str, Any]], int]:
+def _parse_markdown_table(lines: list[str], start: int) -> tuple[dict[str, Any] | None, int]:
     """Parse a github-style markdown table starting at ``start``."""
-    def cells(line: str) -> List[str]:
+
+    def cells(line: str) -> list[str]:
         trimmed = line.strip().strip("|")
         return [clean_inline(cell) for cell in trimmed.split("|")]
 
     header = cells(lines[start])
     index = start + 2  # skip the alignment separator row
-    rows: List[List[str]] = []
+    rows: list[list[str]] = []
     while index < len(lines) and "|" in lines[index] and lines[index].strip():
         rows.append(cells(lines[index]))
         index += 1
-    if not any(has_content(cell) for cell in header) and not any(
-            has_content(cell) for row in rows for cell in row):
+    if not any(has_content(cell) for cell in header) and not any(has_content(cell) for row in rows for cell in row):
         return None, index
     return {
         "text": render_table_text(header, rows),
@@ -320,21 +327,20 @@ _HTML_BLOCK_TAGS = {"p", "div", "section", "article", "li", "td", "th", "pre", "
 _HTML_DROP_TAGS = {"script", "style", "noscript", "svg", "form", "iframe", "nav", "footer"}
 
 
-def from_html(raw: str) -> List[Dict[str, Any]]:
+def from_html(raw: str) -> list[dict[str, Any]]:
     """Convert HTML to blocks using tag semantics instead of raw text."""
     soup = BeautifulSoup(raw or "", "html.parser")
     for tag in soup(list(_HTML_DROP_TAGS)):
         tag.decompose()
     root = soup.body or soup
-    blocks: List[Dict[str, Any]] = []
-    heading_stack: List[Tuple[int, str]] = []
+    blocks: list[dict[str, Any]] = []
+    heading_stack: list[tuple[int, str]] = []
     seq = 0
 
     def heading_path() -> str:
         return " / ".join(title for _, title in heading_stack)
 
-    def add(block_type: str, text: str, level: int = 0,
-            table: Optional[Dict[str, Any]] = None) -> None:
+    def add(block_type: str, text: str, level: int = 0, table: dict[str, Any] | None = None) -> None:
         nonlocal seq
         cleaned = normalize_whitespace(clean_inline(text))
         if not has_content(cleaned):
@@ -357,8 +363,7 @@ def from_html(raw: str) -> List[Dict[str, Any]]:
                 continue
             if not header:
                 header = rows.pop(0)
-            add(BLOCK_TABLE, render_table_text(header, rows),
-                table={"header": header, "rows": rows})
+            add(BLOCK_TABLE, render_table_text(header, rows), table={"header": header, "rows": rows})
             continue
         if name in {"h1", "h2", "h3", "h4", "h5", "h6"}:
             level = int(name[1])
@@ -386,13 +391,13 @@ def from_html(raw: str) -> List[Dict[str, Any]]:
     return blocks
 
 
-def _pdf_page_lines(pages: List[str]) -> Tuple[List[List[str]], set]:
+def _pdf_page_lines(pages: list[str]) -> tuple[list[list[str]], set]:
     """Split pages into lines and detect running headers/footers/page numbers."""
-    all_lines: List[List[str]] = []
+    all_lines: list[list[str]] = []
     for page in pages:
         all_lines.append([line.strip() for line in page.split("\n") if line.strip()])
     total = len(all_lines)
-    counter: Dict[str, int] = {}
+    counter: dict[str, int] = {}
     for lines in all_lines:
         # Running headers/footers occupy the very top or bottom of a page.
         for candidate in set(lines[:2] + lines[-2:]):
@@ -405,15 +410,15 @@ def _pdf_page_lines(pages: List[str]) -> Tuple[List[List[str]], set]:
     return all_lines, noise
 
 
-def from_pdf(path: str) -> Tuple[List[Dict[str, Any]], int]:
+def from_pdf(path: str) -> tuple[list[dict[str, Any]], int]:
     """Convert a PDF to blocks, removing page numbers and running headers/footers."""
     reader = PdfReader(path)
     pages = [(page.extract_text() or "").strip() for page in reader.pages]
     page_lines, noise = _pdf_page_lines(pages)
-    blocks: List[Dict[str, Any]] = []
+    blocks: list[dict[str, Any]] = []
     seq = 0
     for page_no, lines in enumerate(page_lines, start=1):
-        kept: List[str] = []
+        kept: list[str] = []
         for line in lines:
             if line.lower() in noise:
                 continue
@@ -422,13 +427,10 @@ def from_pdf(path: str) -> Tuple[List[Dict[str, Any]], int]:
             kept.append(line)
         # Soft-wrapped PDF lines are re-joined; a line ending in terminal punctuation
         # or a short heading-like line starts a new paragraph.
-        paragraph: List[str] = []
+        paragraph: list[str] = []
         for line in kept:
             paragraph.append(line)
-            ends_paragraph = (
-                len(line) < 40
-                or line.rstrip().endswith(("。", "；", "！", "？", ".", ":", "："))
-            )
+            ends_paragraph = len(line) < 40 or line.rstrip().endswith(("。", "；", "！", "？", ".", ":", "："))
             if not ends_paragraph:
                 continue
             text = normalize_whitespace(clean_inline(_join_lines(paragraph)))
@@ -444,30 +446,29 @@ def from_pdf(path: str) -> Tuple[List[Dict[str, Any]], int]:
     return blocks, len(pages)
 
 
-def _join_lines(lines: List[str]) -> str:
+def _join_lines(lines: list[str]) -> str:
     """Join lines, removing hyphenation breaks created by PDF layout."""
     text = "\n".join(lines)
     text = re.sub(r"-\n", "", text)
     return re.sub(r"\n", "", text) if _looks_wrapped(lines) else text
 
 
-def _looks_wrapped(lines: List[str]) -> bool:
+def _looks_wrapped(lines: list[str]) -> bool:
     """Treat consecutive short lines as one wrapped paragraph (CJK PDFs)."""
     return len(lines) > 1 and all(len(line) <= 40 for line in lines)
 
 
-def from_docx(path: str) -> List[Dict[str, Any]]:
+def from_docx(path: str) -> list[dict[str, Any]]:
     """Convert DOCX to blocks, preserving heading levels and tables."""
     document = DocxDocument(path)
-    blocks: List[Dict[str, Any]] = []
-    heading_stack: List[Tuple[int, str]] = []
+    blocks: list[dict[str, Any]] = []
+    heading_stack: list[tuple[int, str]] = []
     seq = 0
 
     def heading_path() -> str:
         return " / ".join(title for _, title in heading_stack)
 
-    def add(block_type: str, text: str, level: int = 0,
-            table: Optional[Dict[str, Any]] = None) -> None:
+    def add(block_type: str, text: str, level: int = 0, table: dict[str, Any] | None = None) -> None:
         nonlocal seq
         cleaned = normalize_whitespace(clean_inline(text))
         if not has_content(cleaned):
@@ -483,8 +484,7 @@ def from_docx(path: str) -> List[Dict[str, Any]]:
             if not rows:
                 continue
             header = rows.pop(0)
-            add(BLOCK_TABLE, render_table_text(header, rows),
-                table={"header": header, "rows": rows})
+            add(BLOCK_TABLE, render_table_text(header, rows), table={"header": header, "rows": rows})
             continue
         if child.tag != qn("w:p"):
             continue
@@ -497,8 +497,7 @@ def from_docx(path: str) -> List[Dict[str, Any]]:
         if level:
             _push_heading(heading_stack, level, clean_inline(text))
             seq += 1
-            blocks.append(block("B%d" % seq, seq, BLOCK_HEADING, clean_inline(text),
-                                heading_path(), level))
+            blocks.append(block("B%d" % seq, seq, BLOCK_HEADING, clean_inline(text), heading_path(), level))
             continue
         if style.lower().startswith("list"):
             add(BLOCK_LIST_ITEM, text)
@@ -517,9 +516,9 @@ def _docx_heading_level(style: str) -> int:
     return 1 if style.lower() in {"title", "标题"} else 0
 
 
-def from_text(raw: str) -> List[Dict[str, Any]]:
+def from_text(raw: str) -> list[dict[str, Any]]:
     """Convert plain text to paragraphs, dropping separator-only lines."""
-    blocks: List[Dict[str, Any]] = []
+    blocks: list[dict[str, Any]] = []
     seq = 0
     for part in re.split(r"\n{2,}", normalize_whitespace(raw or "")):
         cleaned = normalize_whitespace(clean_inline(part))
@@ -535,19 +534,21 @@ def from_text(raw: str) -> List[Dict[str, Any]]:
 # ---------------------------------------------------------------------------
 
 
-def build_sections(blocks: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+def build_sections(blocks: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Derive the section outline from heading blocks."""
-    sections: List[Dict[str, Any]] = []
+    sections: list[dict[str, Any]] = []
     for item in blocks:
         if item["block_type"] != BLOCK_HEADING:
             continue
-        sections.append({
-            "section_id": "S%d" % len(sections),
-            "heading": item["text"],
-            "level": item.get("level") or 1,
-            "heading_path": item.get("heading_path", ""),
-            "order": item["seq"],
-        })
+        sections.append(
+            {
+                "section_id": "S%d" % len(sections),
+                "heading": item["text"],
+                "level": item.get("level") or 1,
+                "heading_path": item.get("heading_path", ""),
+                "order": item["seq"],
+            }
+        )
     return sections
 
 
@@ -565,18 +566,18 @@ def estimate_tokens(text: str) -> int:
     return max(1, int(round(cjk * 0.7 + rest / 4.0)))
 
 
-def _measure(text: str, policy: Dict[str, Any]) -> int:
+def _measure(text: str, policy: dict[str, Any]) -> int:
     """Window measurement in the unit declared by the policy."""
     return estimate_tokens(text) if policy.get("measure") == "TOKEN" else len(text)
 
 
-def _block_spans(blocks: List[Dict[str, Any]]) -> Dict[str, Tuple[int, int]]:
+def _block_spans(blocks: list[dict[str, Any]]) -> dict[str, tuple[int, int]]:
     """Character span of every block inside the joined document text.
 
     The canonical text is the block texts joined by a blank line, so these offsets
     are exact and a chunk can later report where in the source it starts and ends.
     """
-    spans: Dict[str, Tuple[int, int]] = {}
+    spans: dict[str, tuple[int, int]] = {}
     cursor = 0
     for item in blocks:
         text = item.get("text") or ""
@@ -585,8 +586,7 @@ def _block_spans(blocks: List[Dict[str, Any]]) -> Dict[str, Tuple[int, int]]:
     return spans
 
 
-def _locate(blocks: List[Dict[str, Any]], spans: Dict[str, Tuple[int, int]], offset: int
-            ) -> Tuple[str, Optional[int]]:
+def _locate(blocks: list[dict[str, Any]], spans: dict[str, tuple[int, int]], offset: int) -> tuple[str, int | None]:
     """Heading path and page number covering a character offset."""
     for item in blocks:
         span = spans.get(item["block_id"])
@@ -612,7 +612,7 @@ def _snap_to_boundary(text: str, limit: int) -> int:
     return best if best >= int(limit * 0.6) else limit
 
 
-def _next_cut(text: str, start: int, budget: int, policy: Dict[str, Any]) -> int:
+def _next_cut(text: str, start: int, budget: int, policy: dict[str, Any]) -> int:
     """End offset of the window that starts at ``start`` under the policy budget."""
     if start >= len(text):
         return len(text)
@@ -622,7 +622,7 @@ def _next_cut(text: str, start: int, budget: int, policy: Dict[str, Any]) -> int
         raw = len(text)
         while position < len(text):
             step = min(64, len(text) - position)
-            consumed += estimate_tokens(text[position:position + step])
+            consumed += estimate_tokens(text[position : position + step])
             position += step
             if consumed >= budget:
                 raw = position
@@ -636,7 +636,7 @@ def _next_cut(text: str, start: int, budget: int, policy: Dict[str, Any]) -> int
     return max(raw, start + 1) if raw < len(text) else len(text)
 
 
-def _overlap_chars(policy: Dict[str, Any]) -> int:
+def _overlap_chars(policy: dict[str, Any]) -> int:
     """Overlap expressed in characters; a token overlap is roughly two chars."""
     overlap = int(policy.get("chunkOverlap") or 0)
     return overlap * 2 if policy.get("measure") == "TOKEN" else overlap
@@ -652,10 +652,19 @@ def _chunk_type_for(block_type: str) -> str:
     return "PARAGRAPH"
 
 
-def _make_unit(seq: int, content: str, heading_path: str, page_no: Optional[int],
-               block_type: str, block_ids: List[str], spans: Dict[str, Tuple[int, int]],
-               policy: Dict[str, Any], parent_unit_id: Optional[str] = None,
-               chunk_type: Optional[str] = None, overlap_prefix: str = "") -> Dict[str, Any]:
+def _make_unit(
+    seq: int,
+    content: str,
+    heading_path: str,
+    page_no: int | None,
+    block_type: str,
+    block_ids: list[str],
+    spans: dict[str, tuple[int, int]],
+    policy: dict[str, Any],
+    parent_unit_id: str | None = None,
+    chunk_type: str | None = None,
+    overlap_prefix: str = "",
+) -> dict[str, Any]:
     """One retrieval unit carrying every boundary a citation may need to explain."""
     start = spans.get(block_ids[0], (None, None))[0] if block_ids else None
     end = spans.get(block_ids[-1], (None, None))[1] if block_ids else None
@@ -679,16 +688,16 @@ def _make_unit(seq: int, content: str, heading_path: str, page_no: Optional[int]
     }
 
 
-def _unit_text(items: List[Dict[str, Any]]) -> str:
+def _unit_text(items: list[dict[str, Any]]) -> str:
     return "\n\n".join(item["text"] for item in items if item.get("text"))
 
 
 def build_units(
-    blocks: List[Dict[str, Any]],
-    size: Optional[int] = None,
-    overlap: Optional[int] = None,
-    policy: Optional[Dict[str, Any]] = None,
-) -> List[Dict[str, Any]]:
+    blocks: list[dict[str, Any]],
+    size: int | None = None,
+    overlap: int | None = None,
+    policy: dict[str, Any] | None = None,
+) -> list[dict[str, Any]]:
     """Group blocks into retrieval/extraction units under a chunking policy.
 
     Tables and code blocks are never merged with prose: mixing them would make the
@@ -709,12 +718,12 @@ def build_units(
     return _finalize(units, blocks, active)
 
 
-def _units_semantic(blocks: List[Dict[str, Any]], policy: Dict[str, Any]) -> List[Dict[str, Any]]:
+def _units_semantic(blocks: list[dict[str, Any]], policy: dict[str, Any]) -> list[dict[str, Any]]:
     """Accumulate blocks up to the window, cutting on heading changes."""
     window = int(policy["chunkSize"])
     keep_structure = bool(policy.get("keepStructure"))
-    units: List[Dict[str, Any]] = []
-    buffer: List[Dict[str, Any]] = []
+    units: list[dict[str, Any]] = []
+    buffer: list[dict[str, Any]] = []
     tail = ""
 
     def flush() -> None:
@@ -726,10 +735,19 @@ def _units_semantic(blocks: List[Dict[str, Any]], policy: Dict[str, Any]) -> Lis
             buffer.clear()
             return
         first = buffer[0]
-        units.append(_make_unit(
-            len(units) + 1, content, first.get("heading_path", ""), first.get("page_no"),
-            first["block_type"], [item["block_id"] for item in buffer], {},
-            policy, overlap_prefix=tail))
+        units.append(
+            _make_unit(
+                len(units) + 1,
+                content,
+                first.get("heading_path", ""),
+                first.get("page_no"),
+                first["block_type"],
+                [item["block_id"] for item in buffer],
+                {},
+                policy,
+                overlap_prefix=tail,
+            )
+        )
         # The next unit carries the tail of this one as context without duplicating it
         # in the indexed text: retrieval gains the bridge, storage stays clean.
         gap = _overlap_chars(policy)
@@ -744,8 +762,7 @@ def _units_semantic(blocks: List[Dict[str, Any]], policy: Dict[str, Any]) -> Lis
             buffer = []
             continue
         projected = _measure(_unit_text(buffer + [item]), policy)
-        if buffer and projected > window and (
-                not keep_structure or item["heading_path"] == buffer[-1]["heading_path"]):
+        if buffer and projected > window and (not keep_structure or item["heading_path"] == buffer[-1]["heading_path"]):
             flush()
         buffer.append(item)
         if _measure(_unit_text(buffer), policy) >= window:
@@ -754,13 +771,13 @@ def _units_semantic(blocks: List[Dict[str, Any]], policy: Dict[str, Any]) -> Lis
     return _merge_small_units(units, policy)
 
 
-def _units_sentence(blocks: List[Dict[str, Any]], policy: Dict[str, Any]) -> List[Dict[str, Any]]:
+def _units_sentence(blocks: list[dict[str, Any]], policy: dict[str, Any]) -> list[dict[str, Any]]:
     """Group whole sentences up to the window, so no unit ends mid-sentence."""
     window = int(policy["chunkSize"])
-    units: List[Dict[str, Any]] = []
-    buffer: List[str] = []
-    ids: List[str] = []
-    meta: Dict[str, Any] = {}
+    units: list[dict[str, Any]] = []
+    buffer: list[str] = []
+    ids: list[str] = []
+    meta: dict[str, Any] = {}
 
     def flush() -> None:
         if not buffer:
@@ -770,9 +787,18 @@ def _units_sentence(blocks: List[Dict[str, Any]], policy: Dict[str, Any]) -> Lis
             buffer.clear()
             ids.clear()
             return
-        units.append(_make_unit(
-            len(units) + 1, content, meta.get("heading_path", ""), meta.get("page_no"),
-            meta.get("block_type", BLOCK_PARAGRAPH), list(ids), {}, policy))
+        units.append(
+            _make_unit(
+                len(units) + 1,
+                content,
+                meta.get("heading_path", ""),
+                meta.get("page_no"),
+                meta.get("block_type", BLOCK_PARAGRAPH),
+                list(ids),
+                {},
+                policy,
+            )
+        )
         buffer.clear()
         ids.clear()
 
@@ -786,13 +812,17 @@ def _units_sentence(blocks: List[Dict[str, Any]], policy: Dict[str, Any]) -> Lis
                 continue
             if buffer and _measure(" ".join(buffer + [piece]), policy) > window:
                 flush()
-                meta = {"heading_path": item.get("heading_path", ""),
-                        "page_no": item.get("page_no"),
-                        "block_type": item["block_type"]}
+                meta = {
+                    "heading_path": item.get("heading_path", ""),
+                    "page_no": item.get("page_no"),
+                    "block_type": item["block_type"],
+                }
             elif not buffer:
-                meta = {"heading_path": item.get("heading_path", ""),
-                        "page_no": item.get("page_no"),
-                        "block_type": item["block_type"]}
+                meta = {
+                    "heading_path": item.get("heading_path", ""),
+                    "page_no": item.get("page_no"),
+                    "block_type": item["block_type"],
+                }
             buffer.append(piece)
             if item["block_id"] not in ids:
                 ids.append(item["block_id"])
@@ -800,36 +830,39 @@ def _units_sentence(blocks: List[Dict[str, Any]], policy: Dict[str, Any]) -> Lis
     return _merge_small_units(units, policy)
 
 
-def _units_fixed(blocks: List[Dict[str, Any]], policy: Dict[str, Any]) -> List[Dict[str, Any]]:
+def _units_fixed(blocks: list[dict[str, Any]], policy: dict[str, Any]) -> list[dict[str, Any]]:
     """Sliding window over the cleaned text with a real overlap."""
     spans = _block_spans(blocks)
     text = "\n\n".join(item.get("text") or "" for item in blocks)
     window = int(policy["chunkSize"])
     gap = _overlap_chars(policy)
-    units: List[Dict[str, Any]] = []
+    units: list[dict[str, Any]] = []
     start = 0
     while start < len(text):
         end = _next_cut(text, start, window, policy)
         piece = text[start:end]
         if has_content(piece):
             heading_path, page_no = _locate(blocks, spans, start)
-            block_ids = [item["block_id"] for item in blocks
-                         if spans[item["block_id"]][0] < end and spans[item["block_id"]][1] > start]
-            units.append(_make_unit(
-                len(units) + 1, piece, heading_path, page_no, BLOCK_PARAGRAPH,
-                block_ids, spans, policy))
+            block_ids = [
+                item["block_id"]
+                for item in blocks
+                if spans[item["block_id"]][0] < end and spans[item["block_id"]][1] > start
+            ]
+            units.append(
+                _make_unit(len(units) + 1, piece, heading_path, page_no, BLOCK_PARAGRAPH, block_ids, spans, policy)
+            )
         if end >= len(text):
             break
         start = max(end - gap, start + 1)
     return units
 
 
-def _units_structure(blocks: List[Dict[str, Any]], policy: Dict[str, Any]) -> List[Dict[str, Any]]:
+def _units_structure(blocks: list[dict[str, Any]], policy: dict[str, Any]) -> list[dict[str, Any]]:
     """One unit per heading path; only oversized sections are split."""
     window = int(policy["chunkSize"])
     limit = max(window, int(window * 1.5))
-    units: List[Dict[str, Any]] = []
-    buffer: List[Dict[str, Any]] = []
+    units: list[dict[str, Any]] = []
+    buffer: list[dict[str, Any]] = []
     current_path = None
 
     def flush() -> None:
@@ -842,14 +875,32 @@ def _units_structure(blocks: List[Dict[str, Any]], policy: Dict[str, Any]) -> Li
         first = buffer[0]
         block_ids = [item["block_id"] for item in buffer]
         if _measure(content, policy) <= limit:
-            units.append(_make_unit(
-                len(units) + 1, content, first.get("heading_path", ""), first.get("page_no"),
-                first["block_type"], block_ids, {}, policy))
+            units.append(
+                _make_unit(
+                    len(units) + 1,
+                    content,
+                    first.get("heading_path", ""),
+                    first.get("page_no"),
+                    first["block_type"],
+                    block_ids,
+                    {},
+                    policy,
+                )
+            )
         else:
             for piece in _hard_split(content, window, policy):
-                units.append(_make_unit(
-                    len(units) + 1, piece, first.get("heading_path", ""), first.get("page_no"),
-                    first["block_type"], block_ids, {}, policy))
+                units.append(
+                    _make_unit(
+                        len(units) + 1,
+                        piece,
+                        first.get("heading_path", ""),
+                        first.get("page_no"),
+                        first["block_type"],
+                        block_ids,
+                        {},
+                        policy,
+                    )
+                )
         buffer.clear()
 
     for item in blocks:
@@ -862,7 +913,7 @@ def _units_structure(blocks: List[Dict[str, Any]], policy: Dict[str, Any]) -> Li
     return units
 
 
-def _units_parent_child(blocks: List[Dict[str, Any]], policy: Dict[str, Any]) -> List[Dict[str, Any]]:
+def _units_parent_child(blocks: list[dict[str, Any]], policy: dict[str, Any]) -> list[dict[str, Any]]:
     """Section-level parent units, each followed by its window-sized children.
 
     Retrieval matches the precise child; the parent keeps the surrounding context
@@ -870,8 +921,8 @@ def _units_parent_child(blocks: List[Dict[str, Any]], policy: Dict[str, Any]) ->
     every child to an id that already exists.
     """
     window = int(policy["chunkSize"])
-    units: List[Dict[str, Any]] = []
-    groups: List[Tuple[str, List[Dict[str, Any]]]] = []
+    units: list[dict[str, Any]] = []
+    groups: list[tuple[str, list[dict[str, Any]]]] = []
     current_path = None
     for item in blocks:
         path = item.get("heading_path", "") or ""
@@ -880,12 +931,29 @@ def _units_parent_child(blocks: List[Dict[str, Any]], policy: Dict[str, Any]) ->
             current_path = path
         groups[-1][1].append(item)
 
-    def new_unit(content: str, heading_path: str, page_no: Optional[int], block_type: str,
-                 block_ids: List[str], parent_unit_id: Optional[str] = None,
-                 chunk_type: Optional[str] = None) -> None:
-        units.append(_make_unit(len(units) + 1, content, heading_path, page_no, block_type,
-                                block_ids, {}, policy, parent_unit_id=parent_unit_id,
-                                chunk_type=chunk_type))
+    def new_unit(
+        content: str,
+        heading_path: str,
+        page_no: int | None,
+        block_type: str,
+        block_ids: list[str],
+        parent_unit_id: str | None = None,
+        chunk_type: str | None = None,
+    ) -> None:
+        units.append(
+            _make_unit(
+                len(units) + 1,
+                content,
+                heading_path,
+                page_no,
+                block_type,
+                block_ids,
+                {},
+                policy,
+                parent_unit_id=parent_unit_id,
+                chunk_type=chunk_type,
+            )
+        )
 
     for _path, group in groups:
         content = _unit_text(group)
@@ -903,15 +971,21 @@ def _units_parent_child(blocks: List[Dict[str, Any]], policy: Dict[str, Any]) ->
         for child in _units_semantic(group, child_policy):
             if not has_content(child["content"]):
                 continue
-            new_unit(child["content"], child["heading_path"], child["page_no"],
-                     child["block_type"], child["block_ids"], parent_unit_id=parent_unit_id,
-                     chunk_type=child.get("chunk_type"))
+            new_unit(
+                child["content"],
+                child["heading_path"],
+                child["page_no"],
+                child["block_type"],
+                child["block_ids"],
+                parent_unit_id=parent_unit_id,
+                chunk_type=child.get("chunk_type"),
+            )
     return units
 
 
-def _hard_split(content: str, window: int, policy: Dict[str, Any]) -> List[str]:
+def _hard_split(content: str, window: int, policy: dict[str, Any]) -> list[str]:
     """Split an oversized piece at sentence boundaries when the policy asks for it."""
-    pieces: List[str] = []
+    pieces: list[str] = []
     start = 0
     gap = _overlap_chars(policy)
     while start < len(content):
@@ -925,22 +999,23 @@ def _hard_split(content: str, window: int, policy: Dict[str, Any]) -> List[str]:
     return pieces
 
 
-def _merge_small_units(units: List[Dict[str, Any]], policy: Dict[str, Any]) -> List[Dict[str, Any]]:
+def _merge_small_units(units: list[dict[str, Any]], policy: dict[str, Any]) -> list[dict[str, Any]]:
     """Fold orphan fragments into a neighbour so no chunk is too thin to answer from."""
     min_size = int(policy.get("minChunkSize") or 0)
     window = int(policy["chunkSize"])
     if min_size <= 0 or len(units) < 2:
         return units
-    merged: List[Dict[str, Any]] = []
+    merged: list[dict[str, Any]] = []
     for unit in units:
-        if merged and _measure(unit["content"], policy) < min_size \
-                and unit.get("heading_path") == merged[-1].get("heading_path") \
-                and _measure(merged[-1]["content"], policy) + _measure(
-                    unit["content"], policy) <= window * 1.5:
+        if (
+            merged
+            and _measure(unit["content"], policy) < min_size
+            and unit.get("heading_path") == merged[-1].get("heading_path")
+            and _measure(merged[-1]["content"], policy) + _measure(unit["content"], policy) <= window * 1.5
+        ):
             previous = merged[-1]
             previous["content"] = previous["content"] + "\n\n" + unit["content"]
-            previous["content_hash"] = hashlib.sha256(
-                previous["content"].encode("utf-8")).hexdigest()
+            previous["content_hash"] = hashlib.sha256(previous["content"].encode("utf-8")).hexdigest()
             previous["block_ids"] = previous["block_ids"] + unit["block_ids"]
             previous["token_count"] = estimate_tokens(previous["content"])
             continue
@@ -948,11 +1023,12 @@ def _merge_small_units(units: List[Dict[str, Any]], policy: Dict[str, Any]) -> L
     return merged
 
 
-def _finalize(units: List[Dict[str, Any]], blocks: List[Dict[str, Any]],
-              policy: Dict[str, Any]) -> List[Dict[str, Any]]:
+def _finalize(
+    units: list[dict[str, Any]], blocks: list[dict[str, Any]], policy: dict[str, Any]
+) -> list[dict[str, Any]]:
     """Renumber units and fill spans / token counts from the canonical text."""
     spans = _block_spans(blocks)
-    result: List[Dict[str, Any]] = []
+    result: list[dict[str, Any]] = []
     for index, unit in enumerate(units, start=1):
         block_ids = [bid for bid in unit.get("block_ids", []) if bid in spans]
         unit["unit_id"] = "U%d" % index
@@ -967,7 +1043,7 @@ def _finalize(units: List[Dict[str, Any]], blocks: List[Dict[str, Any]],
     return result
 
 
-def infer_title(blocks: List[Dict[str, Any]], filename: str) -> str:
+def infer_title(blocks: list[dict[str, Any]], filename: str) -> str:
     """Prefer the first top-level heading, then any heading, then the file name."""
     for item in blocks:
         if item["block_type"] == BLOCK_HEADING and (item.get("level") or 6) <= 1:
@@ -988,10 +1064,10 @@ def build_standard_document(
     filename: str,
     extension: str,
     sha256: str,
-    blocks: List[Dict[str, Any]],
+    blocks: list[dict[str, Any]],
     page_count: int = 0,
-    policy: Optional[Dict[str, Any]] = None,
-) -> Dict[str, Any]:
+    policy: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     """Assemble the canonical document model shared by every consumer."""
     text = "\n\n".join(item["text"] for item in blocks if item.get("text"))
     units = build_units(blocks, policy=policy)
@@ -1015,29 +1091,31 @@ def build_standard_document(
             "tables": sum(1 for item in blocks if item["block_type"] == BLOCK_TABLE),
             "chars": len(text),
             "tokens": sum(int(unit.get("token_count") or 0) for unit in units),
-            "chunkStrategy": (units[0].get("strategy") if units
-                              else (policy or {}).get("strategy", "SEMANTIC")),
+            "chunkStrategy": (units[0].get("strategy") if units else (policy or {}).get("strategy", "SEMANTIC")),
             "chunkPolicy": policy or chunk_policy.default_policy(),
         },
     }
 
 
-def to_legacy_chunks(standard: Dict[str, Any]) -> List[Dict[str, Any]]:
+def to_legacy_chunks(standard: dict[str, Any]) -> list[dict[str, Any]]:
     """Render units in the historical chunk shape so persistence stays unchanged."""
-    return [{
-        "seq": unit["seq"],
-        "unit_id": unit["unit_id"],
-        "page_no": unit.get("page_no"),
-        "page_end": unit.get("page_end"),
-        "char_start": unit.get("char_start"),
-        "char_end": unit.get("char_end"),
-        "token_count": unit.get("token_count"),
-        "heading_path": unit.get("heading_path", ""),
-        "content": unit["content"],
-        "content_hash": unit["content_hash"],
-        "chunk_type": unit.get("chunk_type") or "PARAGRAPH",
-        "block_type": unit.get("block_type", ""),
-        "parent_unit_id": unit.get("parent_unit_id"),
-        "overlap_prefix": unit.get("overlap_prefix", ""),
-        "strategy": unit.get("strategy", ""),
-    } for unit in standard.get("units", [])]
+    return [
+        {
+            "seq": unit["seq"],
+            "unit_id": unit["unit_id"],
+            "page_no": unit.get("page_no"),
+            "page_end": unit.get("page_end"),
+            "char_start": unit.get("char_start"),
+            "char_end": unit.get("char_end"),
+            "token_count": unit.get("token_count"),
+            "heading_path": unit.get("heading_path", ""),
+            "content": unit["content"],
+            "content_hash": unit["content_hash"],
+            "chunk_type": unit.get("chunk_type") or "PARAGRAPH",
+            "block_type": unit.get("block_type", ""),
+            "parent_unit_id": unit.get("parent_unit_id"),
+            "overlap_prefix": unit.get("overlap_prefix", ""),
+            "strategy": unit.get("strategy", ""),
+        }
+        for unit in standard.get("units", [])
+    ]

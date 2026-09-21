@@ -138,9 +138,7 @@ Provider 返回统一 Candidate：
     "title": "...",
     "content": "...",
     "score": 0.82,
-    "metadata": {
-        "retrieval_provider": "elasticsearch|milvus|neo4j|local"
-    }
+    "metadata": {"retrieval_provider": "elasticsearch|milvus|neo4j|local"},
 }
 ```
 

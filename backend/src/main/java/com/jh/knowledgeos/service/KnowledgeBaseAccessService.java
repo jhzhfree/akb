@@ -18,7 +18,9 @@ import org.springframework.stereotype.Service;
  */
 @Service
 public class KnowledgeBaseAccessService {
+
     private final KnowledgeMapper mapper;
+
     private final AuthMapper authMapper;
 
     public KnowledgeBaseAccessService(KnowledgeMapper mapper, AuthMapper authMapper) {
@@ -48,7 +50,9 @@ public class KnowledgeBaseAccessService {
     }
 
     public void assertAccess(Long kb, boolean write, User user) {
-        if (kb == null) return;
+        if (kb == null) {
+            return;
+        }
         KnowledgeBase base = mapper.getKnowledgeBase(kb);
         if (base == null) {
             throw new IllegalArgumentException("知识库不存在：" + kb);
@@ -63,10 +67,16 @@ public class KnowledgeBaseAccessService {
     }
 
     public boolean canRead(User user, KnowledgeBase base) {
-        if (base == null) return false;
-        if (user == null) return base.visibility() == KnowledgeBaseVisibility.PUBLIC;
-        if (UserRole.of(user.getRole()) == UserRole.ADMIN) return true;
-        switch (base.visibility()) {
+        if (base == null) {
+            return false;
+        }
+        if (user == null) {
+            return base.visibility() == KnowledgeBaseVisibility.PUBLIC;
+        }
+        if (UserRole.of(user.getRole()) == UserRole.ADMIN) {
+            return true;
+        }
+        switch(base.visibility()) {
             case PUBLIC:
                 return true;
             case PRIVATE:
@@ -79,10 +89,16 @@ public class KnowledgeBaseAccessService {
     }
 
     public boolean canWrite(User user, KnowledgeBase base) {
-        if (base == null || user == null) return false;
+        if (base == null || user == null) {
+            return false;
+        }
         UserRole role = UserRole.of(user.getRole());
-        if (role == UserRole.ADMIN || role == UserRole.KNOWLEDGE_ADMIN) return true;
-        if (isOwner(user, base)) return true;
+        if (role == UserRole.ADMIN || role == UserRole.KNOWLEDGE_ADMIN) {
+            return true;
+        }
+        if (isOwner(user, base)) {
+            return true;
+        }
         return role.canWriteKnowledge() && canRead(user, base);
     }
 
@@ -91,7 +107,9 @@ public class KnowledgeBaseAccessService {
     }
 
     private boolean isGroupMember(User user, Long groupId) {
-        if (user == null || groupId == null) return false;
+        if (user == null || groupId == null) {
+            return false;
+        }
         return authMapper.countGroupMember(groupId, user.getId()) > 0;
     }
 }

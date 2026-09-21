@@ -8,7 +8,6 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
-
 import java.time.LocalDateTime;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -23,9 +22,11 @@ import java.util.Map;
  */
 @Service
 public class PlatformEventStore {
+
     private static final Logger log = LoggerFactory.getLogger(PlatformEventStore.class);
 
     private final PlatformEventMapper mapper;
+
     private final ObjectMapper objectMapper;
 
     public PlatformEventStore(PlatformEventMapper mapper, ObjectMapper objectMapper) {
@@ -43,13 +44,17 @@ public class PlatformEventStore {
         return event;
     }
 
-    /** Replay for reconnecting clients: strictly what happened after the last delivered row. */
+    /**
+     * Replay for reconnecting clients: strictly what happened after the last delivered row.
+     */
     @Transactional(propagation = Propagation.SUPPORTS, readOnly = true)
     public List<PlatformEvent> since(Long kb, List<String> types, Long sinceId, int limit) {
         return mapper.listPlatformEvents(kb, types, sinceId, true, limit);
     }
 
-    /** Latest-first console view of the activity trail. */
+    /**
+     * Latest-first console view of the activity trail.
+     */
     @Transactional(propagation = Propagation.SUPPORTS, readOnly = true)
     public List<PlatformEvent> recent(Long kb, List<String> types, int limit) {
         return mapper.listPlatformEvents(kb, types, null, false, limit);
@@ -57,13 +62,19 @@ public class PlatformEventStore {
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public int purgeBefore(LocalDateTime cutoff) {
-        if (cutoff == null) return 0;
+        if (cutoff == null) {
+            return 0;
+        }
         return mapper.deletePlatformEventsBefore(cutoff);
     }
 
-    /** Detail stays readable even if the payload failed to serialise, so events never vanish. */
+    /**
+     * Detail stays readable even if the payload failed to serialise, so events never vanish.
+     */
     private String toJson(Object value) {
-        if (value == null) return null;
+        if (value == null) {
+            return null;
+        }
         try {
             return objectMapper.writeValueAsString(value);
         } catch (Exception e) {
@@ -72,16 +83,15 @@ public class PlatformEventStore {
         }
     }
 
-    /** Parsed form of {@code detail_json}; kept here so no caller has to touch Jackson. */
+    /**
+     * Parsed form of {@code detail_json}; kept here so no caller has to touch Jackson.
+     */
     public Map<String, Object> detailOf(PlatformEvent event) {
         if (event == null || event.getDetailJson() == null || event.getDetailJson().isEmpty()) {
             return new LinkedHashMap<String, Object>();
         }
         try {
-            Map<String, Object> parsed = objectMapper.readValue(
-                    event.getDetailJson(),
-                    objectMapper.getTypeFactory().constructMapType(java.util.LinkedHashMap.class,
-                            String.class, Object.class));
+            Map<String, Object> parsed = objectMapper.readValue(event.getDetailJson(), objectMapper.getTypeFactory().constructMapType(java.util.LinkedHashMap.class, String.class, Object.class));
             return parsed == null ? new LinkedHashMap<String, Object>() : parsed;
         } catch (Exception e) {
             log.warn("platform event detail of {} is unreadable: {}", event.getEventId(), e.getMessage());
@@ -93,5 +103,4 @@ public class PlatformEventStore {
         Long max = mapper.maxPlatformEventId();
         return max == null ? 0L : max;
     }
-
 }

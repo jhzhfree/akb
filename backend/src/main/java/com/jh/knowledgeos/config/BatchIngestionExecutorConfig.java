@@ -7,7 +7,6 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.task.TaskDecorator;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
-
 import java.util.concurrent.ThreadPoolExecutor;
 
 /**
@@ -25,12 +24,11 @@ import java.util.concurrent.ThreadPoolExecutor;
  */
 @Configuration
 public class BatchIngestionExecutorConfig {
+
     public static final String BEAN_NAME = "batchIngestionExecutor";
 
     @Bean(BEAN_NAME)
-    public ThreadPoolTaskExecutor batchIngestionExecutor(
-            @Value("${knowledge.batch.concurrency:3}") int concurrency,
-            @Value("${knowledge.batch.queue-capacity:200}") int queueCapacity) {
+    public ThreadPoolTaskExecutor batchIngestionExecutor(@Value("${knowledge.batch.concurrency:3}") int concurrency, @Value("${knowledge.batch.queue-capacity:200}") int queueCapacity) {
         int size = Math.max(1, concurrency);
         ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
         executor.setCorePoolSize(size);
@@ -55,10 +53,12 @@ public class BatchIngestionExecutorConfig {
      * would lose its author, and task ownership would be wrong on every row.</p>
      */
     static final class AuthPropagationDecorator implements TaskDecorator {
+
         @Override
         public Runnable decorate(Runnable runnable) {
             final User submitter = AuthContext.get();
             return new Runnable() {
+
                 @Override
                 public void run() {
                     try {

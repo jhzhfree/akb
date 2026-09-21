@@ -11,6 +11,10 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
         with: { distribution: temurin, java-version: '8', cache: maven }
+      - name: Checkstyle
+        run: |
+          curl -sL -o /tmp/checkstyle.jar https://github.com/checkstyle/checkstyle/releases/download/checkstyle-8.45.1/checkstyle-8.45.1-all.jar
+          java -Dfile.encoding=UTF-8 -jar /tmp/checkstyle.jar -c config/checkstyle/checkstyle.xml backend/src/main/java backend/src/test/java
       - name: Unit test and package backend
         working-directory: backend
         run: mvn -B test package
@@ -27,6 +31,10 @@ jobs:
           cache: pip
           cache-dependency-path: ai-service/requirements.txt
       - run: pip install -r ai-service/requirements.txt
+      - name: Ruff static analysis
+        run: |
+          pip install ruff
+          make lint-python
       - name: Smoke tests
         run: ./scripts/check-v11.sh
   frontend:
@@ -35,9 +43,9 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with: { node-version: '20' }
-      - name: Install and build
+      - name: Install, lint, typecheck and build
         working-directory: frontend
-        run: npm install && npm run build
+        run: npm install && npm run lint && npm run typecheck && npm run build
   compose-validate:
     runs-on: ubuntu-latest
     steps:

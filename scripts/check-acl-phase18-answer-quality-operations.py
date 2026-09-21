@@ -10,12 +10,13 @@ frontend = (ROOT / "frontend/src/components/QueryTracePanel.vue").read_text()
 api = (ROOT / "frontend/src/api/knowledge.ts").read_text()
 
 checks = {
-    "qualification detail query": "getAnswerQualification" in mapper_java and "listAnswerClaimAssessments" in mapper_xml,
+    "qualification detail query": "getAnswerQualification" in mapper_java
+    and "listAnswerClaimAssessments" in mapper_xml,
     "trace authoritative assembly": 'trace.put("answerQualification"' in read_service,
     "quality summary": "summarizeAnswerQualifications" in mapper_xml and "passRate" in mapper_xml,
     "policy distribution": "listAnswerQualificationPolicyStats" in mapper_xml,
-    "detail endpoint": 'answer-qualification/{qid}' in controller,
-    "summary endpoint": 'answer-qualifications/{kb}/summary' in controller,
+    "detail endpoint": "answer-qualification/{qid}" in controller,
+    "summary endpoint": "answer-qualifications/{kb}/summary" in controller,
     "bounded time window": "Math.min(hours, 24 * 90)" in read_service,
     "typed frontend API": "getAnswerQualificationSummary" in api,
     "authoritative UI preference": "props.trace?.answerQualification" in frontend,

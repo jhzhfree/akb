@@ -259,7 +259,7 @@ async function loadGraph() {
   try {
     graph.value = unwrap(await getGraph(props.knowledgeBaseId, startCode.value.trim(), depth.value, limit.value), null)
     canvasKey.value++
-  } catch (error) {
+  } catch {
     graph.value = { available:false, nodes:[], edges:[] }
   } finally {
     loading.value = false

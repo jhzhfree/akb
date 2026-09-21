@@ -3,7 +3,6 @@ package com.jh.knowledgeos;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.jh.knowledgeos.common.ApiErrorCode;
@@ -12,6 +11,7 @@ import java.io.File;
 import org.junit.jupiter.api.Test;
 
 public class ApiContractTest {
+
     private final ObjectMapper mapper = new ObjectMapper();
 
     @Test

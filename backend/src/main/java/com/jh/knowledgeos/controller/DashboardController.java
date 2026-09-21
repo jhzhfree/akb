@@ -22,6 +22,7 @@ import org.springframework.web.bind.annotation.RestController;
 @CrossOrigin
 @Tag(name = "Dashboard", description = "知识工作台：资产 KPI、生命周期与治理待办")
 public class DashboardController {
+
     private final DashboardService service;
 
     public DashboardController(DashboardService service) {
@@ -42,9 +43,7 @@ public class DashboardController {
 
     @GetMapping("/governance/{kb}")
     @Operation(summary = "治理待办：待审核 / 冲突 / 过期 / 无证据 / 低置信 / 衍生失效")
-    public ApiResponse<Object> governance(
-            @PathVariable Long kb,
-            @RequestParam(value = "lowConfidence", required = false) Double lowConfidence) {
+    public ApiResponse<Object> governance(@PathVariable Long kb, @RequestParam(value = "lowConfidence", required = false) Double lowConfidence) {
         return ApiResponse.ok(service.governance(kb, lowConfidence));
     }
 }

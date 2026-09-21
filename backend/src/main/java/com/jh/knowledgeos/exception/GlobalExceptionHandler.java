@@ -1,8 +1,6 @@
 package com.jh.knowledgeos.exception;
 
 import com.jh.knowledgeos.common.ApiErrorCode;
-import com.jh.knowledgeos.exception.RateLimitException;
-import com.jh.knowledgeos.exception.UnauthorizedException;
 import com.jh.knowledgeos.common.ApiResponse;
 import java.util.stream.Collectors;
 import org.slf4j.Logger;
@@ -21,13 +19,13 @@ import org.springframework.web.client.RestClientException;
  */
 @RestControllerAdvice
 public class GlobalExceptionHandler {
+
     private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
     @ResponseStatus(HttpStatus.BAD_REQUEST)
     public ApiResponse<Object> validation(MethodArgumentNotValidException e) {
-        String message = e.getBindingResult().getFieldErrors().stream()
-                .map(x -> x.getField() + ": " + x.getDefaultMessage()).collect(Collectors.joining("; "));
+        String message = e.getBindingResult().getFieldErrors().stream().map(x -> x.getField() + ": " + x.getDefaultMessage()).collect(Collectors.joining("; "));
         return ApiResponse.fail(ApiErrorCode.VALIDATION_FAILED, message);
     }
 
@@ -53,14 +51,18 @@ public class GlobalExceptionHandler {
         return ApiResponse.fail(ApiErrorCode.FORBIDDEN, e.getMessage());
     }
 
-    /** External callers without a usable API key: told to authenticate rather than to give up. */
+    /**
+     * External callers without a usable API key: told to authenticate rather than to give up.
+     */
     @ExceptionHandler(UnauthorizedException.class)
     @ResponseStatus(HttpStatus.UNAUTHORIZED)
     public ApiResponse<Object> unauthorized(UnauthorizedException e) {
         return ApiResponse.fail(ApiErrorCode.UNAUTHORIZED, e.getMessage());
     }
 
-    /** Quota breach: 429 so well-behaved clients can back off and retry later. */
+    /**
+     * Quota breach: 429 so well-behaved clients can back off and retry later.
+     */
     @ExceptionHandler(RateLimitException.class)
     @ResponseStatus(HttpStatus.TOO_MANY_REQUESTS)
     public ApiResponse<Object> rateLimited(RateLimitException e) {
@@ -97,9 +99,7 @@ public class GlobalExceptionHandler {
         while (current.getCause() != null && current.getCause() != current) {
             current = current.getCause();
         }
-        String message = current.getMessage() == null
-                ? current.getClass().getSimpleName()
-                : current.getMessage().trim();
+        String message = current.getMessage() == null ? current.getClass().getSimpleName() : current.getMessage().trim();
         return message.length() > 300 ? message.substring(0, 300) + "..." : message;
     }
 }

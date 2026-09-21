@@ -4,7 +4,6 @@ import com.jh.knowledgeos.config.KnowledgeProperties;
 import com.jh.knowledgeos.domain.ApiCallAudit;
 import com.jh.knowledgeos.mapper.ExternalApiMapper;
 import org.springframework.stereotype.Service;
-
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -21,20 +20,22 @@ import java.util.Map;
  */
 @Service
 public class IntegrationInsightService {
+
     private final ExternalApiMapper mapper;
+
     private final ApiKeyService apiKeyService;
+
     private final KnowledgeProperties.External properties;
 
-    public IntegrationInsightService(
-            ExternalApiMapper mapper,
-            ApiKeyService apiKeyService,
-            KnowledgeProperties properties) {
+    public IntegrationInsightService(ExternalApiMapper mapper, ApiKeyService apiKeyService, KnowledgeProperties properties) {
         this.mapper = mapper;
         this.apiKeyService = apiKeyService;
         this.properties = properties.external();
     }
 
-    /** 集成概览：服务 KPI、协议分布、健康状态、最近调用。 */
+    /**
+     * 集成概览：服务 KPI、协议分布、健康状态、最近调用。
+     */
     public Map<String, Object> overview(Integer hours) {
         LocalDateTime since = LocalDateTime.now().minusHours(hours == null || hours <= 0 ? 24 : Math.min(hours, 24 * 30));
         Map<String, Object> stats = mapper.aggregateApiCallStats(since);
@@ -42,7 +43,6 @@ public class IntegrationInsightService {
         long success = num(stats.get("successCount"));
         long error = num(stats.get("errorCount"));
         long p95 = percentile(since, total);
-
         Map<String, Object> result = new LinkedHashMap<String, Object>();
         result.put("windowHours", hours == null ? 24 : hours);
         result.put("services", services());
@@ -62,7 +62,9 @@ public class IntegrationInsightService {
         return result;
     }
 
-    /** 调用日志：protocol / status 过滤在内存完成，量级受 limit 限制。 */
+    /**
+     * 调用日志：protocol / status 过滤在内存完成，量级受 limit 限制。
+     */
     public List<Map<String, Object>> callLogs(Integer hours, String protocol, String status, Integer limit) {
         int max = limit == null || limit <= 0 ? 50 : Math.min(limit, 200);
         LocalDateTime since = LocalDateTime.now().minusHours(hours == null || hours <= 0 ? 24 : Math.min(hours, 24 * 30));
@@ -71,11 +73,19 @@ public class IntegrationInsightService {
         String channel = protocol == null || protocol.trim().isEmpty() ? null : protocol.trim().toUpperCase();
         String outcome = status == null || status.trim().isEmpty() ? null : status.trim().toUpperCase();
         for (ApiCallAudit audit : audits) {
-            if (audit.getCreatedTime() != null && audit.getCreatedTime().isBefore(since)) continue;
-            if (channel != null && !channel.equals(String.valueOf(audit.getChannel()))) continue;
+            if (audit.getCreatedTime() != null && audit.getCreatedTime().isBefore(since)) {
+                continue;
+            }
+            if (channel != null && !channel.equals(String.valueOf(audit.getChannel()))) {
+                continue;
+            }
             boolean failed = audit.getStatusCode() != null && audit.getStatusCode() >= 400;
-            if ("SUCCESS".equals(outcome) && failed) continue;
-            if ("ERROR".equals(outcome) && !failed) continue;
+            if ("SUCCESS".equals(outcome) && failed) {
+                continue;
+            }
+            if ("ERROR".equals(outcome) && !failed) {
+                continue;
+            }
             Map<String, Object> row = new LinkedHashMap<String, Object>();
             row.put("time", audit.getCreatedTime());
             row.put("protocol", audit.getChannel());
@@ -89,48 +99,52 @@ public class IntegrationInsightService {
             row.put("requestParams", audit.getRequestParams());
             row.put("responseData", audit.getResponseData());
             rows.add(row);
-            if (rows.size() >= max) break;
+            if (rows.size() >= max) {
+                break;
             }
-            return rows;
-            }
+        }
+        return rows;
+    }
 
-            /**
-            * One call in full — what the trace view opens.
-            *
-            * <p>The list row stays thin on purpose: an operator scans hundreds of them. This answers the
-            * follow-up question locally, which is the whole point of storing the payloads: what exactly did
-            * this caller send, and what did we hand back. Both reach the caller already sanitised and
-            * bounded by the recorder, so nothing here has to reconstruct or trim them.</p>
-            */
-            public Map<String, Object> callDetail(String traceId) {
-            if (traceId == null || traceId.trim().isEmpty()) return null;
-            ApiCallAudit audit = mapper.findApiCallAuditByTraceId(traceId.trim());
-            if (audit == null) return null;
-            Map<String, Object> row = new LinkedHashMap<String, Object>();
-            row.put("id", audit.getId());
-            row.put("time", audit.getCreatedTime());
-            row.put("traceId", audit.getTraceId());
-            row.put("caller", audit.getCallerName());
-            row.put("client", audit.getKeyCode());
-            row.put("protocol", audit.getChannel());
-            row.put("method", audit.getMethod());
-            row.put("knowledgeBaseId", audit.getKnowledgeBaseId());
-            row.put("status", audit.getStatusCode());
-            row.put("latencyMs", audit.getDurationMs());
-            row.put("message", audit.getMessage());
-            row.put("requestParams", audit.getRequestParams());
-            row.put("responseData", audit.getResponseData());
-            return row;
-            }
+    /**
+     * One call in full — what the trace view opens.
+     *
+     * <p>The list row stays thin on purpose: an operator scans hundreds of them. This answers the
+     * follow-up question locally, which is the whole point of storing the payloads: what exactly did
+     * this caller send, and what did we hand back. Both reach the caller already sanitised and
+     * bounded by the recorder, so nothing here has to reconstruct or trim them.</p>
+     */
+    public Map<String, Object> callDetail(String traceId) {
+        if (traceId == null || traceId.trim().isEmpty()) {
+            return null;
+        }
+        ApiCallAudit audit = mapper.findApiCallAuditByTraceId(traceId.trim());
+        if (audit == null) {
+            return null;
+        }
+        Map<String, Object> row = new LinkedHashMap<String, Object>();
+        row.put("id", audit.getId());
+        row.put("time", audit.getCreatedTime());
+        row.put("traceId", audit.getTraceId());
+        row.put("caller", audit.getCallerName());
+        row.put("client", audit.getKeyCode());
+        row.put("protocol", audit.getChannel());
+        row.put("method", audit.getMethod());
+        row.put("knowledgeBaseId", audit.getKnowledgeBaseId());
+        row.put("status", audit.getStatusCode());
+        row.put("latencyMs", audit.getDurationMs());
+        row.put("message", audit.getMessage());
+        row.put("requestParams", audit.getRequestParams());
+        row.put("responseData", audit.getResponseData());
+        return row;
+    }
 
-    /** 四类集成服务：Search / Retrieve / Answer / Knowledge Object（设计 §6.3）。 */
+    /**
+     * 四类集成服务：Search / Retrieve / Answer / Knowledge Object（设计 §6.3）。
+     */
     private List<Map<String, Object>> services() {
         String base = "/api/v1/external";
-        return new ArrayList<Map<String, Object>>(java.util.Arrays.asList(
-                service("search", "Search Service", "搜索知识对象", "POST " + base + "/search", properties.isEnabled()),
-                service("retrieve", "Retrieve Service", "为外部 LLM/Agent 提供 Context", "POST " + base + "/query", properties.isEnabled()),
-                service("answer", "Answer Service", "检索 + 生成一体化回答", "POST " + base + "/query", properties.isEnabled()),
-                service("knowledge-object", "Knowledge Object Service", "读取知识对象与血缘", "GET " + base + "/cards/{code}", properties.isEnabled())));
+        return new ArrayList<Map<String, Object>>(java.util.Arrays.asList(service("search", "Search Service", "搜索知识对象", "POST " + base + "/search", properties.isEnabled()), service("retrieve", "Retrieve Service", "为外部 LLM/Agent 提供 Context", "POST " + base + "/query", properties.isEnabled()), service("answer", "Answer Service", "检索 + 生成一体化回答", "POST " + base + "/query", properties.isEnabled()), service("knowledge-object", "Knowledge Object Service", "读取知识对象与血缘", "GET " + base + "/cards/{code}", properties.isEnabled())));
     }
 
     private Map<String, Object> service(String code, String name, String purpose, String endpoint, boolean enabled) {
@@ -156,7 +170,9 @@ public class IntegrationInsightService {
         return rows;
     }
 
-    /** 健康状态：错误率与 P95 决定通道告警等级，凭证数量不足提示凭证风险。 */
+    /**
+     * 健康状态：错误率与 P95 决定通道告警等级，凭证数量不足提示凭证风险。
+     */
     private List<Map<String, Object>> health(long error, long total, long p95) {
         double errorRate = total == 0 ? 0.0d : error * 100.0d / total;
         List<Map<String, Object>> rows = new ArrayList<Map<String, Object>>();
@@ -168,8 +184,12 @@ public class IntegrationInsightService {
     }
 
     private String statusOf(double errorRate, long p95) {
-        if (errorRate >= 10.0d) return "异常";
-        if (errorRate >= 2.0d || p95 >= 3000L) return "限流/降级";
+        if (errorRate >= 10.0d) {
+            return "异常";
+        }
+        if (errorRate >= 2.0d || p95 >= 3000L) {
+            return "限流/降级";
+        }
         return "正常";
     }
 
@@ -199,10 +219,16 @@ public class IntegrationInsightService {
         return rows;
     }
 
-    /** P95 近似：总量小于 20 条时直接取最大值，避免小样本下分位数失真。 */
+    /**
+     * P95 近似：总量小于 20 条时直接取最大值，避免小样本下分位数失真。
+     */
     private long percentile(LocalDateTime since, long total) {
-        if (total <= 0) return 0L;
-        if (total < 20) return num(mapper.aggregateApiCallStats(since).get("maxDurationMs"));
+        if (total <= 0) {
+            return 0L;
+        }
+        if (total < 20) {
+            return num(mapper.aggregateApiCallStats(since).get("maxDurationMs"));
+        }
         Integer value = mapper.percentileDuration(since, (int) Math.floor(total * 0.95d));
         return value == null ? 0L : value.longValue();
     }

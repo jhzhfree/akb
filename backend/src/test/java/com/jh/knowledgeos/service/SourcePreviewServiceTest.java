@@ -8,7 +8,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
-
 import com.jh.knowledgeos.domain.SourceFile;
 import com.jh.knowledgeos.mapper.KnowledgeMapper;
 import java.nio.charset.StandardCharsets;
@@ -20,6 +19,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 class SourcePreviewServiceTest {
+
     @TempDir
     Path storageRoot;
 
@@ -50,9 +50,7 @@ class SourcePreviewServiceTest {
         String relative = storage.store(1L, "SRC_1", "policy.md", "# 报销标准\n\n市内交通 80 元/天".getBytes(StandardCharsets.UTF_8));
         Map<String, Object> row = row("policy.md", "归一化后的文本");
         row.put("storagePath", relative);
-
         Map<String, Object> preview = service(mapperReturning(row)).preview(1L, 9L, null, null);
-
         assertEquals("TEXT", preview.get("previewType"));
         assertEquals("SOURCE", preview.get("mode"));
         assertEquals(Boolean.TRUE, preview.get("stored"));
@@ -66,9 +64,7 @@ class SourcePreviewServiceTest {
         String relative = storage.store(1L, "SRC_2", "scan.pdf", "%PDF-1.4 binary".getBytes(StandardCharsets.UTF_8));
         Map<String, Object> row = row("scan.pdf", "解析出来的 PDF 文本");
         row.put("storagePath", relative);
-
         Map<String, Object> preview = service(mapperReturning(row)).preview(1L, 9L, null, null);
-
         assertEquals("BINARY", preview.get("previewType"));
         assertEquals("PARSED", preview.get("mode"));
         assertEquals("解析出来的 PDF 文本", preview.get("content"));
@@ -76,9 +72,7 @@ class SourcePreviewServiceTest {
 
     @Test
     void missingFileStillShowsParsedText() {
-        Map<String, Object> preview = service(mapperReturning(row("legacy.md", "历史解析文本")))
-                .preview(1L, 9L, null, null);
-
+        Map<String, Object> preview = service(mapperReturning(row("legacy.md", "历史解析文本"))).preview(1L, 9L, null, null);
         assertEquals("MISSING", preview.get("previewType"));
         assertEquals("PARSED", preview.get("mode"));
         assertEquals(Boolean.FALSE, preview.get("stored"));
@@ -88,10 +82,10 @@ class SourcePreviewServiceTest {
     @Test
     void longContentIsTruncatedToTheRequestedLimit() {
         StringBuilder text = new StringBuilder();
-        for (int index = 0; index < 500; index++) text.append("知识");
-        Map<String, Object> preview = service(mapperReturning(row("big.md", text.toString())))
-                .preview(1L, 9L, 100, null);
-
+        for (int index = 0; index < 500; index++) {
+            text.append("知识");
+        }
+        Map<String, Object> preview = service(mapperReturning(row("big.md", text.toString()))).preview(1L, 9L, 100, null);
         assertEquals(Boolean.TRUE, preview.get("truncated"));
         assertEquals(100, String.valueOf(preview.get("content")).length());
         assertEquals(1000, preview.get("totalChars"));
@@ -110,7 +104,6 @@ class SourcePreviewServiceTest {
         String relative = storage.store(1L, "SRC_3", "notes.md", "notes".getBytes(StandardCharsets.UTF_8));
         Map<String, Object> row = row("notes.md", "解析文本");
         row.put("storagePath", relative);
-
         SourceFile file = service(mapperReturning(row)).file(1L, 9L, null);
         assertNotNull(file);
         assertEquals("notes.md", file.getName());
@@ -124,7 +117,7 @@ class SourcePreviewServiceTest {
         Files.write(storageRoot.resolve("inside.txt"), "ok".getBytes(StandardCharsets.UTF_8));
         assertNotNull(storage.resolve("inside.txt"));
         assertNull(storage.resolve("../outside.txt"));
-        assertFalse(storage.isText("scan.pdf", new byte[] {0x25, 0x50, 0x44, 0x46}));
-        assertTrue(storage.isText("policy.md", new byte[] {0x23}));
+        assertFalse(storage.isText("scan.pdf", new byte[] { 0x25, 0x50, 0x44, 0x46 }));
+        assertTrue(storage.isText("policy.md", new byte[] { 0x23 }));
     }
 }

@@ -1,12 +1,15 @@
 from app.services.answer_evidence_gate import AnswerEvidenceGate
-from app.services.structured_answer_gate import StructuredAnswerGate
 from app.services.answer_qualification import AnswerQualification
+from app.services.structured_answer_gate import StructuredAnswerGate
 
 
 def citation(index, evidence_code="EVD_1", evidence_hash="hash-1"):
     return {
-        "index": index, "id": "CU_1", "title": "LLM 推理",
-        "evidenceCode": evidence_code, "evidenceHash": evidence_hash,
+        "index": index,
+        "id": "CU_1",
+        "title": "LLM 推理",
+        "evidenceCode": evidence_code,
+        "evidenceHash": evidence_hash,
     }
 
 

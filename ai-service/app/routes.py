@@ -3,24 +3,25 @@
 import asyncio
 import shutil
 import uuid
-from typing import Any, Dict, Optional
-from fastapi import APIRouter, UploadFile, File, Form, HTTPException
+from typing import Any
+
+from fastapi import APIRouter, File, Form, HTTPException, UploadFile
+
 from app.core import chunk_policy
-from app.core.config import UPLOAD_DIR
+from app.core.config import UPLOAD_DIR, settings
 from app.models.schemas import ExtractRequest, QueryRequest
-from app.services.document_parser import DocumentParser
-from app.services.extractor import KnowledgeExtractor
-from app.services.indexer import KnowledgeIndexer
-from app.services.query_engine import QueryEngine
-from app.storage.index_store import store
-from app.services.graph_provider import get_graph_provider
-from app.services.conflict_detector import ConflictDetector
-from app.services.reranker import get_reranker
-from app.core.config import settings
 from app.services.adjudication_engine import AdjudicationEngine
-from app.services.retrieval.external import get_elasticsearch_provider, get_milvus_provider
-from app.services.okf_bundle import OkfBundleError, OkfBundleInspector
+from app.services.conflict_detector import ConflictDetector
+from app.services.document_parser import DocumentParser
 from app.services.entity_resolver import get_entity_resolver
+from app.services.extractor import KnowledgeExtractor
+from app.services.graph_provider import get_graph_provider
+from app.services.indexer import KnowledgeIndexer
+from app.services.okf_bundle import OkfBundleError, OkfBundleInspector
+from app.services.query_engine import QueryEngine
+from app.services.reranker import get_reranker
+from app.services.retrieval.external import get_elasticsearch_provider, get_milvus_provider
+from app.storage.index_store import store
 
 router = APIRouter()
 parser = DocumentParser()
@@ -36,10 +37,10 @@ entity_resolver = get_entity_resolver()
 @router.post("/ai/documents/parse")
 async def parse_document(
     file: UploadFile = File(...),
-    policy: Optional[str] = Form(None),
-    strategy: Optional[str] = Form(None),
-    chunk_size: Optional[int] = Form(None),
-    chunk_overlap: Optional[int] = Form(None),
+    policy: str | None = Form(None),
+    strategy: str | None = Form(None),
+    chunk_size: int | None = Form(None),
+    chunk_overlap: int | None = Form(None),
 ):
     """Parse an uploaded document into normalized text and chunks.
 
@@ -50,7 +51,7 @@ async def parse_document(
     path = UPLOAD_DIR / (uuid.uuid4().hex + "_" + safe)
     with path.open("wb") as f:
         shutil.copyfileobj(file.file, f)
-    payload: Dict[str, Any] = chunk_policy.parse_json(policy) or {}
+    payload: dict[str, Any] = chunk_policy.parse_json(policy) or {}
     if strategy:
         payload["strategy"] = strategy
     if chunk_size:
@@ -61,11 +62,11 @@ async def parse_document(
     try:
         return await asyncio.to_thread(parser.parse, str(path), safe, active)
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e)) from e
 
 
 @router.get("/ai/settings/chunk-policy")
-def read_chunk_policy() -> Dict[str, Any]:
+def read_chunk_policy() -> dict[str, Any]:
     """Vocabulary, bounds and defaults of the chunking policy the parser accepts."""
     return chunk_policy.schema()
 
@@ -77,7 +78,7 @@ async def inspect_okf_bundle(file: UploadFile = File(...)):
         content = await file.read(OkfBundleInspector.MAX_ARCHIVE_BYTES + 1)
         return await asyncio.to_thread(okf_inspector.inspect, content, file.filename or "bundle.zip")
     except OkfBundleError as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @router.post("/ai/extract")
@@ -87,7 +88,7 @@ async def extract(r: ExtractRequest):
 
 
 @router.post("/ai/standard/index")
-async def index_standard_document(p: Dict[str, Any]):
+async def index_standard_document(p: dict[str, Any]):
     """Store normalized standard-document units in Elasticsearch.
 
     This is the ingest-time contract: raw sources are normalized first, and the
@@ -113,7 +114,7 @@ async def read_standard_document(kb: int, document_id: int):
 
 
 @router.post("/ai/standard/search")
-async def search_standard_document(p: Dict[str, Any]):
+async def search_standard_document(p: dict[str, Any]):
     """Full-text search over normalized standard-document units."""
     return await indexer.search_standard_units(
         int(p["knowledgeBaseId"]),
@@ -125,7 +126,7 @@ async def search_standard_document(p: Dict[str, Any]):
 
 
 @router.post("/ai/entity-resolve")
-async def entity_resolve(p: Dict[str, Any]):
+async def entity_resolve(p: dict[str, Any]):
     """Resolve extracted entity mentions onto canonical entities (design V1.1 §5.4)."""
     return await entity_resolver.resolve(
         p.get("entities", []),
@@ -134,7 +135,7 @@ async def entity_resolve(p: Dict[str, Any]):
 
 
 @router.post("/ai/index/chunks")
-async def index_chunks(p: Dict[str, Any]):
+async def index_chunks(p: dict[str, Any]):
     """Index authoritative document chunks into configured retrieval views."""
     return await indexer.index_chunks(
         int(p["knowledgeBaseId"]),
@@ -148,16 +149,20 @@ async def index_chunks(p: Dict[str, Any]):
 
 
 @router.post("/ai/index/knowledge")
-async def index_knowledge(p: Dict[str, Any]):
+async def index_knowledge(p: dict[str, Any]):
     """Index knowledge cards/claims into configured retrieval views."""
     return await indexer.index_knowledge_objects(
-        int(p["knowledgeBaseId"]), p.get("cards"), p.get("claims"), p.get("entities"), p.get("relations"),
-        int(p.get("indexVersion") or 0)
+        int(p["knowledgeBaseId"]),
+        p.get("cards"),
+        p.get("claims"),
+        p.get("entities"),
+        p.get("relations"),
+        int(p.get("indexVersion") or 0),
     )
 
 
 @router.post("/ai/index/object/acl")
-async def update_index_object_acl(p: Dict[str, Any]):
+async def update_index_object_acl(p: dict[str, Any]):
     """Propagate authoritative ACL changes; signal rebuild when a provider cannot safely patch."""
     return await indexer.update_object_acl(
         int(p["knowledgeBaseId"]),
@@ -170,7 +175,7 @@ async def update_index_object_acl(p: Dict[str, Any]):
 
 
 @router.post("/ai/index/object/status")
-async def update_index_object_status(p: Dict[str, Any]):
+async def update_index_object_status(p: dict[str, Any]):
     """Apply a version-aware lifecycle-status update to retrieval views."""
     return await indexer.update_object_status(
         int(p["knowledgeBaseId"]),
@@ -205,52 +210,55 @@ async def rebuild_external_index(knowledge_base_id: int):
     return await indexer.rebuild_external(knowledge_base_id)
 
 
-
 @router.post("/ai/index/schema/rebuild/{knowledge_base_id}")
-async def rebuild_index_schema(knowledge_base_id:int, p:Dict[str,Any]):
+async def rebuild_index_schema(knowledge_base_id: int, p: dict[str, Any]):
     """Reset one blue/green schema target and index the supplied batch."""
-    version=str(p.get("schemaVersion") or "").strip()
+    version = str(p.get("schemaVersion") or "").strip()
     if not version:
-        raise HTTPException(status_code=400,detail="schemaVersion is required")
-    return await indexer.rebuild_schema(knowledge_base_id,version)
+        raise HTTPException(status_code=400, detail="schemaVersion is required")
+    return await indexer.rebuild_schema(knowledge_base_id, version)
 
 
 @router.post("/ai/index/schema/rebuild-batch/{knowledge_base_id}")
-async def rebuild_index_schema_batch(knowledge_base_id:int, p:Dict[str,Any]):
+async def rebuild_index_schema_batch(knowledge_base_id: int, p: dict[str, Any]):
     """Append one authoritative snapshot batch to a blue/green target."""
-    version=str(p.get("schemaVersion") or "").strip()
+    version = str(p.get("schemaVersion") or "").strip()
     if not version:
-        raise HTTPException(status_code=400,detail="schemaVersion is required")
-    return await indexer.rebuild_schema_batch(knowledge_base_id,version,p.get("documents") or [],bool(p.get("reset")))
+        raise HTTPException(status_code=400, detail="schemaVersion is required")
+    return await indexer.rebuild_schema_batch(
+        knowledge_base_id, version, p.get("documents") or [], bool(p.get("reset"))
+    )
+
 
 @router.post("/ai/index/schema/graph-rebuild/{knowledge_base_id}")
-async def rebuild_authoritative_graph(knowledge_base_id:int, payload:Dict[str,Any]):
+async def rebuild_authoritative_graph(knowledge_base_id: int, payload: dict[str, Any]):
     """Rebuild authoritative Entity/Relation graph for one green generation."""
-    generation=str(payload.get("generationId") or "").strip()
+    generation = str(payload.get("generationId") or "").strip()
     if not generation:
-        raise HTTPException(status_code=400,detail="generationId is required")
+        raise HTTPException(status_code=400, detail="generationId is required")
     return await indexer.rebuild_authoritative_graph(
-        knowledge_base_id, generation, payload.get("entitiesAndRelations") or [],
-        payload.get("evidenceBindings") or []
+        knowledge_base_id, generation, payload.get("entitiesAndRelations") or [], payload.get("evidenceBindings") or []
     )
 
 
 @router.post("/ai/index/schema/activate/{knowledge_base_id}")
-async def activate_index_schema(knowledge_base_id:int, p:Dict[str,Any]):
+async def activate_index_schema(knowledge_base_id: int, p: dict[str, Any]):
     """Move retrieval read aliases to a validated schema target."""
-    version=str(p.get("schemaVersion") or "").strip()
+    version = str(p.get("schemaVersion") or "").strip()
     if not version:
-        raise HTTPException(status_code=400,detail="schemaVersion is required")
-    return await indexer.activate_schema(knowledge_base_id,version)
+        raise HTTPException(status_code=400, detail="schemaVersion is required")
+    return await indexer.activate_schema(knowledge_base_id, version)
+
 
 @router.post("/ai/index/schema/acl-qualify/{knowledge_base_id}")
-async def qualify_index_schema_acl(knowledge_base_id:int, payload:Dict[str,Any]):
+async def qualify_index_schema_acl(knowledge_base_id: int, payload: dict[str, Any]):
     """Machine-verifiable ACL leakage qualification against one green schema."""
-    version=str(payload.get("schemaVersion") or "").strip()
+    version = str(payload.get("schemaVersion") or "").strip()
     if not version:
-        raise HTTPException(status_code=400,detail="schemaVersion is required")
+        raise HTTPException(status_code=400, detail="schemaVersion is required")
     return await indexer.qualify_schema_acl(
-        knowledge_base_id, version,
+        knowledge_base_id,
+        version,
         str(payload.get("expectedManifestHash") or ""),
         int(payload.get("expectedManifestCount") or 0),
         str(payload.get("expectedGraphManifestHash") or ""),
@@ -273,21 +281,17 @@ async def retrieval_capabilities():
 @router.post("/ai/query")
 async def query(r: QueryRequest):
     """Execute query routing, hybrid retrieval, reranking, context assembly, and answer generation."""
-    return await engine.query(
-        r.queryId or "", r.knowledgeBaseId, r.query, r.topK, r.permissionTags
-    )
+    return await engine.query(r.queryId or "", r.knowledgeBaseId, r.query, r.topK, r.permissionTags)
 
 
 @router.post("/ai/retrieve")
 async def retrieve(r: QueryRequest):
     """Run recall, fusion and reranking without generation: the grading path for evaluation runs."""
-    return await engine.query(
-        r.queryId or "", r.knowledgeBaseId, r.query, r.topK, r.permissionTags, generate=False
-    )
+    return await engine.query(r.queryId or "", r.knowledgeBaseId, r.query, r.topK, r.permissionTags, generate=False)
 
 
 @router.post("/ai/adjudicate")
-async def adjudicate(p: Dict[str, Any]):
+async def adjudicate(p: dict[str, Any]):
     """Score one knowledge candidate for automatic or human-assisted adjudication."""
     return await adjudication_engine.judge(p)
 
@@ -304,19 +308,21 @@ async def stats(knowledge_base_id: int):
 
 
 @router.post("/ai/conflicts/detect")
-async def detect_conflicts(p: Dict[str, Any]):
+async def detect_conflicts(p: dict[str, Any]):
     """Detect likely contradictions among focused claim candidates."""
-    conflicts = await asyncio.to_thread(
-        conflict_detector.detect, p.get("claims", []), p.get("focusCodes")
-    )
+    conflicts = await asyncio.to_thread(conflict_detector.detect, p.get("claims", []), p.get("focusCodes"))
     return {"conflicts": conflicts}
 
 
 @router.get("/ai/graph/{knowledge_base_id}/{object_code}")
-async def graph_neighborhood(knowledge_base_id: int, object_code: str, depth: int = 2, limit: int = 50, permissionTags: str = ""):
+async def graph_neighborhood(
+    knowledge_base_id: int, object_code: str, depth: int = 2, limit: int = 50, permissionTags: str = ""
+):
     """Return a graph neighborhood for entity/claim exploration."""
     provider = get_graph_provider()
-    return provider.neighborhood(knowledge_base_id, object_code, depth, limit, [x.strip() for x in permissionTags.split(",") if x.strip()])
+    return provider.neighborhood(
+        knowledge_base_id, object_code, depth, limit, [x.strip() for x in permissionTags.split(",") if x.strip()]
+    )
 
 
 @router.get("/ai/capabilities")
@@ -343,35 +349,59 @@ async def capabilities():
         },
     }
 
+
 @router.get("/ai/graph/{knowledge_base_id}/{entity_code}/multihop")
-async def graph_multihop(knowledge_base_id: int, entity_code: str, depth: int = 3, limit: int = 20,
-                         tokenBudget: int = 2500, permissionTags: str = ""):
+async def graph_multihop(
+    knowledge_base_id: int,
+    entity_code: str,
+    depth: int = 3,
+    limit: int = 20,
+    tokenBudget: int = 2500,
+    permissionTags: str = "",
+):
     """Generation-safe multi-hop GraphRAG paths with ACL and evidence binding."""
     provider = get_graph_provider()
     if not hasattr(provider, "generation_multihop"):
         return {"provider": provider.__class__.__name__, "available": False, "paths": []}
     tags = [x.strip() for x in permissionTags.split(",") if x.strip()]
-    return await asyncio.to_thread(provider.generation_multihop, knowledge_base_id, entity_code,
-                                   depth, limit, tags, tokenBudget)
+    return await asyncio.to_thread(
+        provider.generation_multihop, knowledge_base_id, entity_code, depth, limit, tags, tokenBudget
+    )
+
 
 @router.get("/ai/graph/{knowledge_base_id}/{entity_code}/facet-multihop")
-async def graph_facet_multihop(knowledge_base_id: int, entity_code: str, depth: int = 3, limit: int = 20,
-                               token_budget: int = 2500, permission_tags: str = ""):
+async def graph_facet_multihop(
+    knowledge_base_id: int,
+    entity_code: str,
+    depth: int = 3,
+    limit: int = 20,
+    token_budget: int = 2500,
+    permission_tags: str = "",
+):
     """Evidence-scoped GraphRAG: expose only facets visible to the caller persona."""
     provider = get_graph_provider()
     if not hasattr(provider, "facet_multihop"):
         return {"provider": "none", "paths": [], "pathCount": 0, "available": False}
     tags = [x.strip() for x in permission_tags.split(",") if x.strip()]
-    return await asyncio.to_thread(provider.facet_multihop, knowledge_base_id, entity_code,
-                                   depth, limit, tags, token_budget)
+    return await asyncio.to_thread(
+        provider.facet_multihop, knowledge_base_id, entity_code, depth, limit, tags, token_budget
+    )
+
 
 @router.get("/ai/graph/{knowledge_base_id}/{entity_code}/citation-safe-multihop")
-async def graph_citation_safe_multihop(knowledge_base_id: int, entity_code: str, depth: int = 3, limit: int = 20,
-                                      token_budget: int = 2500, permission_tags: str = ""):
+async def graph_citation_safe_multihop(
+    knowledge_base_id: int,
+    entity_code: str,
+    depth: int = 3,
+    limit: int = 20,
+    token_budget: int = 2500,
+    permission_tags: str = "",
+):
     """Generation-pinned GraphRAG where every returned path has persona-visible evidence."""
     provider = get_graph_provider()
     if not hasattr(provider, "citation_safe_multihop"):
         return {"provider": "none", "paths": [], "citationPolicy": "UNAVAILABLE"}
     tags = [x.strip() for x in permission_tags.split(",") if x.strip()]
-    return await asyncio.to_thread(provider.citation_safe_multihop, knowledge_base_id, entity_code,
-                                   depth, limit, tags, token_budget)
+    return await asyncio.to_thread(
+        provider.citation_safe_multihop, knowledge_base_id, entity_code, depth, limit, tags, token_budget
+    )

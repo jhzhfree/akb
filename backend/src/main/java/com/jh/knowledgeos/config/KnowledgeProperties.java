@@ -2,7 +2,6 @@ package com.jh.knowledgeos.config;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.validation.annotation.Validated;
-
 import javax.validation.constraints.Min;
 import javax.validation.constraints.NotBlank;
 
@@ -15,6 +14,7 @@ import javax.validation.constraints.NotBlank;
 @Validated
 @ConfigurationProperties(prefix = "knowledge")
 public class KnowledgeProperties {
+
     @NotBlank
     private String aiServiceBaseUrl;
 
@@ -25,12 +25,17 @@ public class KnowledgeProperties {
     private int aiReadTimeoutMs = 180000;
 
     private Auth auth = new Auth();
+
     private External external = new External();
 
     private boolean startupFailFast = false;
+
     private boolean opsRbacEnabled = false;
+
     private String opsViewerToken = "";
+
     private String opsOperatorToken = "";
+
     private String opsAdminToken = "";
 
     public String getAiServiceBaseUrl() {
@@ -121,22 +126,56 @@ public class KnowledgeProperties {
      * fashion while the console still requires a real login.</p>
      */
     public static class Auth {
+
         private boolean enabled = true;
+
         private boolean allowAnonymous = false;
+
         private int sessionHours = 12;
+
         private String bootstrapAdminUsername = "admin";
+
         private String bootstrapAdminPassword = "";
 
-        public boolean isEnabled() { return enabled; }
-        public void setEnabled(boolean value) { enabled = value; }
-        public boolean isAllowAnonymous() { return allowAnonymous; }
-        public void setAllowAnonymous(boolean value) { allowAnonymous = value; }
-        public int getSessionHours() { return sessionHours; }
-        public void setSessionHours(int value) { sessionHours = value < 1 ? 12 : value; }
-        public String getBootstrapAdminUsername() { return bootstrapAdminUsername; }
-        public void setBootstrapAdminUsername(String value) { bootstrapAdminUsername = value; }
-        public String getBootstrapAdminPassword() { return bootstrapAdminPassword; }
-        public void setBootstrapAdminPassword(String value) { bootstrapAdminPassword = value == null ? "" : value; }
+        public boolean isEnabled() {
+            return enabled;
+        }
+
+        public void setEnabled(boolean value) {
+            enabled = value;
+        }
+
+        public boolean isAllowAnonymous() {
+            return allowAnonymous;
+        }
+
+        public void setAllowAnonymous(boolean value) {
+            allowAnonymous = value;
+        }
+
+        public int getSessionHours() {
+            return sessionHours;
+        }
+
+        public void setSessionHours(int value) {
+            sessionHours = value < 1 ? 12 : value;
+        }
+
+        public String getBootstrapAdminUsername() {
+            return bootstrapAdminUsername;
+        }
+
+        public void setBootstrapAdminUsername(String value) {
+            bootstrapAdminUsername = value;
+        }
+
+        public String getBootstrapAdminPassword() {
+            return bootstrapAdminPassword;
+        }
+
+        public void setBootstrapAdminPassword(String value) {
+            bootstrapAdminPassword = value == null ? "" : value;
+        }
     }
 
     /**
@@ -144,33 +183,86 @@ public class KnowledgeProperties {
      * one quota and one audit trail, but each channel can be switched off on its own.
      */
     public static class External {
+
         private boolean enabled = true;
+
         private boolean mcpEnabled = true;
+
         private boolean sseEnabled = true;
+
         private int sseHeartbeatSeconds = 15;
+
         private int sseMaxMinutes = 30;
-        /** Answer is replayed to SSE clients in slices until the LLM itself streams tokens. */
+
+        /**
+         * Answer is replayed to SSE clients in slices until the LLM itself streams tokens.
+         */
         private int answerChunkChars = 40;
+
         private int answerChunkDelayMillis = 40;
+
         private int defaultRateLimitPerMinute = 60;
 
-        public boolean isEnabled() { return enabled; }
-        public void setEnabled(boolean value) { enabled = value; }
-        public boolean isMcpEnabled() { return mcpEnabled; }
-        public void setMcpEnabled(boolean value) { mcpEnabled = value; }
-        public boolean isSseEnabled() { return sseEnabled; }
-        public void setSseEnabled(boolean value) { sseEnabled = value; }
-        public int getSseHeartbeatSeconds() { return sseHeartbeatSeconds; }
-        public void setSseHeartbeatSeconds(int value) { sseHeartbeatSeconds = Math.max(value, 3); }
-        public int getSseMaxMinutes() { return sseMaxMinutes; }
-        public void setSseMaxMinutes(int value) { sseMaxMinutes = value < 1 ? 30 : Math.min(value, 240); }
-        public int getAnswerChunkChars() { return answerChunkChars; }
-        public void setAnswerChunkChars(int value) { answerChunkChars = value < 8 ? 40 : value; }
-        public int getAnswerChunkDelayMillis() { return answerChunkDelayMillis; }
+        public boolean isEnabled() {
+            return enabled;
+        }
+
+        public void setEnabled(boolean value) {
+            enabled = value;
+        }
+
+        public boolean isMcpEnabled() {
+            return mcpEnabled;
+        }
+
+        public void setMcpEnabled(boolean value) {
+            mcpEnabled = value;
+        }
+
+        public boolean isSseEnabled() {
+            return sseEnabled;
+        }
+
+        public void setSseEnabled(boolean value) {
+            sseEnabled = value;
+        }
+
+        public int getSseHeartbeatSeconds() {
+            return sseHeartbeatSeconds;
+        }
+
+        public void setSseHeartbeatSeconds(int value) {
+            sseHeartbeatSeconds = Math.max(value, 3);
+        }
+
+        public int getSseMaxMinutes() {
+            return sseMaxMinutes;
+        }
+
+        public void setSseMaxMinutes(int value) {
+            sseMaxMinutes = value < 1 ? 30 : Math.min(value, 240);
+        }
+
+        public int getAnswerChunkChars() {
+            return answerChunkChars;
+        }
+
+        public void setAnswerChunkChars(int value) {
+            answerChunkChars = value < 8 ? 40 : value;
+        }
+
+        public int getAnswerChunkDelayMillis() {
+            return answerChunkDelayMillis;
+        }
+
         public void setAnswerChunkDelayMillis(int value) {
             answerChunkDelayMillis = Math.min(Math.max(value, 0), 500);
         }
-        public int getDefaultRateLimitPerMinute() { return defaultRateLimitPerMinute; }
+
+        public int getDefaultRateLimitPerMinute() {
+            return defaultRateLimitPerMinute;
+        }
+
         public void setDefaultRateLimitPerMinute(int value) {
             defaultRateLimitPerMinute = value < 1 ? 60 : value;
         }

@@ -4,7 +4,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.jh.knowledgeos.domain.User;
 import com.jh.knowledgeos.mapper.KnowledgeMapper;
 import org.springframework.stereotype.Service;
-
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
@@ -26,39 +25,58 @@ import java.util.Map;
  */
 @Service
 public class TaskCenterService {
+
     public static final String QUEUED = "QUEUED";
+
     public static final String RUNNING = "RUNNING";
+
     public static final String SUCCEEDED = "SUCCEEDED";
+
     public static final String FAILED = "FAILED";
+
     public static final String CANCELED = "CANCELED";
+
     public static final String DEAD = "DEAD";
 
     public static final String TRIGGER_MANUAL = "MANUAL";
+
     public static final String TRIGGER_SCHEDULED = "SCHEDULED";
+
     public static final String TRIGGER_EVENT = "EVENT";
+
     public static final String TRIGGER_RETRY = "RETRY";
 
     public static final String TYPE_INGESTION = "INGESTION";
+
     public static final String TYPE_EXTRACTION = "EXTRACTION";
+
     public static final String TYPE_EMBEDDING = "EMBEDDING";
+
     public static final String TYPE_INDEX = "INDEX";
+
     public static final String TYPE_DERIVATION = "DERIVATION";
+
     public static final String TYPE_EVALUATION = "EVALUATION";
+
     public static final String TYPE_SYNC = "SYNC";
+
     public static final String TYPE_SCHEMA = "SCHEMA";
+
     public static final String TYPE_ACL_REBUILD = "ACL_REBUILD";
 
-    /** Task types the centre offers as a filter, in the order the console shows them. */
-    public static final List<String> TASK_TYPES = Collections.unmodifiableList(Arrays.asList(
-            TYPE_INGESTION, TYPE_EXTRACTION, TYPE_EMBEDDING, TYPE_INDEX, TYPE_DERIVATION,
-            TYPE_EVALUATION, TYPE_SYNC, TYPE_SCHEMA, TYPE_ACL_REBUILD));
+    /**
+     * Task types the centre offers as a filter, in the order the console shows them.
+     */
+    public static final List<String> TASK_TYPES = Collections.unmodifiableList(Arrays.asList(TYPE_INGESTION, TYPE_EXTRACTION, TYPE_EMBEDDING, TYPE_INDEX, TYPE_DERIVATION, TYPE_EVALUATION, TYPE_SYNC, TYPE_SCHEMA, TYPE_ACL_REBUILD));
 
     private static final DateTimeFormatter TS = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
-    private static final List<String> FAILURE_STATUSES = Collections.unmodifiableList(
-            Arrays.asList(FAILED, DEAD));
+
+    private static final List<String> FAILURE_STATUSES = Collections.unmodifiableList(Arrays.asList(FAILED, DEAD));
 
     private final KnowledgeMapper mapper;
+
     private final IdGenerator ids;
+
     private final ObjectMapper objectMapper;
 
     public TaskCenterService(KnowledgeMapper mapper, IdGenerator ids, ObjectMapper objectMapper) {
@@ -67,12 +85,12 @@ public class TaskCenterService {
         this.objectMapper = objectMapper;
     }
 
-    /** Register a job before it starts, so a crash mid-flight still leaves a trace. */
-    public Map<String, Object> enqueue(Long kb, String taskType, String taskName, String targetType,
-            String targetCode, String triggerType, Map<String, Object> payload) {
+    /**
+     * Register a job before it starts, so a crash mid-flight still leaves a trace.
+     */
+    public Map<String, Object> enqueue(Long kb, String taskType, String taskName, String targetType, String targetCode, String triggerType, Map<String, Object> payload) {
         String taskCode = ids.next("TASK");
-        mapper.insertTaskRun(taskCode, kb, normalizeType(taskType), taskName, targetType, targetCode,
-                defaultTrigger(triggerType), currentUser(), 3, write(payload));
+        mapper.insertTaskRun(taskCode, kb, normalizeType(taskType), taskName, targetType, targetCode, defaultTrigger(triggerType), currentUser(), 3, write(payload));
         Map<String, Object> created = new LinkedHashMap<String, Object>();
         created.put("taskCode", taskCode);
         created.put("status", QUEUED);
@@ -135,7 +153,9 @@ public class TaskCenterService {
         return detail(taskCode);
     }
 
-    /** Put a failed or dead-lettered job back in the queue; the executor decides how to run it. */
+    /**
+     * Put a failed or dead-lettered job back in the queue; the executor decides how to run it.
+     */
     public Map<String, Object> retry(String taskCode) {
         Map<String, Object> task = require(taskCode);
         String status = text(task.get("status"));
@@ -146,17 +166,17 @@ public class TaskCenterService {
         return detail(taskCode);
     }
 
-    public List<Map<String, Object>> list(Long kb, String status, String taskType, String triggerType,
-            Integer limit) {
-        return mapper.listTaskRuns(kb, blank(status), blank(taskType), blank(triggerType),
-                limit == null || limit <= 0 ? 50 : Math.min(limit, 200));
+    public List<Map<String, Object>> list(Long kb, String status, String taskType, String triggerType, Integer limit) {
+        return mapper.listTaskRuns(kb, blank(status), blank(taskType), blank(triggerType), limit == null || limit <= 0 ? 50 : Math.min(limit, 200));
     }
 
     public Map<String, Object> detail(String taskCode) {
         return require(taskCode);
     }
 
-    /** Counts behind the four tiles of the task centre. */
+    /**
+     * Counts behind the four tiles of the task centre.
+     */
     public Map<String, Object> stats(Long kb) {
         Map<String, Object> stats = new LinkedHashMap<String, Object>();
         int total = 0;
@@ -173,7 +193,9 @@ public class TaskCenterService {
         return stats;
     }
 
-    /** Failures inside a window, for the alert rules. */
+    /**
+     * Failures inside a window, for the alert rules.
+     */
     public int countFailures(Long kb, int windowMinutes) {
         String since = LocalDateTime.now().minusMinutes(Math.max(1, windowMinutes)).format(TS);
         return mapper.countTaskOutcome(kb, since, FAILURE_STATUSES);
@@ -206,8 +228,7 @@ public class TaskCenterService {
 
     private String defaultTrigger(String triggerType) {
         String trigger = text(triggerType).toUpperCase();
-        if (TRIGGER_MANUAL.equals(trigger) || TRIGGER_SCHEDULED.equals(trigger)
-                || TRIGGER_EVENT.equals(trigger) || TRIGGER_RETRY.equals(trigger)) {
+        if (TRIGGER_MANUAL.equals(trigger) || TRIGGER_SCHEDULED.equals(trigger) || TRIGGER_EVENT.equals(trigger) || TRIGGER_RETRY.equals(trigger)) {
             return trigger;
         }
         return TRIGGER_MANUAL;
@@ -271,7 +292,9 @@ public class TaskCenterService {
         }
     }
 
-    /** Task types the console renders as a filter chip. */
+    /**
+     * Task types the console renders as a filter chip.
+     */
     public static List<String> taskTypes() {
         return new ArrayList<String>(TASK_TYPES);
     }

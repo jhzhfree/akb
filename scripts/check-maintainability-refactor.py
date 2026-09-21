@@ -1,13 +1,18 @@
 #!/usr/bin/env python3
 """Guard the second-round maintainability refactor against structural regression."""
+
 from pathlib import Path
+
 ROOT = Path(__file__).resolve().parents[1]
 
 app = ROOT / "frontend/src/App.vue"
 components = ROOT / "frontend/src/components"
 required = {
-    "DataCenterPanel.vue", "ReviewPanel.vue", "QueryPanel.vue",
-    "KnowledgeListPanel.vue", "GraphPanel.vue",
+    "DataCenterPanel.vue",
+    "ReviewPanel.vue",
+    "QueryPanel.vue",
+    "KnowledgeListPanel.vue",
+    "GraphPanel.vue",
 }
 missing = [name for name in required if not (components / name).exists()]
 assert not missing, "missing frontend responsibility components: " + ", ".join(missing)

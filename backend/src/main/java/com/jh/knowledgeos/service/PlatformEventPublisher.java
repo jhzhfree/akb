@@ -11,7 +11,6 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
-
 import java.time.LocalDateTime;
 import java.util.Collections;
 import java.util.LinkedHashMap;
@@ -28,79 +27,82 @@ import java.util.concurrent.Executor;
  */
 @Service
 public class PlatformEventPublisher {
+
     private static final Logger log = LoggerFactory.getLogger(PlatformEventPublisher.class);
 
     public static final String SOURCE_UI = "UI";
+
     public static final String SOURCE_REST = "REST";
+
     public static final String SOURCE_MCP = "MCP";
+
     public static final String SOURCE_SSE = "SSE";
+
     public static final String SOURCE_SYSTEM = "SYSTEM";
 
     public static final String ACTOR_USER = "USER";
+
     public static final String ACTOR_API_KEY = "API_KEY";
+
     public static final String ACTOR_SYSTEM = "SYSTEM";
 
     private final PlatformEventStore store;
+
     private final PlatformEventHub hub;
+
     private final IdGenerator ids;
+
     private final Executor fanout;
 
-    public PlatformEventPublisher(
-            PlatformEventStore store,
-            PlatformEventHub hub,
-            IdGenerator ids,
-            @Qualifier("platformEventFanoutExecutor") Executor fanout) {
+    public PlatformEventPublisher(PlatformEventStore store, PlatformEventHub hub, IdGenerator ids, @Qualifier("platformEventFanoutExecutor") Executor fanout) {
         this.store = store;
         this.hub = hub;
         this.ids = ids;
         this.fanout = fanout;
     }
 
-    /** Event attributed to the signed-in console user. */
-    public void emitUser(String type, Long kb, String source, String targetType, String targetCode,
-            String summary, Map<String, Object> detail) {
+    /**
+     * Event attributed to the signed-in console user.
+     */
+    public void emitUser(String type, Long kb, String source, String targetType, String targetCode, String summary, Map<String, Object> detail) {
         User user = AuthContext.get();
-        emit(type, kb, source, targetType, targetCode, summary, detail, ACTOR_USER,
-                user == null ? null : String.valueOf(user.getId()),
-                user == null ? null : user.getUsername());
+        emit(type, kb, source, targetType, targetCode, summary, detail, ACTOR_USER, user == null ? null : String.valueOf(user.getId()), user == null ? null : user.getUsername());
     }
 
-    /** Event attributed to an external credential; also the path MCP and SSE channels use. */
-    public void emitExternal(ApiKey key, String type, Long kb, String source, String targetType,
-            String targetCode, String summary, Map<String, Object> detail) {
-        emit(type, kb, source, targetType, targetCode, summary, detail, ACTOR_API_KEY,
-                key == null ? null : key.getKeyCode(), key == null ? null : key.getName());
+    /**
+     * Event attributed to an external credential; also the path MCP and SSE channels use.
+     */
+    public void emitExternal(ApiKey key, String type, Long kb, String source, String targetType, String targetCode, String summary, Map<String, Object> detail) {
+        emit(type, kb, source, targetType, targetCode, summary, detail, ACTOR_API_KEY, key == null ? null : key.getKeyCode(), key == null ? null : key.getName());
     }
 
-    /** Event raised by a scheduler or internal engine rather than by a person. */
-    public void emitSystem(String type, Long kb, String targetType, String targetCode,
-            String summary, Map<String, Object> detail) {
-        emit(type, kb, SOURCE_SYSTEM, targetType, targetCode, summary, detail,
-                ACTOR_SYSTEM, null, "system");
+    /**
+     * Event raised by a scheduler or internal engine rather than by a person.
+     */
+    public void emitSystem(String type, Long kb, String targetType, String targetCode, String summary, Map<String, Object> detail) {
+        emit(type, kb, SOURCE_SYSTEM, targetType, targetCode, summary, detail, ACTOR_SYSTEM, null, "system");
     }
 
-    /** Same as {@link #emitUser} but stamped with the asynchronous task that produced it. */
-    public void emitUser(String type, Long kb, String source, String targetType, String targetCode,
-            String summary, Map<String, Object> detail, EventTaskContext task) {
+    /**
+     * Same as {@link #emitUser} but stamped with the asynchronous task that produced it.
+     */
+    public void emitUser(String type, Long kb, String source, String targetType, String targetCode, String summary, Map<String, Object> detail, EventTaskContext task) {
         User user = AuthContext.get();
-        emit(type, kb, source, targetType, targetCode, summary, detail, ACTOR_USER,
-                user == null ? null : String.valueOf(user.getId()),
-                user == null ? null : user.getUsername(), task);
+        emit(type, kb, source, targetType, targetCode, summary, detail, ACTOR_USER, user == null ? null : String.valueOf(user.getId()), user == null ? null : user.getUsername(), task);
     }
 
-    /** Same as {@link #emitSystem} but stamped with the asynchronous task that produced it. */
-    public void emitSystem(String type, Long kb, String targetType, String targetCode,
-            String summary, Map<String, Object> detail, EventTaskContext task) {
-        emit(type, kb, SOURCE_SYSTEM, targetType, targetCode, summary, detail,
-                ACTOR_SYSTEM, null, "system", task);
+    /**
+     * Same as {@link #emitSystem} but stamped with the asynchronous task that produced it.
+     */
+    public void emitSystem(String type, Long kb, String targetType, String targetCode, String summary, Map<String, Object> detail, EventTaskContext task) {
+        emit(type, kb, SOURCE_SYSTEM, targetType, targetCode, summary, detail, ACTOR_SYSTEM, null, "system", task);
     }
 
     /**
      * Builds the event synchronously — the principal and trace id are thread-bound and would be
      * gone on any later thread — then persists it only once the surrounding transaction committed.
      */
-    public void emit(String type, Long kb, String source, String targetType, String targetCode,
-            String summary, Map<String, Object> detail, String actorType, String actorId, String actorName) {
+    public void emit(String type, Long kb, String source, String targetType, String targetCode, String summary, Map<String, Object> detail, String actorType, String actorId, String actorName) {
         emit(type, kb, source, targetType, targetCode, summary, detail, actorType, actorId, actorName, null);
     }
 
@@ -108,10 +110,10 @@ public class PlatformEventPublisher {
      * Builds the event synchronously — the principal and trace id are thread-bound and would be
      * gone on any later thread — then persists it only once the surrounding transaction committed.
      */
-    public void emit(String type, Long kb, String source, String targetType, String targetCode,
-            String summary, Map<String, Object> detail, String actorType, String actorId, String actorName,
-            EventTaskContext task) {
-        if (type == null || type.isEmpty()) return;
+    public void emit(String type, Long kb, String source, String targetType, String targetCode, String summary, Map<String, Object> detail, String actorType, String actorId, String actorName, EventTaskContext task) {
+        if (type == null || type.isEmpty()) {
+            return;
+        }
         PlatformEvent event = new PlatformEvent();
         event.setEventId(ids.next("EV_"));
         event.setEventTime(LocalDateTime.now());
@@ -137,7 +139,6 @@ public class PlatformEventPublisher {
             // and leaving it null would lose the event instead of storing it.
             event.setRetryCount(0);
         }
-
         if (TransactionSynchronizationManager.isSynchronizationActive()) {
             TransactionSynchronizationManager.registerSynchronization(new AfterCommit(event));
         } else {
@@ -156,7 +157,9 @@ public class PlatformEventPublisher {
         });
     }
 
-    /** Envelope every subscriber receives, after the caller-specific visibility filter ran. */
+    /**
+     * Envelope every subscriber receives, after the caller-specific visibility filter ran.
+     */
     public static Map<String, Object> envelope(PlatformEvent event, Map<String, Object> detail) {
         Map<String, Object> body = new LinkedHashMap<String, Object>();
         body.put("id", event.getId());
@@ -188,6 +191,7 @@ public class PlatformEventPublisher {
     }
 
     private final class AfterCommit implements TransactionSynchronization {
+
         private final PlatformEvent event;
 
         private AfterCommit(PlatformEvent event) {

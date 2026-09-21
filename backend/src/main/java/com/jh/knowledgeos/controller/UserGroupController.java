@@ -28,6 +28,7 @@ import org.springframework.web.bind.annotation.RestController;
 @CrossOrigin
 @Tag(name = "UserGroups", description = "用户组管理")
 public class UserGroupController {
+
     private final UserGroupService service;
 
     public UserGroupController(UserGroupService service) {
@@ -56,9 +57,7 @@ public class UserGroupController {
 
     @PostMapping("/{id}/status")
     @Operation(summary = "启用或归档用户组")
-    public ApiResponse<Object> updateStatus(
-            @PathVariable Long id,
-            @RequestParam(value = "status", defaultValue = "ACTIVE") String status) {
+    public ApiResponse<Object> updateStatus(@PathVariable Long id, @RequestParam(value = "status", defaultValue = "ACTIVE") String status) {
         requireAdmin();
         service.updateStatus(id, status);
         return ApiResponse.ok(true);

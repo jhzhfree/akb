@@ -14,6 +14,7 @@ import org.springframework.web.filter.OncePerRequestFilter;
  */
 @Component
 public class OpsRbacFilter extends OncePerRequestFilter {
+
     private final KnowledgeProperties properties;
 
     public OpsRbacFilter(KnowledgeProperties properties) {
@@ -22,15 +23,11 @@ public class OpsRbacFilter extends OncePerRequestFilter {
 
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
-        return !request.getRequestURI().startsWith("/api/knowledge/index/")
-                || !properties.isOpsRbacEnabled();
+        return !request.getRequestURI().startsWith("/api/knowledge/index/") || !properties.isOpsRbacEnabled();
     }
 
     @Override
-    protected void doFilterInternal(
-            HttpServletRequest request,
-            HttpServletResponse response,
-            FilterChain chain) throws ServletException, IOException {
+    protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain chain) throws ServletException, IOException {
         String token = request.getHeader("X-Ops-Token");
         int actual = roleLevel(token);
         int required = requiredLevel(request);

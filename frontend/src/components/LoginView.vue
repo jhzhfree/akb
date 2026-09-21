@@ -19,7 +19,7 @@ import { computed, ref } from 'vue'
 import { login, setToken } from '../api/auth'
 import type { AuthSessionResult } from '../types'
 
-const props = defineProps<{ hint?:string }>()
+defineProps<{ hint?:string }>()
 const emit = defineEmits<{ success:[session:AuthSessionResult] }>()
 
 const username = ref('')

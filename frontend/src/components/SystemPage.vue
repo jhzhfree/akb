@@ -50,7 +50,6 @@ import UserAdminPanel from './UserAdminPanel.vue'
 import AclAdministrationPanel from './AclAdministrationPanel.vue'
 import OpsPanel from './OpsPanel.vue'
 import SpacePanel from './SpacePanel.vue'
-import PanelState from './PanelState.vue'
 import SchemaPanel from './SchemaPanel.vue'
 import TaskAlertPanel from './TaskAlertPanel.vue'
 

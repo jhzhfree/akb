@@ -2,8 +2,10 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 
+
 def text(path):
     return (ROOT / path).read_text(encoding="utf-8")
+
 
 graph = text("ai-service/app/services/graph_provider.py")
 indexer = text("ai-service/app/services/indexer.py")

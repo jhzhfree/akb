@@ -140,8 +140,8 @@
 import{computed,onMounted,onUnmounted,provide,ref,watch}from'vue'
 import{ElMessage,type UploadFile}from'element-plus'
 import type {
-  AssessmentRow, Capabilities, Claim, ConflictRow,
-  IngestionRun, IngestionRunDetail, KnowledgeBase, KnowledgeCard, KnowledgeDocument,
+  AssessmentRow, Capabilities, ConflictRow,
+  IngestionRun, IngestionRunDetail, KnowledgeBase, KnowledgeDocument,
   KnowledgeSource, Overview, AclSubject, AclRole, AclAudit, AclChange, ConflictDetail,
   QueryCitation, QueryHistoryItem, QueryResult, QueryTrace, ReviewRow, EvidenceDetail,
   SourcePreview,
@@ -168,8 +168,8 @@ import SystemPage from './components/SystemPage.vue'
 import { KOS_SHELL } from './shell'
 import type { KosShell } from './shell'
 import {
-  createKnowledgeBase, getKnowledgeBases, getOverview, getSources, getDocuments, getCards,
-  getClaims, getPendingReviews, getOpenConflicts, getCapabilities, getAssessments,
+  createKnowledgeBase, getKnowledgeBases, getOverview, getSources, getDocuments,
+  getPendingReviews, getOpenConflicts, getCapabilities, getAssessments,
   getIngestionRuns, getIngestionRun,
   uploadDocument, queryKnowledge, runAdjudication, reviewKnowledge,
   uploadDocuments, getBatchStatus, cancelBatch as cancelBatchRequest, retryBatch as retryBatchRequest,
@@ -185,7 +185,7 @@ import {
   defaultLeafOf, leavesOfSection, locate, normalizeViewKey, visibleLeaves, visibleSections,
 } from './navigation'
 import type { NavLeaf, NavSection } from './navigation'
-import { PERM, ROLE_BRIEF, ROLE_HOME, hasPermission } from './permissions'
+import { PERM, ROLE_BRIEF, hasPermission } from './permissions'
 import type { UserRoleValue } from './types'
 import {
   AUTH_EXPIRED_EVENT, getAuthStatus, getMe, getToken, listGroups, logout, setToken,
@@ -211,8 +211,6 @@ const overview=ref<Overview>({
 })
 const sources=ref<KnowledgeSource[]>([]),
     documents=ref<KnowledgeDocument[]>([]),
-    cards=ref<KnowledgeCard[]>([]),
-    claims=ref<Claim[]>([]),
     pendingReviews=ref<ReviewRow[]>([]),
     conflicts=ref<ConflictRow[]>([]),
     assessments=ref<AssessmentRow[]>([])
@@ -263,8 +261,6 @@ const uploading=ref(false),
  * 面板已下沉到模块页面内部，App 拿不到组件实例，改用令牌广播（limit=1 时否则无法继续选文件）。
  */
 const uploadReset=ref(0)
-/** 卡片/断言列表的加载与错误状态，交由面板统一样式呈现。 */
-const listLoading=ref(false), listError=ref('')
 /** 最近一次操作失败信息：错误需要在页面上停留可见，而不是一闪而过的 toast。 */
 const failure=ref('')
 const activeBase=computed(()=>bases.value.find(v=>v.id===knowledgeBaseId.value))
@@ -552,8 +548,6 @@ const r=await Promise.allSettled([
 if(r[0].status==='fulfilled')pendingReviews.value=unwrap(r[0].value,[]);
 if(r[1].status==='fulfilled')conflicts.value=unwrap(r[1].value,[]);
 if(r[2].status==='fulfilled')assessments.value=unwrap(r[2].value,[])}
-/** 卡片与断言列表改由资产浏览面板按需加载，这里只保留失败提示的写入口。 */
-function loadList(){listError.value=''}
 /** 各视图需要的后台数据：进入模块 Tab 时按需加载，避免一次性拉取全站数据。 */
 const DATA_KEYS=['create.overview','create.import','create.connector','create.jobs']
 const REVIEW_KEYS=['create.judgment']
@@ -674,11 +668,6 @@ async function loadQueryHistory(){
 historyLoading.value=true
 try{queryHistory.value=unwrap(await getQueryHistory(knowledgeBaseId.value),[])}catch(e){err(e)}
 finally{historyLoading.value=false}}
-/** 版本治理页点开详情：版本快照只带类型与对象码，详情仍走统一的详情抽屉。 */
-function openDetailFromVersion(type:string,code:string){
-  const normalized=String(type||'').toUpperCase()
-  if((normalized==='CARD'||normalized==='CLAIM')&&code)openDetail(normalized as 'CARD'|'CLAIM',code)
-}
 async function openTrace(qid:string){traceVisible.value=true;traceLoading.value=true;try{
 queryTrace.value=unwrap(await getTrace(qid),null)}catch(e){err(e)}finally{traceLoading.value=false}}
 /** 调用日志的 traceId 由网关下发，落在调用审计里；它和问答链路的 queryId 是两套 id，
@@ -738,7 +727,7 @@ async function bootstrapAuth(){
       me.value=unwrap(await getMe(),null)
       if(me.value?.user)await loadGroups()
     }
-  }catch(e){
+  }catch{
     setToken('')
     me.value=null
   }finally{
@@ -830,7 +819,7 @@ function resolveInitialView(){
 }
 onMounted(async()=>{
   window.addEventListener(AUTH_EXPIRED_EVENT,onAuthExpired)
-  try{await bootstrapAuth()}catch(e){authReady.value=true}
+  try{await bootstrapAuth()}catch{authReady.value=true}
   if(needLogin.value)return
   resolveInitialView()
   await initialLoad()

@@ -1,7 +1,6 @@
 package com.jh.knowledgeos.service;
 
 import org.springframework.stereotype.Component;
-
 import javax.crypto.SecretKeyFactory;
 import javax.crypto.spec.PBEKeySpec;
 import java.security.MessageDigest;
@@ -17,9 +16,13 @@ import java.util.Base64;
  */
 @Component
 public class PasswordHasher {
+
     private static final String PREFIX = "pbkdf2_sha256";
+
     private static final int ITERATIONS = 120000;
+
     private static final int SALT_BYTES = 16;
+
     private static final int HASH_BYTES = 32;
 
     private final SecureRandom random = new SecureRandom();
@@ -32,9 +35,13 @@ public class PasswordHasher {
     }
 
     public boolean verify(String password, String stored) {
-        if (password == null || stored == null) return false;
+        if (password == null || stored == null) {
+            return false;
+        }
         String[] parts = stored.split("\\$");
-        if (parts.length != 4 || !PREFIX.equals(parts[0])) return false;
+        if (parts.length != 4 || !PREFIX.equals(parts[0])) {
+            return false;
+        }
         try {
             int iterations = Integer.parseInt(parts[1]);
             byte[] salt = Base64.getDecoder().decode(parts[2]);
@@ -48,8 +55,7 @@ public class PasswordHasher {
 
     private byte[] derive(String password, byte[] salt, int iterations, int length) {
         try {
-            PBEKeySpec spec = new PBEKeySpec(
-                    password.toCharArray(), salt, iterations, length * 8);
+            PBEKeySpec spec = new PBEKeySpec(password.toCharArray(), salt, iterations, length * 8);
             SecretKeyFactory factory = SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256");
             byte[] derived = factory.generateSecret(spec).getEncoded();
             spec.clearPassword();

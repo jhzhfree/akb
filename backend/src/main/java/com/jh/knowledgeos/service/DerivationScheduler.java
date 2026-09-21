@@ -6,7 +6,6 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
-
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
@@ -22,10 +21,13 @@ import java.util.Map;
  */
 @Service
 public class DerivationScheduler {
+
     private static final Logger log = LoggerFactory.getLogger(DerivationScheduler.class);
+
     private static final DateTimeFormatter TS = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
     private final KnowledgeMapper mapper;
+
     private final KnowledgeDerivationService derivation;
 
     @Value("${knowledge.derivation.enabled:true}")
@@ -46,15 +48,13 @@ public class DerivationScheduler {
             String ruleCode = String.valueOf(rule.get("ruleCode"));
             try {
                 mapper.updateDerivationRuleState(ruleCode, "RUNNING", null, null, null);
-                Long kb = rule.get("knowledgeBaseId") == null ? null
-                        : Long.valueOf(String.valueOf(rule.get("knowledgeBaseId")));
+                Long kb = rule.get("knowledgeBaseId") == null ? null : Long.valueOf(String.valueOf(rule.get("knowledgeBaseId")));
                 derivation.run(kb, ruleCode, KnowledgeDerivationService.SCHEDULE_SCHEDULED);
             } catch (Exception e) {
                 log.warn("planned derivation failed: rule={} message={}", ruleCode, e.getMessage());
                 // Keep the schedule alive: the failure is visible on the rule, the next fire does
                 // not disappear with it.
-                mapper.updateDerivationRuleState(ruleCode, "FAILED", LocalDateTime.now().format(TS),
-                        nextFire(rule), e.getMessage());
+                mapper.updateDerivationRuleState(ruleCode, "FAILED", LocalDateTime.now().format(TS), nextFire(rule), e.getMessage());
             }
         }
     }
@@ -65,8 +65,7 @@ public class DerivationScheduler {
             return null;
         }
         try {
-            return com.jh.knowledgeos.common.ScheduleExpression.of(cron)
-                    .nextAfter(LocalDateTime.now()).format(TS);
+            return com.jh.knowledgeos.common.ScheduleExpression.of(cron).nextAfter(LocalDateTime.now()).format(TS);
         } catch (RuntimeException e) {
             return null;
         }

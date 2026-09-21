@@ -133,9 +133,13 @@ def check_python_docs_and_safety():
         for node in ast.walk(tree):
             if not isinstance(node, ast.ExceptHandler) or node.type is None:
                 continue
-            if isinstance(node.type, ast.Name) and node.type.id == "Exception":
-                if len(node.body) == 1 and isinstance(node.body[0], ast.Pass):
-                    silent_exception.append((path.relative_to(ROOT), node.lineno))
+            if (
+                isinstance(node.type, ast.Name)
+                and node.type.id == "Exception"
+                and len(node.body) == 1
+                and isinstance(node.body[0], ast.Pass)
+            ):
+                silent_exception.append((path.relative_to(ROOT), node.lineno))
 
     assert not missing_module_docs, "Python modules require docstrings: %s" % missing_module_docs
     assert not missing_public_docs, "public Python symbols require docstrings: %s" % missing_public_docs
@@ -152,9 +156,7 @@ def check_python_docs_and_safety():
         text = (app_root / provider_file).read_text(encoding="utf-8")
         # Providers must be cached per process; configuration-aware providers cache
         # per configuration instead, so any bounded lru_cache satisfies the rule.
-        assert re.search(r"@lru_cache\(maxsize=\d+\)", text), (
-            "provider must be process cached: %s" % provider_file
-        )
+        assert re.search(r"@lru_cache\(maxsize=\d+\)", text), "provider must be process cached: %s" % provider_file
 
 
 def check_frontend_boundaries():

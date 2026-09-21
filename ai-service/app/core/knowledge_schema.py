@@ -12,24 +12,32 @@ from __future__ import annotations
 import json
 import threading
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 from app.core.config import DATA_DIR
 
 SCHEMA_DIR = Path(DATA_DIR) / "schema"
 
 # Fallback vocabulary, identical to the tuple extraction always had.
-DEFAULT_RELATION_VOCABULARY: Tuple[str, ...] = (
-    "RELATED_TO", "PART_OF", "DEPENDS_ON", "USES", "CAUSES",
-    "BELONGS_TO", "LOCATED_IN", "DESCRIBES", "CONTAINS", "MANAGES",
+DEFAULT_RELATION_VOCABULARY: tuple[str, ...] = (
+    "RELATED_TO",
+    "PART_OF",
+    "DEPENDS_ON",
+    "USES",
+    "CAUSES",
+    "BELONGS_TO",
+    "LOCATED_IN",
+    "DESCRIBES",
+    "CONTAINS",
+    "MANAGES",
 )
-DEFAULT_ENTITY_TYPES: Tuple[str, ...] = ("TERM", "PRODUCT", "SYSTEM", "METRIC", "ORG", "ROLE")
+DEFAULT_ENTITY_TYPES: tuple[str, ...] = ("TERM", "PRODUCT", "SYSTEM", "METRIC", "ORG", "ROLE")
 
 _LOCK = threading.Lock()
-_CACHE: Dict[int, Dict[str, Any]] = {}
+_CACHE: dict[int, dict[str, Any]] = {}
 
 
-def apply_schema(payload: Dict[str, Any]) -> Dict[str, Any]:
+def apply_schema(payload: dict[str, Any]) -> dict[str, Any]:
     """Persist a published schema and refresh the in-memory vocabulary.
 
     Accepts either ``{"knowledgeBaseId": n, "types": [...]}`` from the backend or a
@@ -42,9 +50,9 @@ def apply_schema(payload: Dict[str, Any]) -> Dict[str, Any]:
         knowledge_base_id = 0
 
     types = payload.get("types")
-    relation_types: List[str] = []
-    entity_types: List[str] = []
-    knowledge_types: List[str] = []
+    relation_types: list[str] = []
+    entity_types: list[str] = []
+    knowledge_types: list[str] = []
     if isinstance(types, list):
         for item in types:
             if not isinstance(item, dict):
@@ -86,7 +94,7 @@ def apply_schema(payload: Dict[str, Any]) -> Dict[str, Any]:
     return schema
 
 
-def load_schema(knowledge_base_id: Optional[int]) -> Optional[Dict[str, Any]]:
+def load_schema(knowledge_base_id: int | None) -> dict[str, Any] | None:
     """Read a published schema, from cache first and disk second."""
     try:
         key = int(knowledge_base_id or 0)
@@ -108,7 +116,7 @@ def load_schema(knowledge_base_id: Optional[int]) -> Optional[Dict[str, Any]]:
     return schema
 
 
-def relation_vocabulary(knowledge_base_id: Optional[int] = None) -> Tuple[str, ...]:
+def relation_vocabulary(knowledge_base_id: int | None = None) -> tuple[str, ...]:
     """Relation labels extraction may emit for one knowledge base."""
     schema = load_schema(knowledge_base_id)
     if not schema:
@@ -117,7 +125,7 @@ def relation_vocabulary(knowledge_base_id: Optional[int] = None) -> Tuple[str, .
     return tuple(values) if values else DEFAULT_RELATION_VOCABULARY
 
 
-def entity_types(knowledge_base_id: Optional[int] = None) -> Tuple[str, ...]:
+def entity_types(knowledge_base_id: int | None = None) -> tuple[str, ...]:
     """Entity types extraction may emit for one knowledge base."""
     schema = load_schema(knowledge_base_id)
     if not schema:
@@ -131,7 +139,7 @@ def clear_cache() -> None:
         _CACHE.clear()
 
 
-def _clean(values: Any) -> List[str]:
+def _clean(values: Any) -> list[str]:
     if not isinstance(values, list):
         return []
     cleaned = []

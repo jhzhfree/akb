@@ -4,6 +4,7 @@ package com.jh.knowledgeos.common;
  * Canonical lifecycle states for governed knowledge objects.
  */
 public enum KnowledgeStatus {
+
     DRAFT,
     UNCERTAIN,
     PENDING_REVIEW,

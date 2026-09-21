@@ -39,6 +39,8 @@
 
         <!-- 助手回答卡片 -->
         <article class="kb-card mt-4 p-4">
+          <!-- 安全：utils/markdown.ts 的 renderMarkdown 先 escapeHtml 再生成 Markdown 标签 -->
+          <!-- eslint-disable-next-line vue/no-v-html -->
           <div class="md-answer" v-html="renderedAnswer"></div>
 
           <p class="mt-3 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-ink-400">

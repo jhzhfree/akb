@@ -4,7 +4,7 @@ import json
 import re
 import time
 from functools import lru_cache
-from typing import Any, Dict, Optional
+from typing import Any
 
 import httpx
 
@@ -23,13 +23,13 @@ class LlmProvider:
         """Generate text for a fully assembled prompt."""
         raise NotImplementedError
 
-    async def extract_json(self, prompt: str) -> Optional[Dict[str, Any]]:
+    async def extract_json(self, prompt: str) -> dict[str, Any] | None:
         """Generate text and extract the first JSON object from the response."""
         text = await self.generate(prompt)
         match = re.search(r"\{.*\}", text, re.S)
         return json.loads(match.group(0)) if match else None
 
-    async def test(self) -> Dict[str, Any]:
+    async def test(self) -> dict[str, Any]:
         """Probe connectivity with a tiny request and report latency."""
         started = time.perf_counter()
         sample = await self.generate("请只回复两个字：可用")
@@ -49,10 +49,7 @@ class MockProvider(LlmProvider):
 
     async def generate(self, prompt: str) -> str:
         """Return a stable non-generative answer for environments without an LLM."""
-        return (
-            "现有知识上下文已检索完成。当前未配置真实大模型，"
-            "请在「模型设置」中配置 LLM 后启用生成式回答。"
-        )
+        return "现有知识上下文已检索完成。当前未配置真实大模型，请在「模型设置」中配置 LLM 后启用生成式回答。"
 
 
 class OllamaProvider(LlmProvider):

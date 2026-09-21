@@ -5,6 +5,12 @@ so operations staff can edit routing rules, recall channels, fusion weights, rer
 and answer guardrails from the console without redeploying the AI service.
 """
 
+import asyncio
+import logging
+import re
+import time
+from datetime import datetime
+
 from app.core.config import settings
 from app.core.query_policy import (
     DEFAULT_SYNONYMS,
@@ -15,17 +21,12 @@ from app.core.query_policy import (
     quality_weights,
     recall_sizes,
 )
-import asyncio
-from app.services.retrieval.hybrid import HybridRetriever, rrf
+from app.services.answer_evidence_gate import AnswerEvidenceGate
+from app.services.answer_qualification import AnswerQualification
 from app.services.llm_provider import get_llm_provider
 from app.services.reranker import get_reranker
-from app.services.answer_evidence_gate import AnswerEvidenceGate
+from app.services.retrieval.hybrid import HybridRetriever, rrf
 from app.services.structured_answer_gate import StructuredAnswerGate
-from app.services.answer_qualification import AnswerQualification
-from datetime import datetime
-import logging
-import re
-import time
 
 logger = logging.getLogger(__name__)
 
@@ -74,18 +75,19 @@ class QueryRouter:
             # "timeout 配置项哪个版本还在生效" must be routed to CONFLICT, not EXACT.
             candidate = (max(len(keyword) for keyword in matched), rule.priority)
             if best is None or candidate > best[0]:
-                best = (candidate, {
-                    "questionType": rule.questionType,
-                    "strategies": list(rule.strategies),
-                    "reason": rule.reason,
-                    "matchedRule": "keyword",
-                    "matchedKeyword": max(matched, key=len),
-                })
+                best = (
+                    candidate,
+                    {
+                        "questionType": rule.questionType,
+                        "strategies": list(rule.strategies),
+                        "reason": rule.reason,
+                        "matchedRule": "keyword",
+                        "matchedKeyword": max(matched, key=len),
+                    },
+                )
         if best is not None:
             return best[1]
-        return self._fallback(
-            defaults, "default", "未命中任何路由规则，按默认通道组合处理。"
-        )
+        return self._fallback(defaults, "default", "未命中任何路由规则，按默认通道组合处理。")
 
     def _resolve(self, rules=None):
         """Return the rules to evaluate: explicit > bound > persisted policy."""
@@ -163,8 +165,7 @@ class QueryRewriter:
     @staticmethod
     def _prompt(q):
         return (
-            "请把用户问题改写为 1-2 个用于企业知识库检索的同义问法，只输出 JSON：\n"
-            '{"rewrites":["",""]}\n问题：%s' % q
+            '请把用户问题改写为 1-2 个用于企业知识库检索的同义问法，只输出 JSON：\n{"rewrites":["",""]}\n问题：%s' % q
         )
 
 
@@ -238,14 +239,16 @@ def build_score_breakdown(candidate, channel_weights, rrf_k, rerank_depth, top_k
         rank = channel_ranks.get(channel)
         raw = channel_scores.get(channel)
         contribution = round(weight / (rrf_k + rank), 6) if rank and rrf_k else None
-        channels.append({
-            "channel": channel,
-            "label": label,
-            "rank": rank,
-            "rawScore": raw,
-            "weight": weight,
-            "rrfContribution": contribution,
-        })
+        channels.append(
+            {
+                "channel": channel,
+                "label": label,
+                "rank": rank,
+                "rawScore": raw,
+                "weight": weight,
+                "rrfContribution": contribution,
+            }
+        )
         reasons.append(
             "%s命中第 %s 名（原始分 %s，通道权重 %.2f）"
             % (label, rank if rank else "-", ("%.4f" % raw) if raw is not None else "-", weight)
@@ -303,9 +306,7 @@ class QueryEngine:
         if not rewritten:
             rewritten = [normalized]
         rewrite_ms = int((time.perf_counter() - rewrite_started) * 1000)
-        route = self.router.route(
-            q, enabled=policy.route.enabled, defaultStrategies=policy.route.defaultStrategies
-        )
+        route = self.router.route(q, enabled=policy.route.enabled, defaultStrategies=policy.route.defaultStrategies)
         strategies = effective_strategies(policy, route["strategies"])
 
         retrieval_started = time.perf_counter()
@@ -322,8 +323,7 @@ class QueryEngine:
         if signal_weights:
             for candidate in candidates:
                 signals = quality_signals(candidate)
-                boost = round(
-                    1.0 + sum(weight * signals[key] for key, weight in signal_weights.items()), 4)
+                boost = round(1.0 + sum(weight * signals[key] for key, weight in signal_weights.items()), 4)
                 candidate["qualityBoost"] = boost
                 candidate["quality"] = signals
                 candidate["score"] = float(candidate.get("score") or 0.0) * boost
@@ -407,8 +407,10 @@ class QueryEngine:
             verification = {"gateStatus": "NOT_RUN", "reason": "retrieval-only"}
             structured_verification = {"gateStatus": "NOT_RUN", "reason": "retrieval-only"}
             qualification = {
-                "gateStatus": "NOT_RUN", "policyVersion": policy.answer.policyVersion,
-                "claims": [], "deliveredAnswer": "",
+                "gateStatus": "NOT_RUN",
+                "policyVersion": policy.answer.policyVersion,
+                "claims": [],
+                "deliveredAnswer": "",
             }
             llm_ms = 0
         elif not candidates:
@@ -417,8 +419,10 @@ class QueryEngine:
             verification = {"gateStatus": "NO_EVIDENCE", "reason": "no candidate"}
             structured_verification = {"gateStatus": "NO_EVIDENCE", "reason": "no candidate"}
             qualification = {
-                "gateStatus": "NO_EVIDENCE", "policyVersion": policy.answer.policyVersion,
-                "claims": [], "deliveredAnswer": answer,
+                "gateStatus": "NO_EVIDENCE",
+                "policyVersion": policy.answer.policyVersion,
+                "claims": [],
+                "deliveredAnswer": answer,
             }
             llm_ms = int((time.perf_counter() - llm_started) * 1000)
         else:
@@ -432,8 +436,7 @@ class QueryEngine:
                 answer, citations, candidates[:topk]
             )
             qualification = AnswerQualification(policy.answer.policyVersion).qualify(
-                answer, verification, structured_verification,
-                policy.answer.evidenceGateEnabled, model
+                answer, verification, structured_verification, policy.answer.evidenceGateEnabled, model
             )
             answer = qualification.pop("deliveredAnswer")
             llm_ms = int((time.perf_counter() - llm_started) * 1000)
@@ -446,13 +449,20 @@ class QueryEngine:
         question_type = route.get("questionType") or "DEFAULT"
         type_label = QUESTION_TYPE_LABELS.get(question_type, question_type)
         router_note = "%s｜%s%s" % (
-            type_label, " + ".join(strategies), "｜%s" % route["reason"] if route.get("reason") else "",
+            type_label,
+            " + ".join(strategies),
+            "｜%s" % route["reason"] if route.get("reason") else "",
         )
         retrieval_providers = {
-            name: sorted({
-                str((item.get("metadata") or {}).get("retrieval_provider") or ("neo4j" if name == "graph" else "unknown"))
-                for item in items
-            })
+            name: sorted(
+                {
+                    str(
+                        (item.get("metadata") or {}).get("retrieval_provider")
+                        or ("neo4j" if name == "graph" else "unknown")
+                    )
+                    for item in items
+                }
+            )
             for name, items in result_sets.items()
         }
         # Design §12.5: the trace is a timeline, not a bag of latencies. Every stage
@@ -462,74 +472,119 @@ class QueryEngine:
         recall_errors = retrieval_diagnostics.get("errors", {}) or {}
         stages = [
             {
-                "key": "rewrite", "label": "查询改写", "latencyMs": rewrite_ms,
-                "inputCount": 1, "outputCount": len(rewritten),
-                "detail": {"variants": rewritten, "used": used_rewrite or normalized,
-                           "enabled": bool(getattr(policy.rewrite, "enabled", True))},
+                "key": "rewrite",
+                "label": "查询改写",
+                "latencyMs": rewrite_ms,
+                "inputCount": 1,
+                "outputCount": len(rewritten),
+                "detail": {
+                    "variants": rewritten,
+                    "used": used_rewrite or normalized,
+                    "enabled": bool(getattr(policy.rewrite, "enabled", True)),
+                },
                 "errors": [],
             },
             {
-                "key": "route", "label": "意图路由", "latencyMs": None,
-                "inputCount": 1, "outputCount": len(strategies),
-                "detail": {"questionType": question_type, "strategies": strategies,
-                           "reason": route.get("reason"),
-                           "enabled": bool(getattr(policy.route, "enabled", False))},
+                "key": "route",
+                "label": "意图路由",
+                "latencyMs": None,
+                "inputCount": 1,
+                "outputCount": len(strategies),
+                "detail": {
+                    "questionType": question_type,
+                    "strategies": strategies,
+                    "reason": route.get("reason"),
+                    "enabled": bool(getattr(policy.route, "enabled", False)),
+                },
                 "errors": [],
             },
             {
-                "key": "recall", "label": "多通道召回", "latencyMs": retrieval_ms,
-                "inputCount": 1, "outputCount": sum(recall_counts.values()),
+                "key": "recall",
+                "label": "多通道召回",
+                "latencyMs": retrieval_ms,
+                "inputCount": 1,
+                "outputCount": sum(recall_counts.values()),
                 "detail": {
                     "sizes": recall_sizes(policy, topk),
                     "providers": retrieval_providers,
                     "channels": [
-                        {"channel": name, "count": count,
-                         "latencyMs": channel_latency.get(name),
-                         "provider": (retrieval_providers.get(name) or ["local"])[0]}
+                        {
+                            "channel": name,
+                            "count": count,
+                            "latencyMs": channel_latency.get(name),
+                            "provider": (retrieval_providers.get(name) or ["local"])[0],
+                        }
                         for name, count in recall_counts.items()
                     ],
                 },
                 "errors": recall_errors,
             },
             {
-                "key": "acl_filter", "label": "ACL 与状态过滤", "latencyMs": None,
-                "inputCount": None, "outputCount": sum(recall_counts.values()),
+                "key": "acl_filter",
+                "label": "ACL 与状态过滤",
+                "latencyMs": None,
+                "inputCount": None,
+                "outputCount": sum(recall_counts.values()),
                 "detail": retrieval_diagnostics.get("filters", {}),
                 "errors": [],
             },
             {
-                "key": "fusion", "label": "RRF 融合", "latencyMs": fusion_ms,
-                "inputCount": sum(recall_counts.values()), "outputCount": len(fused_snapshot),
-                "detail": {"algorithm": "weighted_rrf", "k": policy.fusion.rrfK,
-                           "weights": fusion_weights, "qualitySignals": signal_weights},
+                "key": "fusion",
+                "label": "RRF 融合",
+                "latencyMs": fusion_ms,
+                "inputCount": sum(recall_counts.values()),
+                "outputCount": len(fused_snapshot),
+                "detail": {
+                    "algorithm": "weighted_rrf",
+                    "k": policy.fusion.rrfK,
+                    "weights": fusion_weights,
+                    "qualitySignals": signal_weights,
+                },
                 "errors": [],
             },
             {
-                "key": "rerank", "label": "重排", "latencyMs": rerank_ms,
-                "inputCount": rerank_input_count, "outputCount": rerank_output_count,
-                "detail": {"reranker": reranker.name, "enabled": bool(policy.rerank.enabled),
-                           "topN": policy.rerank.topN},
+                "key": "rerank",
+                "label": "重排",
+                "latencyMs": rerank_ms,
+                "inputCount": rerank_input_count,
+                "outputCount": rerank_output_count,
+                "detail": {
+                    "reranker": reranker.name,
+                    "enabled": bool(policy.rerank.enabled),
+                    "topN": policy.rerank.topN,
+                },
                 "errors": rerank_errors,
             },
             {
-                "key": "context", "label": "上下文装配", "latencyMs": None,
-                "inputCount": len(candidates), "outputCount": len(selected_context),
+                "key": "context",
+                "label": "上下文装配",
+                "latencyMs": None,
+                "inputCount": len(candidates),
+                "outputCount": len(selected_context),
                 "detail": {"chars": len(context), "maxChars": policy.answer.contextMaxChars},
                 "errors": [],
             },
             {
-                "key": "llm", "label": "答案生成", "latencyMs": llm_ms,
-                "inputCount": len(selected_context), "outputCount": 1 if candidates else 0,
+                "key": "llm",
+                "label": "答案生成",
+                "latencyMs": llm_ms,
+                "inputCount": len(selected_context),
+                "outputCount": 1 if candidates else 0,
                 "detail": {"model": model},
                 "errors": [],
             },
             {
-                "key": "citation", "label": "引用校验", "latencyMs": None,
-                "inputCount": len(candidates[:topk]), "outputCount": len(citations),
-                "detail": {"evidenceGate": verification.get("gateStatus"),
-                           "structuredGate": structured_verification.get("gateStatus"),
-                           "finalGate": qualification.get("gateStatus"),
-                           "policyVersion": qualification.get("policyVersion")},
+                "key": "citation",
+                "label": "引用校验",
+                "latencyMs": None,
+                "inputCount": len(candidates[:topk]),
+                "outputCount": len(citations),
+                "detail": {
+                    "evidenceGate": verification.get("gateStatus"),
+                    "structuredGate": structured_verification.get("gateStatus"),
+                    "finalGate": qualification.get("gateStatus"),
+                    "policyVersion": qualification.get("policyVersion"),
+                },
                 "errors": [],
             },
         ]
@@ -553,12 +608,21 @@ class QueryEngine:
             "router": {**route, "configuredStrategies": route["strategies"]},
             "strategies": strategies,
             "recall": result_sets,
-            "fusion": {"algorithm": "weighted_rrf", "k": policy.fusion.rrfK, "weights": fusion_weights,
-                       "qualitySignals": signal_weights, "qualitySample": quality_sample,
-                       "latencyMs": fusion_ms},
+            "fusion": {
+                "algorithm": "weighted_rrf",
+                "k": policy.fusion.rrfK,
+                "weights": fusion_weights,
+                "qualitySignals": signal_weights,
+                "qualitySample": quality_sample,
+                "latencyMs": fusion_ms,
+            },
             "candidates": candidates,
-            "reranker": {"name": reranker.name, "enabled": policy.rerank.enabled,
-                         "topN": policy.rerank.topN, "latencyMs": rerank_ms},
+            "reranker": {
+                "name": reranker.name,
+                "enabled": policy.rerank.enabled,
+                "topN": policy.rerank.topN,
+                "latencyMs": rerank_ms,
+            },
             "selectedContext": selected_context,
             "context": context,
             "citations": citations,
@@ -630,15 +694,17 @@ class QueryEngine:
                 continue
             seen.add(claim_id)
             subject, predicate, obj = cls._claim_triple(candidate.get("content") or "")
-            chips.append({
-                "claimId": claim_id,
-                "subject": subject,
-                "predicate": predicate,
-                "object": obj,
-                "conditions": [],
-                "confidence": metadata.get("confidence"),
-                "status": str(metadata.get("status") or ""),
-            })
+            chips.append(
+                {
+                    "claimId": claim_id,
+                    "subject": subject,
+                    "predicate": predicate,
+                    "object": obj,
+                    "conditions": [],
+                    "confidence": metadata.get("confidence"),
+                    "status": str(metadata.get("status") or ""),
+                }
+            )
             if len(chips) >= 8:
                 break
         return chips
@@ -687,24 +753,26 @@ class QueryEngine:
                 break
             blocks.append(block)
             used += len(block)
-            citations.append({
-                "index": i,
-                "id": c["id"],
-                "title": c.get("title", ""),
-                "channel": c["channel"],
-                "source": c["channel"],
-                "score": c.get("score"),
-                "sourceName": meta.get("source_name"),
-                "sourceUri": meta.get("source_uri"),
-                "pageNo": meta.get("page_no"),
-                "contentUnitId": meta.get("content_unit_id"),
-                "objectId": c.get("id"),
-                "objectType": meta.get("object_type"),
-                "evidenceCode": meta.get("evidence_code"),
-                "evidenceHash": meta.get("evidence_hash") or meta.get("content_hash"),
-                "generationId": meta.get("generation_id"),
-                "sourceVersion": meta.get("source_version"),
-            })
+            citations.append(
+                {
+                    "index": i,
+                    "id": c["id"],
+                    "title": c.get("title", ""),
+                    "channel": c["channel"],
+                    "source": c["channel"],
+                    "score": c.get("score"),
+                    "sourceName": meta.get("source_name"),
+                    "sourceUri": meta.get("source_uri"),
+                    "pageNo": meta.get("page_no"),
+                    "contentUnitId": meta.get("content_unit_id"),
+                    "objectId": c.get("id"),
+                    "objectType": meta.get("object_type"),
+                    "evidenceCode": meta.get("evidence_code"),
+                    "evidenceHash": meta.get("evidence_hash") or meta.get("content_hash"),
+                    "generationId": meta.get("generation_id"),
+                    "sourceVersion": meta.get("source_version"),
+                }
+            )
         return "\n\n".join(blocks), citations
 
     def _prompt(self, q, ctx):

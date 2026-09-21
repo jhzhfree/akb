@@ -7,7 +7,6 @@ import com.jh.knowledgeos.domain.Claim;
 import com.jh.knowledgeos.domain.KnowledgeCard;
 import com.jh.knowledgeos.mapper.KnowledgeMapper;
 import org.springframework.stereotype.Service;
-
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
@@ -25,25 +24,26 @@ import java.util.Collections;
  */
 @Service
 public class KnowledgeExtractionService {
+
     private final KnowledgeMapper mapper;
+
     private final AiClient aiClient;
+
     private final ObjectMapper objectMapper;
+
     private final IdGenerator idGenerator;
+
     private final TransactionRunner transactionRunner;
+
     private final IndexOutboxService outboxService;
+
     private final EntityResolutionService entityResolutionService;
+
     private final PlatformEventPublisher publisher;
+
     private final SimpleDateFormat dateTimeFormatter = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
 
-    public KnowledgeExtractionService(
-            KnowledgeMapper mapper,
-            AiClient aiClient,
-            ObjectMapper objectMapper,
-            IdGenerator idGenerator,
-            TransactionRunner transactionRunner,
-            IndexOutboxService outboxService,
-            EntityResolutionService entityResolutionService,
-            PlatformEventPublisher publisher) {
+    public KnowledgeExtractionService(KnowledgeMapper mapper, AiClient aiClient, ObjectMapper objectMapper, IdGenerator idGenerator, TransactionRunner transactionRunner, IndexOutboxService outboxService, EntityResolutionService entityResolutionService, PlatformEventPublisher publisher) {
         this.mapper = mapper;
         this.aiClient = aiClient;
         this.objectMapper = objectMapper;
@@ -62,11 +62,8 @@ public class KnowledgeExtractionService {
     public Map<String, Object> extract(Map<String, Object> request) {
         Map<String, Object> response = aiClient.post(AiApiPaths.EXTRACT, request);
         Long knowledgeBaseId = Long.valueOf(String.valueOf(request.get("knowledgeBaseId")));
-        Long documentId = request.get("documentId") == null
-                ? null
-                : Long.valueOf(String.valueOf(request.get("documentId")));
+        Long documentId = request.get("documentId") == null ? null : Long.valueOf(String.valueOf(request.get("documentId")));
         String permissionTags = normalizePermissionTags(request.get("permissionTags"));
-
         // Source authority is read once and stamped onto every extracted object: retrieval uses it
         // as a ranking signal (design V1.1 §8.3) instead of re-reading rows per object.
         Double authorityScore = loadAuthorityScore(documentId);
@@ -76,48 +73,27 @@ public class KnowledgeExtractionService {
         // it to restart. Every statement inside is an idempotent upsert and the AI call above sits
         // outside the transaction, so redoing it neither duplicates rows nor pays for the model twice.
         PersistedKnowledge persisted = transactionRunner.retryingOnDeadlock(() -> {
-            List<Map<String, Object>> cards = persistCards(
-                    knowledgeBaseId, documentId, response.get("cards"), permissionTags, authorityScore);
-            List<Map<String, Object>> claims = persistClaims(
-                    knowledgeBaseId, documentId, response.get("claims"), permissionTags, authorityScore);
-            Map<String, Object> graph = persistAuthoritativeGraph(
-                    knowledgeBaseId, documentId, response, permissionTags);
+            List<Map<String, Object>> cards = persistCards(knowledgeBaseId, documentId, response.get("cards"), permissionTags, authorityScore);
+            List<Map<String, Object>> claims = persistClaims(knowledgeBaseId, documentId, response.get("claims"), permissionTags, authorityScore);
+            Map<String, Object> graph = persistAuthoritativeGraph(knowledgeBaseId, documentId, response, permissionTags);
             return new PersistedKnowledge(cards, claims, graph);
         });
         List<Map<String, Object>> savedCards = persisted.cards;
         List<Map<String, Object>> savedClaims = persisted.claims;
         response.put("authoritativeGraph", persisted.graph);
-
-        Map<String, Object> graphPayload = buildKnowledgeIndexPayload(
-                knowledgeBaseId,
-                new ArrayList<Map<String, Object>>(),
-                new ArrayList<Map<String, Object>>(),
-                withPermissionTags(response.get("entities"), permissionTags),
-                withPermissionTags(response.get("relations"), permissionTags));
+        Map<String, Object> graphPayload = buildKnowledgeIndexPayload(knowledgeBaseId, new ArrayList<Map<String, Object>>(), new ArrayList<Map<String, Object>>(), withPermissionTags(response.get("entities"), permissionTags), withPermissionTags(response.get("relations"), permissionTags));
         String graphKey = "KB:" + knowledgeBaseId + ":GRAPH:" + (documentId == null ? "MANUAL" : documentId);
-        Map<String, Object> graphEvent = transactionRunner.required(() -> outboxService.enqueue(
-                knowledgeBaseId,
-                "GRAPH",
-                graphKey,
-                "GRAPH_BATCH_UPSERT",
-                AiApiPaths.INDEX_KNOWLEDGE,
-                graphPayload,
-                documentId == null
-                        ? "GRAPH_EXTRACT:" + graphKey + ":" + UUID.randomUUID().toString()
-                        : "GRAPH_EXTRACT:" + graphKey + ":1"));
+        Map<String, Object> graphEvent = transactionRunner.required(() -> outboxService.enqueue(knowledgeBaseId, "GRAPH", graphKey, "GRAPH_BATCH_UPSERT", AiApiPaths.INDEX_KNOWLEDGE, graphPayload, documentId == null ? "GRAPH_EXTRACT:" + graphKey + ":" + UUID.randomUUID().toString() : "GRAPH_EXTRACT:" + graphKey + ":1"));
         Map<String, Object> indexSummary = new LinkedHashMap<String, Object>();
         indexSummary.put("mode", "transactional-outbox");
         indexSummary.put("cardEvents", savedCards.size());
         indexSummary.put("claimEvents", savedClaims.size());
         indexSummary.put("graphEvent", graphEvent);
         response.put("knowledgeIndex", indexSummary);
-
         response.put("conflicts", detectAndPersistConflicts(knowledgeBaseId, savedClaims));
         // Entity resolution runs here, outside the persistence transaction: it issues an external
         // AI call and then merges duplicate graph nodes (design V1.1 §5.4).
-        response.put(
-                "entityResolution",
-                entityResolutionService.resolveAndMerge(knowledgeBaseId, response.get("entities")));
+        response.put("entityResolution", entityResolutionService.resolveAndMerge(knowledgeBaseId, response.get("entities")));
         announceExtraction(knowledgeBaseId, documentId, savedCards, savedClaims);
         return response;
     }
@@ -129,8 +105,7 @@ public class KnowledgeExtractionService {
      * yield dozens of objects, and subscribers care about the batch outcome with its identifiers,
      * while individual objects announce themselves again when they are reviewed or superseded.</p>
      */
-    private void announceExtraction(Long knowledgeBaseId, Long documentId,
-            List<Map<String, Object>> savedCards, List<Map<String, Object>> savedClaims) {
+    private void announceExtraction(Long knowledgeBaseId, Long documentId, List<Map<String, Object>> savedCards, List<Map<String, Object>> savedClaims) {
         Map<String, Object> detail = new LinkedHashMap<String, Object>();
         detail.put("documentId", documentId);
         detail.put("cardCount", savedCards == null ? 0 : savedCards.size());
@@ -138,49 +113,54 @@ public class KnowledgeExtractionService {
         detail.put("cardCodes", codes(savedCards, "knowledge_code", 20));
         detail.put("claimCodes", codes(savedClaims, "claim_code", 20));
         detail.put("cardTitles", titles(savedCards, 5));
-        publisher.emitUser(PlatformEventTypes.EXTRACTION_COMPLETED, knowledgeBaseId,
-                PlatformEventPublisher.SOURCE_UI, "DOCUMENT",
-                documentId == null ? null : String.valueOf(documentId),
-                "知识抽取完成：新增 " + (savedCards == null ? 0 : savedCards.size()) + " 张卡片、"
-                        + (savedClaims == null ? 0 : savedClaims.size()) + " 条主张",
-                detail);
-        int candidateCount = (savedCards == null ? 0 : savedCards.size())
-                + (savedClaims == null ? 0 : savedClaims.size());
+        publisher.emitUser(PlatformEventTypes.EXTRACTION_COMPLETED, knowledgeBaseId, PlatformEventPublisher.SOURCE_UI, "DOCUMENT", documentId == null ? null : String.valueOf(documentId), "知识抽取完成：新增 " + (savedCards == null ? 0 : savedCards.size()) + " 张卡片、" + (savedClaims == null ? 0 : savedClaims.size()) + " 条主张", detail);
+        int candidateCount = (savedCards == null ? 0 : savedCards.size()) + (savedClaims == null ? 0 : savedClaims.size());
         if (candidateCount > 0) {
             // Candidates are distinguished from approved knowledge so a subscriber can follow the
             // review pipeline instead of assuming extraction means "usable now" (§16.2).
-            publisher.emitUser(PlatformEventTypes.KNOWLEDGE_CANDIDATE_CREATED, knowledgeBaseId,
-                    PlatformEventPublisher.SOURCE_UI, "DOCUMENT",
-                    documentId == null ? null : String.valueOf(documentId),
-                    "新增 " + candidateCount + " 条待审核候选知识", detail);
+            publisher.emitUser(PlatformEventTypes.KNOWLEDGE_CANDIDATE_CREATED, knowledgeBaseId, PlatformEventPublisher.SOURCE_UI, "DOCUMENT", documentId == null ? null : String.valueOf(documentId), "新增 " + candidateCount + " 条待审核候选知识", detail);
         }
     }
 
     private List<String> codes(List<Map<String, Object>> items, String key, int limit) {
         List<String> values = new ArrayList<String>();
-        if (items == null) return values;
+        if (items == null) {
+            return values;
+        }
         for (Map<String, Object> item : items) {
-            if (values.size() >= limit) break;
+            if (values.size() >= limit) {
+                break;
+            }
             Object value = item.get(key);
-            if (value != null) values.add(String.valueOf(value));
+            if (value != null) {
+                values.add(String.valueOf(value));
+            }
         }
         return values;
     }
 
     private List<String> titles(List<Map<String, Object>> items, int limit) {
         List<String> values = new ArrayList<String>();
-        if (items == null) return values;
+        if (items == null) {
+            return values;
+        }
         for (Map<String, Object> item : items) {
-            if (values.size() >= limit) break;
+            if (values.size() >= limit) {
+                break;
+            }
             Object value = item.get("title");
-            if (value == null) continue;
+            if (value == null) {
+                continue;
+            }
             String text = String.valueOf(value);
             values.add(text.length() > 80 ? text.substring(0, 80) + "…" : text);
         }
         return values;
     }
 
-    /** Source authority from the owning source; neutral 0.5 when unresolvable. */
+    /**
+     * Source authority from the owning source; neutral 0.5 when unresolvable.
+     */
     private Double loadAuthorityScore(Long documentId) {
         if (documentId == null) {
             return 0.5D;
@@ -190,14 +170,11 @@ public class KnowledgeExtractionService {
     }
 
     @SuppressWarnings("unchecked")
-    private List<Map<String, Object>> persistCards(
-            Long knowledgeBaseId, Long documentId, Object cardsObject, String permissionTags,
-            Double authorityScore) {
+    private List<Map<String, Object>> persistCards(Long knowledgeBaseId, Long documentId, Object cardsObject, String permissionTags, Double authorityScore) {
         List<Map<String, Object>> saved = new ArrayList<Map<String, Object>>();
         if (!(cardsObject instanceof List)) {
             return saved;
         }
-
         for (Object item : (List<Object>) cardsObject) {
             if (!(item instanceof Map)) {
                 continue;
@@ -228,28 +205,18 @@ public class KnowledgeExtractionService {
             source.put("evidence_count", mapper.countCardEvidence(card.getKnowledgeCode()));
             attachEvidenceAnchor("CARD", card.getKnowledgeCode(), source);
             Map<String, Object> payload = buildSingleKnowledgeIndexPayload(knowledgeBaseId, source, null);
-            outboxService.enqueue(
-                    knowledgeBaseId,
-                    "CARD",
-                    "KB:" + knowledgeBaseId + ":CARD:" + card.getKnowledgeCode(),
-                    "KNOWLEDGE_OBJECT_UPSERT",
-                    AiApiPaths.INDEX_KNOWLEDGE,
-                    payload,
-                    "CARD_CREATE:" + card.getKnowledgeCode() + ":1");
+            outboxService.enqueue(knowledgeBaseId, "CARD", "KB:" + knowledgeBaseId + ":CARD:" + card.getKnowledgeCode(), "KNOWLEDGE_OBJECT_UPSERT", AiApiPaths.INDEX_KNOWLEDGE, payload, "CARD_CREATE:" + card.getKnowledgeCode() + ":1");
             saved.add(source);
         }
         return saved;
     }
 
     @SuppressWarnings("unchecked")
-    private List<Map<String, Object>> persistClaims(
-            Long knowledgeBaseId, Long documentId, Object claimsObject, String permissionTags,
-            Double authorityScore) {
+    private List<Map<String, Object>> persistClaims(Long knowledgeBaseId, Long documentId, Object claimsObject, String permissionTags, Double authorityScore) {
         List<Map<String, Object>> saved = new ArrayList<Map<String, Object>>();
         if (!(claimsObject instanceof List)) {
             return saved;
         }
-
         for (Object item : (List<Object>) claimsObject) {
             if (!(item instanceof Map)) {
                 continue;
@@ -265,14 +232,10 @@ public class KnowledgeExtractionService {
             claim.setQualifierJson(jsonOrDefault(source.get("qualifiers"), "{}"));
             claim.setPolarity(stringValue(source.get("polarity")));
             claim.setConfidence(doubleValue(source.get("confidence"), 0.0D));
-            claim.setCertainty(
-                    source.get("certainty") == null
-                            ? claim.getConfidence()
-                            : doubleValue(source.get("certainty"), claim.getConfidence()));
+            claim.setCertainty(source.get("certainty") == null ? claim.getConfidence() : doubleValue(source.get("certainty"), claim.getConfidence()));
             claim.setValidFrom(dateValue(source.get("valid_from")));
             claim.setValidTo(dateValue(source.get("valid_to")));
-            claim.setVersion(
-                    source.get("version") == null ? 1 : integerValue(source.get("version"), 1));
+            claim.setVersion(source.get("version") == null ? 1 : integerValue(source.get("version"), 1));
             claim.setStatus(KnowledgeStatus.UNCERTAIN.name());
             claim.setPermissionTags(permissionTags);
             mapper.insertClaim(claim);
@@ -294,14 +257,7 @@ public class KnowledgeExtractionService {
             source.put("evidence_count", mapper.countClaimEvidence(claim.getClaimCode()));
             attachEvidenceAnchor("CLAIM", claim.getClaimCode(), source);
             Map<String, Object> payload = buildSingleKnowledgeIndexPayload(knowledgeBaseId, null, source);
-            outboxService.enqueue(
-                    knowledgeBaseId,
-                    "CLAIM",
-                    "KB:" + knowledgeBaseId + ":CLAIM:" + claim.getClaimCode(),
-                    "KNOWLEDGE_OBJECT_UPSERT",
-                    AiApiPaths.INDEX_KNOWLEDGE,
-                    payload,
-                    "CLAIM_CREATE:" + claim.getClaimCode() + ":1");
+            outboxService.enqueue(knowledgeBaseId, "CLAIM", "KB:" + knowledgeBaseId + ":CLAIM:" + claim.getClaimCode(), "KNOWLEDGE_OBJECT_UPSERT", AiApiPaths.INDEX_KNOWLEDGE, payload, "CLAIM_CREATE:" + claim.getClaimCode() + ":1");
             saved.add(source);
         }
         return saved;
@@ -317,12 +273,13 @@ public class KnowledgeExtractionService {
      * the entity name instead of its code.</p>
      */
     @SuppressWarnings("unchecked")
-    private Map<String, Object> persistAuthoritativeGraph(
-            Long kb, Long documentId, Map<String, Object> response, String permissionTags) {
+    private Map<String, Object> persistAuthoritativeGraph(Long kb, Long documentId, Map<String, Object> response, String permissionTags) {
         Long sourceId = null;
         if (documentId != null) {
             Map<String, Object> header = mapper.getDocumentIndexHeader(documentId);
-            if (header != null && header.get("sourceId") != null) sourceId = Long.valueOf(String.valueOf(header.get("sourceId")));
+            if (header != null && header.get("sourceId") != null) {
+                sourceId = Long.valueOf(String.valueOf(header.get("sourceId")));
+            }
         }
         String aclFrom = sourceId == null ? "EXTRACTION_REQUEST" : "SOURCE:" + sourceId;
         Map<String, String> codeByName = new LinkedHashMap<String, String>();
@@ -330,28 +287,25 @@ public class KnowledgeExtractionService {
         Object entitiesObject = response.get("entities");
         if (entitiesObject instanceof List) {
             for (Object value : (List<Object>) entitiesObject) {
-                if (!(value instanceof Map)) continue;
+                if (!(value instanceof Map)) {
+                    continue;
+                }
                 Map<String, Object> entity = (Map<String, Object>) value;
                 String name = stringValue(first(entity, "canonical_name", "name"));
                 String explicit = stringValue(first(entity, "entity_code", "code"));
                 // Reuse the node of a term this knowledge base already knows, otherwise derive a
                 // stable code from the name so the next document connects to the same node.
                 String known = explicit.isEmpty() && !name.isEmpty() ? existingEntityCode(kb, name) : "";
-                String code = !explicit.isEmpty()
-                        ? explicit
-                        : (!known.isEmpty() ? known
-                        : (name.isEmpty() ? idGenerator.next("ENT_") : stableCode("ENT_", kb + "|" + normalizeName(name))));
-                mapper.upsertExtractedEntity(kb, sourceId, code, stringValue(first(entity, "entity_type", "type")),
-                        name, stringValue(entity.get("description")),
-                        doubleValue(entity.get("confidence"), 0.0D), "ACTIVE", permissionTags, aclFrom);
+                String code = !explicit.isEmpty() ? explicit : (!known.isEmpty() ? known : (name.isEmpty() ? idGenerator.next("ENT_") : stableCode("ENT_", kb + "|" + normalizeName(name))));
+                mapper.upsertExtractedEntity(kb, sourceId, code, stringValue(first(entity, "entity_type", "type")), name, stringValue(entity.get("description")), doubleValue(entity.get("confidence"), 0.0D), "ACTIVE", permissionTags, aclFrom);
                 String scopeHash = aclScopeHash(permissionTags);
                 mapper.insertEntityAclScope(kb, code, sourceId, documentId, permissionTags, scopeHash, aclFrom);
-                mapper.upsertEntityFacet(kb, code, code + ":" + scopeHash, sourceId, documentId,
-                        stringValue(first(entity, "entity_type", "type")), name,
-                        stringValue(entity.get("description")), permissionTags, scopeHash, aclFrom);
+                mapper.upsertEntityFacet(kb, code, code + ":" + scopeHash, sourceId, documentId, stringValue(first(entity, "entity_type", "type")), name, stringValue(entity.get("description")), permissionTags, scopeHash, aclFrom);
                 mapper.recomputeEntityAclMergePolicy(kb, code);
                 entity.put("entity_code", code);
-                if (!name.isEmpty()) codeByName.put(normalizeName(name), code);
+                if (!name.isEmpty()) {
+                    codeByName.put(normalizeName(name), code);
+                }
                 entityCount++;
             }
         }
@@ -359,28 +313,25 @@ public class KnowledgeExtractionService {
         Object relationsObject = response.get("relations");
         if (relationsObject instanceof List) {
             for (Object value : (List<Object>) relationsObject) {
-                if (!(value instanceof Map)) continue;
+                if (!(value instanceof Map)) {
+                    continue;
+                }
                 Map<String, Object> relation = (Map<String, Object>) value;
-                EntityRef source = resolveEntity(
-                        kb, first(relation, "source_entity_code", "source", "subject"), codeByName);
-                EntityRef target = resolveEntity(
-                        kb, first(relation, "target_entity_code", "target", "object"), codeByName);
-                if (source == null || target == null || source.code.equals(target.code)) continue;
+                EntityRef source = resolveEntity(kb, first(relation, "source_entity_code", "source", "subject"), codeByName);
+                EntityRef target = resolveEntity(kb, first(relation, "target_entity_code", "target", "object"), codeByName);
+                if (source == null || target == null || source.code.equals(target.code)) {
+                    continue;
+                }
                 String type = stringValue(first(relation, "relation_type", "type", "predicate"));
-                if (type.isEmpty()) type = "RELATED_TO";
+                if (type.isEmpty()) {
+                    type = "RELATED_TO";
+                }
                 String explicit = stringValue(first(relation, "relation_code", "code"));
-                String relationCode = !explicit.isEmpty()
-                        ? explicit
-                        : stableCode("REL_", kb + "|" + source.code + "|" + type + "|" + target.code);
-                mapper.upsertExtractedRelation(kb, sourceId, relationCode,
-                        source.id, type, target.id,
-                        doubleValue(relation.get("confidence"), 0.0D), "ACTIVE", permissionTags, aclFrom);
+                String relationCode = !explicit.isEmpty() ? explicit : stableCode("REL_", kb + "|" + source.code + "|" + type + "|" + target.code);
+                mapper.upsertExtractedRelation(kb, sourceId, relationCode, source.id, type, target.id, doubleValue(relation.get("confidence"), 0.0D), "ACTIVE", permissionTags, aclFrom);
                 String scopeHash = aclScopeHash(permissionTags);
-                mapper.insertRelationAclScope(kb, relationCode, sourceId, documentId,
-                        permissionTags, scopeHash, aclFrom);
-                mapper.upsertRelationFacet(kb, relationCode, relationCode + ":" + scopeHash, sourceId, documentId,
-                        source.code, target.code, type,
-                        permissionTags, scopeHash, aclFrom);
+                mapper.insertRelationAclScope(kb, relationCode, sourceId, documentId, permissionTags, scopeHash, aclFrom);
+                mapper.upsertRelationFacet(kb, relationCode, relationCode + ":" + scopeHash, sourceId, documentId, source.code, target.code, type, permissionTags, scopeHash, aclFrom);
                 mapper.recomputeRelationAclMergePolicy(kb, relationCode);
                 relation.put("relation_code", relationCode);
                 // Stamp the resolved entity codes so the graph index event connects the real
@@ -390,8 +341,7 @@ public class KnowledgeExtractionService {
                 relationCount++;
             }
         }
-        int linkCount = persistKnowledgeEntityLinks(kb, response.get("claims"), true, permissionTags, codeByName)
-                + persistKnowledgeEntityLinks(kb, response.get("cards"), false, permissionTags, codeByName);
+        int linkCount = persistKnowledgeEntityLinks(kb, response.get("claims"), true, permissionTags, codeByName) + persistKnowledgeEntityLinks(kb, response.get("cards"), false, permissionTags, codeByName);
         Map<String, Object> summary = new LinkedHashMap<String, Object>();
         summary.put("entityCount", entityCount);
         summary.put("relationCount", relationCount);
@@ -399,24 +349,36 @@ public class KnowledgeExtractionService {
         return summary;
     }
 
-    /** Code of the node already carrying this term, or empty when the term is new. */
+    /**
+     * Code of the node already carrying this term, or empty when the term is new.
+     */
     private String existingEntityCode(Long kb, String name) {
         Map<String, Object> row = mapper.findEntityRef(kb, name);
         return row == null ? "" : stringValue(row.get("entityCode"));
     }
 
-    /** Resolve one entity reference that may be a code, a batch name or a stored name. */
+    /**
+     * Resolve one entity reference that may be a code, a batch name or a stored name.
+     */
     private EntityRef resolveEntity(Long kb, Object raw, Map<String, String> codeByName) {
         String value = stringValue(raw);
-        if (value.isEmpty()) return null;
+        if (value.isEmpty()) {
+            return null;
+        }
         String batchCode = codeByName.get(normalizeName(value));
         Map<String, Object> row = mapper.findEntityRef(kb, batchCode == null ? value : batchCode);
-        if (row == null && batchCode != null) row = mapper.findEntityRef(kb, value);
-        if (row == null || row.get("id") == null) return null;
+        if (row == null && batchCode != null) {
+            row = mapper.findEntityRef(kb, value);
+        }
+        if (row == null || row.get("id") == null) {
+            return null;
+        }
         return new EntityRef(Long.valueOf(String.valueOf(row.get("id"))), stringValue(row.get("entityCode")));
     }
 
-    /** Stable identifier derived from authoritative content; identical input gives one node. */
+    /**
+     * Stable identifier derived from authoritative content; identical input gives one node.
+     */
     private String stableCode(String prefix, String material) {
         try {
             MessageDigest digest = MessageDigest.getInstance("SHA-256");
@@ -431,24 +393,32 @@ public class KnowledgeExtractionService {
     }
 
     @SuppressWarnings("unchecked")
-    private int persistKnowledgeEntityLinks(Long kb, Object objects, boolean claim, String permissionTags,
-            Map<String, String> codeByName) {
+    private int persistKnowledgeEntityLinks(Long kb, Object objects, boolean claim, String permissionTags, Map<String, String> codeByName) {
         int links = 0;
-        if (!(objects instanceof List)) return links;
+        if (!(objects instanceof List)) {
+            return links;
+        }
         for (Object value : (List<Object>) objects) {
-            if (!(value instanceof Map)) continue;
+            if (!(value instanceof Map)) {
+                continue;
+            }
             Map<String, Object> object = (Map<String, Object>) value;
             String objectCode = stringValue(first(object, claim ? "claim_code" : "knowledge_code", "code"));
             Object entityCodes = first(object, "entity_codes", "entities");
-            if (!(entityCodes instanceof List)) continue;
+            if (!(entityCodes instanceof List)) {
+                continue;
+            }
             for (Object entityValue : (List<Object>) entityCodes) {
-                String reference = entityValue instanceof Map
-                        ? stringValue(first((Map<String, Object>) entityValue, "entity_code", "code"))
-                        : stringValue(entityValue);
+                String reference = entityValue instanceof Map ? stringValue(first((Map<String, Object>) entityValue, "entity_code", "code")) : stringValue(entityValue);
                 EntityRef entity = resolveEntity(kb, reference, codeByName);
-                if (entity == null) continue;
-                if (claim) mapper.linkClaimEntityAcl(objectCode, entity.code, "ABOUT", permissionTags);
-                else mapper.linkCardEntityAcl(objectCode, entity.code, "ABOUT", permissionTags);
+                if (entity == null) {
+                    continue;
+                }
+                if (claim) {
+                    mapper.linkClaimEntityAcl(objectCode, entity.code, "ABOUT", permissionTags);
+                } else {
+                    mapper.linkCardEntityAcl(objectCode, entity.code, "ABOUT", permissionTags);
+                }
                 links++;
             }
         }
@@ -464,7 +434,11 @@ public class KnowledgeExtractionService {
     }
 
     private Object first(Map<String, Object> source, String... keys) {
-        for (String key : keys) if (source.get(key) != null) return source.get(key);
+        for (String key : keys) {
+            if (source.get(key) != null) {
+                return source.get(key);
+            }
+        }
         return null;
     }
 
@@ -491,8 +465,7 @@ public class KnowledgeExtractionService {
         }
     }
 
-    private Map<String, Object> buildSingleKnowledgeIndexPayload(
-            Long kb, Map<String, Object> card, Map<String, Object> claim) {
+    private Map<String, Object> buildSingleKnowledgeIndexPayload(Long kb, Map<String, Object> card, Map<String, Object> claim) {
         List<Map<String, Object>> cards = new ArrayList<Map<String, Object>>();
         List<Map<String, Object>> claims = new ArrayList<Map<String, Object>>();
         if (card != null) {
@@ -506,10 +479,14 @@ public class KnowledgeExtractionService {
 
     @SuppressWarnings("unchecked")
     private Object withPermissionTags(Object value, String permissionTags) {
-        if (!(value instanceof List)) return value;
+        if (!(value instanceof List)) {
+            return value;
+        }
         List<Map<String, Object>> output = new ArrayList<Map<String, Object>>();
         for (Object row : (List<Object>) value) {
-            if (!(row instanceof Map)) continue;
+            if (!(row instanceof Map)) {
+                continue;
+            }
             Map<String, Object> copy = new LinkedHashMap<String, Object>((Map<String, Object>) row);
             copy.put("permission_tags", permissionTags);
             output.add(copy);
@@ -517,12 +494,7 @@ public class KnowledgeExtractionService {
         return output;
     }
 
-    private Map<String, Object> buildKnowledgeIndexPayload(
-            Long kb,
-            List<Map<String, Object>> cards,
-            List<Map<String, Object>> claims,
-            Object entities,
-            Object relations) {
+    private Map<String, Object> buildKnowledgeIndexPayload(Long kb, List<Map<String, Object>> cards, List<Map<String, Object>> claims, Object entities, Object relations) {
         Map<String, Object> payload = new LinkedHashMap<String, Object>();
         payload.put("knowledgeBaseId", kb);
         payload.put("cards", cards);
@@ -537,7 +509,6 @@ public class KnowledgeExtractionService {
         if (newClaims.isEmpty()) {
             return new ArrayList<Object>();
         }
-
         List<String> subjects = new ArrayList<String>();
         List<String> focusCodes = new ArrayList<String>();
         for (Map<String, Object> claim : newClaims) {
@@ -547,7 +518,6 @@ public class KnowledgeExtractionService {
             }
             focusCodes.add(stringValue(claim.get("claim_code")));
         }
-
         List<Claim> candidates = mapper.listClaimsBySubjects(knowledgeBaseId, subjects);
         List<Map<String, Object>> conflictClaims = new ArrayList<Map<String, Object>>(candidates.size());
         for (Claim existing : candidates) {
@@ -560,7 +530,6 @@ public class KnowledgeExtractionService {
             item.put("status", existing.getStatus());
             conflictClaims.add(item);
         }
-
         Map<String, Object> payload = new LinkedHashMap<String, Object>();
         payload.put("claims", conflictClaims);
         payload.put("focusCodes", focusCodes);
@@ -569,7 +538,6 @@ public class KnowledgeExtractionService {
         if (!(conflictsObject instanceof List)) {
             return new ArrayList<Object>();
         }
-
         transactionRunner.required(() -> {
             for (Object item : (List<Object>) conflictsObject) {
                 if (!(item instanceof Map)) {
@@ -578,32 +546,21 @@ public class KnowledgeExtractionService {
                 Map<String, Object> conflict = (Map<String, Object>) item;
                 String objectA = stringValue(conflict.get("objectACode"));
                 String objectB = stringValue(conflict.get("objectBCode"));
-                mapper.insertConflict(
-                        knowledgeBaseId,
-                        objectA,
-                        objectB,
-                        stringValue(conflict.get("conflictType")),
-                        doubleValue(conflict.get("conflictScore"), 0.0D));
+                mapper.insertConflict(knowledgeBaseId, objectA, objectB, stringValue(conflict.get("conflictType")), doubleValue(conflict.get("conflictScore"), 0.0D));
                 mapper.updateClaimStatus(objectA, KnowledgeStatus.CONFLICTED.name());
                 mapper.updateClaimStatus(objectB, KnowledgeStatus.CONFLICTED.name());
                 mapper.snapshotKnowledgeObject(knowledgeBaseId, "CLAIM", objectA, "CONFLICT_DETECTED", "CONFLICT_ENGINE");
                 mapper.snapshotKnowledgeObject(knowledgeBaseId, "CLAIM", objectB, "CONFLICT_DETECTED", "CONFLICT_ENGINE");
                 String conflictOperation = "CONFLICT:" + objectA + ":" + objectB;
-                outboxService.enqueueObjectStatus(
-                        knowledgeBaseId, "CLAIM", objectA, KnowledgeStatus.CONFLICTED.name(),
-                        conflictOperation + ":A");
-                outboxService.enqueueObjectStatus(
-                        knowledgeBaseId, "CLAIM", objectB, KnowledgeStatus.CONFLICTED.name(),
-                        conflictOperation + ":B");
+                outboxService.enqueueObjectStatus(knowledgeBaseId, "CLAIM", objectA, KnowledgeStatus.CONFLICTED.name(), conflictOperation + ":A");
+                outboxService.enqueueObjectStatus(knowledgeBaseId, "CLAIM", objectB, KnowledgeStatus.CONFLICTED.name(), conflictOperation + ":B");
             }
         });
         return conflictsObject;
     }
 
     private String valueOrId(Object value, String prefix) {
-        return value == null || String.valueOf(value).trim().isEmpty()
-                ? idGenerator.next(prefix)
-                : String.valueOf(value);
+        return value == null || String.valueOf(value).trim().isEmpty() ? idGenerator.next(prefix) : String.valueOf(value);
     }
 
     private String stringValue(Object value) {
@@ -632,7 +589,9 @@ public class KnowledgeExtractionService {
         }
     }
 
-    /** Parse a validity boundary; unparsable or missing timestamps stay null (open bound). */
+    /**
+     * Parse a validity boundary; unparsable or missing timestamps stay null (open bound).
+     */
     private Date dateValue(Object value) {
         if (value == null) {
             return null;
@@ -660,9 +619,13 @@ public class KnowledgeExtractionService {
     }
 
     private String normalizePermissionTags(Object value) {
-        if (value == null) return "[]";
+        if (value == null) {
+            return "[]";
+        }
         String raw = String.valueOf(value).trim();
-        if (raw.isEmpty()) return "[]";
+        if (raw.isEmpty()) {
+            return "[]";
+        }
         try {
             if (raw.startsWith("[")) {
                 Object parsed = objectMapper.readValue(raw, Object.class);
@@ -681,24 +644,29 @@ public class KnowledgeExtractionService {
             return defaultJson;
         }
     }
+
     private static final class PersistedKnowledge {
+
         private final List<Map<String, Object>> cards;
+
         private final List<Map<String, Object>> claims;
+
         private final Map<String, Object> graph;
 
-        private PersistedKnowledge(
-                List<Map<String, Object>> cards,
-                List<Map<String, Object>> claims,
-                Map<String, Object> graph) {
+        private PersistedKnowledge(List<Map<String, Object>> cards, List<Map<String, Object>> claims, Map<String, Object> graph) {
             this.cards = cards;
             this.claims = claims;
             this.graph = graph;
         }
     }
 
-    /** A resolved entity endpoint: authoritative row id plus the stable code edges reference. */
+    /**
+     * A resolved entity endpoint: authoritative row id plus the stable code edges reference.
+     */
     private static final class EntityRef {
+
         private final Long id;
+
         private final String code;
 
         private EntityRef(Long id, String code) {
@@ -707,8 +675,9 @@ public class KnowledgeExtractionService {
         }
     }
 
-
-    /** Stable hash for one evidence ACL scope; tags are normalized before hashing. */
+    /**
+     * Stable hash for one evidence ACL scope; tags are normalized before hashing.
+     */
     private String aclScopeHash(String tagsJson) {
         try {
             @SuppressWarnings("unchecked")
@@ -726,5 +695,4 @@ public class KnowledgeExtractionService {
             throw new IllegalStateException("cannot hash ACL scope", ex);
         }
     }
-
 }

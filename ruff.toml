@@ -1,0 +1,50 @@
+# Knowledge OS Python 编码规范（覆盖 ai-service 与 scripts/）。
+#
+# 取舍原则同 config/checkstyle/checkstyle.xml：让工具拦住真正的缺陷与隐患，
+# 不为纯审美催收 Alerts。因此：
+#   - 启用 F/E9 这类"几乎必然是 bug"的规则；
+#   - 启用 B(bugbear)、SIM(简化)、RET(返回值一致性) 这类易埋缺陷的规则；
+#   - 关闭 RUF001 等与中文注释/字符串天然冲突的规则。
+line-length = 120
+target-version = "py310"
+
+exclude = [
+    ".git",
+    ".venv",
+    "venv",
+    "__pycache__",
+    "node_modules",
+    "dist",
+    "build",
+    "ai-service/.venv",
+    "frontend/node_modules",
+]
+
+[lint]
+select = [
+    "F",     # pyflakes：未使用导入/变量、未定义名称
+    "E",     # pycodestyle 错误
+    "W",     # pycodestyle 告警
+    "I",     # isort：导入顺序
+    "UP",    # pyupgrade：语法现代化
+    "B",     # bugbear：易错写法
+    "SIM",   # 可简化结构
+    "RET",   # 函数返回值一致性
+    "C4",    # comprehensions
+]
+ignore = [
+    "RUF001",   # 歧义 Unicode：中文项目必然存在，无监控价值
+    "E501",     # 行长交给 formatter，不在 lint 里重复报
+    "SIM108",   # 三元表达式：有些展开写法可读性更好，不强求
+    "UP031",    # % 格式化：logging 依赖它做惰性求值，改 f-string 会让日志无条件拼字符串
+    "B008",     # 函数调用作默认参数：FastAPI 依赖注入（File()/Depends()）的官方写法
+]
+
+[lint.per-file-ignores]
+# 运维脚本允许直接 print 给用户看输出，也不强求类型注解
+"scripts/**/*.py" = ["ARG", "E402"]
+"ai-service/tests/**/*.py" = ["E402"]
+
+[format]
+quote-style = "double"
+indent-style = "space"

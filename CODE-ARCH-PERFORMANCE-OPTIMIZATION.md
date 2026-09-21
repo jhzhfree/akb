@@ -194,8 +194,10 @@ Neo4j Provider 也会重复创建 Driver / 验证连接。
 @lru_cache(maxsize=1)
 def get_reranker(): ...
 
+
 @lru_cache(maxsize=1)
 def get_embedding_provider(): ...
+
 
 @lru_cache(maxsize=1)
 def get_graph_provider(): ...

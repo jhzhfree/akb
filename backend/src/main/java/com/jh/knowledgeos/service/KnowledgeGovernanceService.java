@@ -7,7 +7,6 @@ import com.jh.knowledgeos.mapper.KnowledgeMapper;
 import org.springframework.stereotype.Service;
 import org.slf4j.MDC;
 import org.springframework.transaction.annotation.Transactional;
-
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -23,26 +22,32 @@ import java.util.Set;
  */
 @Service
 public class KnowledgeGovernanceService {
+
     private static final int DEFAULT_ASSESSMENT_LIMIT = 100;
+
     private static final int MAX_ASSESSMENT_LIMIT = 500;
-    /** Accepted verdicts for conflict adjudication; anything else is rejected early rather than silently ignored. */
-    private static final Set<String> SUPPORTED_VERDICTS = Collections.unmodifiableSet(new HashSet<String>(
-            Arrays.asList("KEEP_A", "KEEP_B", "MERGE", "REJECT_BOTH", "REQUEST_EVIDENCE", "IGNORE")));
-    /** Conflict stays open while evidence is being collected: closing it would hide the pending work. */
+
+    /**
+     * Accepted verdicts for conflict adjudication; anything else is rejected early rather than silently ignored.
+     */
+    private static final Set<String> SUPPORTED_VERDICTS = Collections.unmodifiableSet(new HashSet<String>(Arrays.asList("KEEP_A", "KEEP_B", "MERGE", "REJECT_BOTH", "REQUEST_EVIDENCE", "IGNORE")));
+
+    /**
+     * Conflict stays open while evidence is being collected: closing it would hide the pending work.
+     */
     private static final String CONFLICT_STATUS_EVIDENCE_PENDING = "OPEN";
 
     private final KnowledgeMapper mapper;
+
     private final AiClient aiClient;
+
     private final ObjectMapper objectMapper;
+
     private final TransactionRunner transactionRunner;
+
     private final IndexOutboxService outboxService;
 
-    public KnowledgeGovernanceService(
-            KnowledgeMapper mapper,
-            AiClient aiClient,
-            ObjectMapper objectMapper,
-            TransactionRunner transactionRunner,
-            IndexOutboxService outboxService) {
+    public KnowledgeGovernanceService(KnowledgeMapper mapper, AiClient aiClient, ObjectMapper objectMapper, TransactionRunner transactionRunner, IndexOutboxService outboxService) {
         this.mapper = mapper;
         this.aiClient = aiClient;
         this.objectMapper = objectMapper;
@@ -51,8 +56,10 @@ public class KnowledgeGovernanceService {
     }
 
     @Transactional
-    /** Persist a human adjudication decision and enqueue the resulting lifecycle change. */
-    public Map<String, Object> adjudicate(Map<String, Object> request) {
+    public /**
+     * Persist a human adjudication decision and enqueue the resulting lifecycle change.
+     */
+    Map<String, Object> adjudicate(Map<String, Object> request) {
         String type = stringValue(request.get("objectType"));
         String code = stringValue(request.get("objectCode"));
         String decision = stringValue(request.get("decision"));
@@ -64,47 +71,34 @@ public class KnowledgeGovernanceService {
             outboxService.enqueueObjectStatus(kb, type, code, decision, MDC.get("traceId"));
         }
         // A decision is only auditable when it also records what was compared and under which policy.
-        mapper.insertJudgment(
-                type,
-                code,
-                decision,
-                reviewer,
-                stringValue(request.get("comment")),
-                stringValue(request.get("inputObjectCodes")),
-                stringValue(request.get("resultObjectCode")),
-                stringValue(request.get("policyVersion")));
+        mapper.insertJudgment(type, code, decision, reviewer, stringValue(request.get("comment")), stringValue(request.get("inputObjectCodes")), stringValue(request.get("resultObjectCode")), stringValue(request.get("policyVersion")));
         return request;
     }
 
     @SuppressWarnings("unchecked")
-    /**
+    public /**
      * Scores governance candidates with deterministic policy + AI judge assistance;
      * external model calls remain outside database transactions.
      */
-    public Map<String, Object> intelligentAdjudicate(Long knowledgeBaseId) throws Exception {
+    Map<String, Object> intelligentAdjudicate(Long knowledgeBaseId) throws Exception {
         List<Map<String, Object>> candidates = mapper.listAdjudicationCandidates(knowledgeBaseId);
         List<Map<String, Object>> results = new ArrayList<Map<String, Object>>(candidates.size());
         int autoApproved = 0;
         int needsHuman = 0;
         int conflicted = 0;
-
         for (Map<String, Object> candidate : candidates) {
             String type = stringValue(candidate.get("objectType"));
             String code = stringValue(candidate.get("objectCode"));
             List<Map<String, Object>> evidence = mapper.listEvidenceForObject(type, code);
             List<Map<String, Object>> conflicts = mapper.listObjectConflicts(code);
-
             // Evidence support is scored once, inside the AI adjudication engine, from evidenceCount;
             // a second formula here would silently diverge from the published weights.
             Map<String, Object> payload = new LinkedHashMap<String, Object>(candidate);
             payload.put("evidenceSamples", evidence);
             payload.put("conflicts", conflicts);
-
             Map<String, Object> result = aiClient.post(AiApiPaths.ADJUDICATE, payload);
             String decision = stringValue(result.get("decision"));
-            boolean requiresHuman = Boolean.parseBoolean(
-                    String.valueOf(result.get("requiresHumanReview")));
-
+            boolean requiresHuman = Boolean.parseBoolean(String.valueOf(result.get("requiresHumanReview")));
             transactionRunner.required(() -> {
                 try {
                     persistAssessment(knowledgeBaseId, type, code, result, requiresHuman);
@@ -121,11 +115,8 @@ public class KnowledgeGovernanceService {
                 }
                 updateObjectStatus(type, code, finalStatus);
                 mapper.snapshotKnowledgeObject(knowledgeBaseId, type, code, "AI_ADJUDICATION", "AI_JUDGE");
-                outboxService.enqueueObjectStatus(
-                        knowledgeBaseId, type, code, finalStatus,
-                        String.valueOf(MDC.get("traceId")) + ":" + type + ":" + code);
+                outboxService.enqueueObjectStatus(knowledgeBaseId, type, code, finalStatus, String.valueOf(MDC.get("traceId")) + ":" + type + ":" + code);
             });
-
             if (KnowledgeStatus.APPROVED.name().equals(decision)) {
                 autoApproved++;
             } else if (KnowledgeStatus.CONFLICTED.name().equals(decision)) {
@@ -134,14 +125,12 @@ public class KnowledgeGovernanceService {
             } else {
                 needsHuman++;
             }
-
             Map<String, Object> item = new LinkedHashMap<String, Object>();
             item.put("objectType", type);
             item.put("objectCode", code);
             item.putAll(result);
             results.add(item);
         }
-
         Map<String, Object> output = new LinkedHashMap<String, Object>();
         output.put("knowledgeBaseId", knowledgeBaseId);
         output.put("total", results.size());
@@ -153,9 +142,7 @@ public class KnowledgeGovernanceService {
     }
 
     public List<Map<String, Object>> assessments(Long kb, Integer limit) {
-        int normalized = limit == null
-                ? DEFAULT_ASSESSMENT_LIMIT
-                : Math.min(MAX_ASSESSMENT_LIMIT, Math.max(1, limit));
+        int normalized = limit == null ? DEFAULT_ASSESSMENT_LIMIT : Math.min(MAX_ASSESSMENT_LIMIT, Math.max(1, limit));
         return mapper.listAssessments(kb, normalized);
     }
 
@@ -204,9 +191,7 @@ public class KnowledgeGovernanceService {
         List<Map<String, Object>> sides = new ArrayList<Map<String, Object>>(codes.size());
         for (String code : codes) {
             String type = types.get(code);
-            Map<String, Object> side = rows.get(code) == null
-                    ? new LinkedHashMap<String, Object>()
-                    : new LinkedHashMap<String, Object>(rows.get(code));
+            Map<String, Object> side = rows.get(code) == null ? new LinkedHashMap<String, Object>() : new LinkedHashMap<String, Object>(rows.get(code));
             side.put("objectType", type);
             side.put("objectCode", code);
             List<Map<String, Object>> evidence = mapper.listEvidenceForObject(type, code);
@@ -226,18 +211,16 @@ public class KnowledgeGovernanceService {
     }
 
     @Transactional
-    /**
+    public /**
      * Applies a verdict to both sides of a conflict: the surviving object is approved, the losing one rejected,
      * and every status change is snapshot and published so the index and the audit trail agree with the decision.
      */
-    public Map<String, Object> adjudicateConflict(Long id, String decision, String comment, String reviewer) {
+    Map<String, Object> adjudicateConflict(Long id, String decision, String comment, String reviewer) {
         Map<String, Object> conflict = mapper.getConflict(id);
         if (conflict == null) {
             throw new IllegalArgumentException("Conflict not found: " + id);
         }
-        String verdict = decision == null || decision.trim().isEmpty()
-                ? "MERGE"
-                : decision.trim().toUpperCase(Locale.ROOT);
+        String verdict = decision == null || decision.trim().isEmpty() ? "MERGE" : decision.trim().toUpperCase(Locale.ROOT);
         if (!SUPPORTED_VERDICTS.contains(verdict)) {
             throw new IllegalArgumentException("Unsupported adjudication verdict: " + decision);
         }
@@ -247,7 +230,6 @@ public class KnowledgeGovernanceService {
         Long kb = kbValue == null ? null : Long.valueOf(stringValue(kbValue));
         Map<String, String> types = objectTypes(Arrays.asList(codeA, codeB));
         String resolvedReviewer = reviewerOrDefault(reviewer);
-
         boolean evidenceRequested = "REQUEST_EVIDENCE".equals(verdict);
         String winner = "IGNORE".equals(verdict) || evidenceRequested ? "" : resolveWinner(verdict, codeA, codeB);
         String loser = winner.isEmpty() ? "" : (winner.equals(codeA) ? codeB : codeA);
@@ -263,29 +245,20 @@ public class KnowledgeGovernanceService {
             pendingStatus.put(winner, KnowledgeStatus.APPROVED.name());
             if (!winner.equals(loser)) {
                 // A merge absorbs B into A: B stays traceable as superseded, a rejection would erase the lineage.
-                pendingStatus.put(loser, "MERGE".equals(verdict)
-                        ? KnowledgeStatus.SUPERSEDED.name()
-                        : KnowledgeStatus.REJECTED.name());
+                pendingStatus.put(loser, "MERGE".equals(verdict) ? KnowledgeStatus.SUPERSEDED.name() : KnowledgeStatus.REJECTED.name());
             }
         }
-
         for (Map.Entry<String, String> entry : pendingStatus.entrySet()) {
             String code = entry.getKey();
             String type = types.get(code);
             updateObjectStatus(type, code, entry.getValue());
             if (kb != null) {
                 mapper.snapshotKnowledgeObject(kb, type, code, "CONFLICT_ADJUDICATION", resolvedReviewer);
-                outboxService.enqueueObjectStatus(
-                        kb, type, code, entry.getValue(),
-                        MDC.get("traceId") + ":" + type + ":" + code);
+                outboxService.enqueueObjectStatus(kb, type, code, entry.getValue(), MDC.get("traceId") + ":" + type + ":" + code);
             }
         }
-
-        String conflictStatus = evidenceRequested
-                ? CONFLICT_STATUS_EVIDENCE_PENDING
-                : ("IGNORE".equals(verdict) ? "IGNORED" : "RESOLVED");
+        String conflictStatus = evidenceRequested ? CONFLICT_STATUS_EVIDENCE_PENDING : ("IGNORE".equals(verdict) ? "IGNORED" : "RESOLVED");
         mapper.resolveConflict(id, conflictStatus, adjudicationNote(verdict, winner, comment));
-
         Map<String, Object> result = new LinkedHashMap<String, Object>();
         result.put("id", id);
         result.put("verdict", verdict);
@@ -295,12 +268,16 @@ public class KnowledgeGovernanceService {
         return result;
     }
 
-    /** KEEP_A / KEEP_B name the survivor explicitly; MERGE keeps A as the surviving object by convention. */
+    /**
+     * KEEP_A / KEEP_B name the survivor explicitly; MERGE keeps A as the surviving object by convention.
+     */
     private String resolveWinner(String verdict, String codeA, String codeB) {
         return "KEEP_B".equals(verdict) ? codeB : codeA;
     }
 
-    /** Object type must come from storage: conflicting codes are not always claims, and a wrong update would be silent. */
+    /**
+     * Object type must come from storage: conflicting codes are not always claims, and a wrong update would be silent.
+     */
     private Map<String, String> objectTypes(List<String> codes) {
         Map<String, String> types = new LinkedHashMap<String, String>();
         for (String code : codes) {
@@ -325,7 +302,9 @@ public class KnowledgeGovernanceService {
         return types;
     }
 
-    /** The resolution text must record the verdict itself, otherwise "RESOLVED" says nothing about how. */
+    /**
+     * The resolution text must record the verdict itself, otherwise "RESOLVED" says nothing about how.
+     */
     private String adjudicationNote(String verdict, String winner, String comment) {
         String trimmed = comment == null ? "" : comment.trim();
         String note = "VERDICT=" + verdict + (winner.isEmpty() ? "" : ";KEEP=" + winner);
@@ -333,28 +312,10 @@ public class KnowledgeGovernanceService {
     }
 
     @SuppressWarnings("unchecked")
-    private void persistAssessment(
-            Long kb,
-            String type,
-            String code,
-            Map<String, Object> result,
-            boolean requiresHuman) throws Exception {
+    private void persistAssessment(Long kb, String type, String code, Map<String, Object> result, boolean requiresHuman) throws Exception {
         Object aiJudge = result.get("aiJudge");
-        String reason = aiJudge instanceof Map
-                ? stringValue(((Map<String, Object>) aiJudge).get("reason"))
-                : "";
-        mapper.insertAssessment(
-                kb,
-                type,
-                code,
-                stringValue(result.get("policyVersion")),
-                doubleValue(result.get("knowledgeConfidence"), 0.0D),
-                stringValue(result.get("riskLevel")),
-                stringValue(result.get("decision")),
-                requiresHuman,
-                objectMapper.writeValueAsString(result.get("components")),
-                objectMapper.writeValueAsString(result.get("aiJudge")),
-                reason);
+        String reason = aiJudge instanceof Map ? stringValue(((Map<String, Object>) aiJudge).get("reason")) : "";
+        mapper.insertAssessment(kb, type, code, stringValue(result.get("policyVersion")), doubleValue(result.get("knowledgeConfidence"), 0.0D), stringValue(result.get("riskLevel")), stringValue(result.get("decision")), requiresHuman, objectMapper.writeValueAsString(result.get("components")), objectMapper.writeValueAsString(result.get("aiJudge")), reason);
     }
 
     private void updateObjectStatus(String type, String code, String status) {
@@ -365,7 +326,9 @@ public class KnowledgeGovernanceService {
         }
     }
 
-    /** A verdict without an author cannot be audited, so the signed-in user is the fallback reviewer. */
+    /**
+     * A verdict without an author cannot be audited, so the signed-in user is the fallback reviewer.
+     */
     private String reviewerOrDefault(Object reviewer) {
         String value = stringValue(reviewer).trim();
         if (!value.isEmpty()) {

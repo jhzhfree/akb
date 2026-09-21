@@ -8,9 +8,8 @@ recall budgets, fusion weights, and validation failures.
 import json
 
 import pytest
-
 from app.core import query_policy as qp
-from app.services.query_engine import QueryRouter, QueryRewriter
+from app.services.query_engine import QueryRewriter, QueryRouter
 from app.services.retrieval.hybrid import HybridRetriever
 
 
@@ -45,10 +44,21 @@ def test_disabled_routing_falls_back_to_default_channels():
 
 def test_custom_rule_routes_by_longest_keyword():
     """An added keyword intent must win over a built-in rule with a shorter match."""
-    qp.save_policy({"route": {"rules": [{
-        "questionType": "RELEASE", "keywords": ["发布流程"], "strategies": ["card"], "priority": 95,
-        "reason": "release-specific routing",
-    }]}})
+    qp.save_policy(
+        {
+            "route": {
+                "rules": [
+                    {
+                        "questionType": "RELEASE",
+                        "keywords": ["发布流程"],
+                        "strategies": ["card"],
+                        "priority": 95,
+                        "reason": "release-specific routing",
+                    }
+                ]
+            }
+        }
+    )
     policy = qp.load_policy()
     # Deep merge keeps the built-in rules and appends the custom one.
     assert any(rule.questionType == "RELEASE" for rule in policy.route.rules)

@@ -17,7 +17,6 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
-
 import javax.servlet.http.HttpServletRequest;
 import java.util.Collections;
 import java.util.HashSet;
@@ -35,20 +34,20 @@ import java.util.Set;
 @CrossOrigin
 @Tag(name = "External SSE", description = "对外 SSE 推送：流式问答与知识库事件订阅")
 public class ExternalStreamController {
+
     private final ExternalAccessService accessService;
+
     private final ExternalStreamService streamService;
+
     private final ExternalAuditService auditService;
+
     private final PlatformEventHub hub;
+
     private final PlatformEventVisibilityService visibility;
+
     private final KnowledgeProperties.External properties;
 
-    public ExternalStreamController(
-            ExternalAccessService accessService,
-            ExternalStreamService streamService,
-            ExternalAuditService auditService,
-            PlatformEventHub hub,
-            PlatformEventVisibilityService visibility,
-            KnowledgeProperties properties) {
+    public ExternalStreamController(ExternalAccessService accessService, ExternalStreamService streamService, ExternalAuditService auditService, PlatformEventHub hub, PlatformEventVisibilityService visibility, KnowledgeProperties properties) {
         this.accessService = accessService;
         this.streamService = streamService;
         this.auditService = auditService;
@@ -59,11 +58,7 @@ public class ExternalStreamController {
 
     @GetMapping(value = "/query", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     @Operation(summary = "流式问答：依次推送 stage / delta / citation / done 事件")
-    public SseEmitter streamQuery(
-            HttpServletRequest request,
-            @RequestParam(value = "knowledgeBaseId", required = false) Long knowledgeBaseId,
-            @RequestParam("question") String question,
-            @RequestParam(value = "topK", required = false) Integer topK) {
+    public SseEmitter streamQuery(HttpServletRequest request, @RequestParam(value = "knowledgeBaseId", required = false) Long knowledgeBaseId, @RequestParam("question") String question, @RequestParam(value = "topK", required = false) Integer topK) {
         ApiKey key = open(request, "/stream/query", knowledgeBaseId);
         Long kb = accessService.resolveKnowledgeBase(key, knowledgeBaseId);
         accessService.assertScope(key, ApiKey.SCOPE_READ);
@@ -82,12 +77,7 @@ public class ExternalStreamController {
      */
     @GetMapping(value = "/events", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     @Operation(summary = "知识库事件订阅：知识库/卡片/检索/权限等事件，支持 types、断线续传")
-    public SseEmitter streamEvents(
-            HttpServletRequest request,
-            @RequestParam(value = "knowledgeBaseId", required = false) Long knowledgeBaseId,
-            @RequestParam(value = "types", required = false) String types,
-            @RequestParam(value = "sinceEventId", required = false) Long sinceEventId,
-            @RequestParam(value = "legacy", defaultValue = "false") boolean legacy) {
+    public SseEmitter streamEvents(HttpServletRequest request, @RequestParam(value = "knowledgeBaseId", required = false) Long knowledgeBaseId, @RequestParam(value = "types", required = false) String types, @RequestParam(value = "sinceEventId", required = false) Long sinceEventId, @RequestParam(value = "legacy", defaultValue = "false") boolean legacy) {
         ApiKey key = open(request, "/stream/events", knowledgeBaseId);
         Long kb = accessService.resolveKnowledgeBase(key, knowledgeBaseId);
         accessService.assertScope(key, ApiKey.SCOPE_READ);
@@ -97,14 +87,17 @@ public class ExternalStreamController {
             return emitter;
         }
         Long since = sinceEventId != null ? sinceEventId : lastEventId(request);
-        return hub.subscribe("key:" + key.getId(), kb, splitTypes(types), since,
-                visibility.forApiKey(key, kb));
+        return hub.subscribe("key:" + key.getId(), kb, splitTypes(types), since, visibility.forApiKey(key, kb));
     }
 
-    /** Last-Event-ID is the browser's resume handle; the parameter is there for curl-style clients. */
+    /**
+     * Last-Event-ID is the browser's resume handle; the parameter is there for curl-style clients.
+     */
     private Long lastEventId(HttpServletRequest request) {
         String header = request.getHeader("Last-Event-ID");
-        if (header == null || header.trim().isEmpty()) return null;
+        if (header == null || header.trim().isEmpty()) {
+            return null;
+        }
         try {
             return Long.valueOf(header.trim());
         } catch (NumberFormatException ignored) {
@@ -113,16 +106,22 @@ public class ExternalStreamController {
     }
 
     private Set<String> splitTypes(String raw) {
-        if (raw == null || raw.trim().isEmpty()) return Collections.emptySet();
+        if (raw == null || raw.trim().isEmpty()) {
+            return Collections.emptySet();
+        }
         Set<String> values = new HashSet<String>();
         for (String part : raw.split(",")) {
             String token = part.trim().toUpperCase();
-            if (!token.isEmpty()) values.add(token);
+            if (!token.isEmpty()) {
+                values.add(token);
+            }
         }
         return values;
     }
 
-    /** Same credential gate as REST, but audited once when the stream opens. */
+    /**
+     * Same credential gate as REST, but audited once when the stream opens.
+     */
     private ApiKey open(HttpServletRequest request, String method, Long knowledgeBaseId) {
         if (!properties.isEnabled() || !properties.isSseEnabled()) {
             throw new SecurityException("SSE 推送服务已关闭");
@@ -132,8 +131,7 @@ public class ExternalStreamController {
         // The stream itself is not captured — it never ends and would outgrow any column — but the
         // subscription parameters say which events the caller asked to follow.
         Map<String, Object> params = auditService.requestParamsOf(request);
-        auditService.record(key, ApiCallAudit.CHANNEL_SSE, method, knowledgeBaseId, 200,
-                System.currentTimeMillis() - start, "stream opened", params, null);
+        auditService.record(key, ApiCallAudit.CHANNEL_SSE, method, knowledgeBaseId, 200, System.currentTimeMillis() - start, "stream opened", params, null);
         return key;
     }
 }

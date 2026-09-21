@@ -4,7 +4,7 @@ import hashlib
 import re
 import time
 from functools import lru_cache
-from typing import Any, Dict, List
+from typing import Any
 
 import httpx
 import numpy as np
@@ -17,10 +17,10 @@ class EmbeddingProvider:
 
     name = "base"
 
-    async def embed(self, texts: List[str]) -> List[List[float]]:
+    async def embed(self, texts: list[str]) -> list[list[float]]:
         raise NotImplementedError
 
-    async def test(self) -> Dict[str, Any]:
+    async def test(self) -> dict[str, Any]:
         """Embed a short probe and report dimension plus latency."""
         started = time.perf_counter()
         vectors = await self.embed(["连通性测试"])
@@ -114,7 +114,7 @@ class OpenAIEmbeddingProvider(EmbeddingProvider):
         self._assert_dimension(vectors)
         return vectors
 
-    def _assert_dimension(self, vectors: List[List[float]]) -> None:
+    def _assert_dimension(self, vectors: list[list[float]]) -> None:
         """Fail loudly instead of letting mismatched shapes corrupt similarity scores."""
         if not vectors:
             return
@@ -122,8 +122,7 @@ class OpenAIEmbeddingProvider(EmbeddingProvider):
         expected = self._config.dim
         if actual != expected:
             raise RuntimeError(
-                f"向量维度不匹配：模型返回 {actual} 维，当前配置为 {expected} 维，"
-                "请调整「向量维度」并重建索引"
+                f"向量维度不匹配：模型返回 {actual} 维，当前配置为 {expected} 维，请调整「向量维度」并重建索引"
             )
 
 

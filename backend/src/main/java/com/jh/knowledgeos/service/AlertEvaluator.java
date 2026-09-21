@@ -5,7 +5,6 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
-
 import java.util.Map;
 
 /**
@@ -18,6 +17,7 @@ import java.util.Map;
  */
 @Service
 public class AlertEvaluator {
+
     private static final Logger log = LoggerFactory.getLogger(AlertEvaluator.class);
 
     private final AlertService alerts;

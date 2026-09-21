@@ -16,12 +16,12 @@ from __future__ import annotations
 import json
 import os
 import threading
-from pathlib import Path
-from typing import Any, Dict, Literal, Optional
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
-from app.core.config import DATA_DIR, settings as env_settings
+from app.core.config import DATA_DIR
+from app.core.config import settings as env_settings
 
 SETTINGS_FILE = DATA_DIR / "settings.json"
 SETTINGS_FILE_MODE = 0o600
@@ -31,7 +31,7 @@ _MASK = "****"
 # Re-entrant: ``save_model_settings`` reuses ``load_model_settings`` while already
 # holding the lock, which would deadlock with a plain ``threading.Lock``.
 _lock = threading.RLock()
-_cache: Optional["ModelSettings"] = None
+_cache: ModelSettings | None = None
 
 
 class LlmSettings(BaseModel):
@@ -109,7 +109,7 @@ def load_model_settings(force: bool = False) -> ModelSettings:
         seeded = seed_from_env()
         if SETTINGS_FILE.exists():
             try:
-                raw: Dict[str, Any] = json.loads(SETTINGS_FILE.read_text(encoding="utf-8"))
+                raw: dict[str, Any] = json.loads(SETTINGS_FILE.read_text(encoding="utf-8"))
                 known = {key: raw[key] for key in SECTIONS if isinstance(raw.get(key), dict)}
                 _cache = ModelSettings.model_validate({**seeded.model_dump(), **known})
             except Exception:
@@ -120,7 +120,7 @@ def load_model_settings(force: bool = False) -> ModelSettings:
         return _cache
 
 
-def save_model_settings(payload: Dict[str, Any]) -> ModelSettings:
+def save_model_settings(payload: dict[str, Any]) -> ModelSettings:
     """Merge a partial console update into the stored configuration."""
     global _cache
     with _lock:
@@ -175,7 +175,7 @@ def mask_secret(value: str) -> str:
     return value[:4] + _MASK + value[-4:]
 
 
-def public_model_settings(settings: Optional[ModelSettings] = None) -> Dict[str, Any]:
+def public_model_settings(settings: ModelSettings | None = None) -> dict[str, Any]:
     """Return the console payload with every credential masked."""
     settings = settings or load_model_settings()
     data = settings.model_dump()

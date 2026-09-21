@@ -2,7 +2,7 @@
 
 import hashlib
 import re
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import Any
 
 from app.services.answer_evidence_gate import AnswerEvidenceGate
 from app.services.structured_answer_gate import StructuredAnswerGate
@@ -25,8 +25,9 @@ class AnswerQualification:
     def __init__(self, policy_version: str = "answer-policy-v1") -> None:
         self.policy_version = policy_version or "answer-policy-v1"
 
-    def qualify(self, original: str, evidence: Dict[str, Any], structured: Dict[str, Any],
-                enabled: bool = True, model: str = "") -> Dict[str, Any]:
+    def qualify(
+        self, original: str, evidence: dict[str, Any], structured: dict[str, Any], enabled: bool = True, model: str = ""
+    ) -> dict[str, Any]:
         ledger = [dict(item) for item in (structured.get("claims") or [])]
         rows = [dict(item) for item in (evidence.get("claims") or [])]
         if not rows:
@@ -42,8 +43,7 @@ class AnswerQualification:
             item = {key: value for key, value in row.items() if key not in ("text",)}
             item["policyVersion"] = self.policy_version
             item["includedInFinalAnswer"] = (
-                index in kept if kept is not None
-                else status == "PASS" and item.get("decision") == "SUPPORTED"
+                index in kept if kept is not None else status == "PASS" and item.get("decision") == "SUPPORTED"
             )
             claims.append(item)
         return {
@@ -59,29 +59,50 @@ class AnswerQualification:
             "claims": claims,
         }
 
-    def _decide(self, original: str, evidence: Dict[str, Any], structured: Dict[str, Any],
-                rows: List[Dict[str, Any]], ledger: List[Dict[str, Any]]
-                ) -> Tuple[str, str, List[str], Optional[Set[int]]]:
+    def _decide(
+        self,
+        original: str,
+        evidence: dict[str, Any],
+        structured: dict[str, Any],
+        rows: list[dict[str, Any]],
+        ledger: list[dict[str, Any]],
+    ) -> tuple[str, str, list[str], set[int] | None]:
         """Return status, deliverable text, reasons, and the set of delivered claim indexes."""
         decisions = self._decisions(rows, ledger)
         # The evidence gate has priority: a sentence without a trustworthy citation never ships.
         if evidence.get("gateStatus") != "PASS":
-            kept = [i for i in range(len(rows))
-                    if rows[i].get("supported") and decisions[i] != "CONTRADICTED"]
+            kept = [i for i in range(len(rows)) if rows[i].get("supported") and decisions[i] != "CONTRADICTED"]
             return self._render(
-                original, rows, kept, "ANSWER_EVIDENCE_GATE_PARTIAL_REDACTION",
-                "ANSWER_EVIDENCE_GATE_BLOCKED", AnswerEvidenceGate.safe_answer(original, evidence))
+                original,
+                rows,
+                kept,
+                "ANSWER_EVIDENCE_GATE_PARTIAL_REDACTION",
+                "ANSWER_EVIDENCE_GATE_BLOCKED",
+                AnswerEvidenceGate.safe_answer(original, evidence),
+            )
         if structured.get("gateStatus") == "BLOCKED":
             kept = [i for i in range(len(rows)) if decisions[i] == "SUPPORTED"]
             return self._render(
-                original, rows, kept, "STRUCTURED_ANSWER_GATE_PARTIAL_REDACTION",
-                "STRUCTURED_ANSWER_GATE_BLOCKED", StructuredAnswerGate.safe_answer(original, structured))
+                original,
+                rows,
+                kept,
+                "STRUCTURED_ANSWER_GATE_PARTIAL_REDACTION",
+                "STRUCTURED_ANSWER_GATE_BLOCKED",
+                StructuredAnswerGate.safe_answer(original, structured),
+            )
         if structured.get("gateStatus") == "PARTIAL":
             return "PARTIAL", StructuredAnswerGate.safe_answer(original, structured), ["PARTIAL_CLAIM_SUPPORT"], None
         return "PASS", original, [], None
 
-    def _render(self, original: str, rows: List[Dict[str, Any]], kept: List[int], reason: str,
-                blocked_reason: str, blocked_text: str) -> Tuple[str, str, List[str], Optional[Set[int]]]:
+    def _render(
+        self,
+        original: str,
+        rows: list[dict[str, Any]],
+        kept: list[int],
+        reason: str,
+        blocked_reason: str,
+        blocked_text: str,
+    ) -> tuple[str, str, list[str], set[int] | None]:
         """Rebuild the answer from the surviving claims, or fail closed when nothing survives."""
         if not rows or not kept:
             return "BLOCKED", blocked_text, [blocked_reason], set()
@@ -92,7 +113,7 @@ class AnswerQualification:
         note = _CONFLICT_NOTE % dropped if reason.startswith("STRUCTURED") else _WITHHELD_NOTE % dropped
         return "PARTIAL", (text.strip() + "\n\n" + note), [reason], set(kept)
 
-    def _decisions(self, rows: List[Dict[str, Any]], ledger: List[Dict[str, Any]]) -> List[str]:
+    def _decisions(self, rows: list[dict[str, Any]], ledger: list[dict[str, Any]]) -> list[str]:
         """Map each redaction row onto the claim-level decision made by the structured gate."""
         outcome = {self._key(item.get("statement")): str(item.get("decision") or "") for item in ledger}
         decisions = []

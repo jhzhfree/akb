@@ -7,6 +7,7 @@ import com.jh.knowledgeos.domain.User;
  * interceptor and cleared when the request completes.
  */
 public final class AuthContext {
+
     public static final String REQUEST_ATTRIBUTE = "knowledgeos.currentUser";
 
     private static final ThreadLocal<User> CURRENT = new ThreadLocal<User>();

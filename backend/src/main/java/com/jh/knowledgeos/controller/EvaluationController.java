@@ -14,7 +14,6 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
-
 import java.util.List;
 import java.util.Map;
 
@@ -45,15 +44,13 @@ public class EvaluationController {
 
     @PostMapping("/datasets/{kb}")
     @Operation(summary = "创建评测数据集")
-    public ApiResponse<Map<String, Object>> createDataset(@PathVariable Long kb,
-            @RequestBody Map<String, Object> body) {
+    public ApiResponse<Map<String, Object>> createDataset(@PathVariable Long kb, @RequestBody Map<String, Object> body) {
         return ApiResponse.ok(service.createDataset(kb, body == null ? new java.util.LinkedHashMap<String, Object>() : body));
     }
 
     @PutMapping("/datasets/{code}")
     @Operation(summary = "更新评测数据集")
-    public ApiResponse<Integer> updateDataset(@PathVariable String code,
-            @RequestBody Map<String, Object> body) {
+    public ApiResponse<Integer> updateDataset(@PathVariable String code, @RequestBody Map<String, Object> body) {
         return ApiResponse.ok(service.updateDataset(code, body == null ? new java.util.LinkedHashMap<String, Object>() : body));
     }
 
@@ -65,8 +62,7 @@ public class EvaluationController {
 
     @PostMapping("/datasets/{code}/cases")
     @Operation(summary = "新增评测用例")
-    public ApiResponse<Map<String, Object>> createCase(@PathVariable String code,
-            @RequestBody Map<String, Object> body) {
+    public ApiResponse<Map<String, Object>> createCase(@PathVariable String code, @RequestBody Map<String, Object> body) {
         return ApiResponse.ok(service.createCase(code, body == null ? new java.util.LinkedHashMap<String, Object>() : body));
     }
 
@@ -78,16 +74,13 @@ public class EvaluationController {
 
     @PostMapping("/runs/{kb}")
     @Operation(summary = "运行评测：回放数据集并计算 Hit@K / Recall / MRR / NDCG / 延迟分位")
-    public ApiResponse<Map<String, Object>> run(@PathVariable Long kb,
-            @RequestBody Map<String, Object> body) {
+    public ApiResponse<Map<String, Object>> run(@PathVariable Long kb, @RequestBody Map<String, Object> body) {
         return ApiResponse.ok(service.run(kb, body == null ? new java.util.LinkedHashMap<String, Object>() : body));
     }
 
     @GetMapping("/runs/{kb}")
     @Operation(summary = "列出评测运行历史")
-    public ApiResponse<List<Map<String, Object>>> runs(@PathVariable Long kb,
-            @RequestParam(value = "datasetId", required = false) Long datasetId,
-            @RequestParam(value = "limit", required = false) Integer limit) {
+    public ApiResponse<List<Map<String, Object>>> runs(@PathVariable Long kb, @RequestParam(value = "datasetId", required = false) Long datasetId, @RequestParam(value = "limit", required = false) Integer limit) {
         return ApiResponse.ok(service.listRuns(kb, datasetId, limit));
     }
 

@@ -4,7 +4,6 @@ import org.springframework.dao.DeadlockLoserDataAccessException;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
-
 import java.sql.SQLException;
 import java.util.Locale;
 import java.util.concurrent.ThreadLocalRandom;
@@ -15,6 +14,7 @@ import java.util.function.Supplier;
  */
 @Component
 public class TransactionRunner {
+
     /**
      * How many times a transaction is allowed to lose a deadlock before the failure surfaces.
      * Bounded because a batch that really cannot make progress must say so, not spin forever.

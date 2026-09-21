@@ -4,6 +4,7 @@ package com.jh.knowledgeos.common;
  * Stable API error-code catalog shared by controllers and exception handling.
  */
 public enum ApiErrorCode {
+
     OK("OK"),
     INVALID_ARGUMENT("KB-400-001"),
     VALIDATION_FAILED("KB-400-002"),
@@ -16,6 +17,12 @@ public enum ApiErrorCode {
     INTERNAL_ERROR("KB-500-001");
 
     private final String code;
-    ApiErrorCode(String code) { this.code = code; }
-    public String getCode() { return code; }
+
+    ApiErrorCode(String code) {
+        this.code = code;
+    }
+
+    public String getCode() {
+        return code;
+    }
 }

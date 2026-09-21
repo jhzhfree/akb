@@ -12,16 +12,17 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
-
 import javax.validation.Valid;
 
 @RestController
 @RequestMapping("/api/knowledge/acl")
-/**
+public class /**
  * Administrative endpoints for ACL governance, propagation visibility, and audit inspection.
  */
-public class AclAdministrationController {
+AclAdministrationController {
+
     private final AclAdministrationService admin;
+
     private final AclAuditService audit;
 
     public AclAdministrationController(AclAdministrationService admin, AclAuditService audit) {
@@ -30,28 +31,28 @@ public class AclAdministrationController {
     }
 
     @GetMapping("/subjects")
-    public ApiResponse<Object> subjects() { return ApiResponse.ok(admin.subjects()); }
+    public ApiResponse<Object> subjects() {
+        return ApiResponse.ok(admin.subjects());
+    }
 
     @GetMapping("/roles")
-    public ApiResponse<Object> roles() { return ApiResponse.ok(admin.roles()); }
+    public ApiResponse<Object> roles() {
+        return ApiResponse.ok(admin.roles());
+    }
 
     @GetMapping("/changes/{kb}")
-    public ApiResponse<Object> changes(@PathVariable Long kb,
-            @RequestParam(required = false) Integer limit) {
+    public ApiResponse<Object> changes(@PathVariable Long kb, @RequestParam(required = false) Integer limit) {
         return ApiResponse.ok(admin.changes(kb, limit));
     }
 
     @GetMapping("/audits/{kb}")
-    public ApiResponse<Object> audits(@PathVariable Long kb,
-            @RequestParam(required = false) Integer limit) {
+    public ApiResponse<Object> audits(@PathVariable Long kb, @RequestParam(required = false) Integer limit) {
         return ApiResponse.ok(audit.list(kb, limit));
     }
 
     @PostMapping("/resources/{kb}")
     @Operation(summary = "修改知识资源 ACL 并通过 Transactional Outbox 传播")
-    public ApiResponse<Object> change(@PathVariable Long kb,
-            @Valid @RequestBody AclResourceChangeRequest request) {
-        return ApiResponse.ok(admin.changeResourceAcl(kb, request.getResourceType(),
-                request.getResourceCode(), request.getPermissionTags(), request.getReason()));
+    public ApiResponse<Object> change(@PathVariable Long kb, @Valid @RequestBody AclResourceChangeRequest request) {
+        return ApiResponse.ok(admin.changeResourceAcl(kb, request.getResourceType(), request.getResourceCode(), request.getPermissionTags(), request.getReason()));
     }
 }

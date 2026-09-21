@@ -6,13 +6,19 @@ import org.slf4j.MDC;
  * Generic HTTP response envelope used by the public backend API.
  */
 public class ApiResponse<T> {
+
     private boolean success;
+
     private String code;
+
     private String message;
+
     private String traceId;
+
     private T data;
 
-    public ApiResponse() {}
+    public ApiResponse() {
+    }
 
     public ApiResponse(boolean success, String code, String message, String traceId, T data) {
         this.success = success;
@@ -34,14 +40,43 @@ public class ApiResponse<T> {
         return fail(ApiErrorCode.INTERNAL_ERROR, message);
     }
 
-    public boolean isSuccess() { return success; }
-    public String getCode() { return code; }
-    public String getMessage() { return message; }
-    public String getTraceId() { return traceId; }
-    public T getData() { return data; }
-    public void setSuccess(boolean value) { success = value; }
-    public void setCode(String value) { code = value; }
-    public void setMessage(String value) { message = value; }
-    public void setTraceId(String value) { traceId = value; }
-    public void setData(T value) { data = value; }
+    public boolean isSuccess() {
+        return success;
+    }
+
+    public String getCode() {
+        return code;
+    }
+
+    public String getMessage() {
+        return message;
+    }
+
+    public String getTraceId() {
+        return traceId;
+    }
+
+    public T getData() {
+        return data;
+    }
+
+    public void setSuccess(boolean value) {
+        success = value;
+    }
+
+    public void setCode(String value) {
+        code = value;
+    }
+
+    public void setMessage(String value) {
+        message = value;
+    }
+
+    public void setTraceId(String value) {
+        traceId = value;
+    }
+
+    public void setData(T value) {
+        data = value;
+    }
 }

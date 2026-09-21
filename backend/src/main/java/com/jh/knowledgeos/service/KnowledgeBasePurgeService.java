@@ -6,7 +6,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -30,6 +29,7 @@ import java.util.Map;
  */
 @Service
 public class KnowledgeBasePurgeService {
+
     private static final Logger log = LoggerFactory.getLogger(KnowledgeBasePurgeService.class);
 
     /**
@@ -37,48 +37,17 @@ public class KnowledgeBasePurgeService {
      * objects it describes. The schema has no foreign keys, so the order documents intent rather
      * than satisfying a constraint.
      */
-    private static final List<String> PURGE_TABLES = Collections.unmodifiableList(Arrays.asList(
-            "t_index_outbox",
-            "t_index_outbox_archive",
-            "t_index_schema_release",
-            "t_index_schema_snapshot_audit",
-            "t_index_acl_manifest",
-            "t_index_graph_manifest",
-            "t_index_graph_facet_manifest",
-            "t_index_graph_evidence_manifest",
-            "t_adjudication_assessment",
-            "t_answer_evidence_assessment",
-            "t_answer_qualification",
-            "t_query_trace",
-            "t_acl_access_audit",
-            "t_acl_change",
-            "t_acl_rebuild_job",
-            "t_ingestion_run",
-            "t_knowledge_version",
-            "t_knowledge_conflict",
-            "t_entity_acl_scope",
-            "t_relation_acl_scope",
-            "t_entity_facet",
-            "t_relation_facet",
-            "t_exact_evidence_binding",
-            "t_entity_alias",
-            "t_relation",
-            "t_entity",
-            "t_evidence",
-            "t_claim",
-            "t_knowledge_card",
-            "t_source"));
+    private static final List<String> PURGE_TABLES = Collections.unmodifiableList(Arrays.asList("t_index_outbox", "t_index_outbox_archive", "t_index_schema_release", "t_index_schema_snapshot_audit", "t_index_acl_manifest", "t_index_graph_manifest", "t_index_graph_facet_manifest", "t_index_graph_evidence_manifest", "t_adjudication_assessment", "t_answer_evidence_assessment", "t_answer_qualification", "t_query_trace", "t_acl_access_audit", "t_acl_change", "t_acl_rebuild_job", "t_ingestion_run", "t_knowledge_version", "t_knowledge_conflict", "t_entity_acl_scope", "t_relation_acl_scope", "t_entity_facet", "t_relation_facet", "t_exact_evidence_binding", "t_entity_alias", "t_relation", "t_entity", "t_evidence", "t_claim", "t_knowledge_card", "t_source"));
 
     private final KnowledgeMapper mapper;
+
     private final SourceFileStorageService sourceFileStorage;
+
     private final AiClient aiClient;
+
     private final PlatformEventPublisher publisher;
 
-    public KnowledgeBasePurgeService(
-            KnowledgeMapper mapper,
-            SourceFileStorageService sourceFileStorage,
-            AiClient aiClient,
-            PlatformEventPublisher publisher) {
+    public KnowledgeBasePurgeService(KnowledgeMapper mapper, SourceFileStorageService sourceFileStorage, AiClient aiClient, PlatformEventPublisher publisher) {
         this.mapper = mapper;
         this.sourceFileStorage = sourceFileStorage;
         this.aiClient = aiClient;
@@ -112,7 +81,6 @@ public class KnowledgeBasePurgeService {
         // Paths must be read before t_source is deleted, otherwise the uploads they point at
         // become unreachable garbage on disk.
         result.put("sourceStoragePaths", new ArrayList<String>(mapper.listSourceStoragePaths(kb)));
-
         mapper.purgeIndexDeliveryAttempts(kb);
         mapper.purgeArchivedIndexDeliveryAttempts(kb);
         mapper.purgeAnswerClaimAssessments(kb);
@@ -127,16 +95,13 @@ public class KnowledgeBasePurgeService {
         mapper.purgeContentUnits(kb);
         mapper.purgeDocuments(kb);
         mapper.purgeSourceVersions(kb);
-
         for (String table : PURGE_TABLES) {
             mapper.purgeKnowledgeBaseTable(table, kb);
         }
         // Purging a base is the most destructive action an operator can take, so it has to be
         // announced: subscribers holding materialized views or caches need to drop them.
         Map<String, Object> detail = new LinkedHashMap<String, Object>(result);
-        publisher.emitUser(PlatformEventTypes.KNOWLEDGE_BASE_PURGED, kb,
-                PlatformEventPublisher.SOURCE_UI, "KNOWLEDGE_BASE", String.valueOf(kb),
-                "清空知识库：" + kb, detail);
+        publisher.emitUser(PlatformEventTypes.KNOWLEDGE_BASE_PURGED, kb, PlatformEventPublisher.SOURCE_UI, "KNOWLEDGE_BASE", String.valueOf(kb), "清空知识库：" + kb, detail);
         return result;
     }
 
@@ -156,13 +121,19 @@ public class KnowledgeBasePurgeService {
     }
 
     private int deleteSourceFiles(List<String> storagePaths) {
-        if (storagePaths == null || storagePaths.isEmpty()) return 0;
+        if (storagePaths == null || storagePaths.isEmpty()) {
+            return 0;
+        }
         int removed = 0;
         for (String storagePath : storagePaths) {
             Path file = sourceFileStorage.resolve(storagePath);
-            if (file == null) continue;
+            if (file == null) {
+                continue;
+            }
             try {
-                if (Files.deleteIfExists(file)) removed++;
+                if (Files.deleteIfExists(file)) {
+                    removed++;
+                }
                 pruneEmptyDirectories(file.getParent());
             } catch (Exception ex) {
                 log.warn("purge could not remove source file path={} reason={}", storagePath, ex.getMessage());
@@ -171,13 +142,17 @@ public class KnowledgeBasePurgeService {
         return removed;
     }
 
-    /** Remove the per-source and per-base folders once the last upload below them is gone. */
+    /**
+     * Remove the per-source and per-base folders once the last upload below them is gone.
+     */
     private void pruneEmptyDirectories(Path directory) {
         Path current = directory;
         for (int level = 0; level < 2 && current != null; level++) {
             Path parent = current;
             try {
-                if (Files.isDirectory(parent)) Files.deleteIfExists(parent);
+                if (Files.isDirectory(parent)) {
+                    Files.deleteIfExists(parent);
+                }
             } catch (Exception ex) {
                 return;
             }
@@ -198,7 +173,9 @@ public class KnowledgeBasePurgeService {
         }
     }
 
-    /** Normalize the count projection: MySQL returns {@code BigDecimal} for scalar sub-queries. */
+    /**
+     * Normalize the count projection: MySQL returns {@code BigDecimal} for scalar sub-queries.
+     */
     private Map<String, Object> counts(Map<String, Object> row) {
         Map<String, Object> counts = new LinkedHashMap<String, Object>();
         if (row != null) {
@@ -209,7 +186,9 @@ public class KnowledgeBasePurgeService {
         }
         long total = 0;
         for (Object value : counts.values()) {
-            if (value instanceof Number) total += ((Number) value).longValue();
+            if (value instanceof Number) {
+                total += ((Number) value).longValue();
+            }
         }
         counts.put("total", total);
         return counts;

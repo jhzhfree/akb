@@ -20,7 +20,6 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
-
 import javax.servlet.http.HttpServletRequest;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -38,17 +37,18 @@ import java.util.Map;
 @RequestMapping("/api/internal/platform/events")
 @Tag(name = "Platform events", description = "会话态平台事件：SSE 订阅与历史查询")
 public class PlatformEventController {
+
     private static final Logger log = LoggerFactory.getLogger(PlatformEventController.class);
+
     private static final int MAX_LIMIT = 200;
 
     private final PlatformEventHub hub;
+
     private final PlatformEventStore store;
+
     private final PlatformEventVisibilityService visibility;
 
-    public PlatformEventController(
-            PlatformEventHub hub,
-            PlatformEventStore store,
-            PlatformEventVisibilityService visibility) {
+    public PlatformEventController(PlatformEventHub hub, PlatformEventStore store, PlatformEventVisibilityService visibility) {
         this.hub = hub;
         this.store = store;
         this.visibility = visibility;
@@ -56,29 +56,23 @@ public class PlatformEventController {
 
     @GetMapping(value = "/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     @Operation(summary = "平台事件 SSE 订阅：知识库生命周期、知识对象变更、检索调用、权限变更")
-    public SseEmitter stream(
-            HttpServletRequest request,
-            @RequestParam(value = "knowledgeBaseId", required = false) Long knowledgeBaseId,
-            @RequestParam(value = "types", required = false) String types,
-            @RequestParam(value = "sinceId", required = false) Long sinceId) {
+    public SseEmitter stream(HttpServletRequest request, @RequestParam(value = "knowledgeBaseId", required = false) Long knowledgeBaseId, @RequestParam(value = "types", required = false) String types, @RequestParam(value = "sinceId", required = false) Long sinceId) {
         User user = requireUser();
         Long since = sinceId != null ? sinceId : lastEventId(request);
-        return hub.subscribe("user:" + user.getId(), knowledgeBaseId, parseTypes(types), since,
-                visibility.forSession(user, knowledgeBaseId));
+        return hub.subscribe("user:" + user.getId(), knowledgeBaseId, parseTypes(types), since, visibility.forSession(user, knowledgeBaseId));
     }
 
     @GetMapping
     @Operation(summary = "事件历史：按知识库与类型回放，Same visibility rules as the stream")
-    public ApiResponse<Object> history(
-            @RequestParam(value = "knowledgeBaseId", required = false) Long knowledgeBaseId,
-            @RequestParam(value = "types", required = false) String types,
-            @RequestParam(value = "limit", required = false) Integer limit) {
+    public ApiResponse<Object> history(@RequestParam(value = "knowledgeBaseId", required = false) Long knowledgeBaseId, @RequestParam(value = "types", required = false) String types, @RequestParam(value = "limit", required = false) Integer limit) {
         User user = requireUser();
         int size = Math.max(1, Math.min(limit == null ? 50 : limit, MAX_LIMIT));
         PlatformEventHub.Visibility audit = visibility.forSession(user, knowledgeBaseId);
         List<Map<String, Object>> items = new ArrayList<Map<String, Object>>();
         for (PlatformEvent event : store.recent(knowledgeBaseId, parseTypesList(types), size)) {
-            if (!audit.visible(event)) continue;
+            if (!audit.visible(event)) {
+                continue;
+            }
             items.add(PlatformEventPublisher.envelope(event, store.detailOf(event)));
         }
         Map<String, Object> payload = new LinkedHashMap<String, Object>();
@@ -94,10 +88,14 @@ public class PlatformEventController {
         return ApiResponse.ok(Arrays.asList(PlatformEventTypes.all()));
     }
 
-    /** Last-Event-ID arrives as a header on browser reconnects and as a parameter for curl users. */
+    /**
+     * Last-Event-ID arrives as a header on browser reconnects and as a parameter for curl users.
+     */
     private Long lastEventId(HttpServletRequest request) {
         String header = request.getHeader("Last-Event-ID");
-        if (!StringUtils.hasText(header)) return null;
+        if (!StringUtils.hasText(header)) {
+            return null;
+        }
         try {
             return Long.valueOf(header.trim());
         } catch (NumberFormatException e) {
@@ -120,11 +118,15 @@ public class PlatformEventController {
     }
 
     private List<String> parseTypesList(String raw) {
-        if (!StringUtils.hasText(raw)) return null;
+        if (!StringUtils.hasText(raw)) {
+            return null;
+        }
         List<String> values = new ArrayList<String>();
         for (String part : raw.split(",")) {
             String token = part.trim().toUpperCase();
-            if (!token.isEmpty()) values.add(token);
+            if (!token.isEmpty()) {
+                values.add(token);
+            }
         }
         return values.isEmpty() ? null : values;
     }

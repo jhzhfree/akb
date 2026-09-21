@@ -6,7 +6,6 @@ import org.slf4j.LoggerFactory;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.stereotype.Component;
-
 import javax.sql.DataSource;
 import java.net.URI;
 import java.sql.Connection;
@@ -16,16 +15,16 @@ import java.sql.Connection;
  */
 @Component
 public class StartupDiagnostics implements ApplicationRunner {
+
     private static final Logger log = LoggerFactory.getLogger(StartupDiagnostics.class);
 
     private final KnowledgeProperties properties;
+
     private final DataSource dataSource;
+
     private final AiClient aiClient;
 
-    public StartupDiagnostics(
-            KnowledgeProperties properties,
-            DataSource dataSource,
-            AiClient aiClient) {
+    public StartupDiagnostics(KnowledgeProperties properties, DataSource dataSource, AiClient aiClient) {
         this.properties = properties;
         this.dataSource = dataSource;
         this.aiClient = aiClient;
@@ -42,8 +41,7 @@ public class StartupDiagnostics implements ApplicationRunner {
     private void validateAiServiceUrl() {
         URI uri = URI.create(properties.getAiServiceBaseUrl());
         if (uri.getScheme() == null || uri.getHost() == null) {
-            throw new IllegalStateException(
-                    "knowledge.ai-service-base-url 非法: " + properties.getAiServiceBaseUrl());
+            throw new IllegalStateException("knowledge.ai-service-base-url 非法: " + properties.getAiServiceBaseUrl());
         }
     }
 
@@ -68,10 +66,7 @@ public class StartupDiagnostics implements ApplicationRunner {
 
     private void verifyDatabase() throws Exception {
         try (Connection connection = dataSource.getConnection()) {
-            log.info(
-                    "RC startup check database={} valid={}",
-                    connection.getMetaData().getDatabaseProductVersion(),
-                    connection.isValid(2));
+            log.info("RC startup check database={} valid={}", connection.getMetaData().getDatabaseProductVersion(), connection.isValid(2));
         }
     }
 

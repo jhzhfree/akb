@@ -14,7 +14,6 @@ import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-
 import java.io.UnsupportedEncodingException;
 import java.net.URLEncoder;
 import java.util.Collections;
@@ -30,6 +29,7 @@ import java.util.Map;
 @CrossOrigin
 @Tag(name = "QueryPolicy", description = "问答策略：路由、召回、融合、重排与答案门控")
 public class QueryPolicyController {
+
     private final AiClient aiClient;
 
     public QueryPolicyController(AiClient aiClient) {
@@ -74,42 +74,32 @@ public class QueryPolicyController {
 
     @PostMapping("/profiles")
     @Operation(summary = "新增检索策略（克隆当前策略或指定策略）")
-    public ApiResponse<Map<String, Object>> createProfile(
-            @RequestBody(required = false) Map<String, Object> payload) {
+    public ApiResponse<Map<String, Object>> createProfile(@RequestBody(required = false) Map<String, Object> payload) {
         return ApiResponse.ok(aiClient.post(AiApiPaths.QUERY_POLICY_PROFILES, body(payload)));
     }
 
     @PutMapping("/profiles/{name}")
     @Operation(summary = "修改指定检索策略")
-    public ApiResponse<Map<String, Object>> updateProfile(
-            @PathVariable String name,
-            @RequestBody(required = false) Map<String, Object> payload) {
-        return ApiResponse.ok(aiClient.put(
-                AiApiPaths.QUERY_POLICY_PROFILE_PREFIX + encode(name), body(payload)));
+    public ApiResponse<Map<String, Object>> updateProfile(@PathVariable String name, @RequestBody(required = false) Map<String, Object> payload) {
+        return ApiResponse.ok(aiClient.put(AiApiPaths.QUERY_POLICY_PROFILE_PREFIX + encode(name), body(payload)));
     }
 
     @PostMapping("/profiles/{name}/rename")
     @Operation(summary = "重命名检索策略")
-    public ApiResponse<Map<String, Object>> renameProfile(
-            @PathVariable String name,
-            @RequestBody(required = false) Map<String, Object> payload) {
-        return ApiResponse.ok(aiClient.post(
-                AiApiPaths.QUERY_POLICY_PROFILE_PREFIX + encode(name) + "/rename", body(payload)));
+    public ApiResponse<Map<String, Object>> renameProfile(@PathVariable String name, @RequestBody(required = false) Map<String, Object> payload) {
+        return ApiResponse.ok(aiClient.post(AiApiPaths.QUERY_POLICY_PROFILE_PREFIX + encode(name) + "/rename", body(payload)));
     }
 
     @PostMapping("/profiles/{name}/activate")
     @Operation(summary = "切换到指定检索策略（下一次检索起生效）")
     public ApiResponse<Map<String, Object>> activateProfile(@PathVariable String name) {
-        return ApiResponse.ok(aiClient.post(
-                AiApiPaths.QUERY_POLICY_PROFILE_PREFIX + encode(name) + "/activate",
-                Collections.<String, Object>emptyMap()));
+        return ApiResponse.ok(aiClient.post(AiApiPaths.QUERY_POLICY_PROFILE_PREFIX + encode(name) + "/activate", Collections.<String, Object>emptyMap()));
     }
 
     @DeleteMapping("/profiles/{name}")
     @Operation(summary = "删除检索策略（不能删除正在使用的策略）")
     public ApiResponse<Map<String, Object>> deleteProfile(@PathVariable String name) {
-        return ApiResponse.ok(aiClient.delete(
-                AiApiPaths.QUERY_POLICY_PROFILE_PREFIX + encode(name)));
+        return ApiResponse.ok(aiClient.delete(AiApiPaths.QUERY_POLICY_PROFILE_PREFIX + encode(name)));
     }
 
     private static String encode(String name) {

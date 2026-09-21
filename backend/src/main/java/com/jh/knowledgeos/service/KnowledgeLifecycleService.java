@@ -4,7 +4,6 @@ import com.jh.knowledgeos.common.KnowledgeStatus;
 import com.jh.knowledgeos.common.PlatformEventTypes;
 import com.jh.knowledgeos.mapper.KnowledgeMapper;
 import org.springframework.stereotype.Service;
-
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.LinkedHashMap;
@@ -21,16 +20,16 @@ import java.util.UUID;
  */
 @Service
 public class KnowledgeLifecycleService {
+
     private final KnowledgeMapper mapper;
+
     private final IndexOutboxService indexOutboxService;
+
     private final TransactionRunner transactionRunner;
+
     private final PlatformEventPublisher publisher;
 
-    public KnowledgeLifecycleService(
-            KnowledgeMapper mapper,
-            IndexOutboxService indexOutboxService,
-            TransactionRunner transactionRunner,
-            PlatformEventPublisher publisher) {
+    public KnowledgeLifecycleService(KnowledgeMapper mapper, IndexOutboxService indexOutboxService, TransactionRunner transactionRunner, PlatformEventPublisher publisher) {
         this.mapper = mapper;
         this.indexOutboxService = indexOutboxService;
         this.transactionRunner = transactionRunner;
@@ -62,11 +61,8 @@ public class KnowledgeLifecycleService {
             transactionRunner.required(() -> {
                 for (String claimCode : due) {
                     mapper.updateClaimStatus(claimCode, KnowledgeStatus.EXPIRED.name());
-                    mapper.snapshotKnowledgeObject(
-                            knowledgeBaseId, "CLAIM", claimCode, "EXPIRED", "LIFECYCLE_ENGINE");
-                    indexOutboxService.enqueueObjectStatus(
-                            knowledgeBaseId, "CLAIM", claimCode, KnowledgeStatus.EXPIRED.name(),
-                            "lifecycle_expire_" + claimCode + "_" + UUID.randomUUID());
+                    mapper.snapshotKnowledgeObject(knowledgeBaseId, "CLAIM", claimCode, "EXPIRED", "LIFECYCLE_ENGINE");
+                    indexOutboxService.enqueueObjectStatus(knowledgeBaseId, "CLAIM", claimCode, KnowledgeStatus.EXPIRED.name(), "lifecycle_expire_" + claimCode + "_" + UUID.randomUUID());
                     expired.add(claimCode);
                 }
                 return null;
@@ -85,9 +81,7 @@ public class KnowledgeLifecycleService {
             detail.put("scanned", rows.size());
             detail.put("expiredCount", expired.size());
             detail.put("expiredClaimCodes", expired.size() > 20 ? expired.subList(0, 20) : expired);
-            publisher.emitUser(PlatformEventTypes.KNOWLEDGE_OBJECT_EXPIRED, knowledgeBaseId,
-                    PlatformEventPublisher.SOURCE_UI, "CLAIM",
-                    expired.get(0), "有效期到期：失效 " + expired.size() + " 条主张", detail);
+            publisher.emitUser(PlatformEventTypes.KNOWLEDGE_OBJECT_EXPIRED, knowledgeBaseId, PlatformEventPublisher.SOURCE_UI, "CLAIM", expired.get(0), "有效期到期：失效 " + expired.size() + " 条主张", detail);
         }
         return summary;
     }
@@ -106,11 +100,9 @@ public class KnowledgeLifecycleService {
         long claimSuperseded = value(claimStatus, KnowledgeStatus.SUPERSEDED.name());
         long cardSuperseded = value(cardStatus, KnowledgeStatus.SUPERSEDED.name());
         long claimRejected = value(claimStatus, KnowledgeStatus.REJECTED.name());
-        long effective = claimTotal - claimExpired - claimSuperseded - claimRejected
-                + cardTotal - cardSuperseded;
+        long effective = claimTotal - claimExpired - claimSuperseded - claimRejected + cardTotal - cardSuperseded;
         long total = claimTotal + cardTotal;
         long decayed = claimExpired + claimSuperseded + cardSuperseded;
-
         Map<String, Object> result = new LinkedHashMap<String, Object>();
         result.put("knowledgeBaseId", knowledgeBaseId);
         result.put("withinDays", days);
@@ -125,14 +117,15 @@ public class KnowledgeLifecycleService {
         result.put("decayedTotal", decayed);
         result.put("claimStatusCounts", claimStatus);
         result.put("cardStatusCounts", cardStatus);
-        result.put("dueNowCount",
-                dueClaimCodes(mapper.listClaimsWithValidity(knowledgeBaseId), new Date()).size());
+        result.put("dueNowCount", dueClaimCodes(mapper.listClaimsWithValidity(knowledgeBaseId), new Date()).size());
         result.put("expiringSoonCount", expiringClaims(knowledgeBaseId, days).size());
         result.put("expiredRate", total == 0 ? 0.0D : round((double) decayed / (double) total));
         return result;
     }
 
-    /** Assertions whose validity window closes within {@code withinDays}; the renewal queue. */
+    /**
+     * Assertions whose validity window closes within {@code withinDays}; the renewal queue.
+     */
     public List<Map<String, Object>> expiringClaims(Long knowledgeBaseId, Integer withinDays) {
         int days = withinDays == null ? 30 : Math.max(1, Math.min(withinDays, 365));
         Date horizon = new Date(System.currentTimeMillis() + days * 24L * 60L * 60L * 1000L);
@@ -153,8 +146,7 @@ public class KnowledgeLifecycleService {
                 continue;
             }
             String status = String.valueOf(row.get("status"));
-            if (KnowledgeStatus.EXPIRED.name().equals(status)
-                    || KnowledgeStatus.SUPERSEDED.name().equals(status)) {
+            if (KnowledgeStatus.EXPIRED.name().equals(status) || KnowledgeStatus.SUPERSEDED.name().equals(status)) {
                 continue;
             }
             Object claimCode = row.get("claimCode");
@@ -199,8 +191,7 @@ public class KnowledgeLifecycleService {
      * Supersede an older object version with its replacement. Used when a new card version
      * replaces a previous one: history is preserved, only the live status changes.
      */
-    public Map<String, Object> supersede(
-            Long knowledgeBaseId, String objectType, String oldObjectCode, String newObjectCode) {
+    public Map<String, Object> supersede(Long knowledgeBaseId, String objectType, String oldObjectCode, String newObjectCode) {
         Map<String, Object> summary = new LinkedHashMap<String, Object>();
         if (oldObjectCode == null || newObjectCode == null || oldObjectCode.equals(newObjectCode)) {
             throw new IllegalArgumentException("替代关系需要两个不同的知识对象编码");
@@ -208,12 +199,10 @@ public class KnowledgeLifecycleService {
         transactionRunner.required(() -> {
             if ("CARD".equalsIgnoreCase(objectType)) {
                 mapper.updateCardStatus(oldObjectCode, KnowledgeStatus.SUPERSEDED.name());
-                mapper.snapshotKnowledgeObject(
-                        knowledgeBaseId, "CARD", oldObjectCode, "SUPERSEDED", "LIFECYCLE_ENGINE");
+                mapper.snapshotKnowledgeObject(knowledgeBaseId, "CARD", oldObjectCode, "SUPERSEDED", "LIFECYCLE_ENGINE");
             } else {
                 mapper.updateClaimStatus(oldObjectCode, KnowledgeStatus.SUPERSEDED.name());
-                mapper.snapshotKnowledgeObject(
-                        knowledgeBaseId, "CLAIM", oldObjectCode, "SUPERSEDED", "LIFECYCLE_ENGINE");
+                mapper.snapshotKnowledgeObject(knowledgeBaseId, "CLAIM", oldObjectCode, "SUPERSEDED", "LIFECYCLE_ENGINE");
             }
             return null;
         });
@@ -221,14 +210,11 @@ public class KnowledgeLifecycleService {
         summary.put("objectType", objectType);
         summary.put("superseded", oldObjectCode);
         summary.put("supersededBy", newObjectCode);
-
         Map<String, Object> detail = new LinkedHashMap<String, Object>();
         detail.put("objectType", objectType == null ? null : objectType.toUpperCase());
         detail.put("superseded", oldObjectCode);
         detail.put("supersededBy", newObjectCode);
-        publisher.emitUser(PlatformEventTypes.KNOWLEDGE_OBJECT_SUPERSEDED, knowledgeBaseId,
-                PlatformEventPublisher.SOURCE_UI, objectType == null ? null : objectType.toUpperCase(),
-                oldObjectCode, "知识对象被替代：" + oldObjectCode + " → " + newObjectCode, detail);
+        publisher.emitUser(PlatformEventTypes.KNOWLEDGE_OBJECT_SUPERSEDED, knowledgeBaseId, PlatformEventPublisher.SOURCE_UI, objectType == null ? null : objectType.toUpperCase(), oldObjectCode, "知识对象被替代：" + oldObjectCode + " → " + newObjectCode, detail);
         return summary;
     }
 

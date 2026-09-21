@@ -1,7 +1,10 @@
 package com.jh.knowledgeos.exception;
 
-/** Raised when an external caller exceeds the quota granted to its API key. */
+/**
+ * Raised when an external caller exceeds the quota granted to its API key.
+ */
 public class RateLimitException extends RuntimeException {
+
     private final int limitPerMinute;
 
     public RateLimitException(int limitPerMinute) {

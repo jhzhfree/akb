@@ -4,7 +4,6 @@ import com.jh.knowledgeos.common.UserRole;
 import com.jh.knowledgeos.domain.User;
 import com.jh.knowledgeos.mapper.AuthMapper;
 import org.springframework.stereotype.Service;
-
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -21,12 +20,18 @@ import java.util.Map;
  */
 @Service
 public class UserService {
-    /** 旧角色名：升级后仍允许出现在历史数据里，但不再作为可分配角色。 */
+
+    /**
+     * 旧角色名：升级后仍允许出现在历史数据里，但不再作为可分配角色。
+     */
     private static final String LEGACY_EDITOR = "EDITOR";
+
     private static final String LEGACY_VIEWER = "VIEWER";
 
     private final AuthMapper mapper;
+
     private final PasswordHasher hasher;
+
     private final IdGenerator ids;
 
     public UserService(AuthMapper mapper, PasswordHasher hasher, IdGenerator ids) {
@@ -49,7 +54,9 @@ public class UserService {
         return profile(user, groupIdsOf(user.getId()), groupNamesOf(user.getId()));
     }
 
-    /** 角色字典：角色码、中文名、职责说明与自带权限码，供用户管理与权限说明使用。 */
+    /**
+     * 角色字典：角色码、中文名、职责说明与自带权限码，供用户管理与权限说明使用。
+     */
     public List<Map<String, Object>> roles() {
         List<Map<String, Object>> out = new ArrayList<Map<String, Object>>();
         for (UserRole role : UserRole.values()) {
@@ -74,13 +81,7 @@ public class UserService {
         ROLE_DESCRIPTIONS.put(UserRole.KNOWLEDGE_VIEWER.name(), "可查看知识工作台（总览 / 资产浏览 / 版本 / 质量）与知识检索，不能改动知识");
     }
 
-    public Map<String, Object> create(
-            String username,
-            String password,
-            String displayName,
-            String email,
-            String role,
-            List<Long> groupIds) {
+    public Map<String, Object> create(String username, String password, String displayName, String email, String role, List<Long> groupIds) {
         String name = normalizeUsername(username);
         if (mapper.getUserByUsername(name) != null) {
             throw new IllegalArgumentException("用户名已存在：" + name);
@@ -99,18 +100,21 @@ public class UserService {
         return profile(user, groupIds, null);
     }
 
-    public Map<String, Object> update(
-            Long id,
-            String displayName,
-            String email,
-            String role,
-            List<Long> groupIds) {
+    public Map<String, Object> update(Long id, String displayName, String email, String role, List<Long> groupIds) {
         User user = requireUser(id);
-        if (displayName != null && !displayName.trim().isEmpty()) user.setDisplayName(displayName.trim());
-        if (email != null) user.setEmail(email.trim());
-        if (role != null && !role.trim().isEmpty()) user.setRole(resolveRole(role).name());
+        if (displayName != null && !displayName.trim().isEmpty()) {
+            user.setDisplayName(displayName.trim());
+        }
+        if (email != null) {
+            user.setEmail(email.trim());
+        }
+        if (role != null && !role.trim().isEmpty()) {
+            user.setRole(resolveRole(role).name());
+        }
         mapper.updateUserProfile(user);
-        if (groupIds != null) replaceMemberships(id, groupIds);
+        if (groupIds != null) {
+            replaceMemberships(id, groupIds);
+        }
         return profile(user);
     }
 
@@ -121,7 +125,9 @@ public class UserService {
             throw new IllegalArgumentException("至少保留一个启用状态的系统管理员");
         }
         mapper.updateUserStatus(id, disabled ? "DISABLED" : "ACTIVE");
-        if (disabled) mapper.revokeUserSessions(id);
+        if (disabled) {
+            mapper.revokeUserSessions(id);
+        }
     }
 
     public void resetPassword(Long id, String password) {
@@ -152,7 +158,9 @@ public class UserService {
 
     public User requireUser(Long id) {
         User user = mapper.getUserById(id);
-        if (user == null) throw new IllegalArgumentException("用户不存在：" + id);
+        if (user == null) {
+            throw new IllegalArgumentException("用户不存在：" + id);
+        }
         return user;
     }
 
@@ -162,9 +170,13 @@ public class UserService {
 
     private void replaceMemberships(Long userId, List<Long> groupIds) {
         mapper.deleteGroupMembers(userId == null ? 0L : userId);
-        if (groupIds == null) return;
+        if (groupIds == null) {
+            return;
+        }
         for (Long groupId : groupIds) {
-            if (groupId != null) mapper.insertGroupMember(groupId, userId);
+            if (groupId != null) {
+                mapper.insertGroupMember(groupId, userId);
+            }
         }
     }
 
@@ -197,10 +209,11 @@ public class UserService {
     }
 
     private UserRole resolveRole(String role) {
-        if (role == null || role.trim().isEmpty()) return UserRole.KNOWLEDGE_VIEWER;
+        if (role == null || role.trim().isEmpty()) {
+            return UserRole.KNOWLEDGE_VIEWER;
+        }
         String raw = role.trim();
-        if (!UserRole.assignable().contains(raw.toUpperCase(Locale.ROOT))
-                && !LEGACY_EDITOR.equalsIgnoreCase(raw) && !LEGACY_VIEWER.equalsIgnoreCase(raw)) {
+        if (!UserRole.assignable().contains(raw.toUpperCase(Locale.ROOT)) && !LEGACY_EDITOR.equalsIgnoreCase(raw) && !LEGACY_VIEWER.equalsIgnoreCase(raw)) {
             throw new IllegalArgumentException("未知角色：" + role);
         }
         return UserRole.of(raw);
@@ -227,7 +240,9 @@ public class UserService {
         for (Map<String, Object> row : mapper.listAllGroupMembers()) {
             Long userId = toLong(row.get("userId"));
             Long groupId = toLong(row.get("groupId"));
-            if (userId == null || groupId == null) continue;
+            if (userId == null || groupId == null) {
+                continue;
+            }
             List<Long> list = index.get(userId);
             if (list == null) {
                 list = new ArrayList<Long>();
@@ -242,7 +257,9 @@ public class UserService {
         Map<Long, List<String>> index = new HashMap<Long, List<String>>();
         for (Map<String, Object> row : mapper.listAllGroupMembers()) {
             Long userId = toLong(row.get("userId"));
-            if (userId == null) continue;
+            if (userId == null) {
+                continue;
+            }
             List<String> list = index.get(userId);
             if (list == null) {
                 list = new ArrayList<String>();
@@ -254,8 +271,12 @@ public class UserService {
     }
 
     private Long toLong(Object value) {
-        if (value == null) return null;
-        if (value instanceof Number) return ((Number) value).longValue();
+        if (value == null) {
+            return null;
+        }
+        if (value instanceof Number) {
+            return ((Number) value).longValue();
+        }
         try {
             return Long.valueOf(String.valueOf(value));
         } catch (NumberFormatException e) {

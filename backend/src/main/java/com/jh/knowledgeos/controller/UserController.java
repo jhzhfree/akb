@@ -18,15 +18,17 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
-
 import javax.validation.Valid;
 
-/** Account administration; only system administrators may call these endpoints. */
+/**
+ * Account administration; only system administrators may call these endpoints.
+ */
 @RestController
 @RequestMapping("/api/users")
 @CrossOrigin
 @Tag(name = "Users", description = "用户管理")
 public class UserController {
+
     private final UserService service;
 
     public UserController(UserService service) {
@@ -44,32 +46,19 @@ public class UserController {
     @Operation(summary = "创建用户")
     public ApiResponse<Object> create(@RequestBody UserRequest request) {
         requireAdmin();
-        return ApiResponse.ok(service.create(
-                request.getUsername(),
-                request.getPassword(),
-                request.getDisplayName(),
-                request.getEmail(),
-                request.getRole(),
-                request.getGroupIds()));
+        return ApiResponse.ok(service.create(request.getUsername(), request.getPassword(), request.getDisplayName(), request.getEmail(), request.getRole(), request.getGroupIds()));
     }
 
     @PutMapping("/{id}")
     @Operation(summary = "更新用户资料、角色与用户组")
     public ApiResponse<Object> update(@PathVariable Long id, @RequestBody UserRequest request) {
         requireAdmin();
-        return ApiResponse.ok(service.update(
-                id,
-                request.getDisplayName(),
-                request.getEmail(),
-                request.getRole(),
-                request.getGroupIds()));
+        return ApiResponse.ok(service.update(id, request.getDisplayName(), request.getEmail(), request.getRole(), request.getGroupIds()));
     }
 
     @PostMapping("/{id}/status")
     @Operation(summary = "启用或停用用户")
-    public ApiResponse<Object> updateStatus(
-            @PathVariable Long id,
-            @RequestParam(value = "status", defaultValue = "ACTIVE") String status) {
+    public ApiResponse<Object> updateStatus(@PathVariable Long id, @RequestParam(value = "status", defaultValue = "ACTIVE") String status) {
         User admin = requireAdmin();
         if (admin.getId() != null && admin.getId().equals(id) && !"ACTIVE".equalsIgnoreCase(status)) {
             throw new IllegalArgumentException("不能停用当前登录的账号");
@@ -80,9 +69,7 @@ public class UserController {
 
     @PostMapping("/{id}/password")
     @Operation(summary = "重置用户密码")
-    public ApiResponse<Object> resetPassword(
-            @PathVariable Long id,
-            @Valid @RequestBody PasswordResetRequest request) {
+    public ApiResponse<Object> resetPassword(@PathVariable Long id, @Valid @RequestBody PasswordResetRequest request) {
         requireAdmin();
         service.resetPassword(id, request.getPassword());
         return ApiResponse.ok(true);

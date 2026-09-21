@@ -155,6 +155,42 @@ prod-logs:
 
 # ---------- 发布与产品包 ----------
 # 构建并打标签：knowledge-os/{ai-service,backend,frontend}:$(VERSION)
+# ---------- 静态检查 / 编码规范 ----------
+# 规则集与取舍说明见 docs/CODE-STYLE.md
+CHECKSTYLE_JAR ?= $(HOME)/.local/lib/checkstyle/checkstyle.jar
+CHECKSTYLE_CONFIG ?= config/checkstyle/checkstyle.xml
+RUFF ?= ruff
+
+.PHONY: lint lint-python lint-java lint-frontend format-python format-frontend
+
+lint: lint-python lint-java lint-frontend
+
+lint-python:
+	@command -v $(RUFF) >/dev/null 2>&1 || { echo "缺少 ruff，请先执行：pip install ruff"; exit 1; }
+	$(RUFF) check .
+	$(RUFF) format --check .
+
+lint-java:
+	@test -f "$(CHECKSTYLE_JAR)" || { echo "缺少 checkstyle jar，请执行 make tools-install"; exit 1; }
+	java -Dfile.encoding=UTF-8 -jar "$(CHECKSTYLE_JAR)" -c "$(CHECKSTYLE_CONFIG)" backend/src/main/java backend/src/test/java
+
+lint-frontend:
+	cd frontend && npm run lint && npm run typecheck
+
+# 自动修复：安全的 fix 由工具完成，剩余问题需人工判断
+format-python:
+	$(RUFF) check --fix .
+	$(RUFF) format .
+
+format-frontend:
+	cd frontend && npm run lint:fix
+
+tools-install:
+	command -v $(RUFF) >/dev/null 2>&1 || pip install ruff
+	mkdir -p "$(HOME)/.local/lib/checkstyle"
+	test -f "$(CHECKSTYLE_JAR)" || curl -sL -o "$(CHECKSTYLE_JAR)" \
+		https://github.com/checkstyle/checkstyle/releases/download/checkstyle-8.45.1/checkstyle-8.45.1-all.jar
+
 release-build:
 	VERSION=$(VERSION) IMAGE_PREFIX=$(IMAGE_PREFIX) docker compose -f docker-compose.yml build ai-service backend frontend
 

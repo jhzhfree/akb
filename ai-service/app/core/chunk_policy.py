@@ -22,7 +22,7 @@ Available strategies:
 from __future__ import annotations
 
 import json
-from typing import Any, Dict, Optional
+from typing import Any
 
 from app.core.config import settings as env_settings
 
@@ -52,7 +52,7 @@ CHUNK_SIZE_RANGE = (200, 4000)
 CHUNK_OVERLAP_RANGE = (0, 1000)
 MIN_CHUNK_SIZE_RANGE = (0, 1000)
 
-DEFAULT_POLICY: Dict[str, Any] = {
+DEFAULT_POLICY: dict[str, Any] = {
     "strategy": "SEMANTIC",
     "chunkSize": int(env_settings.chunk_size),
     "chunkOverlap": int(env_settings.chunk_overlap),
@@ -83,7 +83,7 @@ def _clean_bool(value: Any, default: bool) -> bool:
     return str(value).strip().lower() in {"1", "true", "yes", "on"}
 
 
-def normalize(payload: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+def normalize(payload: dict[str, Any] | None = None) -> dict[str, Any]:
     """Coerce a console/backend payload into a complete, bounds-checked policy."""
     raw = payload if isinstance(payload, dict) else {}
     strategy = str(raw.get("strategy") or DEFAULT_POLICY["strategy"]).strip().upper()
@@ -92,32 +92,37 @@ def normalize(payload: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     measure = str(raw.get("measure") or DEFAULT_POLICY["measure"]).strip().upper()
     if measure not in MEASURES:
         measure = str(DEFAULT_POLICY["measure"])
-    size = _clamp_int(raw.get("chunkSize", raw.get("chunk_size")),
-                      DEFAULT_POLICY["chunkSize"], CHUNK_SIZE_RANGE)
-    overlap = _clamp_int(raw.get("chunkOverlap", raw.get("chunk_overlap")),
-                         DEFAULT_POLICY["chunkOverlap"], CHUNK_OVERLAP_RANGE)
-    min_size = _clamp_int(raw.get("minChunkSize", raw.get("min_chunk_size")),
-                          DEFAULT_POLICY["minChunkSize"], MIN_CHUNK_SIZE_RANGE)
+    size = _clamp_int(raw.get("chunkSize", raw.get("chunk_size")), DEFAULT_POLICY["chunkSize"], CHUNK_SIZE_RANGE)
+    overlap = _clamp_int(
+        raw.get("chunkOverlap", raw.get("chunk_overlap")), DEFAULT_POLICY["chunkOverlap"], CHUNK_OVERLAP_RANGE
+    )
+    min_size = _clamp_int(
+        raw.get("minChunkSize", raw.get("min_chunk_size")), DEFAULT_POLICY["minChunkSize"], MIN_CHUNK_SIZE_RANGE
+    )
     # An overlap that swallows the window would duplicate the whole document.
     overlap = min(overlap, max(0, size // 2))
     min_size = min(min_size, max(0, size // 2))
-    parent_child = _clean_bool(raw.get("parentChild", raw.get("parent_child")),
-                               DEFAULT_POLICY["parentChild"]) or strategy == "PARENT_CHILD"
+    parent_child = (
+        _clean_bool(raw.get("parentChild", raw.get("parent_child")), DEFAULT_POLICY["parentChild"])
+        or strategy == "PARENT_CHILD"
+    )
     return {
         "strategy": strategy,
         "chunkSize": size,
         "chunkOverlap": overlap,
         "minChunkSize": min_size,
         "measure": measure,
-        "keepStructure": _clean_bool(raw.get("keepStructure", raw.get("keep_structure")),
-                                     DEFAULT_POLICY["keepStructure"]),
-        "respectSentence": _clean_bool(raw.get("respectSentence", raw.get("respect_sentence")),
-                                       DEFAULT_POLICY["respectSentence"]),
+        "keepStructure": _clean_bool(
+            raw.get("keepStructure", raw.get("keep_structure")), DEFAULT_POLICY["keepStructure"]
+        ),
+        "respectSentence": _clean_bool(
+            raw.get("respectSentence", raw.get("respect_sentence")), DEFAULT_POLICY["respectSentence"]
+        ),
         "parentChild": parent_child,
     }
 
 
-def default_policy(size: Optional[int] = None, overlap: Optional[int] = None) -> Dict[str, Any]:
+def default_policy(size: int | None = None, overlap: int | None = None) -> dict[str, Any]:
     """Environment-seeded policy, optionally with the legacy size/overlap overrides."""
     policy = normalize(DEFAULT_POLICY)
     if size is not None:
@@ -128,7 +133,7 @@ def default_policy(size: Optional[int] = None, overlap: Optional[int] = None) ->
     return policy
 
 
-def schema() -> Dict[str, Any]:
+def schema() -> dict[str, Any]:
     """Vocabulary and bounds for the console, so the UI never invents a value."""
     return {
         "version": POLICY_VERSION,
@@ -146,7 +151,7 @@ def schema() -> Dict[str, Any]:
     }
 
 
-def parse_json(raw: Optional[str]) -> Optional[Dict[str, Any]]:
+def parse_json(raw: str | None) -> dict[str, Any] | None:
     """Tolerant decode of the ``policy`` form field sent by the backend."""
     if raw is None:
         return None

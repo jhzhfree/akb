@@ -35,27 +35,31 @@ def test_index_store_snapshot_cache():
 
 
 def test_retrieval_status_filter():
-    assert allowed({"id":"chunk","permission_tags":[]}, [])
-    assert allowed({"id":"card","status":"APPROVED","permission_tags":[]}, [])
-    assert allowed({"id":"card","status":"EFFECTIVE","permission_tags":[]}, [])
-    assert not allowed({"id":"card","status":"DRAFT","permission_tags":[]}, [])
-    assert not allowed({"id":"claim","status":"CONFLICTED","permission_tags":[]}, [])
+    assert allowed({"id": "chunk", "permission_tags": []}, [])
+    assert allowed({"id": "card", "status": "APPROVED", "permission_tags": []}, [])
+    assert allowed({"id": "card", "status": "EFFECTIVE", "permission_tags": []}, [])
+    assert not allowed({"id": "card", "status": "DRAFT", "permission_tags": []}, [])
+    assert not allowed({"id": "claim", "status": "CONFLICTED", "permission_tags": []}, [])
 
 
 def test_conflict_detector_focus_and_grouping():
     claims = []
     for index in range(200):
-        claims.append({
-            "claim_code": "UNRELATED_%s" % index,
-            "subject": "subject-%s" % index,
-            "predicate": "IS",
-            "object": "value",
-        })
-    claims.extend([
-        {"claim_code": "C_NEW", "subject": "Tomcat", "predicate": "SUPPORTS", "object": "支持 PKCS12"},
-        {"claim_code": "C_OLD", "subject": "Tomcat", "predicate": "SUPPORTS", "object": "不支持 PKCS12"},
-        {"claim_code": "C_OTHER", "subject": "Tomcat", "predicate": "SUPPORTS", "object": "支持 JKS"},
-    ])
+        claims.append(
+            {
+                "claim_code": "UNRELATED_%s" % index,
+                "subject": "subject-%s" % index,
+                "predicate": "IS",
+                "object": "value",
+            }
+        )
+    claims.extend(
+        [
+            {"claim_code": "C_NEW", "subject": "Tomcat", "predicate": "SUPPORTS", "object": "支持 PKCS12"},
+            {"claim_code": "C_OLD", "subject": "Tomcat", "predicate": "SUPPORTS", "object": "不支持 PKCS12"},
+            {"claim_code": "C_OTHER", "subject": "Tomcat", "predicate": "SUPPORTS", "object": "支持 JKS"},
+        ]
+    )
     rows = ConflictDetector().detect(claims, focus_codes=["C_NEW"])
     assert rows
     assert all("C_NEW" in {row["objectACode"], row["objectBCode"]} for row in rows)

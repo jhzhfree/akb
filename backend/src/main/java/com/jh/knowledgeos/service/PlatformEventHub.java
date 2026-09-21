@@ -7,7 +7,6 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
-
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Iterator;
@@ -34,21 +33,26 @@ import java.util.concurrent.atomic.AtomicInteger;
  */
 @Service
 public class PlatformEventHub {
+
     private static final Logger log = LoggerFactory.getLogger(PlatformEventHub.class);
+
     private static final int MAX_REPLAY = 200;
+
     private static final int MAX_SUBSCRIPTIONS_PER_PRINCIPAL = 5;
 
     private final PlatformEventStore store;
+
     private final KnowledgeProperties.External properties;
+
     private final Executor fanout;
+
     private final ConcurrentMap<String, Subscription> subscriptions = new ConcurrentHashMap<String, Subscription>();
+
     private final ConcurrentMap<String, AtomicInteger> perPrincipal = new ConcurrentHashMap<String, AtomicInteger>();
+
     private final ScheduledExecutorService heartbeat;
 
-    public PlatformEventHub(
-            PlatformEventStore store,
-            KnowledgeProperties properties,
-            @Qualifier("platformEventFanoutExecutor") Executor fanout) {
+    public PlatformEventHub(PlatformEventStore store, KnowledgeProperties properties, @Qualifier("platformEventFanoutExecutor") Executor fanout) {
         this.store = store;
         this.properties = properties.external();
         this.fanout = fanout;
@@ -69,18 +73,16 @@ public class PlatformEventHub {
      * same event is simultaneously visible to an administrator and redacted for an external key.</p>
      */
     public interface Visibility {
+
         boolean visible(PlatformEvent event);
 
         Map<String, Object> project(PlatformEvent event, Map<String, Object> detail);
     }
 
-    /** Opens one stream, applying type filters, lifetime budget and per-credential connection caps. */
-    public SseEmitter subscribe(
-            String principal,
-            Long knowledgeBaseId,
-            Set<String> types,
-            Long sinceEventId,
-            Visibility visibility) {
+    /**
+     * Opens one stream, applying type filters, lifetime budget and per-credential connection caps.
+     */
+    public SseEmitter subscribe(String principal, Long knowledgeBaseId, Set<String> types, Long sinceEventId, Visibility visibility) {
         AtomicInteger held = perPrincipal.computeIfAbsent(principal, key -> new AtomicInteger());
         if (held.incrementAndGet() > MAX_SUBSCRIPTIONS_PER_PRINCIPAL) {
             held.decrementAndGet();
@@ -89,9 +91,7 @@ public class PlatformEventHub {
         String subscriptionId = "SUB-" + System.currentTimeMillis() + "-" + subscriptions.size();
         SseEmitter emitter = new SseEmitter(0L);
         long budget = Math.max(properties.getSseMaxMinutes(), 1) * 60_000L;
-        Subscription subscription = new Subscription(
-                subscriptionId, principal, knowledgeBaseId, types, visibility, emitter,
-                System.currentTimeMillis() + budget);
+        Subscription subscription = new Subscription(subscriptionId, principal, knowledgeBaseId, types, visibility, emitter, System.currentTimeMillis() + budget);
         subscriptions.put(subscriptionId, subscription);
         Runnable release = () -> {
             subscriptions.remove(subscriptionId);
@@ -106,16 +106,13 @@ public class PlatformEventHub {
             release.run();
             emitter.completeWithError(e);
         });
-
         Map<String, Object> open = new LinkedHashMap<String, Object>();
         open.put("subscriptionId", subscriptionId);
         open.put("knowledgeBaseId", knowledgeBaseId);
         open.put("types", types == null || types.isEmpty() ? "ALL" : types);
         open.put("replayFrom", sinceEventId == null ? store.currentId() : sinceEventId);
         open.put("maxMinutes", properties.getSseMaxMinutes());
-        send(subscription, SseEmitter.event().name("open")
-                .data(open)
-                .reconnectTime(Math.max(properties.getSseHeartbeatSeconds(), 3) * 1000L));
+        send(subscription, SseEmitter.event().name("open").data(open).reconnectTime(Math.max(properties.getSseHeartbeatSeconds(), 3) * 1000L));
         if (sinceEventId != null) {
             fanout.execute(() -> replay(subscription, sinceEventId));
         }
@@ -126,14 +123,22 @@ public class PlatformEventHub {
         return subscriptions.size();
     }
 
-    /** Persisted events are broadcast after commit; see {@link PlatformEventPublisher}. */
+    /**
+     * Persisted events are broadcast after commit; see {@link PlatformEventPublisher}.
+     */
     public void publish(PlatformEvent event) {
-        if (event == null || event.getEventType() == null) return;
+        if (event == null || event.getEventType() == null) {
+            return;
+        }
         List<Subscription> targets = new ArrayList<Subscription>();
         for (Subscription subscription : subscriptions.values()) {
-            if (subscription.matches(event)) targets.add(subscription);
+            if (subscription.matches(event)) {
+                targets.add(subscription);
+            }
         }
-        if (targets.isEmpty()) return;
+        if (targets.isEmpty()) {
+            return;
+        }
         fanout.execute(() -> {
             for (Subscription subscription : targets) {
                 deliver(subscription, event);
@@ -141,15 +146,20 @@ public class PlatformEventHub {
         });
     }
 
-    /** Replays missed rows after a reconnect, oldest first, using the durable log as truth. */
+    /**
+     * Replays missed rows after a reconnect, oldest first, using the durable log as truth.
+     */
     private void replay(Subscription subscription, Long sinceEventId) {
         try {
-            List<String> types = subscription.types == null || subscription.types.isEmpty()
-                    ? null : new ArrayList<String>(subscription.types);
+            List<String> types = subscription.types == null || subscription.types.isEmpty() ? null : new ArrayList<String>(subscription.types);
             List<PlatformEvent> missed = store.since(subscription.knowledgeBaseId, types, sinceEventId, MAX_REPLAY);
             for (PlatformEvent event : missed) {
-                if (!subscription.open.get()) return;
-                if (!subscription.matches(event)) continue;
+                if (!subscription.open.get()) {
+                    return;
+                }
+                if (!subscription.matches(event)) {
+                    continue;
+                }
                 deliver(subscription, event);
             }
         } catch (Exception e) {
@@ -166,18 +176,19 @@ public class PlatformEventHub {
             log.warn("visibility projection failed for {}: {}", subscription.id, e.getMessage());
             projected = null;
         }
-        if (projected == null) return;
+        if (projected == null) {
+            return;
+        }
         // One envelope shape for live delivery, replay and the history endpoint alike; the
         // per-subscriber difference is entirely inside "detail".
         Map<String, Object> body = PlatformEventPublisher.envelope(event, projected);
-        send(subscription, SseEmitter.event()
-                .id(String.valueOf(event.getId()))
-                .name(event.getEventType())
-                .data(body));
+        send(subscription, SseEmitter.event().id(String.valueOf(event.getId())).name(event.getEventType()).data(body));
     }
 
     private void send(Subscription subscription, SseEmitter.SseEventBuilder builder) {
-        if (!subscription.open.get()) return;
+        if (!subscription.open.get()) {
+            return;
+        }
         try {
             subscription.emitter.send(builder);
         } catch (IOException e) {
@@ -189,7 +200,9 @@ public class PlatformEventHub {
         }
     }
 
-    /** Comment heartbeats keep intermediaries from closing idle streams; expiry is enforced here. */
+    /**
+     * Comment heartbeats keep intermediaries from closing idle streams; expiry is enforced here.
+     */
     private void heartbeat() {
         long now = System.currentTimeMillis();
         Iterator<Map.Entry<String, Subscription>> iterator = subscriptions.entrySet().iterator();
@@ -204,7 +217,9 @@ public class PlatformEventHub {
                     log.debug("completing subscription {} failed", subscription.id);
                 }
                 AtomicInteger held = perPrincipal.get(subscription.principal);
-                if (held != null) held.decrementAndGet();
+                if (held != null) {
+                    held.decrementAndGet();
+                }
                 continue;
             }
             send(subscription, SseEmitter.event().comment("heartbeat " + now));
@@ -212,17 +227,24 @@ public class PlatformEventHub {
     }
 
     private static final class Subscription {
+
         private final String id;
+
         private final String principal;
+
         private final Long knowledgeBaseId;
+
         private final Set<String> types;
+
         private final Visibility visibility;
+
         private final SseEmitter emitter;
+
         private final long deadline;
+
         private final AtomicBoolean open = new AtomicBoolean(true);
 
-        private Subscription(String id, String principal, Long knowledgeBaseId, Set<String> types,
-                Visibility visibility, SseEmitter emitter, long deadline) {
+        private Subscription(String id, String principal, Long knowledgeBaseId, Set<String> types, Visibility visibility, SseEmitter emitter, long deadline) {
             this.id = id;
             this.principal = principal;
             this.knowledgeBaseId = knowledgeBaseId;
@@ -233,8 +255,7 @@ public class PlatformEventHub {
         }
 
         private boolean matches(PlatformEvent event) {
-            if (knowledgeBaseId != null && event.getKnowledgeBaseId() != null
-                    && !knowledgeBaseId.equals(event.getKnowledgeBaseId())) {
+            if (knowledgeBaseId != null && event.getKnowledgeBaseId() != null && !knowledgeBaseId.equals(event.getKnowledgeBaseId())) {
                 return false;
             }
             if (types != null && !types.isEmpty() && !types.contains(event.getEventType())) {

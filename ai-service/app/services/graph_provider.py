@@ -9,7 +9,7 @@ import re
 import time
 from abc import ABC, abstractmethod
 from functools import lru_cache
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from app.core.config import settings
 
@@ -30,7 +30,7 @@ class GraphProvider(ABC):
         relations=None,
         claims=None,
         cards=None,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Idempotently synchronize knowledge objects into the graph view."""
         raise NotImplementedError
 
@@ -41,7 +41,7 @@ class GraphProvider(ABC):
         query: str,
         top_k: int = 10,
         permission_tags=None,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """Search graph objects relevant to a natural-language query."""
         raise NotImplementedError
 
@@ -53,16 +53,16 @@ class GraphProvider(ABC):
         depth: int = 2,
         limit: int = 50,
         permission_tags=None,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Return a bounded graph neighborhood for one knowledge object."""
         raise NotImplementedError
 
     @abstractmethod
-    def reset_generation(self, knowledge_base_id: int, generation_id: str) -> Dict[str, Any]:
+    def reset_generation(self, knowledge_base_id: int, generation_id: str) -> dict[str, Any]:
         """Delete one non-active governed graph generation before rebuild."""
         raise NotImplementedError
 
-    def delete_knowledge_base(self, knowledge_base_id: int) -> Dict[str, Any]:
+    def delete_knowledge_base(self, knowledge_base_id: int) -> dict[str, Any]:
         """Delete the whole knowledge base from the graph view after a console purge.
 
         Not abstract: graph backends are optional, and a provider without a graph store
@@ -72,56 +72,29 @@ class GraphProvider(ABC):
         return {"provider": "graph", "available": False, "deleted": 0}
 
     @abstractmethod
-    def upsert_generation(
-        self, knowledge_base_id: int, generation_id: str, documents
-    ) -> Dict[str, Any]:
+    def upsert_generation(self, knowledge_base_id: int, generation_id: str, documents) -> dict[str, Any]:
         """Write authoritative snapshot objects into one graph generation."""
         raise NotImplementedError
 
     @abstractmethod
-    def activate_generation(
-        self, knowledge_base_id: int, generation_id: str
-    ) -> Dict[str, Any]:
+    def activate_generation(self, knowledge_base_id: int, generation_id: str) -> dict[str, Any]:
         """Move the graph active-generation pointer after qualification."""
         raise NotImplementedError
 
     @abstractmethod
-    def active_generation(self, knowledge_base_id: int) -> Optional[str]:
+    def active_generation(self, knowledge_base_id: int) -> str | None:
         """Return the graph generation currently selected for reads."""
         raise NotImplementedError
 
     @abstractmethod
-    def target_manifest(
-        self, knowledge_base_id: int, generation_id: str
-    ) -> Dict[str, Any]:
+    def target_manifest(self, knowledge_base_id: int, generation_id: str) -> dict[str, Any]:
         """Return deterministic manifest metadata for one graph generation."""
         raise NotImplementedError
 
     @abstractmethod
-    def qualify_acl_target(
-        self, knowledge_base_id: int, generation_id: str, permission_tags, admin=False
-    ) -> List[str]:
+    def qualify_acl_target(self, knowledge_base_id: int, generation_id: str, permission_tags, admin=False) -> list[str]:
         """Return visible object IDs for a persona against a graph generation."""
         raise NotImplementedError
-
-    @abstractmethod
-    def reset_generation(self, knowledge_base_id: int, generation_id: str) -> Dict[str, Any]:
-        return {"provider": "null", "available": False, "deleted": 0}
-
-    def upsert_generation(self, knowledge_base_id: int, generation_id: str, documents) -> Dict[str, Any]:
-        return {"provider": "null", "available": False, "indexed": 0}
-
-    def activate_generation(self, knowledge_base_id: int, generation_id: str) -> Dict[str, Any]:
-        return {"provider": "null", "available": False, "generationId": generation_id}
-
-    def active_generation(self, knowledge_base_id: int) -> Optional[str]:
-        return None
-
-    def target_manifest(self, knowledge_base_id: int, generation_id: str) -> Dict[str, Any]:
-        return {"provider": "neo4j", "available": False, "manifestHash": "", "count": 0, "generations": []}
-
-    def qualify_acl_target(self, knowledge_base_id: int, generation_id: str, permission_tags, admin=False) -> List[str]:
-        return []
 
     def update_object_status(
         self,
@@ -130,16 +103,20 @@ class GraphProvider(ABC):
         object_code: str,
         status: str,
         index_version: int,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Apply a lifecycle state change if its index version is not stale."""
         raise NotImplementedError
+
     @abstractmethod
     def update_object_acl(
-        self, knowledge_base_id: int, object_type: str, object_code: str,
-        permission_tags, index_version: int,
-    ) -> Dict[str, Any]:
+        self,
+        knowledge_base_id: int,
+        object_type: str,
+        object_code: str,
+        permission_tags,
+        index_version: int,
+    ) -> dict[str, Any]:
         raise NotImplementedError
-
 
 
 class NullGraphProvider(GraphProvider):
@@ -155,7 +132,7 @@ class NullGraphProvider(GraphProvider):
         relations=None,
         claims=None,
         cards=None,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         return {"provider": "null", "available": False, "nodes": 0, "edges": 0}
 
     def search(
@@ -164,7 +141,7 @@ class NullGraphProvider(GraphProvider):
         query: str,
         top_k: int = 10,
         permission_tags=None,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         return []
 
     def neighborhood(
@@ -174,25 +151,25 @@ class NullGraphProvider(GraphProvider):
         depth: int = 2,
         limit: int = 50,
         permission_tags=None,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         return {"provider": "null", "available": False, "nodes": [], "edges": []}
 
-    def reset_generation(self, knowledge_base_id: int, generation_id: str) -> Dict[str, Any]:
+    def reset_generation(self, knowledge_base_id: int, generation_id: str) -> dict[str, Any]:
         return {"provider": "null", "available": False, "deleted": 0}
 
-    def upsert_generation(self, knowledge_base_id: int, generation_id: str, documents) -> Dict[str, Any]:
+    def upsert_generation(self, knowledge_base_id: int, generation_id: str, documents) -> dict[str, Any]:
         return {"provider": "null", "available": False, "indexed": 0}
 
-    def activate_generation(self, knowledge_base_id: int, generation_id: str) -> Dict[str, Any]:
+    def activate_generation(self, knowledge_base_id: int, generation_id: str) -> dict[str, Any]:
         return {"provider": "null", "available": False, "generationId": generation_id}
 
-    def active_generation(self, knowledge_base_id: int) -> Optional[str]:
+    def active_generation(self, knowledge_base_id: int) -> str | None:
         return None
 
-    def target_manifest(self, knowledge_base_id: int, generation_id: str) -> Dict[str, Any]:
+    def target_manifest(self, knowledge_base_id: int, generation_id: str) -> dict[str, Any]:
         return {"provider": "null", "available": False, "manifestHash": "", "count": 0, "generations": []}
 
-    def qualify_acl_target(self, knowledge_base_id: int, generation_id: str, permission_tags, admin=False) -> List[str]:
+    def qualify_acl_target(self, knowledge_base_id: int, generation_id: str, permission_tags, admin=False) -> list[str]:
         return []
 
     def update_object_status(
@@ -202,12 +179,14 @@ class NullGraphProvider(GraphProvider):
         object_code: str,
         status: str,
         index_version: int,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         return {"provider": "null", "available": False, "updated": 0}
 
+    def update_object_acl(
+        self, knowledge_base_id: int, object_type: str, object_code: str, permission_tags, index_version: int
+    ) -> dict[str, Any]:
+        return {"provider": "none", "updated": 0, "skipped": True}
 
-    def update_object_acl(self, knowledge_base_id:int, object_type:str, object_code:str, permission_tags, index_version:int)->Dict[str,Any]:
-        return {"provider":"none","updated":0,"skipped":True}
 
 class Neo4jGraphProvider(GraphProvider):
     """Neo4j-backed graph retrieval/write implementation.
@@ -221,9 +200,7 @@ class Neo4jGraphProvider(GraphProvider):
         try:
             from neo4j import GraphDatabase
         except ImportError as exc:
-            raise RuntimeError(
-                "未安装 neo4j Python Driver，请执行 pip install neo4j"
-            ) from exc
+            raise RuntimeError("未安装 neo4j Python Driver，请执行 pip install neo4j") from exc
 
         self._driver = GraphDatabase.driver(
             settings.neo4j_uri,
@@ -246,7 +223,7 @@ class Neo4jGraphProvider(GraphProvider):
         self._availability_checked_at = now
         return self._availability
 
-    def _execute(self, cypher: str, params: Dict[str, Any]):
+    def _execute(self, cypher: str, params: dict[str, Any]):
         records, summary, _ = self._driver.execute_query(
             cypher,
             parameters_=params,
@@ -261,7 +238,7 @@ class Neo4jGraphProvider(GraphProvider):
         relations=None,
         claims=None,
         cards=None,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Synchronize entities, cards, claims, and relations using MERGE."""
         entities = entities or []
         relations = relations or []
@@ -294,10 +271,11 @@ class Neo4jGraphProvider(GraphProvider):
         }
 
     @staticmethod
-    def _permission_tags(item: Dict[str, Any]) -> List[str]:
+    def _permission_tags(item: dict[str, Any]) -> list[str]:
         raw = item.get("permission_tags") or item.get("permissionTags") or []
         if isinstance(raw, str):
             import json
+
             try:
                 raw = json.loads(raw) if raw.strip().startswith("[") else raw.split(",")
             except (TypeError, ValueError):
@@ -310,9 +288,9 @@ class Neo4jGraphProvider(GraphProvider):
         return re.sub(r"\s+", "", str(value or "")).strip().lower()
 
     @classmethod
-    def _entity_code_index(cls, entities: List[Dict[str, Any]]) -> Dict[str, str]:
+    def _entity_code_index(cls, entities: list[dict[str, Any]]) -> dict[str, str]:
         """Map entity names to their codes so claim ABOUT edges hit real nodes."""
-        index: Dict[str, str] = {}
+        index: dict[str, str] = {}
         for entity in entities or []:
             code = str(entity.get("entity_code") or entity.get("id") or entity.get("name") or "").strip()
             name = str(entity.get("canonical_name") or entity.get("name") or "").strip()
@@ -320,13 +298,8 @@ class Neo4jGraphProvider(GraphProvider):
                 index.setdefault(cls._entity_key(name), code)
         return index
 
-    def _upsert_entity(self, knowledge_base_id: int, entity: Dict[str, Any]) -> int:
-        code = str(
-            entity.get("entity_code")
-            or entity.get("id")
-            or entity.get("name")
-            or ""
-        ).strip()
+    def _upsert_entity(self, knowledge_base_id: int, entity: dict[str, Any]) -> int:
+        code = str(entity.get("entity_code") or entity.get("id") or entity.get("name") or "").strip()
         name = str(entity.get("canonical_name") or entity.get("name") or "").strip()
         if not code or not name:
             return 0
@@ -347,7 +320,7 @@ class Neo4jGraphProvider(GraphProvider):
         )
         return summary.counters.nodes_created
 
-    def _upsert_card(self, knowledge_base_id: int, card: Dict[str, Any]) -> int:
+    def _upsert_card(self, knowledge_base_id: int, card: dict[str, Any]) -> int:
         code = str(card.get("knowledge_code") or card.get("id") or "").strip()
         if not code:
             return 0
@@ -372,8 +345,8 @@ class Neo4jGraphProvider(GraphProvider):
     def _upsert_claim(
         self,
         knowledge_base_id: int,
-        claim: Dict[str, Any],
-        code_by_name: Optional[Dict[str, str]] = None,
+        claim: dict[str, Any],
+        code_by_name: dict[str, str] | None = None,
     ) -> tuple:
         code = str(claim.get("claim_code") or claim.get("id") or "").strip()
         if not code:
@@ -391,9 +364,7 @@ class Neo4jGraphProvider(GraphProvider):
                 "subject": claim.get("subject", ""),
                 "permissionTags": self._permission_tags(claim),
                 "predicate": claim.get("predicate", ""),
-                "objectValue": (
-                    claim.get("object") or claim.get("object_value") or ""
-                ),
+                "objectValue": (claim.get("object") or claim.get("object_value") or ""),
                 "status": claim.get("status", "UNCERTAIN"),
                 "confidence": float(claim.get("confidence", 0.0) or 0.0),
             },
@@ -430,25 +401,13 @@ class Neo4jGraphProvider(GraphProvider):
     def _upsert_relation(
         self,
         knowledge_base_id: int,
-        relation: Dict[str, Any],
+        relation: dict[str, Any],
     ) -> int:
         # A resolved entity code always wins over the raw name: relations stamped by the
         # ingestion pipeline carry both, and the code points at the indexed entity node.
-        source = str(
-            relation.get("source_entity_code")
-            or relation.get("source")
-            or relation.get("from")
-            or ""
-        ).strip()
-        target = str(
-            relation.get("target_entity_code")
-            or relation.get("target")
-            or relation.get("to")
-            or ""
-        ).strip()
-        relation_type = str(
-            relation.get("relation_type") or relation.get("type") or "RELATED_TO"
-        ).upper()
+        source = str(relation.get("source_entity_code") or relation.get("source") or relation.get("from") or "").strip()
+        target = str(relation.get("target_entity_code") or relation.get("target") or relation.get("to") or "").strip()
+        relation_type = str(relation.get("relation_type") or relation.get("type") or "RELATED_TO").upper()
         if not source or not target:
             return 0
 
@@ -477,7 +436,7 @@ class Neo4jGraphProvider(GraphProvider):
         )
         return summary.counters.relationships_created
 
-    def reset_generation(self, knowledge_base_id: int, generation_id: str) -> Dict[str, Any]:
+    def reset_generation(self, knowledge_base_id: int, generation_id: str) -> dict[str, Any]:
         """Delete only the requested green generation; active pointer is untouched."""
         records, _ = self._execute(
             "MATCH (n:KnowledgeObject {knowledgeBaseId:$kb, generationId:$generation}) "
@@ -486,7 +445,7 @@ class Neo4jGraphProvider(GraphProvider):
         )
         return {"provider": "neo4j", "deleted": int((records[0] if records else {}).get("deleted") or 0)}
 
-    def delete_knowledge_base(self, knowledge_base_id: int) -> Dict[str, Any]:
+    def delete_knowledge_base(self, knowledge_base_id: int) -> dict[str, Any]:
         """Delete every graph node of one knowledge base, including the generation pointer.
 
         Every node written by this provider carries ``knowledgeBaseId``, so one
@@ -503,7 +462,7 @@ class Neo4jGraphProvider(GraphProvider):
         self._execute("MATCH (n {knowledgeBaseId:$kb}) DETACH DELETE n", {"kb": knowledge_base_id})
         return {"provider": "neo4j", "available": True, "deleted": total}
 
-    def upsert_generation(self, knowledge_base_id: int, generation_id: str, documents) -> Dict[str, Any]:
+    def upsert_generation(self, knowledge_base_id: int, generation_id: str, documents) -> dict[str, Any]:
         """Project the authoritative retrieval snapshot into generation-scoped graph nodes."""
         indexed = 0
         for item in documents or []:
@@ -514,16 +473,23 @@ class Neo4jGraphProvider(GraphProvider):
                 "MERGE (n:KnowledgeObject {knowledgeBaseId:$kb, generationId:$generation, objectId:$objectId}) "
                 "SET n.objectType=$objectType,n.objectKey=$objectKey,n.title=$title,n.content=$content,"
                 "n.contentHash=$contentHash,n.status=$status,n.permissionTags=$permissionTags,n.updatedAt=datetime()",
-                {"kb": knowledge_base_id, "generation": generation_id, "objectId": object_id,
-                 "objectType": item.get("object_type"), "objectKey": item.get("object_key"),
-                 "title": item.get("title") or "", "content": item.get("content") or "",
-                 "contentHash": item.get("content_hash") or "", "status": item.get("status"),
-                 "permissionTags": list(item.get("permission_tags") or [])},
+                {
+                    "kb": knowledge_base_id,
+                    "generation": generation_id,
+                    "objectId": object_id,
+                    "objectType": item.get("object_type"),
+                    "objectKey": item.get("object_key"),
+                    "title": item.get("title") or "",
+                    "content": item.get("content") or "",
+                    "contentHash": item.get("content_hash") or "",
+                    "status": item.get("status"),
+                    "permissionTags": list(item.get("permission_tags") or []),
+                },
             )
             indexed += 1
         return {"provider": "neo4j", "indexed": indexed, "generationId": generation_id}
 
-    def activate_generation(self, knowledge_base_id: int, generation_id: str) -> Dict[str, Any]:
+    def activate_generation(self, knowledge_base_id: int, generation_id: str) -> dict[str, Any]:
         """Atomically move the Neo4j pointer used by generation-scoped reads."""
         records, _ = self._execute(
             "MERGE (p:IndexGenerationPointer {knowledgeBaseId:$kb}) "
@@ -533,10 +499,9 @@ class Neo4jGraphProvider(GraphProvider):
         )
         return {"provider": "neo4j", "generationId": (records[0] if records else {}).get("generationId")}
 
-    def active_generation(self, knowledge_base_id: int) -> Optional[str]:
+    def active_generation(self, knowledge_base_id: int) -> str | None:
         records, _ = self._execute(
-            "MATCH (p:IndexGenerationPointer {knowledgeBaseId:$kb}) "
-            "RETURN p.activeGenerationId AS generationId",
+            "MATCH (p:IndexGenerationPointer {knowledgeBaseId:$kb}) RETURN p.activeGenerationId AS generationId",
             {"kb": knowledge_base_id},
         )
         value = (records[0] if records else {}).get("generationId")
@@ -551,27 +516,35 @@ class Neo4jGraphProvider(GraphProvider):
         )
         return records
 
-    def target_manifest(self, knowledge_base_id: int, generation_id: str) -> Dict[str, Any]:
+    def target_manifest(self, knowledge_base_id: int, generation_id: str) -> dict[str, Any]:
         """Hash the same canonical fields used by MySQL, Elasticsearch and Milvus."""
         import hashlib
         import json
+
         rows = self._generation_rows(knowledge_base_id, generation_id)
         digest = hashlib.sha256()
         for row in sorted(rows, key=lambda item: str(item.get("object_key") or "")):
-            canonical = {"objectKey": row.get("object_key"), "contentHash": row.get("content_hash") or "",
-                         "status": row.get("status"), "permissionTags": sorted(row.get("permission_tags") or [])}
+            canonical = {
+                "objectKey": row.get("object_key"),
+                "contentHash": row.get("content_hash") or "",
+                "status": row.get("status"),
+                "permissionTags": sorted(row.get("permission_tags") or []),
+            }
             line = json.dumps(canonical, ensure_ascii=False, separators=(",", ":")) + "\n"
             digest.update(line.encode("utf-8"))
         generations = sorted({str(row.get("generation_id")) for row in rows if row.get("generation_id")})
         return {"provider": "neo4j", "manifestHash": digest.hexdigest(), "count": len(rows), "generations": generations}
 
-    def qualify_acl_target(self, knowledge_base_id: int, generation_id: str, permission_tags, admin=False) -> List[str]:
+    def qualify_acl_target(self, knowledge_base_id: int, generation_id: str, permission_tags, admin=False) -> list[str]:
         rows = self._generation_rows(knowledge_base_id, generation_id)
         if admin:
             return [str(row.get("id")) for row in rows]
         caller = set(permission_tags or [])
-        return [str(row.get("id")) for row in rows
-                if not (row.get("permission_tags") or []) or caller.intersection(row.get("permission_tags") or [])]
+        return [
+            str(row.get("id"))
+            for row in rows
+            if not (row.get("permission_tags") or []) or caller.intersection(row.get("permission_tags") or [])
+        ]
 
     def update_object_status(
         self,
@@ -580,7 +553,7 @@ class Neo4jGraphProvider(GraphProvider):
         object_code: str,
         status: str,
         index_version: int,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Update graph lifecycle state while rejecting stale index events."""
         label = "Claim" if str(object_type).upper() == "CLAIM" else "KnowledgeCard"
         cypher = (
@@ -605,8 +578,12 @@ class Neo4jGraphProvider(GraphProvider):
         }
 
     def search(
-        self, knowledge_base_id: int, query: str, top_k: int = 10, permission_tags=None,
-    ) -> List[Dict[str, Any]]:
+        self,
+        knowledge_base_id: int,
+        query: str,
+        top_k: int = 10,
+        permission_tags=None,
+    ) -> list[dict[str, Any]]:
         """Search only the active governed graph generation with pre-TopK ACL."""
         records, _ = self._execute(
             "MATCH (p:IndexGenerationPointer {knowledgeBaseId:$kb}) "
@@ -620,11 +597,21 @@ class Neo4jGraphProvider(GraphProvider):
         )
         result = []
         for index, row in enumerate(records):
-            result.append({"id": str(row.get("code") or "graph-%s" % index), "channel": "graph",
-                           "title": row.get("title") or "图谱对象", "content": row.get("content") or "",
-                           "score": max(0.2, 1.0-index*0.05),
-                           "metadata": {"object_type": row.get("nodeType"), "graph_neighbors": [],
-                                        "generation_id": row.get("generationId"), "retrieval_provider": "neo4j"}})
+            result.append(
+                {
+                    "id": str(row.get("code") or "graph-%s" % index),
+                    "channel": "graph",
+                    "title": row.get("title") or "图谱对象",
+                    "content": row.get("content") or "",
+                    "score": max(0.2, 1.0 - index * 0.05),
+                    "metadata": {
+                        "object_type": row.get("nodeType"),
+                        "graph_neighbors": [],
+                        "generation_id": row.get("generationId"),
+                        "retrieval_provider": "neo4j",
+                    },
+                }
+            )
         return result
 
     def neighborhood(
@@ -634,7 +621,7 @@ class Neo4jGraphProvider(GraphProvider):
         depth: int = 2,
         limit: int = 50,
         permission_tags=None,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Return a de-duplicated bounded neighborhood for graph exploration."""
         depth = max(1, min(int(depth), 3))
         limit = max(1, min(int(limit), 200))
@@ -658,8 +645,12 @@ class Neo4jGraphProvider(GraphProvider):
         )
         records, _ = self._execute(
             cypher,
-            {"kb": knowledge_base_id, "code": object_code, "limit": limit,
-             "permissionTags": list(permission_tags or [])},
+            {
+                "kb": knowledge_base_id,
+                "code": object_code,
+                "limit": limit,
+                "permissionTags": list(permission_tags or []),
+            },
         )
         if not records:
             return {
@@ -686,9 +677,13 @@ class Neo4jGraphProvider(GraphProvider):
         }
 
     def update_object_acl(
-        self, knowledge_base_id: int, object_type: str, object_code: str,
-        permission_tags, index_version: int,
-    ) -> Dict[str, Any]:
+        self,
+        knowledge_base_id: int,
+        object_type: str,
+        object_code: str,
+        permission_tags,
+        index_version: int,
+    ) -> dict[str, Any]:
         label = "Claim" if str(object_type).upper() == "CLAIM" else "KnowledgeCard"
         cypher = (
             "MATCH (n:%s {knowledgeBaseId:$kb, code:$code}) "
@@ -696,10 +691,15 @@ class Neo4jGraphProvider(GraphProvider):
             "SET n.permissionTags=$tags,n.indexVersion=$version,n.updatedAt=datetime() "
             "RETURN count(n) AS updated" % label
         )
-        records, _ = self._execute(cypher, {
-            "kb": knowledge_base_id, "code": object_code,
-            "tags": list(permission_tags or []), "version": int(index_version),
-        })
+        records, _ = self._execute(
+            cypher,
+            {
+                "kb": knowledge_base_id,
+                "code": object_code,
+                "tags": list(permission_tags or []),
+                "version": int(index_version),
+            },
+        )
         updated = int((records[0] if records else {}).get("updated") or 0)
         return {"provider": "neo4j", "available": True, "updated": updated}
 
@@ -714,11 +714,14 @@ def get_graph_provider() -> GraphProvider:
             return NullGraphProvider()
     return NullGraphProvider()
 
+
 # Phase 9 methods are attached explicitly to preserve compatibility with older provider implementations.
 def _neo4j_rebuild_authoritative_graph(self, knowledge_base_id, generation_id, rows):
     """Rebuild generation-scoped Entity/Relation graph; never touches the active pointer."""
-    self._execute("MATCH (n:EntityGen {knowledgeBaseId:$kb,generationId:$g}) DETACH DELETE n",
-                  {"kb": knowledge_base_id, "g": generation_id})
+    self._execute(
+        "MATCH (n:EntityGen {knowledgeBaseId:$kb,generationId:$g}) DETACH DELETE n",
+        {"kb": knowledge_base_id, "g": generation_id},
+    )
     entities = [x for x in (rows or []) if str(x.get("graph_type")) == "ENTITY"]
     relations = [x for x in (rows or []) if str(x.get("graph_type")) == "RELATION"]
     links = [x for x in (rows or []) if str(x.get("graph_type")) in ("CLAIM_ENTITY", "CARD_ENTITY")]
@@ -727,65 +730,101 @@ def _neo4j_rebuild_authoritative_graph(self, knowledge_base_id, generation_id, r
             "MERGE (n:EntityGen {knowledgeBaseId:$kb,generationId:$g,code:$code}) "
             "SET n.entityType=$type,n.name=$name,n.description=$description,n.status=$status,"
             "n.permissionTags=$tags,n.contentHash=$hash,n.updatedAt=datetime()",
-            {"kb":knowledge_base_id,"g":generation_id,"code":x.get("code"),"type":x.get("semantic_type"),
-             "name":x.get("name") or "","description":x.get("description") or "","status":x.get("status"),
-             "tags":list(x.get("permission_tags") or []),"hash":x.get("content_hash") or ""})
+            {
+                "kb": knowledge_base_id,
+                "g": generation_id,
+                "code": x.get("code"),
+                "type": x.get("semantic_type"),
+                "name": x.get("name") or "",
+                "description": x.get("description") or "",
+                "status": x.get("status"),
+                "tags": list(x.get("permission_tags") or []),
+                "hash": x.get("content_hash") or "",
+            },
+        )
     created = 0
     for x in relations:
-        records,_=self._execute(
+        records, _ = self._execute(
             "MATCH (a:EntityGen {knowledgeBaseId:$kb,generationId:$g,code:$source}),"
             "(b:EntityGen {knowledgeBaseId:$kb,generationId:$g,code:$target}) "
             "MERGE (a)-[r:RELATION_GEN {generationId:$g,code:$code}]->(b) "
             "SET r.relationType=$type,r.permissionTags=$tags,r.contentHash=$hash,r.status=$status "
             "RETURN count(r) AS updated",
-            {"kb":knowledge_base_id,"g":generation_id,"source":x.get("source_code"),"target":x.get("target_code"),
-             "code":x.get("code"),"type":x.get("semantic_type"),"tags":list(x.get("permission_tags") or []),
-             "hash":x.get("content_hash") or "","status":x.get("status")})
+            {
+                "kb": knowledge_base_id,
+                "g": generation_id,
+                "source": x.get("source_code"),
+                "target": x.get("target_code"),
+                "code": x.get("code"),
+                "type": x.get("semantic_type"),
+                "tags": list(x.get("permission_tags") or []),
+                "hash": x.get("content_hash") or "",
+                "status": x.get("status"),
+            },
+        )
         created += int((records[0] if records else {}).get("updated") or 0)
     linked = 0
     for x in links:
         object_type = "CLAIM" if str(x.get("graph_type")) == "CLAIM_ENTITY" else "CARD"
-        records,_=self._execute(
+        records, _ = self._execute(
             "MATCH (o:KnowledgeObject {knowledgeBaseId:$kb,generationId:$g,objectId:$objectCode}),"
             "(e:EntityGen {knowledgeBaseId:$kb,generationId:$g,code:$entityCode}) "
             "MERGE (o)-[r:ABOUT_ENTITY_GEN {generationId:$g,code:$code}]->(e) "
             "SET r.role=$role,r.permissionTags=$tags,r.contentHash=$hash,r.objectType=$objectType RETURN count(r) AS updated",
-            {"kb":knowledge_base_id,"g":generation_id,"objectCode":x.get("source_code"),"entityCode":x.get("target_code"),
-             "code":x.get("code"),"role":x.get("semantic_type"),"tags":list(x.get("permission_tags") or []),
-             "hash":x.get("content_hash") or "","objectType":object_type})
+            {
+                "kb": knowledge_base_id,
+                "g": generation_id,
+                "objectCode": x.get("source_code"),
+                "entityCode": x.get("target_code"),
+                "code": x.get("code"),
+                "role": x.get("semantic_type"),
+                "tags": list(x.get("permission_tags") or []),
+                "hash": x.get("content_hash") or "",
+                "objectType": object_type,
+            },
+        )
         linked += int((records[0] if records else {}).get("updated") or 0)
     return {
-        "provider": "neo4j", "generationId": generation_id,
-        "entityCount": len(entities), "relationCount": created,
+        "provider": "neo4j",
+        "generationId": generation_id,
+        "entityCount": len(entities),
+        "relationCount": created,
         "knowledgeEntityLinkCount": linked,
     }
 
-def _neo4j_generation_neighborhood(
-    self, knowledge_base_id, entity_code, depth=2, limit=50, permission_tags=None
-):
-    """Traverse only the active Entity/Relation generation and apply ACL to every node and edge."""
-    depth=max(1,min(int(depth),3)); limit=max(1,min(int(limit),200))
-    cypher=("MATCH (ptr:IndexGenerationPointer {knowledgeBaseId:$kb}) "
-            "MATCH p=(n:EntityGen {knowledgeBaseId:$kb,generationId:ptr.activeGenerationId,code:$code})"
-            "-[:RELATION_GEN*1..%d]-(m:EntityGen) "
-            "WHERE m.generationId=ptr.activeGenerationId "
-            "AND (size(coalesce(n.permissionTags,[]))=0 OR any(t IN coalesce(n.permissionTags,[]) WHERE t IN $tags)) "
-            "AND (size(coalesce(m.permissionTags,[]))=0 OR any(t IN coalesce(m.permissionTags,[]) WHERE t IN $tags)) "
-            "AND all(rel IN relationships(p) WHERE rel.generationId=ptr.activeGenerationId AND "
-            "(size(coalesce(rel.permissionTags,[]))=0 OR any(t IN coalesce(rel.permissionTags,[]) WHERE t IN $tags))) "
-            "RETURN p LIMIT $limit" % depth)
-    records,_=self._execute(cypher,{"kb":knowledge_base_id,"code":entity_code,"tags":list(permission_tags or []),"limit":limit})
-    return {"generationId":self.active_generation(knowledge_base_id),"pathCount":len(records),"paths":records}
 
-if 'Neo4jGraphProvider' in globals():
+def _neo4j_generation_neighborhood(self, knowledge_base_id, entity_code, depth=2, limit=50, permission_tags=None):
+    """Traverse only the active Entity/Relation generation and apply ACL to every node and edge."""
+    depth = max(1, min(int(depth), 3))
+    limit = max(1, min(int(limit), 200))
+    cypher = (
+        "MATCH (ptr:IndexGenerationPointer {knowledgeBaseId:$kb}) "
+        "MATCH p=(n:EntityGen {knowledgeBaseId:$kb,generationId:ptr.activeGenerationId,code:$code})"
+        "-[:RELATION_GEN*1..%d]-(m:EntityGen) "
+        "WHERE m.generationId=ptr.activeGenerationId "
+        "AND (size(coalesce(n.permissionTags,[]))=0 OR any(t IN coalesce(n.permissionTags,[]) WHERE t IN $tags)) "
+        "AND (size(coalesce(m.permissionTags,[]))=0 OR any(t IN coalesce(m.permissionTags,[]) WHERE t IN $tags)) "
+        "AND all(rel IN relationships(p) WHERE rel.generationId=ptr.activeGenerationId AND "
+        "(size(coalesce(rel.permissionTags,[]))=0 OR any(t IN coalesce(rel.permissionTags,[]) WHERE t IN $tags))) "
+        "RETURN p LIMIT $limit" % depth
+    )
+    records, _ = self._execute(
+        cypher, {"kb": knowledge_base_id, "code": entity_code, "tags": list(permission_tags or []), "limit": limit}
+    )
+    return {"generationId": self.active_generation(knowledge_base_id), "pathCount": len(records), "paths": records}
+
+
+if "Neo4jGraphProvider" in globals():
     Neo4jGraphProvider.rebuild_authoritative_graph = _neo4j_rebuild_authoritative_graph
     Neo4jGraphProvider.generation_neighborhood = _neo4j_generation_neighborhood
+
 
 # Phase 10: machine-verifiable authoritative graph manifest and evidence-bound multi-hop traversal.
 def _neo4j_authoritative_graph_manifest(self, knowledge_base_id, generation_id):
     """Recompute the Phase-9 canonical graph manifest from one physical Neo4j generation."""
     import hashlib
     import json
+
     records, _ = self._execute(
         "MATCH (e:EntityGen {knowledgeBaseId:$kb,generationId:$g}) "
         "RETURN 'ENTITY:' + e.code AS graph_key,'ENTITY' AS graph_type,e.code AS code,"
@@ -809,14 +848,28 @@ def _neo4j_authoritative_graph_manifest(self, knowledge_base_id, generation_id):
     rows = sorted(records, key=lambda x: str(x.get("graph_key") or ""))
     digest = hashlib.sha256()
     for row in rows:
-        item = {key: row.get(key) for key in (
-            "graph_key", "graph_type", "code", "source_code", "target_code", "semantic_type",
-            "name", "description", "status", "permission_tags", "content_hash"
-        )}
+        item = {
+            key: row.get(key)
+            for key in (
+                "graph_key",
+                "graph_type",
+                "code",
+                "source_code",
+                "target_code",
+                "semantic_type",
+                "name",
+                "description",
+                "status",
+                "permission_tags",
+                "content_hash",
+            )
+        }
         item["permission_tags"] = list(item.get("permission_tags") or [])
         digest.update((json.dumps(item, ensure_ascii=False, separators=(",", ":")) + "\n").encode("utf-8"))
     return {
-        "provider": "neo4j-graph", "available": True, "generationId": generation_id,
+        "provider": "neo4j-graph",
+        "available": True,
+        "generationId": generation_id,
         "manifestHash": digest.hexdigest(),
         "entityCount": sum(1 for x in rows if x.get("graph_type") == "ENTITY"),
         "relationCount": sum(1 for x in rows if x.get("graph_type") == "RELATION"),
@@ -824,10 +877,12 @@ def _neo4j_authoritative_graph_manifest(self, knowledge_base_id, generation_id):
     }
 
 
-def _neo4j_generation_multihop(self, knowledge_base_id, entity_code, depth=3, limit=20,
-                                permission_tags=None, token_budget=2500):
+def _neo4j_generation_multihop(
+    self, knowledge_base_id, entity_code, depth=3, limit=20, permission_tags=None, token_budget=2500
+):
     """Return ACL-safe active-generation paths with bounded hops, cycles and context budget."""
-    depth = max(1, min(int(depth), 4)); limit = max(1, min(int(limit), 100))
+    depth = max(1, min(int(depth), 4))
+    limit = max(1, min(int(limit), 100))
     token_budget = max(256, min(int(token_budget), 12000))
     cypher = (
         "MATCH (ptr:IndexGenerationPointer {knowledgeBaseId:$kb}) "
@@ -846,37 +901,61 @@ def _neo4j_generation_multihop(self, knowledge_base_id, entity_code, depth=3, li
         "collect(DISTINCT {objectId:o.objectId,objectType:o.objectType,title:o.title,content:o.content}) AS evidence,"
         "length(p) AS hops LIMIT $limit" % depth
     )
-    records, _ = self._execute(cypher, {"kb": knowledge_base_id, "code": entity_code,
-                                        "tags": list(permission_tags or []), "limit": limit})
-    paths=[]; used=0
+    records, _ = self._execute(
+        cypher, {"kb": knowledge_base_id, "code": entity_code, "tags": list(permission_tags or []), "limit": limit}
+    )
+    paths = []
+    used = 0
     for row in records:
-        evidence=[x for x in (row.get("evidence") or []) if x.get("objectId")]
-        text=" ".join(str(x.get("content") or x.get("title") or "") for x in evidence)
-        cost=max(1, len(text)//4)
-        if used + cost > token_budget and paths: continue
-        used += min(cost, token_budget-used)
-        hops=int(row.get("hops") or 1)
-        paths.append({"nodes":row.get("nodes") or [],"relations":row.get("relations") or [],
-                      "evidence":evidence,"hops":hops,"pathScore":round(1.0/(1.0+0.18*hops),4)})
-        if used >= token_budget: break
-    return {"provider":"neo4j","generationId":self.active_generation(knowledge_base_id),
-            "startEntity":entity_code,"paths":paths,"pathCount":len(paths),
-            "tokenBudget":token_budget,"estimatedTokens":used,"cyclePolicy":"SIMPLE_PATH",
-            "aclPolicy":"NODE_EDGE_EVIDENCE_PRE_FILTER"}
+        evidence = [x for x in (row.get("evidence") or []) if x.get("objectId")]
+        text = " ".join(str(x.get("content") or x.get("title") or "") for x in evidence)
+        cost = max(1, len(text) // 4)
+        if used + cost > token_budget and paths:
+            continue
+        used += min(cost, token_budget - used)
+        hops = int(row.get("hops") or 1)
+        paths.append(
+            {
+                "nodes": row.get("nodes") or [],
+                "relations": row.get("relations") or [],
+                "evidence": evidence,
+                "hops": hops,
+                "pathScore": round(1.0 / (1.0 + 0.18 * hops), 4),
+            }
+        )
+        if used >= token_budget:
+            break
+    return {
+        "provider": "neo4j",
+        "generationId": self.active_generation(knowledge_base_id),
+        "startEntity": entity_code,
+        "paths": paths,
+        "pathCount": len(paths),
+        "tokenBudget": token_budget,
+        "estimatedTokens": used,
+        "cyclePolicy": "SIMPLE_PATH",
+        "aclPolicy": "NODE_EDGE_EVIDENCE_PRE_FILTER",
+    }
 
-if 'Neo4jGraphProvider' in globals():
+
+if "Neo4jGraphProvider" in globals():
     Neo4jGraphProvider.authoritative_graph_manifest = _neo4j_authoritative_graph_manifest
     Neo4jGraphProvider.generation_multihop = _neo4j_generation_multihop
+
 
 # Phase 12: evidence-scoped graph facets. Canonical identity is never used as an ACL union.
 def _neo4j_rebuild_authoritative_graph_with_facets(self, knowledge_base_id, generation_id, rows):
     """Rebuild canonical graph plus source-scoped entity/relation facets for one generation."""
     base_rows = [x for x in (rows or []) if str(x.get("graph_type")) not in ("ENTITY_FACET", "RELATION_FACET")]
     result = _neo4j_rebuild_authoritative_graph(self, knowledge_base_id, generation_id, base_rows)
-    self._execute("MATCH (n:EntityFacetGen {knowledgeBaseId:$kb,generationId:$g}) DETACH DELETE n",
-                  {"kb": knowledge_base_id, "g": generation_id})
-    self._execute("MATCH (n:RelationFacetGen {knowledgeBaseId:$kb,generationId:$g}) DETACH DELETE n",
-                  {"kb": knowledge_base_id, "g": generation_id})
+    self._execute(
+        "MATCH (n:EntityFacetGen {knowledgeBaseId:$kb,generationId:$g}) DETACH DELETE n",
+        {"kb": knowledge_base_id, "g": generation_id},
+    )
+    self._execute(
+        "MATCH (n:RelationFacetGen {knowledgeBaseId:$kb,generationId:$g}) DETACH DELETE n",
+        {"kb": knowledge_base_id, "g": generation_id},
+    )
     entity_facets = [x for x in (rows or []) if str(x.get("graph_type")) == "ENTITY_FACET"]
     relation_facets = [x for x in (rows or []) if str(x.get("graph_type")) == "RELATION_FACET"]
     for x in entity_facets:
@@ -886,10 +965,19 @@ def _neo4j_rebuild_authoritative_graph_with_facets(self, knowledge_base_id, gene
             "SET f.entityCode=$entity,f.entityType=$type,f.name=$name,f.description=$description,"
             "f.permissionTags=$tags,f.contentHash=$hash,f.status=$status "
             "MERGE (f)-[:FACET_OF {generationId:$g}]->(e)",
-            {"kb": knowledge_base_id, "g": generation_id, "entity": x.get("source_code"),
-             "code": x.get("code"), "type": x.get("semantic_type"), "name": x.get("name") or "",
-             "description": x.get("description") or "", "tags": list(x.get("permission_tags") or []),
-             "hash": x.get("content_hash") or "", "status": x.get("status")})
+            {
+                "kb": knowledge_base_id,
+                "g": generation_id,
+                "entity": x.get("source_code"),
+                "code": x.get("code"),
+                "type": x.get("semantic_type"),
+                "name": x.get("name") or "",
+                "description": x.get("description") or "",
+                "tags": list(x.get("permission_tags") or []),
+                "hash": x.get("content_hash") or "",
+                "status": x.get("status"),
+            },
+        )
     for x in relation_facets:
         self._execute(
             "MATCH (a:EntityGen {knowledgeBaseId:$kb,generationId:$g,code:$source}),"
@@ -898,20 +986,30 @@ def _neo4j_rebuild_authoritative_graph_with_facets(self, knowledge_base_id, gene
             "SET f.relationType=$type,f.permissionTags=$tags,f.contentHash=$hash,f.status=$status "
             "MERGE (f)-[:FACET_SOURCE {generationId:$g}]->(a) "
             "MERGE (f)-[:FACET_TARGET {generationId:$g}]->(b)",
-            {"kb": knowledge_base_id, "g": generation_id, "source": x.get("source_code"),
-             "target": x.get("target_code"), "code": x.get("code"), "type": x.get("semantic_type"),
-             "tags": list(x.get("permission_tags") or []), "hash": x.get("content_hash") or "",
-             "status": x.get("status")})
+            {
+                "kb": knowledge_base_id,
+                "g": generation_id,
+                "source": x.get("source_code"),
+                "target": x.get("target_code"),
+                "code": x.get("code"),
+                "type": x.get("semantic_type"),
+                "tags": list(x.get("permission_tags") or []),
+                "hash": x.get("content_hash") or "",
+                "status": x.get("status"),
+            },
+        )
     result["entityFacetCount"] = len(entity_facets)
     result["relationFacetCount"] = len(relation_facets)
     result["facetAclPolicy"] = "EVIDENCE_SCOPED_NON_BROADENING"
     return result
 
 
-def _neo4j_facet_multihop(self, knowledge_base_id, entity_code, depth=3, limit=20,
-                           permission_tags=None, token_budget=2500):
+def _neo4j_facet_multihop(
+    self, knowledge_base_id, entity_code, depth=3, limit=20, permission_tags=None, token_budget=2500
+):
     """Traverse only relation facets visible to the persona; canonical nodes carry identity only."""
-    depth = max(1, min(int(depth), 4)); limit = max(1, min(int(limit), 100))
+    depth = max(1, min(int(depth), 4))
+    limit = max(1, min(int(limit), 100))
     tags = list(permission_tags or [])
     cypher = (
         "MATCH (ptr:IndexGenerationPointer {knowledgeBaseId:$kb}) "
@@ -921,30 +1019,44 @@ def _neo4j_facet_multihop(self, knowledge_base_id, entity_code, depth=3, limit=2
         "AND (size(coalesce(rf.permissionTags,[]))=0 OR any(tag IN coalesce(rf.permissionTags,[]) WHERE tag IN $tags)) "
         "RETURN DISTINCT t.code AS targetCode,t.name AS targetName,rf.code AS facetCode,"
         "rf.relationType AS relationType,rf.permissionTags AS permissionTags,rf.contentHash AS contentHash "
-        "LIMIT $limit" % (depth, depth))
-    records, _ = self._execute(cypher, {"kb": knowledge_base_id, "code": entity_code,
-                                        "tags": tags, "limit": limit})
-    paths=[]; used=0; token_budget=max(256,min(int(token_budget),12000))
+        "LIMIT $limit" % (depth, depth)
+    )
+    records, _ = self._execute(cypher, {"kb": knowledge_base_id, "code": entity_code, "tags": tags, "limit": limit})
+    paths = []
+    used = 0
+    token_budget = max(256, min(int(token_budget), 12000))
     for row in records:
-        text="%s %s %s" % (row.get("targetName") or "", row.get("relationType") or "", row.get("targetCode") or "")
-        cost=max(1,len(text)//4)
-        if used+cost>token_budget and paths: continue
-        used += min(cost, token_budget-used)
+        text = "%s %s %s" % (row.get("targetName") or "", row.get("relationType") or "", row.get("targetCode") or "")
+        cost = max(1, len(text) // 4)
+        if used + cost > token_budget and paths:
+            continue
+        used += min(cost, token_budget - used)
         paths.append(row)
-        if used>=token_budget: break
-    return {"provider":"neo4j","generationId":self.active_generation(knowledge_base_id),
-            "startEntity":entity_code,"paths":paths,"pathCount":len(paths),"estimatedTokens":used,
-            "tokenBudget":token_budget,"aclPolicy":"FACET_PRE_FILTER_NON_BROADENING",
-            "identityPolicy":"CANONICAL_ENTITY_IDENTITY_ONLY"}
+        if used >= token_budget:
+            break
+    return {
+        "provider": "neo4j",
+        "generationId": self.active_generation(knowledge_base_id),
+        "startEntity": entity_code,
+        "paths": paths,
+        "pathCount": len(paths),
+        "estimatedTokens": used,
+        "tokenBudget": token_budget,
+        "aclPolicy": "FACET_PRE_FILTER_NON_BROADENING",
+        "identityPolicy": "CANONICAL_ENTITY_IDENTITY_ONLY",
+    }
 
-if 'Neo4jGraphProvider' in globals():
+
+if "Neo4jGraphProvider" in globals():
     Neo4jGraphProvider.rebuild_authoritative_graph = _neo4j_rebuild_authoritative_graph_with_facets
     Neo4jGraphProvider.facet_multihop = _neo4j_facet_multihop
+
 
 # Phase 12 manifest includes physical facet projections, so qualification includes protected facts.
 def _neo4j_authoritative_graph_manifest_with_facets(self, knowledge_base_id, generation_id):
     import hashlib
     import json
+
     queries = [
         (
             "MATCH (e:EntityGen {knowledgeBaseId:$kb,generationId:$g}) "
@@ -993,8 +1105,17 @@ def _neo4j_authoritative_graph_manifest_with_facets(self, knowledge_base_id, gen
     rows = sorted(rows, key=lambda x: str(x.get("graph_key") or ""))
     digest = hashlib.sha256()
     keys = (
-        "graph_key", "graph_type", "code", "source_code", "target_code", "semantic_type",
-        "name", "description", "status", "permission_tags", "content_hash",
+        "graph_key",
+        "graph_type",
+        "code",
+        "source_code",
+        "target_code",
+        "semantic_type",
+        "name",
+        "description",
+        "status",
+        "permission_tags",
+        "content_hash",
     )
     for row in rows:
         item = {key: row.get(key) for key in keys}
@@ -1002,7 +1123,9 @@ def _neo4j_authoritative_graph_manifest_with_facets(self, knowledge_base_id, gen
         canonical = json.dumps(item, ensure_ascii=False, separators=(",", ":")) + "\n"
         digest.update(canonical.encode("utf-8"))
     return {
-        "provider": "neo4j-graph", "available": True, "generationId": generation_id,
+        "provider": "neo4j-graph",
+        "available": True,
+        "generationId": generation_id,
         "manifestHash": digest.hexdigest(),
         "entityCount": sum(1 for x in rows if x.get("graph_type") == "ENTITY"),
         "relationCount": sum(1 for x in rows if x.get("graph_type") == "RELATION"),
@@ -1012,17 +1135,16 @@ def _neo4j_authoritative_graph_manifest_with_facets(self, knowledge_base_id, gen
     }
 
 
-if 'Neo4jGraphProvider' in globals():
+if "Neo4jGraphProvider" in globals():
     Neo4jGraphProvider.authoritative_graph_manifest = _neo4j_authoritative_graph_manifest_with_facets
+
 
 # Phase 13: citation-safe graph paths require visible immutable evidence bindings.
 def _neo4j_rebuild_graph_evidence(self, knowledge_base_id, generation_id, bindings):
     """Project immutable EvidenceGen/SourceGen nodes and facet support edges."""
     params = {"kb": knowledge_base_id, "g": generation_id}
-    self._execute(
-        "MATCH (e:EvidenceGen {knowledgeBaseId:$kb,generationId:$g}) DETACH DELETE e", params)
-    self._execute(
-        "MATCH (s:SourceGen {knowledgeBaseId:$kb,generationId:$g}) DETACH DELETE s", params)
+    self._execute("MATCH (e:EvidenceGen {knowledgeBaseId:$kb,generationId:$g}) DETACH DELETE e", params)
+    self._execute("MATCH (s:SourceGen {knowledgeBaseId:$kb,generationId:$g}) DETACH DELETE s", params)
     for item in bindings or []:
         self._execute(
             "MERGE (s:SourceGen {knowledgeBaseId:$kb,generationId:$g,code:$source}) "
@@ -1036,16 +1158,29 @@ def _neo4j_rebuild_graph_evidence(self, knowledge_base_id, generation_id, bindin
             "OPTIONAL MATCH (rf:RelationFacetGen {knowledgeBaseId:$kb,generationId:$g,code:$facet}) "
             "FOREACH (_ IN CASE WHEN rf IS NULL THEN [] ELSE [1] END | "
             "MERGE (rf)-[:SUPPORTED_BY {generationId:$g}]->(e))",
-            {"kb": knowledge_base_id, "g": generation_id, "source": item.get("sourceCode"),
-             "version": item.get("sourceVersion"), "evidence": item.get("evidenceCode"),
-             "tags": list(item.get("permissionTags") or []), "hash": item.get("evidenceHash") or "",
-             "locator": item.get("locator") or "", "facet": item.get("facetCode")})
-    return {"provider": "neo4j", "generationId": generation_id,
-            "bindingCount": len(bindings or []), "citationPolicy": "VISIBLE_EVIDENCE_REQUIRED"}
+            {
+                "kb": knowledge_base_id,
+                "g": generation_id,
+                "source": item.get("sourceCode"),
+                "version": item.get("sourceVersion"),
+                "evidence": item.get("evidenceCode"),
+                "tags": list(item.get("permissionTags") or []),
+                "hash": item.get("evidenceHash") or "",
+                "locator": item.get("locator") or "",
+                "facet": item.get("facetCode"),
+            },
+        )
+    return {
+        "provider": "neo4j",
+        "generationId": generation_id,
+        "bindingCount": len(bindings or []),
+        "citationPolicy": "VISIBLE_EVIDENCE_REQUIRED",
+    }
 
 
-def _neo4j_citation_safe_multihop(self, knowledge_base_id, entity_code, depth=3, limit=20,
-                                   permission_tags=None, token_budget=2500):
+def _neo4j_citation_safe_multihop(
+    self, knowledge_base_id, entity_code, depth=3, limit=20, permission_tags=None, token_budget=2500
+):
     """Return only facet paths with evidence visible to the current persona."""
     tags = list(permission_tags or [])
     limit = max(1, min(int(limit), 100))
@@ -1062,9 +1197,9 @@ def _neo4j_citation_safe_multihop(self, knowledge_base_id, entity_code, depth=3,
         "MATCH (rf)-[:FACET_SOURCE|FACET_TARGET]->(t:EntityGen) WHERE t.code<>$code "
         "RETURN DISTINCT t.code targetCode,t.name targetName,rf.code facetCode,"
         "rf.relationType relationType,collect(DISTINCT {evidenceCode:ev.code,contentHash:ev.contentHash,"
-        "locator:ev.locator,sourceCode:src.code,sourceVersion:src.sourceVersion}) citations LIMIT $limit")
-    rows, _ = self._execute(query, {"kb": knowledge_base_id, "code": entity_code,
-                                    "tags": tags, "limit": limit})
+        "locator:ev.locator,sourceCode:src.code,sourceVersion:src.sourceVersion}) citations LIMIT $limit"
+    )
+    rows, _ = self._execute(query, {"kb": knowledge_base_id, "code": entity_code, "tags": tags, "limit": limit})
     budget = max(256, min(int(token_budget), 12000))
     used = 0
     paths = []
@@ -1078,12 +1213,18 @@ def _neo4j_citation_safe_multihop(self, knowledge_base_id, entity_code, depth=3,
         used += min(cost, budget - used)
         row["citationCount"] = len(citations)
         paths.append(row)
-    return {"provider": "neo4j", "generationId": self.active_generation(knowledge_base_id),
-            "paths": paths, "pathCount": len(paths), "estimatedTokens": used,
-            "tokenBudget": budget, "aclPolicy": "FACET_EVIDENCE_SOURCE_PRE_FILTER",
-            "citationPolicy": "AT_LEAST_ONE_VISIBLE_EVIDENCE_PER_PATH"}
+    return {
+        "provider": "neo4j",
+        "generationId": self.active_generation(knowledge_base_id),
+        "paths": paths,
+        "pathCount": len(paths),
+        "estimatedTokens": used,
+        "tokenBudget": budget,
+        "aclPolicy": "FACET_EVIDENCE_SOURCE_PRE_FILTER",
+        "citationPolicy": "AT_LEAST_ONE_VISIBLE_EVIDENCE_PER_PATH",
+    }
 
 
-if 'Neo4jGraphProvider' in globals():
+if "Neo4jGraphProvider" in globals():
     Neo4jGraphProvider.rebuild_graph_evidence = _neo4j_rebuild_graph_evidence
     Neo4jGraphProvider.citation_safe_multihop = _neo4j_citation_safe_multihop

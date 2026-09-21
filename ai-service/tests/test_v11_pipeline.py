@@ -25,19 +25,13 @@ def test_pipeline(tmp_path: Path):
             item["content_unit_id"] = 900000 + i
             chunks.append(item)
 
-        await KnowledgeIndexer().index_chunks(
-            9999, 9999, sample.name, "test://sample.md", chunks, []
-        )
+        await KnowledgeIndexer().index_chunks(9999, 9999, sample.name, "test://sample.md", chunks, [])
         knowledge = await KnowledgeExtractor().extract(parsed["text"], chunks)
         assert knowledge["cards"]
         assert knowledge["claims"]
-        await KnowledgeIndexer().index_knowledge_objects(
-            9999, knowledge["cards"], knowledge["claims"]
-        )
+        await KnowledgeIndexer().index_knowledge_objects(9999, knowledge["cards"], knowledge["claims"])
 
-        result = await QueryEngine().query(
-            "Q_TEST", 9999, "为什么知识发布前需要裁决？", 5, []
-        )
+        result = await QueryEngine().query("Q_TEST", 9999, "为什么知识发布前需要裁决？", 5, [])
         assert result["candidates"]
         assert result["citations"]
         assert "bm25" in result["strategies"] or "vector" in result["strategies"]

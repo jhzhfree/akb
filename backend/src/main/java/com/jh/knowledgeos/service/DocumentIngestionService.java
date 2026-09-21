@@ -10,7 +10,6 @@ import com.jh.knowledgeos.mapper.KnowledgeMapper;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
-
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.concurrent.Callable;
@@ -24,35 +23,36 @@ import java.util.Map;
  */
 @Service
 public class DocumentIngestionService {
+
     private static final double DEFAULT_AUTHORITY_SCORE = 0.80D;
+
     private static final int DB_BATCH_SIZE = 100;
 
     private final KnowledgeMapper mapper;
+
     private final AiClient aiClient;
+
     private final KnowledgeExtractionService extractionService;
+
     private final ObjectMapper objectMapper;
+
     private final IdGenerator idGenerator;
+
     private final TransactionRunner transactionRunner;
+
     private final IndexOutboxService outboxService;
+
     private final IngestionObservabilityService observabilityService;
+
     private final SourceFileStorageService sourceFileStorage;
+
     private final PlatformEventPublisher publisher;
+
     private final ChunkPolicyService chunkPolicyService;
+
     private final TaskCenterService taskCenterService;
 
-    public DocumentIngestionService(
-            KnowledgeMapper mapper,
-            AiClient aiClient,
-            KnowledgeExtractionService extractionService,
-            ObjectMapper objectMapper,
-            IdGenerator idGenerator,
-            TransactionRunner transactionRunner,
-            IndexOutboxService outboxService,
-            IngestionObservabilityService observabilityService,
-            SourceFileStorageService sourceFileStorage,
-            PlatformEventPublisher publisher,
-            ChunkPolicyService chunkPolicyService,
-            @Lazy TaskCenterService taskCenterService) {
+    public DocumentIngestionService(KnowledgeMapper mapper, AiClient aiClient, KnowledgeExtractionService extractionService, ObjectMapper objectMapper, IdGenerator idGenerator, TransactionRunner transactionRunner, IndexOutboxService outboxService, IngestionObservabilityService observabilityService, SourceFileStorageService sourceFileStorage, PlatformEventPublisher publisher, ChunkPolicyService chunkPolicyService, @Lazy TaskCenterService taskCenterService) {
         this.mapper = mapper;
         this.aiClient = aiClient;
         this.extractionService = extractionService;
@@ -71,25 +71,22 @@ public class DocumentIngestionService {
      * Parses an uploaded source outside the DB transaction, persists its authoritative
      * source/document/chunk/evidence state, enqueues indexing, then triggers extraction.
      */
-    public Map<String, Object> upload(Long knowledgeBaseId, MultipartFile file, Double authorityScore, String permissionTags)
-            throws Exception {
+    public Map<String, Object> upload(Long knowledgeBaseId, MultipartFile file, Double authorityScore, String permissionTags) throws Exception {
         String name = file == null ? "" : String.valueOf(file.getOriginalFilename());
         // Ingestion is the longest job on the platform and the one operators are asked about
         // most, so it is registered in the task centre before a single byte is parsed: a crash
         // mid-way leaves a failed task instead of a silent hole.
-        return tracked(knowledgeBaseId, "文档接入：" + name, null,
-                () -> ingest(knowledgeBaseId, file, authorityScore, permissionTags, null));
+        return tracked(knowledgeBaseId, "文档接入：" + name, null, () -> ingest(knowledgeBaseId, file, authorityScore, permissionTags, null));
     }
 
-    /** Runs work as a tracked task: the ledger is updated whatever the outcome. */
-    private Map<String, Object> tracked(Long knowledgeBaseId, String taskName, String targetCode,
-            Callable<Map<String, Object>> work) throws Exception {
+    /**
+     * Runs work as a tracked task: the ledger is updated whatever the outcome.
+     */
+    private Map<String, Object> tracked(Long knowledgeBaseId, String taskName, String targetCode, Callable<Map<String, Object>> work) throws Exception {
         Map<String, Object> payload = new LinkedHashMap<String, Object>();
         payload.put("knowledgeBaseId", knowledgeBaseId);
         payload.put("documentId", targetCode);
-        Map<String, Object> task = taskCenterService.enqueue(knowledgeBaseId,
-                TaskCenterService.TYPE_INGESTION, taskName, "DOCUMENT", targetCode,
-                TaskCenterService.TRIGGER_MANUAL, payload);
+        Map<String, Object> task = taskCenterService.enqueue(knowledgeBaseId, TaskCenterService.TYPE_INGESTION, taskName, "DOCUMENT", targetCode, TaskCenterService.TRIGGER_MANUAL, payload);
         String taskCode = String.valueOf(task.get("taskCode"));
         taskCenterService.start(taskCode, "PARSE");
         try {
@@ -110,7 +107,9 @@ public class DocumentIngestionService {
      */
     public Map<String, Object> retry(Long documentId) throws Exception {
         Map<String, Object> context = mapper.findDocumentRetryContext(documentId);
-        if (context == null) throw new IllegalArgumentException("文档不存在：" + documentId);
+        if (context == null) {
+            throw new IllegalArgumentException("文档不存在：" + documentId);
+        }
         String status = String.valueOf(context.get("status"));
         if (!"FAILED".equals(status) && !"DIRTY".equals(status)) {
             throw new IllegalStateException("仅 FAILED / DIRTY 文档可重试，当前状态：" + status);
@@ -121,64 +120,35 @@ public class DocumentIngestionService {
             mapper.updateDocumentState(documentId, "FAILED", "RETRY", "原始文件缺失，无法重跑", retries);
             throw new IllegalStateException("原始文件缺失，无法重跑该文档");
         }
-        final InMemoryMultipartFile file = InMemoryMultipartFile.of(
-                stored,
-                String.valueOf(context.get("sourceName")),
-                mimeFromExtension(String.valueOf(context.get("sourceName"))));
+        final InMemoryMultipartFile file = InMemoryMultipartFile.of(stored, String.valueOf(context.get("sourceName")), mimeFromExtension(String.valueOf(context.get("sourceName"))));
         final Long knowledgeBaseId = toLong(context.get("knowledgeBaseId"));
-        return tracked(knowledgeBaseId, "文档重跑：" + documentId, String.valueOf(documentId),
-                () -> ingest(
-                        knowledgeBaseId,
-                        file,
-                        toDouble(context.get("authorityScore")),
-                        String.valueOf(context.get("permissionTags")),
-                        context));
+        return tracked(knowledgeBaseId, "文档重跑：" + documentId, String.valueOf(documentId), () -> ingest(knowledgeBaseId, file, toDouble(context.get("authorityScore")), String.valueOf(context.get("permissionTags")), context));
     }
 
     @SuppressWarnings("unchecked")
-    private Map<String, Object> ingest(
-            Long knowledgeBaseId,
-            MultipartFile file,
-            Double authorityScore,
-            String permissionTags,
-            Map<String, Object> retryContext) throws Exception {
+    private Map<String, Object> ingest(Long knowledgeBaseId, MultipartFile file, Double authorityScore, String permissionTags, Map<String, Object> retryContext) throws Exception {
         Long retryDocumentId = retryContext == null ? null : toLong(retryContext.get("id"));
         int retryCount = retryContext == null ? 0 : toInt(retryContext.get("retryCount")) + 1;
-        com.jh.knowledgeos.domain.IngestionRun run =
-                observabilityService.start(knowledgeBaseId, file.getOriginalFilename());
+        com.jh.knowledgeos.domain.IngestionRun run = observabilityService.start(knowledgeBaseId, file.getOriginalFilename());
         // Mutable holders: a failure has to record the stage it died in, and the document id only
         // exists once the persist transaction ran, but the catch block needs both.
-        final String[] stageHolder = new String[]{"PARSE"};
-        final Long[] documentIdHolder = new Long[]{retryDocumentId};
+        final String[] stageHolder = new String[] { "PARSE" };
+        final Long[] documentIdHolder = new Long[] { retryDocumentId };
         try {
-            publisher.emitUser(PlatformEventTypes.INGESTION_DOCUMENT_RECEIVED, knowledgeBaseId,
-                    PlatformEventPublisher.SOURCE_UI, "INGESTION_RUN", run.getRunCode(),
-                    "文档接收开始解析：" + file.getOriginalFilename(),
-                    receivedDetail(run, file, authorityScore),
-                    taskContext(run.getRunCode(), retryDocumentId, null, retryCount));
+            publisher.emitUser(PlatformEventTypes.INGESTION_DOCUMENT_RECEIVED, knowledgeBaseId, PlatformEventPublisher.SOURCE_UI, "INGESTION_RUN", run.getRunCode(), "文档接收开始解析：" + file.getOriginalFilename(), receivedDetail(run, file, authorityScore), taskContext(run.getRunCode(), retryDocumentId, null, retryCount));
             if (retryDocumentId != null) {
                 mapper.updateDocumentState(retryDocumentId, "RETRYING", "PARSE", null, retryCount);
             }
-            observabilityService.event(run.getId(), "PARSE_STARTED", "PARSE", "RUNNING",
-                    "开始解析文档", null);
+            observabilityService.event(run.getId(), "PARSE_STARTED", "PARSE", "RUNNING", "开始解析文档", null);
             // The knowledge base owns its chunking policy: the parser only applies it, so a
             // manual can be re-cut by section while a report stays window-based.
-            Map<String, Object> parsed =
-                    aiClient.parse(file, chunkPolicyService.policyFor(knowledgeBaseId));
-            List<Map<String, Object>> parsedChunks =
-                    parsed.get("chunks") instanceof List
-                            ? (List<Map<String, Object>>) parsed.get("chunks")
-                            : new ArrayList<Map<String, Object>>();
+            Map<String, Object> parsed = aiClient.parse(file, chunkPolicyService.policyFor(knowledgeBaseId));
+            List<Map<String, Object>> parsedChunks = parsed.get("chunks") instanceof List ? (List<Map<String, Object>>) parsed.get("chunks") : new ArrayList<Map<String, Object>>();
             // The parser returns one canonical model for every source format; chunks are the
             // normalized units of that model, already free of layout-only content.
-            Map<String, Object> standard = parsed.get("standard") instanceof Map
-                    ? (Map<String, Object>) parsed.get("standard")
-                    : new LinkedHashMap<String, Object>();
-            observabilityService.event(run.getId(), "PARSE_COMPLETED", "PARSE", "SUCCESS",
-                    "文档解析完成，共 " + parsedChunks.size() + " 个标准单元", null);
-
-            observabilityService.event(run.getId(), "PERSIST_STARTED", "PERSIST", "RUNNING",
-                    "写入权威知识数据", null);
+            Map<String, Object> standard = parsed.get("standard") instanceof Map ? (Map<String, Object>) parsed.get("standard") : new LinkedHashMap<String, Object>();
+            observabilityService.event(run.getId(), "PARSE_COMPLETED", "PARSE", "SUCCESS", "文档解析完成，共 " + parsedChunks.size() + " 个标准单元", null);
+            observabilityService.event(run.getId(), "PERSIST_STARTED", "PERSIST", "RUNNING", "写入权威知识数据", null);
             // Retried on deadlock: a batch runs several documents through this write set at once,
             // and every INSERT here is rolled back cleanly by the database, so redoing the whole
             // transaction is a no-op rather than a duplicate. The expensive AI calls sit outside
@@ -200,57 +170,31 @@ public class DocumentIngestionService {
                     }
                     documentIdHolder[0] = document.getId();
                     int revision = retryDocumentId == null ? 1 : mapper.nextChunkRevision(document.getId());
-                    List<Map<String, Object>> indexChunks = persistChunks(
-                            knowledgeBaseId, source, document, parsedChunks, revision);
-                    mapper.updateDocumentParsed(
-                            document.getId(), String.valueOf(parsed.get("text")), indexChunks.size(), "PARSED");
-                    Map<String, Object> indexEvent = outboxService.enqueue(
-                            knowledgeBaseId, "DOCUMENT",
-                            "KB:" + knowledgeBaseId + ":DOCUMENT:" + document.getId(),
-                            "DOCUMENT_CHUNKS_UPSERT", AiApiPaths.INDEX_CHUNKS,
-                            buildIndexReference(knowledgeBaseId, document),
-                            "DOCUMENT_CHUNKS:" + document.getId() + ":" + revision);
+                    List<Map<String, Object>> indexChunks = persistChunks(knowledgeBaseId, source, document, parsedChunks, revision);
+                    mapper.updateDocumentParsed(document.getId(), String.valueOf(parsed.get("text")), indexChunks.size(), "PARSED");
+                    Map<String, Object> indexEvent = outboxService.enqueue(knowledgeBaseId, "DOCUMENT", "KB:" + knowledgeBaseId + ":DOCUMENT:" + document.getId(), "DOCUMENT_CHUNKS_UPSERT", AiApiPaths.INDEX_CHUNKS, buildIndexReference(knowledgeBaseId, document), "DOCUMENT_CHUNKS:" + document.getId() + ":" + revision);
                     // The normalized standard document is stored as its own retrieval view: it is
                     // the material card generation reads from, so it is persisted in the same
                     // transaction that makes the document durable.
-                    Map<String, Object> standardEvent = outboxService.enqueue(
-                            knowledgeBaseId, "DOCUMENT",
-                            "KB:" + knowledgeBaseId + ":STANDARD:" + document.getId(),
-                            "DOCUMENT_STANDARD_UPSERT", AiApiPaths.INDEX_STANDARD_DOCUMENT,
-                            buildStandardPayload(knowledgeBaseId, source, document, standard, parsedChunks),
-                            "DOCUMENT_STANDARD:" + document.getId() + ":" + revision);
+                    Map<String, Object> standardEvent = outboxService.enqueue(knowledgeBaseId, "DOCUMENT", "KB:" + knowledgeBaseId + ":STANDARD:" + document.getId(), "DOCUMENT_STANDARD_UPSERT", AiApiPaths.INDEX_STANDARD_DOCUMENT, buildStandardPayload(knowledgeBaseId, source, document, standard, parsedChunks), "DOCUMENT_STANDARD:" + document.getId() + ":" + revision);
                     return new IngestionState(source, document, indexChunks, indexEvent, standardEvent, revision);
                 } catch (Exception ex) {
                     throw new IllegalStateException("Persist parsed document failed", ex);
                 }
             });
             stageHolder[0] = "CHUNK";
-            publisher.emitUser(PlatformEventTypes.CHUNK_CHANGED, knowledgeBaseId,
-                    PlatformEventPublisher.SOURCE_UI, "DOCUMENT", String.valueOf(state.document.getId()),
-                    "文档切片完成：" + state.indexChunks.size() + " 个 Chunk（revision " + state.revision + "）",
-                    chunkDetail(state),
-                    taskContext(run.getRunCode(), state.document.getId(), String.valueOf(state.revision), retryCount));
-            observabilityService.event(run.getId(), "PERSIST_COMPLETED", "PERSIST", "SUCCESS",
-                    "Source / Document / ContentUnit / Evidence 已保存", null);
-            observabilityService.event(run.getId(), "INDEX_EVENT_CREATED", "INDEX", "SUCCESS",
-                    "已创建 Transactional Outbox 索引事件", state.indexEvent);
-            observabilityService.event(run.getId(), "STANDARD_EVENT_CREATED", "STANDARD", "SUCCESS",
-                    "标准化数据已入队写入 Elasticsearch", state.standardEvent);
-            observabilityService.event(run.getId(), "EXTRACTION_STARTED", "EXTRACT", "RUNNING",
-                    "开始抽取 Knowledge Card / Claim / Entity / Relation", null);
+            publisher.emitUser(PlatformEventTypes.CHUNK_CHANGED, knowledgeBaseId, PlatformEventPublisher.SOURCE_UI, "DOCUMENT", String.valueOf(state.document.getId()), "文档切片完成：" + state.indexChunks.size() + " 个 Chunk（revision " + state.revision + "）", chunkDetail(state), taskContext(run.getRunCode(), state.document.getId(), String.valueOf(state.revision), retryCount));
+            observabilityService.event(run.getId(), "PERSIST_COMPLETED", "PERSIST", "SUCCESS", "Source / Document / ContentUnit / Evidence 已保存", null);
+            observabilityService.event(run.getId(), "INDEX_EVENT_CREATED", "INDEX", "SUCCESS", "已创建 Transactional Outbox 索引事件", state.indexEvent);
+            observabilityService.event(run.getId(), "STANDARD_EVENT_CREATED", "STANDARD", "SUCCESS", "标准化数据已入队写入 Elasticsearch", state.standardEvent);
+            observabilityService.event(run.getId(), "EXTRACTION_STARTED", "EXTRACT", "RUNNING", "开始抽取 Knowledge Card / Claim / Entity / Relation", null);
             stageHolder[0] = "EXTRACT";
             mapper.updateDocumentState(state.document.getId(), "PROCESSING", "EXTRACT", null, retryCount);
-
-            Map<String, Object> knowledgeResult = extractionService.extract(
-                    buildExtractionPayload(knowledgeBaseId, state.source, state.document, parsed,
-                            state.indexChunks, parsedChunks));
+            Map<String, Object> knowledgeResult = extractionService.extract(buildExtractionPayload(knowledgeBaseId, state.source, state.document, parsed, state.indexChunks, parsedChunks));
             int cardCount = resultCount(knowledgeResult, "cards");
             int claimCount = resultCount(knowledgeResult, "claims");
-            observabilityService.event(run.getId(), "EXTRACTION_COMPLETED", "EXTRACT", "SUCCESS",
-                    "候选知识抽取完成",
-                    extractionEventDetail(state.document.getId(), knowledgeResult));
+            observabilityService.event(run.getId(), "EXTRACTION_COMPLETED", "EXTRACT", "SUCCESS", "候选知识抽取完成", extractionEventDetail(state.document.getId(), knowledgeResult));
             observabilityService.complete(run.getId(), state.indexChunks.size(), cardCount, claimCount);
-
             Map<String, Object> result = new LinkedHashMap<String, Object>();
             result.put("runId", run.getId());
             result.put("runCode", run.getRunCode());
@@ -268,40 +212,29 @@ public class DocumentIngestionService {
             // knowledge while its cards and claims are still missing.
             stageHolder[0] = "READY";
             mapper.updateDocumentState(state.document.getId(), "READY", "READY", null, retryCount);
-            publisher.emitUser(PlatformEventTypes.INGESTION_COMPLETED, knowledgeBaseId,
-                    PlatformEventPublisher.SOURCE_UI, "INGESTION_RUN", run.getRunCode(),
-                    "文档摄入完成：" + file.getOriginalFilename(),
-                    completedDetail(run, file, state, cardCount, claimCount, knowledgeResult),
-                    taskContext(run.getRunCode(), state.document.getId(),
-                            String.valueOf(state.revision), retryCount));
+            publisher.emitUser(PlatformEventTypes.INGESTION_COMPLETED, knowledgeBaseId, PlatformEventPublisher.SOURCE_UI, "INGESTION_RUN", run.getRunCode(), "文档摄入完成：" + file.getOriginalFilename(), completedDetail(run, file, state, cardCount, claimCount, knowledgeResult), taskContext(run.getRunCode(), state.document.getId(), String.valueOf(state.revision), retryCount));
             return result;
         } catch (Exception ex) {
             observabilityService.fail(run.getId(), "FAILED", ex);
             Long failedDocument = documentIdHolder[0];
             if (failedDocument != null) {
-                mapper.updateDocumentState(failedDocument, "FAILED", stageHolder[0],
-                        abbreviate(ex.getMessage(), 900), retryCount);
+                mapper.updateDocumentState(failedDocument, "FAILED", stageHolder[0], abbreviate(ex.getMessage(), 900), retryCount);
             }
             Map<String, Object> detail = receivedDetail(run, file, authorityScore);
             detail.put("stage", stageHolder[0]);
             detail.put("documentId", failedDocument);
             detail.put("retryCount", retryCount);
             detail.put("error", ex.getMessage());
-            publisher.emitUser(PlatformEventTypes.INGESTION_FAILED, knowledgeBaseId,
-                    PlatformEventPublisher.SOURCE_UI, "INGESTION_RUN",
-                    run == null ? null : run.getRunCode(),
-                    "文档摄入失败：" + file.getOriginalFilename(), detail,
-                    taskContext(run == null ? null : run.getRunCode(), failedDocument, null, retryCount));
+            publisher.emitUser(PlatformEventTypes.INGESTION_FAILED, knowledgeBaseId, PlatformEventPublisher.SOURCE_UI, "INGESTION_RUN", run == null ? null : run.getRunCode(), "文档摄入失败：" + file.getOriginalFilename(), detail, taskContext(run == null ? null : run.getRunCode(), failedDocument, null, retryCount));
             throw ex;
         }
     }
 
-    /** Task identity every ingestion event carries, so a subscriber can join events to one run. */
+    /**
+     * Task identity every ingestion event carries, so a subscriber can join events to one run.
+     */
     private EventTaskContext taskContext(String taskId, Long objectId, String objectVersion, int retryCount) {
-        return EventTaskContext.task(taskId)
-                .object(objectId == null ? null : String.valueOf(objectId), objectVersion)
-                .retryCount(retryCount)
-                .build();
+        return EventTaskContext.task(taskId).object(objectId == null ? null : String.valueOf(objectId), objectVersion).retryCount(retryCount).build();
     }
 
     private Map<String, Object> chunkDetail(IngestionState state) {
@@ -312,9 +245,10 @@ public class DocumentIngestionService {
         return detail;
     }
 
-    /** Shared ingestion detail so the received / completed / failed events read the same way. */
-    private Map<String, Object> receivedDetail(
-            com.jh.knowledgeos.domain.IngestionRun run, MultipartFile file, Double authorityScore) {
+    /**
+     * Shared ingestion detail so the received / completed / failed events read the same way.
+     */
+    private Map<String, Object> receivedDetail(com.jh.knowledgeos.domain.IngestionRun run, MultipartFile file, Double authorityScore) {
         Map<String, Object> detail = new LinkedHashMap<String, Object>();
         detail.put("runCode", run == null ? null : run.getRunCode());
         detail.put("filename", file.getOriginalFilename());
@@ -324,9 +258,7 @@ public class DocumentIngestionService {
         return detail;
     }
 
-    private Map<String, Object> completedDetail(
-            com.jh.knowledgeos.domain.IngestionRun run, MultipartFile file, IngestionState state,
-            int cardCount, int claimCount, Map<String, Object> knowledgeResult) {
+    private Map<String, Object> completedDetail(com.jh.knowledgeos.domain.IngestionRun run, MultipartFile file, IngestionState state, int cardCount, int claimCount, Map<String, Object> knowledgeResult) {
         Map<String, Object> detail = receivedDetail(run, file, null);
         detail.put("sourceId", state.source.getId());
         detail.put("documentId", state.document.getId());
@@ -339,8 +271,12 @@ public class DocumentIngestionService {
 
     private int resultCount(Map<String, Object> result, String key) {
         Object value = result.get(key);
-        if (value instanceof List) return ((List<?>) value).size();
-        if (value instanceof Number) return ((Number) value).intValue();
+        if (value instanceof List) {
+            return ((List<?>) value).size();
+        }
+        if (value instanceof Number) {
+            return ((Number) value).intValue();
+        }
         Object count = result.get(key + "Count");
         return count instanceof Number ? ((Number) count).intValue() : 0;
     }
@@ -381,23 +317,24 @@ public class DocumentIngestionService {
 
     private List<String> codesOf(Object items, String key, int limit) {
         List<String> codes = new ArrayList<String>();
-        if (!(items instanceof List)) return codes;
+        if (!(items instanceof List)) {
+            return codes;
+        }
         for (Object item : (List<?>) items) {
-            if (codes.size() >= limit) break;
+            if (codes.size() >= limit) {
+                break;
+            }
             if (item instanceof Map) {
                 Object code = ((Map<?, ?>) item).get(key);
-                if (code != null) codes.add(String.valueOf(code));
+                if (code != null) {
+                    codes.add(String.valueOf(code));
+                }
             }
         }
         return codes;
     }
 
-    private KnowledgeSource createSource(
-            Long knowledgeBaseId,
-            MultipartFile file,
-            Map<String, Object> parsed,
-            Double authorityScore,
-            String permissionTags) throws Exception {
+    private KnowledgeSource createSource(Long knowledgeBaseId, MultipartFile file, Map<String, Object> parsed, Double authorityScore, String permissionTags) throws Exception {
         KnowledgeSource source = new KnowledgeSource();
         source.setSourceCode(idGenerator.next("SRC_"));
         source.setKnowledgeBaseId(knowledgeBaseId);
@@ -406,17 +343,12 @@ public class DocumentIngestionService {
         source.setSourceUri("upload://" + file.getOriginalFilename());
         // The original bytes are kept so the console can preview what was imported; a storage
         // problem only costs preview, so it never aborts an otherwise valid ingestion.
-        source.setStoragePath(sourceFileStorage.store(
-                knowledgeBaseId, source.getSourceCode(), file.getOriginalFilename(), file.getBytes()));
+        source.setStoragePath(sourceFileStorage.store(knowledgeBaseId, source.getSourceCode(), file.getOriginalFilename(), file.getBytes()));
         source.setAuthorityScore(authorityScore == null ? DEFAULT_AUTHORITY_SCORE : authorityScore);
         source.setPermissionTags(normalizePermissionTags(permissionTags));
         source.setStatus("ACTIVE");
         mapper.insertSource(source);
-        mapper.insertSourceVersion(
-                source.getId(),
-                1,
-                String.valueOf(parsed.get("sha256")),
-                source.getSourceUri());
+        mapper.insertSourceVersion(source.getId(), 1, String.valueOf(parsed.get("sha256")), source.getSourceUri());
         return source;
     }
 
@@ -435,7 +367,9 @@ public class DocumentIngestionService {
         return document;
     }
 
-    /** Rebuilds the source aggregate for a retry: the bytes are re-read, the identity is not. */
+    /**
+     * Rebuilds the source aggregate for a retry: the bytes are re-read, the identity is not.
+     */
     private KnowledgeSource sourceFromRetryContext(Map<String, Object> context) {
         KnowledgeSource source = new KnowledgeSource();
         source.setId(toLong(context.get("sourceId")));
@@ -444,8 +378,7 @@ public class DocumentIngestionService {
         source.setSourceType(String.valueOf(context.get("sourceType")));
         source.setAuthorityScore(toDouble(context.get("authorityScore")));
         Object tags = context.get("permissionTags");
-        source.setPermissionTags(normalizePermissionTags(
-                tags == null || "null".equals(tags) ? null : String.valueOf(tags)));
+        source.setPermissionTags(normalizePermissionTags(tags == null || "null".equals(tags) ? null : String.valueOf(tags)));
         return source;
     }
 
@@ -457,12 +390,7 @@ public class DocumentIngestionService {
         return document;
     }
 
-    private List<Map<String, Object>> persistChunks(
-            Long knowledgeBaseId,
-            KnowledgeSource source,
-            KnowledgeDocument document,
-            List<Map<String, Object>> parsedChunks,
-            int revision) throws Exception {
+    private List<Map<String, Object>> persistChunks(Long knowledgeBaseId, KnowledgeSource source, KnowledgeDocument document, List<Map<String, Object>> parsedChunks, int revision) throws Exception {
         List<Map<String, Object>> indexChunks = new ArrayList<Map<String, Object>>(parsedChunks.size());
         // Parent-child linking walks the heading hierarchy, so the stack has to survive across
         // batches: a top-level section in batch two still belongs to a heading in batch one.
@@ -470,36 +398,24 @@ public class DocumentIngestionService {
         // Parser unit ids (P1, U2, ...) map to database ids, so a parent-child split can
         // link a child to the section the parser emitted immediately before it.
         Map<String, Long> idByParserUnitId = new LinkedHashMap<String, Long>();
-
         for (int start = 0; start < parsedChunks.size(); start += DB_BATCH_SIZE) {
             int end = Math.min(start + DB_BATCH_SIZE, parsedChunks.size());
             List<Map<String, Object>> batch = parsedChunks.subList(start, end);
-            persistChunkBatch(knowledgeBaseId, source, document, batch, indexChunks, revision,
-                    unitIdByHeading, idByParserUnitId);
+            persistChunkBatch(knowledgeBaseId, source, document, batch, indexChunks, revision, unitIdByHeading, idByParserUnitId);
         }
         return indexChunks;
     }
 
-    private void persistChunkBatch(
-            Long knowledgeBaseId,
-            KnowledgeSource source,
-            KnowledgeDocument document,
-            List<Map<String, Object>> batch,
-            List<Map<String, Object>> output,
-            int revision,
-            Map<String, Long> unitIdByHeading,
-            Map<String, Long> idByParserUnitId) throws Exception {
+    private void persistChunkBatch(Long knowledgeBaseId, KnowledgeSource source, KnowledgeDocument document, List<Map<String, Object>> batch, List<Map<String, Object>> output, int revision, Map<String, Long> unitIdByHeading, Map<String, Long> idByParserUnitId) throws Exception {
         List<Map<String, Object>> contentRows = new ArrayList<Map<String, Object>>(batch.size());
         List<String> unitCodes = new ArrayList<String>(batch.size());
         List<Map<String, Object>> copiedChunks = new ArrayList<Map<String, Object>>(batch.size());
-
         for (Map<String, Object> parsedChunk : batch) {
             Map<String, Object> chunk = new LinkedHashMap<String, Object>(parsedChunk);
             String unitCode = idGenerator.next("CU_");
             Integer pageNo = toInteger(chunk.get("page_no"));
             String headingPath = nullableString(chunk.get("heading_path"));
             String content = nullableString(chunk.get("content"));
-
             // Chunk metadata is what makes a hit explainable later: the strategy that produced the
             // chunk, its page/character span, its size in tokens, and the source version it came
             // from. Without them a citation can point at a chunk but never explain its boundaries.
@@ -515,28 +431,21 @@ public class DocumentIngestionService {
             row.put("charEnd", toInteger(chunk.get("char_end")));
             row.put("content", content);
             row.put("contentHash", nullableString(chunk.get("content_hash")));
-            row.put("tokenCount", toInteger(chunk.get("token_count")) == null
-                    ? estimateTokenCount(content)
-                    : toInteger(chunk.get("token_count")));
+            row.put("tokenCount", toInteger(chunk.get("token_count")) == null ? estimateTokenCount(content) : toInteger(chunk.get("token_count")));
             row.put("aclTags", source.getPermissionTags());
             row.put("sourceVersion", 1);
             row.put("revision", revision);
             contentRows.add(row);
             unitCodes.add(unitCode);
-
             chunk.put("_unit_code", unitCode);
             copiedChunks.add(chunk);
         }
-
         mapper.batchInsertContentUnits(contentRows);
         List<Map<String, Object>> ids = mapper.findContentUnitIdsByCodes(unitCodes);
         Map<String, Long> idByCode = new LinkedHashMap<String, Long>();
         for (Map<String, Object> row : ids) {
-            idByCode.put(
-                    String.valueOf(row.get("unitCode")),
-                    Long.valueOf(String.valueOf(row.get("id"))));
+            idByCode.put(String.valueOf(row.get("unitCode")), Long.valueOf(String.valueOf(row.get("id"))));
         }
-
         List<Map<String, Object>> evidenceRows = new ArrayList<Map<String, Object>>(copiedChunks.size());
         List<Map<String, Object>> parentRows = new ArrayList<Map<String, Object>>();
         for (Map<String, Object> chunk : copiedChunks) {
@@ -545,7 +454,6 @@ public class DocumentIngestionService {
             if (contentUnitId == null) {
                 throw new IllegalStateException("ContentUnit ID not found for unitCode=" + unitCode);
             }
-
             String headingPath = nullableString(chunk.get("heading_path"));
             Long parentId = parentIdFor(chunk, headingPath, unitIdByHeading, idByParserUnitId);
             if (parentId != null) {
@@ -559,12 +467,10 @@ public class DocumentIngestionService {
             if (parserUnitId != null && !parserUnitId.isEmpty()) {
                 idByParserUnitId.put(parserUnitId, contentUnitId);
             }
-
             Integer pageNo = toInteger(chunk.get("page_no"));
             Map<String, Object> location = new LinkedHashMap<String, Object>();
             location.put("pageNo", pageNo);
             location.put("headingPath", headingPath);
-
             Map<String, Object> evidence = new LinkedHashMap<String, Object>();
             String evidenceCode = idGenerator.next("EVD_");
             evidence.put("evidenceCode", evidenceCode);
@@ -575,12 +481,9 @@ public class DocumentIngestionService {
             evidence.put("locationJson", objectMapper.writeValueAsString(location));
             evidence.put("authorityScore", source.getAuthorityScore());
             evidenceRows.add(evidence);
-
             chunk.put("content_unit_id", contentUnitId);
             chunk.put("chunk_type", nullableString(chunk.get("chunk_type"), "PARAGRAPH"));
-            chunk.put("token_count", chunk.get("token_count") == null
-                    ? estimateTokenCount(nullableString(chunk.get("content")))
-                    : toInteger(chunk.get("token_count")));
+            chunk.put("token_count", chunk.get("token_count") == null ? estimateTokenCount(nullableString(chunk.get("content"))) : toInteger(chunk.get("token_count")));
             chunk.put("revision", revision);
             chunk.put("evidence_code", evidenceCode);
             chunk.put("evidence_hash", nullableString(chunk.get("content_hash")));
@@ -602,8 +505,7 @@ public class DocumentIngestionService {
      * Parent of a chunk: the parser knows it exactly under parent-child chunking, the
      * heading hierarchy is the fallback when the parser did not say.
      */
-    private Long parentIdFor(Map<String, Object> chunk, String headingPath,
-            Map<String, Long> unitIdByHeading, Map<String, Long> idByParserUnitId) {
+    private Long parentIdFor(Map<String, Object> chunk, String headingPath, Map<String, Long> unitIdByHeading, Map<String, Long> idByParserUnitId) {
         String explicit = nullableString(chunk.get("parent_unit_id"));
         if (explicit != null && !explicit.isEmpty()) {
             Long parentId = idByParserUnitId.get(explicit);
@@ -615,12 +517,20 @@ public class DocumentIngestionService {
     }
 
     private Long parentIdFor(String headingPath, Map<String, Long> unitIdByHeading) {
-        if (headingPath == null || headingPath.isEmpty()) return null;
+        if (headingPath == null || headingPath.isEmpty()) {
+            return null;
+        }
         String best = null;
         for (String candidate : unitIdByHeading.keySet()) {
-            if (candidate == null || candidate.isEmpty() || candidate.equals(headingPath)) continue;
-            if (!headingPath.startsWith(candidate)) continue;
-            if (best == null || candidate.length() > best.length()) best = candidate;
+            if (candidate == null || candidate.isEmpty() || candidate.equals(headingPath)) {
+                continue;
+            }
+            if (!headingPath.startsWith(candidate)) {
+                continue;
+            }
+            if (best == null || candidate.length() > best.length()) {
+                best = candidate;
+            }
         }
         return best == null ? null : unitIdByHeading.get(best);
     }
@@ -632,11 +542,7 @@ public class DocumentIngestionService {
         return payload;
     }
 
-    private Map<String, Object> buildIndexPayload(
-            Long kb,
-            KnowledgeSource source,
-            KnowledgeDocument document,
-            List<Map<String, Object>> chunks) {
+    private Map<String, Object> buildIndexPayload(Long kb, KnowledgeSource source, KnowledgeDocument document, List<Map<String, Object>> chunks) {
         Map<String, Object> payload = new LinkedHashMap<String, Object>();
         payload.put("knowledgeBaseId", kb);
         payload.put("documentId", document.getId());
@@ -652,12 +558,7 @@ public class DocumentIngestionService {
      * alongside the units: blocks are an intermediate artefact and would bloat the
      * outbox row without adding retrieval value.
      */
-    private Map<String, Object> buildStandardPayload(
-            Long kb,
-            KnowledgeSource source,
-            KnowledgeDocument document,
-            Map<String, Object> standard,
-            List<Map<String, Object>> units) {
+    private Map<String, Object> buildStandardPayload(Long kb, KnowledgeSource source, KnowledgeDocument document, Map<String, Object> standard, List<Map<String, Object>> units) {
         Map<String, Object> payload = new LinkedHashMap<String, Object>();
         payload.put("knowledgeBaseId", kb);
         payload.put("documentId", document.getId());
@@ -667,7 +568,7 @@ public class DocumentIngestionService {
         payload.put("units", units);
         payload.put("permissionTags", source.getPermissionTags());
         Map<String, Object> metadata = new LinkedHashMap<String, Object>();
-        for (String key : new String[] {"doc_id", "title", "source_format", "language", "sha256", "page_count"}) {
+        for (String key : new String[] { "doc_id", "title", "source_format", "language", "sha256", "page_count" }) {
             metadata.put(key, standard.get(key));
         }
         metadata.put("stats", standard.get("stats"));
@@ -675,13 +576,7 @@ public class DocumentIngestionService {
         return payload;
     }
 
-    private Map<String, Object> buildExtractionPayload(
-            Long kb,
-            KnowledgeSource source,
-            KnowledgeDocument document,
-            Map<String, Object> parsed,
-            List<Map<String, Object>> chunks,
-            List<Map<String, Object>> standardUnits) {
+    private Map<String, Object> buildExtractionPayload(Long kb, KnowledgeSource source, KnowledgeDocument document, Map<String, Object> parsed, List<Map<String, Object>> chunks, List<Map<String, Object>> standardUnits) {
         Map<String, Object> payload = new LinkedHashMap<String, Object>();
         payload.put("knowledgeBaseId", kb);
         payload.put("sourceId", source.getId());
@@ -694,7 +589,9 @@ public class DocumentIngestionService {
         return payload;
     }
 
-    /** Compact view of the canonical parse result surfaced to the ingestion UI. */
+    /**
+     * Compact view of the canonical parse result surfaced to the ingestion UI.
+     */
     private Map<String, Object> standardSummary(Map<String, Object> standard) {
         Map<String, Object> summary = new LinkedHashMap<String, Object>();
         summary.put("docId", standard.get("doc_id"));
@@ -707,7 +604,9 @@ public class DocumentIngestionService {
     }
 
     private String normalizePermissionTags(String raw) {
-        if (raw == null || raw.trim().isEmpty()) return "[]";
+        if (raw == null || raw.trim().isEmpty()) {
+            return "[]";
+        }
         try {
             if (raw.trim().startsWith("[")) {
                 List<?> values = objectMapper.readValue(raw, List.class);
@@ -715,7 +614,9 @@ public class DocumentIngestionService {
             }
             List<String> values = new ArrayList<String>();
             for (String value : raw.split(",")) {
-                if (!value.trim().isEmpty()) values.add(value.trim());
+                if (!value.trim().isEmpty()) {
+                    values.add(value.trim());
+                }
             }
             return objectMapper.writeValueAsString(values);
         } catch (Exception ex) {
@@ -737,8 +638,12 @@ public class DocumentIngestionService {
     }
 
     private Long toLong(Object value) {
-        if (value == null) return null;
-        if (value instanceof Number) return ((Number) value).longValue();
+        if (value == null) {
+            return null;
+        }
+        if (value instanceof Number) {
+            return ((Number) value).longValue();
+        }
         String text = String.valueOf(value).trim();
         return text.isEmpty() ? null : Long.valueOf(text);
     }
@@ -749,8 +654,12 @@ public class DocumentIngestionService {
     }
 
     private Double toDouble(Object value) {
-        if (value == null) return DEFAULT_AUTHORITY_SCORE;
-        if (value instanceof Number) return ((Number) value).doubleValue();
+        if (value == null) {
+            return DEFAULT_AUTHORITY_SCORE;
+        }
+        if (value instanceof Number) {
+            return ((Number) value).doubleValue();
+        }
         try {
             return Double.valueOf(String.valueOf(value));
         } catch (NumberFormatException ex) {
@@ -758,45 +667,65 @@ public class DocumentIngestionService {
         }
     }
 
-    /** Rough token estimate so a chunk without parser-provided counts still has a usable size. */
+    /**
+     * Rough token estimate so a chunk without parser-provided counts still has a usable size.
+     */
     private int estimateTokenCount(String content) {
-        if (content == null || content.isEmpty()) return 0;
+        if (content == null || content.isEmpty()) {
+            return 0;
+        }
         int length = content.length();
         return (length + 3) / 4;
     }
 
     private String mimeFromExtension(String filename) {
         String lower = filename == null ? "" : filename.toLowerCase();
-        if (lower.endsWith(".pdf")) return "application/pdf";
-        if (lower.endsWith(".docx")) return "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
-        if (lower.endsWith(".doc")) return "application/msword";
-        if (lower.endsWith(".xlsx")) return "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
-        if (lower.endsWith(".pptx")) return "application/vnd.openxmlformats-officedocument.presentationml.presentation";
-        if (lower.endsWith(".html") || lower.endsWith(".htm")) return "text/html";
-        if (lower.endsWith(".md")) return "text/markdown";
+        if (lower.endsWith(".pdf")) {
+            return "application/pdf";
+        }
+        if (lower.endsWith(".docx")) {
+            return "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+        }
+        if (lower.endsWith(".doc")) {
+            return "application/msword";
+        }
+        if (lower.endsWith(".xlsx")) {
+            return "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+        }
+        if (lower.endsWith(".pptx")) {
+            return "application/vnd.openxmlformats-officedocument.presentationml.presentation";
+        }
+        if (lower.endsWith(".html") || lower.endsWith(".htm")) {
+            return "text/html";
+        }
+        if (lower.endsWith(".md")) {
+            return "text/markdown";
+        }
         return "text/plain";
     }
 
     private String abbreviate(String value, int limit) {
-        if (value == null) return null;
+        if (value == null) {
+            return null;
+        }
         return value.length() <= limit ? value : value.substring(0, limit);
     }
 
     private static final class IngestionState {
+
         private final KnowledgeSource source;
+
         private final KnowledgeDocument document;
+
         private final List<Map<String, Object>> indexChunks;
+
         private final Map<String, Object> indexEvent;
+
         private final Map<String, Object> standardEvent;
+
         private final int revision;
 
-        private IngestionState(
-                KnowledgeSource source,
-                KnowledgeDocument document,
-                List<Map<String, Object>> indexChunks,
-                Map<String, Object> indexEvent,
-                Map<String, Object> standardEvent,
-                int revision) {
+        private IngestionState(KnowledgeSource source, KnowledgeDocument document, List<Map<String, Object>> indexChunks, Map<String, Object> indexEvent, Map<String, Object> standardEvent, int revision) {
             this.source = source;
             this.document = document;
             this.indexChunks = indexChunks;
@@ -805,5 +734,4 @@ public class DocumentIngestionService {
             this.revision = revision;
         }
     }
-
 }

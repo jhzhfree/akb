@@ -5,7 +5,6 @@ import com.jh.knowledgeos.domain.KnowledgeCard;
 import com.jh.knowledgeos.domain.KnowledgeSource;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
-
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -19,20 +18,20 @@ import java.util.Map;
  */
 @Service
 public class KnowledgeService {
+
     private final DocumentIngestionService ingestionService;
+
     private final KnowledgeExtractionService extractionService;
+
     private final KnowledgeQueryService queryService;
+
     private final KnowledgeGovernanceService governanceService;
+
     private final KnowledgeReadService readService;
+
     private final SourcePreviewService previewService;
 
-    public KnowledgeService(
-            DocumentIngestionService ingestionService,
-            KnowledgeExtractionService extractionService,
-            KnowledgeQueryService queryService,
-            KnowledgeGovernanceService governanceService,
-            KnowledgeReadService readService,
-            SourcePreviewService previewService) {
+    public KnowledgeService(DocumentIngestionService ingestionService, KnowledgeExtractionService extractionService, KnowledgeQueryService queryService, KnowledgeGovernanceService governanceService, KnowledgeReadService readService, SourcePreviewService previewService) {
         this.ingestionService = ingestionService;
         this.extractionService = extractionService;
         this.queryService = queryService;
@@ -85,8 +84,7 @@ public class KnowledgeService {
         return governanceService.adjudicateConflict(id, decision, comment, reviewer);
     }
 
-    public Map<String, Object> graph(Long kb, String code, java.util.List<String> permissionTags,
-            Integer depth, Integer limit) {
+    public Map<String, Object> graph(Long kb, String code, java.util.List<String> permissionTags, Integer depth, Integer limit) {
         return readService.graph(kb, code, permissionTags, depth, limit);
     }
 
@@ -114,7 +112,9 @@ public class KnowledgeService {
         return readService.documents(kb);
     }
 
-    /** Re-runs a FAILED / DIRTY document from its stored original bytes. */
+    /**
+     * Re-runs a FAILED / DIRTY document from its stored original bytes.
+     */
     public Map<String, Object> retryDocument(Long documentId) throws Exception {
         return ingestionService.retry(documentId);
     }
@@ -162,13 +162,11 @@ public class KnowledgeService {
         return result;
     }
 
-    public Map<String, Object> sourcePreview(Long kb, Long sourceId, Integer limit,
-            java.util.List<String> permissionTags) {
+    public Map<String, Object> sourcePreview(Long kb, Long sourceId, Integer limit, java.util.List<String> permissionTags) {
         return previewService.preview(kb, sourceId, limit, permissionTags);
     }
 
-    public com.jh.knowledgeos.domain.SourceFile sourceFile(Long kb, Long sourceId,
-            java.util.List<String> permissionTags) {
+    public com.jh.knowledgeos.domain.SourceFile sourceFile(Long kb, Long sourceId, java.util.List<String> permissionTags) {
         return previewService.file(kb, sourceId, permissionTags);
     }
 

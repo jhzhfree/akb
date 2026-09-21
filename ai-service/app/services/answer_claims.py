@@ -17,9 +17,7 @@ _HEADING_RE = re.compile(r"^#{1,6}\s+\S")
 _TABLE_RULE_RE = re.compile(r"^[\s|:-]*-[\s|:-]*$")
 # Model narration about the evidence itself carries no factual content and can
 # never be grounded, so it must not inflate the claim population of a gate.
-_META_CLAIM_RE = re.compile(
-    r"(未发现|没有发现|未提及冲突|不存在冲突|无冲突|未见冲突|冲突信息|无法从上述|以上内容均)"
-)
+_META_CLAIM_RE = re.compile(r"(未发现|没有发现|未提及冲突|不存在冲突|无冲突|未见冲突|冲突信息|无法从上述|以上内容均)")
 _UNVERIFIED_PREFIX = "现有知识不足以"
 
 

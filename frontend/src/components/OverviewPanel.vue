@@ -210,7 +210,7 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { statusLabel } from '../types'
 import type { Capabilities, DashboardGovernance, DashboardLifecycle, DashboardSummary, GovernanceItem, KnowledgeDocument, KnowledgeSource, Overview, QualityOverview, RecentObject } from '../types'
 import type { AssetType } from './AssetBrowserPanel.vue'
-import { getDashboardGovernance, getDashboardLifecycle, getDocuments, getQualityOverview, getSources, unwrap } from '../api/knowledge'
+import { getDocuments, getQualityOverview, getSources, unwrap } from '../api/knowledge'
 import { useShell } from '../shell'
 import { PERM } from '../permissions'
 

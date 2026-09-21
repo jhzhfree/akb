@@ -7,7 +7,6 @@ import com.jh.knowledgeos.domain.KnowledgeBase;
 import com.jh.knowledgeos.domain.User;
 import com.jh.knowledgeos.mapper.KnowledgeMapper;
 import org.springframework.stereotype.Service;
-
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -20,8 +19,11 @@ import java.util.Map;
  */
 @Service
 public class KnowledgeBaseService {
+
     private final KnowledgeMapper mapper;
+
     private final IdGenerator ids;
+
     private final PlatformEventPublisher publisher;
 
     public KnowledgeBaseService(KnowledgeMapper mapper, IdGenerator ids, PlatformEventPublisher publisher) {
@@ -36,17 +38,14 @@ public class KnowledgeBaseService {
         return mapper.listKnowledgeBases(user == null ? null : user.getId(), all);
     }
 
-    /** Single workspace lookup, used by external callers bound to one knowledge base. */
+    /**
+     * Single workspace lookup, used by external callers bound to one knowledge base.
+     */
     public KnowledgeBase get(Long id) {
         return id == null ? null : mapper.getKnowledgeBase(id);
     }
 
-    public KnowledgeBase create(
-            String name,
-            String description,
-            String visibility,
-            Long ownerGroupId,
-            User creator) {
+    public KnowledgeBase create(String name, String description, String visibility, Long ownerGroupId, User creator) {
         if (creator != null && !UserRole.of(creator.getRole()).canWriteKnowledge()) {
             throw new SecurityException("当前角色无权创建知识库");
         }
@@ -62,9 +61,7 @@ public class KnowledgeBaseService {
         mapper.insertKnowledgeBase(base);
         Map<String, Object> detail = describe(base);
         detail.put("description", base.getDescription());
-        publisher.emitUser(PlatformEventTypes.KNOWLEDGE_BASE_CREATED, base.getId(),
-                PlatformEventPublisher.SOURCE_UI, "KNOWLEDGE_BASE", base.getBaseCode(),
-                "创建知识库：" + base.getName(), detail);
+        publisher.emitUser(PlatformEventTypes.KNOWLEDGE_BASE_CREATED, base.getId(), PlatformEventPublisher.SOURCE_UI, "KNOWLEDGE_BASE", base.getBaseCode(), "创建知识库：" + base.getName(), detail);
         return base;
     }
 
@@ -81,9 +78,7 @@ public class KnowledgeBaseService {
         Map<String, Object> detail = describe(updated);
         detail.put("previousVisibility", previousVisibility);
         detail.put("previousOwnerGroupId", previousGroup);
-        publisher.emitUser(PlatformEventTypes.KNOWLEDGE_BASE_ACCESS_UPDATED, updated.getId(),
-                PlatformEventPublisher.SOURCE_UI, "KNOWLEDGE_BASE", updated.getBaseCode(),
-                "调整知识库可见范围：" + updated.getName() + " → " + scope.visibility.name(), detail);
+        publisher.emitUser(PlatformEventTypes.KNOWLEDGE_BASE_ACCESS_UPDATED, updated.getId(), PlatformEventPublisher.SOURCE_UI, "KNOWLEDGE_BASE", updated.getBaseCode(), "调整知识库可见范围：" + updated.getName() + " → " + scope.visibility.name(), detail);
         return updated;
     }
 
@@ -91,18 +86,18 @@ public class KnowledgeBaseService {
         KnowledgeBase base = mapper.getKnowledgeBase(id);
         mapper.updateKnowledgeBaseStatus(id, "ARCHIVED");
         KnowledgeBase updated = mapper.getKnowledgeBase(id);
-        publisher.emitUser(PlatformEventTypes.KNOWLEDGE_BASE_ARCHIVED, id,
-                PlatformEventPublisher.SOURCE_UI, "KNOWLEDGE_BASE",
-                base == null ? String.valueOf(id) : base.getBaseCode(),
-                "归档知识库：" + (base == null ? String.valueOf(id) : base.getName()),
-                describe(updated == null ? base : updated));
+        publisher.emitUser(PlatformEventTypes.KNOWLEDGE_BASE_ARCHIVED, id, PlatformEventPublisher.SOURCE_UI, "KNOWLEDGE_BASE", base == null ? String.valueOf(id) : base.getBaseCode(), "归档知识库：" + (base == null ? String.valueOf(id) : base.getName()), describe(updated == null ? base : updated));
         return updated;
     }
 
-    /** Shared detail block: what every workspace event must carry to be actionable downstream. */
+    /**
+     * Shared detail block: what every workspace event must carry to be actionable downstream.
+     */
     private Map<String, Object> describe(KnowledgeBase base) {
         Map<String, Object> detail = new LinkedHashMap<String, Object>();
-        if (base == null) return detail;
+        if (base == null) {
+            return detail;
+        }
         detail.put("knowledgeBaseCode", base.getBaseCode());
         detail.put("name", base.getName());
         detail.put("visibility", base.getVisibility());
@@ -113,7 +108,9 @@ public class KnowledgeBaseService {
         return detail;
     }
 
-    /** GROUP scope without a group would silently exclude everyone, so it degrades to PRIVATE. */
+    /**
+     * GROUP scope without a group would silently exclude everyone, so it degrades to PRIVATE.
+     */
     private KnowledgeBaseScope resolveScope(String visibility, Long ownerGroupId) {
         KnowledgeBaseVisibility scope = KnowledgeBaseVisibility.of(visibility);
         Long groupId = scope == KnowledgeBaseVisibility.GROUP ? ownerGroupId : null;
@@ -124,7 +121,9 @@ public class KnowledgeBaseService {
     }
 
     private static final class KnowledgeBaseScope {
+
         private final KnowledgeBaseVisibility visibility;
+
         private final Long ownerGroupId;
 
         private KnowledgeBaseScope(KnowledgeBaseVisibility visibility, Long ownerGroupId) {

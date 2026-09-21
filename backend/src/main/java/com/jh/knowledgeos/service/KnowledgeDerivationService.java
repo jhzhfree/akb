@@ -6,7 +6,6 @@ import com.jh.knowledgeos.common.ScheduleExpression;
 import com.jh.knowledgeos.domain.User;
 import com.jh.knowledgeos.mapper.KnowledgeMapper;
 import org.springframework.stereotype.Service;
-
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.time.LocalDateTime;
@@ -32,37 +31,53 @@ import java.util.Map;
  */
 @Service
 public class KnowledgeDerivationService {
+
     public static final String TYPE_GRAPH_PATH = "GRAPH_PATH";
+
     public static final String TYPE_TEMPLATE = "TEMPLATE";
+
     public static final String TYPE_AI = "AI";
 
     public static final String SCHEDULE_MANUAL = "MANUAL";
+
     public static final String SCHEDULE_SCHEDULED = "SCHEDULED";
 
     public static final String DRAFT = "DRAFT";
+
     public static final String PENDING = "PENDING";
+
     public static final String APPROVED = "APPROVED";
+
     public static final String REJECTED = "REJECTED";
+
     public static final String STALE = "STALE";
 
     public static final String ALGORITHM_VERSION = "derive-v1";
 
-    /** How much confidence a two-hop inference keeps relative to its weakest link. */
+    /**
+     * How much confidence a two-hop inference keeps relative to its weakest link.
+     */
     private static final double PATH_DECAY = 0.9;
+
     private static final double TEMPLATE_DECAY = 0.8;
+
     private static final int MAX_CANDIDATES_PER_RUN = 200;
 
     private static final DateTimeFormatter TS = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
     private final KnowledgeMapper mapper;
+
     private final IdGenerator ids;
+
     private final ObjectMapper objectMapper;
+
     private final TaskCenterService tasks;
+
     private final PlatformEventPublisher publisher;
+
     private final AiClient aiClient;
 
-    public KnowledgeDerivationService(KnowledgeMapper mapper, IdGenerator ids, ObjectMapper objectMapper,
-            TaskCenterService tasks, PlatformEventPublisher publisher, AiClient aiClient) {
+    public KnowledgeDerivationService(KnowledgeMapper mapper, IdGenerator ids, ObjectMapper objectMapper, TaskCenterService tasks, PlatformEventPublisher publisher, AiClient aiClient) {
         this.mapper = mapper;
         this.ids = ids;
         this.objectMapper = objectMapper;
@@ -72,7 +87,6 @@ public class KnowledgeDerivationService {
     }
 
     // ------------------------------------------------------------------ rules
-
     public List<Map<String, Object>> rules(Long kb) {
         List<Map<String, Object>> rows = new ArrayList<Map<String, Object>>();
         for (Map<String, Object> rule : mapper.listDerivationRules(kb)) {
@@ -101,11 +115,7 @@ public class KnowledgeDerivationService {
         }
         String definitionJson = write(readDefinition(body.get("definition"), type));
         String ruleCode = ids.next("DR");
-        mapper.insertDerivationRule(ruleCode, kb, name, type, scheduleType, cron, nextFireAt,
-                write(body.get("sourceScope")), definitionJson,
-                text(body.get("algorithmVersion")).isEmpty() ? ALGORITHM_VERSION
-                        : text(body.get("algorithmVersion")),
-                currentUser());
+        mapper.insertDerivationRule(ruleCode, kb, name, type, scheduleType, cron, nextFireAt, write(body.get("sourceScope")), definitionJson, text(body.get("algorithmVersion")).isEmpty() ? ALGORITHM_VERSION : text(body.get("algorithmVersion")), currentUser());
         return mapper.getDerivationRule(ruleCode);
     }
 
@@ -114,32 +124,20 @@ public class KnowledgeDerivationService {
         if (existing == null) {
             throw new IllegalArgumentException("衍生规则不存在：" + ruleCode);
         }
-        Long kb = existing.get("knowledgeBaseId") == null ? null
-                : Long.valueOf(text(existing.get("knowledgeBaseId")));
-        String type = body.get("derivationType") == null ? text(existing.get("derivationType"))
-                : derivationType(body.get("derivationType"));
-        String scheduleType = scheduleType(body.get("scheduleType") == null ? existing.get("scheduleType")
-                : body.get("scheduleType"));
+        Long kb = existing.get("knowledgeBaseId") == null ? null : Long.valueOf(text(existing.get("knowledgeBaseId")));
+        String type = body.get("derivationType") == null ? text(existing.get("derivationType")) : derivationType(body.get("derivationType"));
+        String scheduleType = scheduleType(body.get("scheduleType") == null ? existing.get("scheduleType") : body.get("scheduleType"));
         String cron = null;
         String nextFireAt = null;
         if (SCHEDULE_SCHEDULED.equals(scheduleType)) {
-            cron = body.get("cronExpr") == null ? text(existing.get("cronExpr"))
-                    : text(body.get("cronExpr")).trim();
+            cron = body.get("cronExpr") == null ? text(existing.get("cronExpr")) : text(body.get("cronExpr")).trim();
             if (cron.isEmpty()) {
                 throw new IllegalArgumentException("计划衍生需要填写 cron 表达式");
             }
             nextFireAt = ScheduleExpression.of(cron).nextAfter(LocalDateTime.now()).format(TS);
         }
-        Object definition = body.get("definition") == null ? existing.get("definitionJson")
-                : body.get("definition");
-        mapper.updateDerivationRule(ruleCode,
-                body.get("name") == null ? text(existing.get("name")) : text(body.get("name")).trim(),
-                type, scheduleType, cron, nextFireAt, write(readScope(body.get("sourceScope"), existing)),
-                write(readDefinition(definition, type)),
-                text(body.get("algorithmVersion")).isEmpty() ? ALGORITHM_VERSION
-                        : text(body.get("algorithmVersion")),
-                body.get("enabled") == null ? toBoolean(existing.get("enabled"))
-                        : toBoolean(body.get("enabled")));
+        Object definition = body.get("definition") == null ? existing.get("definitionJson") : body.get("definition");
+        mapper.updateDerivationRule(ruleCode, body.get("name") == null ? text(existing.get("name")) : text(body.get("name")).trim(), type, scheduleType, cron, nextFireAt, write(readScope(body.get("sourceScope"), existing)), write(readDefinition(definition, type)), text(body.get("algorithmVersion")).isEmpty() ? ALGORITHM_VERSION : text(body.get("algorithmVersion")), body.get("enabled") == null ? toBoolean(existing.get("enabled")) : toBoolean(body.get("enabled")));
         return mapper.getDerivationRule(ruleCode);
     }
 
@@ -168,53 +166,40 @@ public class KnowledgeDerivationService {
     }
 
     // -------------------------------------------------------------------- run
-
     /**
      * Run one rule. Manual runs and scheduled runs take the same path: the only difference is who
      * asked, which the run record keeps so the console can tell an operator's run from a cron one.
      */
     public Map<String, Object> run(Long kb, String ruleCode, String triggerType) {
         Map<String, Object> rule = requireRule(ruleCode);
-        Long scope = rule.get("knowledgeBaseId") == null ? kb
-                : Long.valueOf(text(rule.get("knowledgeBaseId")));
+        Long scope = rule.get("knowledgeBaseId") == null ? kb : Long.valueOf(text(rule.get("knowledgeBaseId")));
         if (scope == null) {
             throw new IllegalArgumentException("衍生规则缺少知识库：无法执行");
         }
         String runCode = ids.next("DRUN");
-        mapper.insertDerivationRun(runCode, scope, ruleCode,
-                SCHEDULE_SCHEDULED.equalsIgnoreCase(text(triggerType)) ? "SCHEDULED" : "MANUAL");
-        Map<String, Object> task = tasks.enqueue(scope, TaskCenterService.TYPE_DERIVATION,
-                "知识衍生：" + text(rule.get("name")), "DERIVATION_RULE", ruleCode,
-                SCHEDULE_SCHEDULED.equalsIgnoreCase(text(triggerType))
-                        ? TaskCenterService.TRIGGER_SCHEDULED : TaskCenterService.TRIGGER_MANUAL,
-                payloadOf(ruleCode, triggerType));
+        mapper.insertDerivationRun(runCode, scope, ruleCode, SCHEDULE_SCHEDULED.equalsIgnoreCase(text(triggerType)) ? "SCHEDULED" : "MANUAL");
+        Map<String, Object> task = tasks.enqueue(scope, TaskCenterService.TYPE_DERIVATION, "知识衍生：" + text(rule.get("name")), "DERIVATION_RULE", ruleCode, SCHEDULE_SCHEDULED.equalsIgnoreCase(text(triggerType)) ? TaskCenterService.TRIGGER_SCHEDULED : TaskCenterService.TRIGGER_MANUAL, payloadOf(ruleCode, triggerType));
         String taskCode = text(task.get("taskCode"));
         tasks.start(taskCode, "SCAN");
         try {
             List<Map<String, Object>> produced = execute(scope, rule);
             int created = persist(scope, rule, produced);
-            mapper.updateDerivationRun(runCode, "SUCCEEDED", produced.size(), created, 0, null,
-                    LocalDateTime.now().format(TS));
+            mapper.updateDerivationRun(runCode, "SUCCEEDED", produced.size(), created, 0, null, LocalDateTime.now().format(TS));
             Map<String, Object> result = new LinkedHashMap<String, Object>();
             result.put("runCode", runCode);
             result.put("scanned", produced.size());
             result.put("candidates", created);
             tasks.succeed(taskCode, result);
-            mapper.updateDerivationRuleState(ruleCode, "IDLE", LocalDateTime.now().format(TS),
-                    nextFireTime(rule), null);
+            mapper.updateDerivationRuleState(ruleCode, "IDLE", LocalDateTime.now().format(TS), nextFireTime(rule), null);
             Map<String, Object> summary = new LinkedHashMap<String, Object>(result);
             summary.put("ruleCode", ruleCode);
             summary.put("triggerType", triggerType);
-            publisher.emitSystem(PlatformEventTypes.KNOWLEDGE_CANDIDATE_CREATED, scope,
-                    "DERIVATION_RUN", runCode,
-                    "知识衍生完成：" + text(rule.get("name")) + "，产出 " + created + " 条候选", summary);
+            publisher.emitSystem(PlatformEventTypes.KNOWLEDGE_CANDIDATE_CREATED, scope, "DERIVATION_RUN", runCode, "知识衍生完成：" + text(rule.get("name")) + "，产出 " + created + " 条候选", summary);
             return summary;
         } catch (RuntimeException e) {
             String message = e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage();
-            mapper.updateDerivationRun(runCode, "FAILED", 0, 0, 0, message,
-                    LocalDateTime.now().format(TS));
-            mapper.updateDerivationRuleState(ruleCode, "FAILED", LocalDateTime.now().format(TS),
-                    nextFireTime(rule), message);
+            mapper.updateDerivationRun(runCode, "FAILED", 0, 0, 0, message, LocalDateTime.now().format(TS));
+            mapper.updateDerivationRuleState(ruleCode, "FAILED", LocalDateTime.now().format(TS), nextFireTime(rule), message);
             tasks.fail(taskCode, message);
             Map<String, Object> failure = new LinkedHashMap<String, Object>();
             failure.put("runCode", runCode);
@@ -225,7 +210,9 @@ public class KnowledgeDerivationService {
         }
     }
 
-    /** The derivation itself: graph traversal, template rendering or a model call. */
+    /**
+     * The derivation itself: graph traversal, template rendering or a model call.
+     */
     private List<Map<String, Object>> execute(Long kb, Map<String, Object> rule) {
         String type = derivationType(rule.get("derivationType"));
         Map<String, Object> definition = readDefinition(rule.get("definitionJson"), type);
@@ -234,29 +221,20 @@ public class KnowledgeDerivationService {
         if (TYPE_GRAPH_PATH.equals(type)) {
             String first = definition.get("firstType") == null ? null : text(definition.get("firstType"));
             String second = definition.get("secondType") == null ? null : text(definition.get("secondType"));
-            List<Map<String, Object>> paths = mapper.listGraphPathPairs(kb, emptyToNull(first),
-                    emptyToNull(second), minConfidence, limit);
+            List<Map<String, Object>> paths = mapper.listGraphPathPairs(kb, emptyToNull(first), emptyToNull(second), minConfidence, limit);
             List<Map<String, Object>> candidates = new ArrayList<Map<String, Object>>();
             for (Map<String, Object> path : paths) {
                 Map<String, Object> candidate = new LinkedHashMap<String, Object>();
-                double confidence = Math.min(toDouble(path.get("firstConfidence"), 0.5),
-                        toDouble(path.get("secondConfidence"), 0.5)) * PATH_DECAY;
-                String template = text(definition.get("template")).isEmpty()
-                        ? "{head} 经由 {mid} 与 {tail} 相关" : text(definition.get("template"));
+                double confidence = Math.min(toDouble(path.get("firstConfidence"), 0.5), toDouble(path.get("secondConfidence"), 0.5)) * PATH_DECAY;
+                String template = text(definition.get("template")).isEmpty() ? "{head} 经由 {mid} 与 {tail} 相关" : text(definition.get("template"));
                 candidate.put("title", render(template, path));
-                candidate.put("content", "由图谱路径推导：" + text(path.get("headName")) + " -"
-                        + text(path.get("firstType")) + "-> " + text(path.get("midName")) + " -"
-                        + text(path.get("secondType")) + "-> " + text(path.get("tailName")));
+                candidate.put("content", "由图谱路径推导：" + text(path.get("headName")) + " -" + text(path.get("firstType")) + "-> " + text(path.get("midName")) + " -" + text(path.get("secondType")) + "-> " + text(path.get("tailName")));
                 candidate.put("confidence", round(confidence));
-                candidate.put("baseAssertionCodes",
-                        Arrays.asList(text(path.get("firstRelationCode")), text(path.get("secondRelationCode"))));
-                candidate.put("graphPath", Arrays.asList(
-                        edge(path, "headCode", "firstType", "midCode"),
-                        edge(path, "midCode", "secondType", "tailCode")));
+                candidate.put("baseAssertionCodes", Arrays.asList(text(path.get("firstRelationCode")), text(path.get("secondRelationCode"))));
+                candidate.put("graphPath", Arrays.asList(edge(path, "headCode", "firstType", "midCode"), edge(path, "midCode", "secondType", "tailCode")));
                 Map<String, Object> derivedFrom = new LinkedHashMap<String, Object>();
                 derivedFrom.put("baseType", "RELATION");
-                derivedFrom.put("relations", Arrays.asList(text(path.get("firstRelationCode")),
-                        text(path.get("secondRelationCode"))));
+                derivedFrom.put("relations", Arrays.asList(text(path.get("firstRelationCode")), text(path.get("secondRelationCode"))));
                 candidate.put("derivedFrom", derivedFrom);
                 candidates.add(candidate);
             }
@@ -272,12 +250,10 @@ public class KnowledgeDerivationService {
             values.put("subject", text(claim.get("subject")));
             values.put("predicate", text(claim.get("predicate")));
             values.put("object", text(claim.get("objectValue")));
-            String template = text(definition.get("template")).isEmpty()
-                    ? "{subject} 的 {predicate} 为 {object}" : text(definition.get("template"));
+            String template = text(definition.get("template")).isEmpty() ? "{subject} 的 {predicate} 为 {object}" : text(definition.get("template"));
             Map<String, Object> candidate = new LinkedHashMap<String, Object>();
             candidate.put("title", render(template, values));
-            candidate.put("content", "由断言模板推导：" + text(claim.get("subject")) + " "
-                    + text(claim.get("predicate")) + " " + text(claim.get("objectValue")));
+            candidate.put("content", "由断言模板推导：" + text(claim.get("subject")) + " " + text(claim.get("predicate")) + " " + text(claim.get("objectValue")));
             candidate.put("confidence", round(toDouble(claim.get("confidence"), 0.5) * TEMPLATE_DECAY));
             candidate.put("baseAssertionCodes", Collections.singletonList(text(claim.get("claimCode"))));
             Map<String, Object> derivedFrom = new LinkedHashMap<String, Object>();
@@ -293,16 +269,14 @@ public class KnowledgeDerivationService {
      * Model backed derivation. The model proposes, the platform disposes: whatever comes back is
      * stored as a candidate with its base assertions, never as sourced knowledge.
      */
-    private List<Map<String, Object>> deriveWithModel(Long kb, Map<String, Object> rule,
-            Map<String, Object> definition, int limit) {
+    private List<Map<String, Object>> deriveWithModel(Long kb, Map<String, Object> rule, Map<String, Object> definition, int limit) {
         Map<String, Object> request = new LinkedHashMap<String, Object>();
         request.put("knowledgeBaseId", kb);
         request.put("ruleCode", text(rule.get("ruleCode")));
         request.put("prompt", text(definition.get("prompt")));
         request.put("limit", limit);
         request.put("minConfidence", toDouble(definition.get("minConfidence"), 0.5));
-        request.put("claims", mapper.listDerivationSourceClaims(kb,
-                toDouble(definition.get("minConfidence"), 0.5), limit));
+        request.put("claims", mapper.listDerivationSourceClaims(kb, toDouble(definition.get("minConfidence"), 0.5), limit));
         Map<String, Object> response = aiClient.post(AiApiPaths.DERIVE, request);
         if (response == null) {
             throw new IllegalStateException("AI 服务未返回衍生结果");
@@ -313,8 +287,8 @@ public class KnowledgeDerivationService {
             for (Object item : (List<?>) candidates) {
                 if (item instanceof Map) {
                     @SuppressWarnings("unchecked")
-                        Map<String, Object> typed = (Map<String, Object>) item;
-                        raw.add(new LinkedHashMap<String, Object>(typed));
+                    Map<String, Object> typed = (Map<String, Object>) item;
+                    raw.add(new LinkedHashMap<String, Object>(typed));
                 }
             }
         }
@@ -350,8 +324,7 @@ public class KnowledgeDerivationService {
     private int persist(Long kb, Map<String, Object> rule, List<Map<String, Object>> candidates) {
         String ruleCode = text(rule.get("ruleCode"));
         String type = derivationType(rule.get("derivationType"));
-        String version = text(rule.get("algorithmVersion")).isEmpty() ? ALGORITHM_VERSION
-                : text(rule.get("algorithmVersion"));
+        String version = text(rule.get("algorithmVersion")).isEmpty() ? ALGORITHM_VERSION : text(rule.get("algorithmVersion"));
         int created = 0;
         for (Map<String, Object> candidate : candidates) {
             String title = text(candidate.get("title"));
@@ -362,25 +335,18 @@ public class KnowledgeDerivationService {
             String hash = sha256(ruleCode + "|" + title + "|" + content);
             Map<String, Object> existing = mapper.getDerivedCandidateByHash(ruleCode, hash);
             if (existing != null) {
-                mapper.touchDerivedCandidate(ruleCode, hash,
-                        toDouble(candidate.get("confidence"), 0.5), DRAFT);
+                mapper.touchDerivedCandidate(ruleCode, hash, toDouble(candidate.get("confidence"), 0.5), DRAFT);
                 continue;
             }
-            mapper.insertDerivedCandidate(ids.next("DK"), kb, ruleCode, type, version, title, content,
-                    toDouble(candidate.get("confidence"), 0.5), write(candidate.get("baseAssertionCodes")),
-                    write(candidate.get("graphPath")), write(candidate.get("evidence")),
-                    write(candidate.get("derivedFrom")), write(candidate.get("permissionTags")),
-                    toDouble(candidate.get("authorityScore"), 0.0), hash, currentUser());
+            mapper.insertDerivedCandidate(ids.next("DK"), kb, ruleCode, type, version, title, content, toDouble(candidate.get("confidence"), 0.5), write(candidate.get("baseAssertionCodes")), write(candidate.get("graphPath")), write(candidate.get("evidence")), write(candidate.get("derivedFrom")), write(candidate.get("permissionTags")), toDouble(candidate.get("authorityScore"), 0.0), hash, currentUser());
             created++;
         }
         return created;
     }
 
     // --------------------------------------------------------------- candidates
-
     public List<Map<String, Object>> candidates(Long kb, String status, String ruleCode, Integer limit) {
-        return mapper.listDerivedCandidates(kb, blank(status), blank(ruleCode),
-                limit == null || limit <= 0 ? 50 : Math.min(limit, 200));
+        return mapper.listDerivedCandidates(kb, blank(status), blank(ruleCode), limit == null || limit <= 0 ? 50 : Math.min(limit, 200));
     }
 
     /**
@@ -413,7 +379,9 @@ public class KnowledgeDerivationService {
         return stats;
     }
 
-    /** Governance of a candidate: it becomes knowledge only when a human says so. */
+    /**
+     * Governance of a candidate: it becomes knowledge only when a human says so.
+     */
     public Map<String, Object> review(String candidateCode, String decision, String reason) {
         String status = text(decision).trim().toUpperCase();
         if (!APPROVED.equals(status) && !REJECTED.equals(status)) {
@@ -444,8 +412,7 @@ public class KnowledgeDerivationService {
             return empty;
         }
         List<Map<String, Object>> affected = mapper.listCandidatesByBaseAssertion(kb, codes);
-        String reason = "基础断言已变更：" + (codes.size() > 3
-                ? codes.subList(0, 3) + " 等 " + codes.size() + " 项" : String.join("、", codes));
+        String reason = "基础断言已变更：" + (codes.size() > 3 ? codes.subList(0, 3) + " 等 " + codes.size() + " 项" : String.join("、", codes));
         for (Map<String, Object> candidate : affected) {
             mapper.updateDerivedCandidateStatus(text(candidate.get("candidateCode")), STALE, reason);
         }
@@ -453,8 +420,7 @@ public class KnowledgeDerivationService {
             Map<String, Object> detail = new LinkedHashMap<String, Object>();
             detail.put("candidateCount", affected.size());
             detail.put("assertionCodes", codes.size() > 10 ? codes.subList(0, 10) : codes);
-            publisher.emitSystem(PlatformEventTypes.KNOWLEDGE_DERIVED_STALE, kb, "DERIVATION",
-                    null, affected.size() + " 条衍生候选因基础断言变更失效", detail);
+            publisher.emitSystem(PlatformEventTypes.KNOWLEDGE_DERIVED_STALE, kb, "DERIVATION", null, affected.size() + " 条衍生候选因基础断言变更失效", detail);
         }
         Map<String, Object> outcome = new LinkedHashMap<String, Object>();
         outcome.put("staleCount", affected.size());
@@ -463,12 +429,10 @@ public class KnowledgeDerivationService {
     }
 
     public List<Map<String, Object>> runs(Long kb, String ruleCode, Integer limit) {
-        return mapper.listDerivationRuns(kb, blank(ruleCode),
-                limit == null || limit <= 0 ? 30 : Math.min(limit, 100));
+        return mapper.listDerivationRuns(kb, blank(ruleCode), limit == null || limit <= 0 ? 30 : Math.min(limit, 100));
     }
 
     // ------------------------------------------------------------------ helpers
-
     private Map<String, Object> requireRule(String ruleCode) {
         Map<String, Object> rule = mapper.getDerivationRule(ruleCode);
         if (rule == null) {
@@ -582,11 +546,12 @@ public class KnowledgeDerivationService {
     }
 
     private String scheduleType(Object value) {
-        return SCHEDULE_SCHEDULED.equals(text(value).trim().toUpperCase(Locale.ROOT))
-                ? SCHEDULE_SCHEDULED : SCHEDULE_MANUAL;
+        return SCHEDULE_SCHEDULED.equals(text(value).trim().toUpperCase(Locale.ROOT)) ? SCHEDULE_SCHEDULED : SCHEDULE_MANUAL;
     }
 
-    /** JSON columns come back as text; console and callers want the structure. */
+    /**
+     * JSON columns come back as text; console and callers want the structure.
+     */
     private Object asObject(Object raw) {
         if (raw == null) {
             return null;

@@ -10,11 +10,11 @@ from fastapi.responses import JSONResponse
 
 from app.core.config import settings
 from app.core.runtime_settings import load_model_settings
-from app.routes import router
-from app.settings_routes import router as settings_router
-from app.query_policy_routes import router as query_policy_router
 from app.derivation_routes import router as derivation_router
+from app.query_policy_routes import router as query_policy_router
+from app.routes import router
 from app.schema_routes import router as schema_router
+from app.settings_routes import router as settings_router
 
 logging.basicConfig(
     level=getattr(logging, os.getenv("LOG_LEVEL", "INFO").upper(), logging.INFO),

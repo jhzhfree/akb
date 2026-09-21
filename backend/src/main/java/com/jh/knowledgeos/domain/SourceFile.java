@@ -9,8 +9,11 @@ import org.springframework.core.io.Resource;
  * memory: source files can reach the configured upload size limit.</p>
  */
 public class SourceFile {
+
     private final String name;
+
     private final String contentType;
+
     private final Resource resource;
 
     public SourceFile(String name, String contentType, Resource resource) {
@@ -19,7 +22,15 @@ public class SourceFile {
         this.resource = resource;
     }
 
-    public String getName() { return name; }
-    public String getContentType() { return contentType; }
-    public Resource getResource() { return resource; }
+    public String getName() {
+        return name;
+    }
+
+    public String getContentType() {
+        return contentType;
+    }
+
+    public Resource getResource() {
+        return resource;
+    }
 }

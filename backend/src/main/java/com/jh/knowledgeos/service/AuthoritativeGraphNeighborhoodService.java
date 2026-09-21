@@ -2,7 +2,6 @@ package com.jh.knowledgeos.service;
 
 import com.jh.knowledgeos.mapper.KnowledgeMapper;
 import org.springframework.stereotype.Service;
-
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Deque;
@@ -23,7 +22,8 @@ import java.util.Set;
  */
 @Service
 public class AuthoritativeGraphNeighborhoodService {
-    private static final String[] NODE_TYPES = {"CARD", "CLAIM", "EVIDENCE", "ENTITY", "SOURCE"};
+
+    private static final String[] NODE_TYPES = { "CARD", "CLAIM", "EVIDENCE", "ENTITY", "SOURCE" };
 
     private final KnowledgeMapper mapper;
 
@@ -53,14 +53,12 @@ public class AuthoritativeGraphNeighborhoodService {
         String seedType = String.valueOf(seed.get("nodeType"));
         int hops = depth < 1 ? 1 : (depth > 3 ? 3 : depth);
         int cap = limit < 10 ? 10 : (limit > 400 ? 400 : limit);
-
         List<Edge> edges = loadEdges(kb);
         Map<String, Set<Integer>> adjacency = new HashMap<String, Set<Integer>>();
         for (int i = 0; i < edges.size(); i++) {
             link(adjacency, edges.get(i).source, i);
             link(adjacency, edges.get(i).target, i);
         }
-
         Set<String> reached = new LinkedHashSet<String>();
         Deque<String> queue = new ArrayDeque<String>();
         Map<String, Integer> distance = new HashMap<String, Integer>();
@@ -72,9 +70,13 @@ public class AuthoritativeGraphNeighborhoodService {
         while (!queue.isEmpty()) {
             String current = queue.poll();
             int step = distance.get(current);
-            if (step >= hops) continue;
+            if (step >= hops) {
+                continue;
+            }
             Set<Integer> incident = adjacency.get(current);
-            if (incident == null) continue;
+            if (incident == null) {
+                continue;
+            }
             for (Integer index : incident) {
                 Edge edge = edges.get(index);
                 String next = edge.source.equals(current) ? edge.target : edge.source;
@@ -89,13 +91,14 @@ public class AuthoritativeGraphNeighborhoodService {
                 }
             }
         }
-
         Map<String, Map<String, Object>> meta = loadNodeMetadata(kb, reached);
         List<Map<String, Object>> nodes = new ArrayList<Map<String, Object>>();
         Map<String, Integer> degree = new HashMap<String, Integer>();
         List<Map<String, Object>> visibleEdges = new ArrayList<Map<String, Object>>();
         for (Edge edge : edges) {
-            if (!reached.contains(edge.source) || !reached.contains(edge.target)) continue;
+            if (!reached.contains(edge.source) || !reached.contains(edge.target)) {
+                continue;
+            }
             degree(degree, edge.source);
             degree(degree, edge.target);
             Map<String, Object> item = new LinkedHashMap<String, Object>();
@@ -121,7 +124,6 @@ public class AuthoritativeGraphNeighborhoodService {
             item.put("degree", degree.get(nodeKey) == null ? 0 : degree.get(nodeKey));
             nodes.add(item);
         }
-
         result.put("available", true);
         result.put("seed", seed);
         result.put("depth", hops);
@@ -144,8 +146,12 @@ public class AuthoritativeGraphNeighborhoodService {
 
     private Map<String, Map<String, Object>> loadNodeMetadata(Long kb, Set<String> keys) {
         Map<String, List<String>> wanted = new HashMap<String, List<String>>();
-        for (String type : NODE_TYPES) wanted.put(type, new ArrayList<String>());
-        for (String key : keys) wanted.get(type(key)).add(code(key));
+        for (String type : NODE_TYPES) {
+            wanted.put(type, new ArrayList<String>());
+        }
+        for (String key : keys) {
+            wanted.get(type(key)).add(code(key));
+        }
         Map<String, Map<String, Object>> meta = new HashMap<String, Map<String, Object>>();
         // An empty IN () list is invalid SQL, so only populated node types are queried.
         collect(meta, "CARD", kb, wanted.get("CARD"), mapper::listGraphCards);
@@ -156,32 +162,39 @@ public class AuthoritativeGraphNeighborhoodService {
         return meta;
     }
 
-    private void collect(Map<String, Map<String, Object>> meta, String type, Long kb,
-            List<String> codes, NodeLoader loader) {
-        if (codes == null || codes.isEmpty()) return;
+    private void collect(Map<String, Map<String, Object>> meta, String type, Long kb, List<String> codes, NodeLoader loader) {
+        if (codes == null || codes.isEmpty()) {
+            return;
+        }
         List<Map<String, Object>> rows = loader.load(kb, codes);
-        if (rows == null) return;
+        if (rows == null) {
+            return;
+        }
         for (Map<String, Object> row : rows) {
             meta.put(key(type, text(row.get("code"))), row);
         }
     }
 
-    /** Loads display metadata for one node type. */
+    /**
+     * Loads display metadata for one node type.
+     */
     private interface NodeLoader {
+
         List<Map<String, Object>> load(Long kb, List<String> codes);
     }
 
-    private static void add(List<Edge> edges, List<Map<String, Object>> rows,
-            String sourceType, String targetType) {
-        if (rows == null) return;
+    private static void add(List<Edge> edges, List<Map<String, Object>> rows, String sourceType, String targetType) {
+        if (rows == null) {
+            return;
+        }
         for (Map<String, Object> row : rows) {
             String source = text(row.get("sourceCode"));
             String target = text(row.get("targetCode"));
-            if (source.isEmpty() || target.isEmpty()) continue;
+            if (source.isEmpty() || target.isEmpty()) {
+                continue;
+            }
             Object confidence = row.get("confidence");
-            edges.add(new Edge(key(sourceType, source), key(targetType, target),
-                    text(row.get("edgeType")), text(row.get("semanticType")),
-                    confidence instanceof Number ? ((Number) confidence).doubleValue() : null));
+            edges.add(new Edge(key(sourceType, source), key(targetType, target), text(row.get("edgeType")), text(row.get("semanticType")), confidence instanceof Number ? ((Number) confidence).doubleValue() : null));
         }
     }
 
@@ -217,12 +230,19 @@ public class AuthoritativeGraphNeighborhoodService {
         return value == null ? "" : String.valueOf(value);
     }
 
-    /** One projected graph edge with typed endpoints. */
+    /**
+     * One projected graph edge with typed endpoints.
+     */
     private static final class Edge {
+
         private final String source;
+
         private final String target;
+
         private final String type;
+
         private final String semanticType;
+
         private final Double confidence;
 
         private Edge(String source, String target, String type, String semanticType, Double confidence) {

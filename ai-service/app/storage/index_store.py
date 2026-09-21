@@ -3,7 +3,7 @@
 import json
 import threading
 from pathlib import Path
-from typing import Any, Dict, List, Tuple
+from typing import Any
 
 from app.core.config import INDEX_DIR
 
@@ -18,8 +18,8 @@ class IndexStore:
 
     def __init__(self):
         self._lock = threading.RLock()
-        self._cache: Dict[str, Tuple[int, List[Dict[str, Any]]]] = {}
-        self._generation: Dict[str, int] = {}
+        self._cache: dict[str, tuple[int, list[dict[str, Any]]]] = {}
+        self._generation: dict[str, int] = {}
 
     def _key(self, kb: Any) -> str:
         return str(kb)
@@ -31,7 +31,7 @@ class IndexStore:
         with self._lock:
             return self._generation.get(self._key(kb), 0)
 
-    def load(self, kb: Any) -> List[Dict[str, Any]]:
+    def load(self, kb: Any) -> list[dict[str, Any]]:
         key = self._key(kb)
         path = self._path(kb)
         if not path.exists():
@@ -50,7 +50,7 @@ class IndexStore:
             self._cache[key] = (generation, docs)
             return docs
 
-    def save(self, kb: Any, docs: List[Dict[str, Any]]) -> None:
+    def save(self, kb: Any, docs: list[dict[str, Any]]) -> None:
         key = self._key(kb)
         path = self._path(kb)
         tmp = path.with_suffix(".tmp")
@@ -64,7 +64,7 @@ class IndexStore:
             self._generation[key] = generation
             self._cache[key] = (generation, docs)
 
-    def upsert(self, kb: Any, new_docs: List[Dict[str, Any]]) -> int:
+    def upsert(self, kb: Any, new_docs: list[dict[str, Any]]) -> int:
         docs = self.load(kb)
         by_id = {str(item["id"]): item for item in docs}
         for item in new_docs:
@@ -74,11 +74,7 @@ class IndexStore:
         return len(merged)
 
     def delete_document(self, kb: Any, document_id: Any) -> int:
-        docs = [
-            item
-            for item in self.load(kb)
-            if str(item.get("document_id")) != str(document_id)
-        ]
+        docs = [item for item in self.load(kb) if str(item.get("document_id")) != str(document_id)]
         self.save(kb, docs)
         return len(docs)
 
@@ -103,9 +99,7 @@ class IndexStore:
                 pass
         return removed
 
-    def update_object_status(
-        self, kb: Any, object_id: Any, status: str, index_version: int
-    ) -> bool:
+    def update_object_status(self, kb: Any, object_id: Any, status: str, index_version: int) -> bool:
         docs = self.load(kb)
         changed = False
         for item in docs:
@@ -123,12 +117,19 @@ class IndexStore:
         return changed
 
     def update_object_acl(self, kb: Any, object_id: Any, permission_tags, index_version: int) -> bool:
-        docs=self.load(kb); changed=False
+        docs = self.load(kb)
+        changed = False
         for item in docs:
-            if str(item.get("id")) != str(object_id): continue
-            if int(index_version) < int(item.get("index_version") or 0): return False
-            item["permission_tags"]=list(permission_tags or []); item["index_version"]=int(index_version); changed=True; break
-        if changed: self.save(kb,docs)
+            if str(item.get("id")) != str(object_id):
+                continue
+            if int(index_version) < int(item.get("index_version") or 0):
+                return False
+            item["permission_tags"] = list(permission_tags or [])
+            item["index_version"] = int(index_version)
+            changed = True
+            break
+        if changed:
+            self.save(kb, docs)
         return changed
 
 

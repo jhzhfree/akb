@@ -2,6 +2,7 @@
 
 New code should import the vendor-specific provider module directly.
 """
+
 from app.services.retrieval.elasticsearch_provider import ElasticsearchProvider, get_elasticsearch_provider
 from app.services.retrieval.milvus_provider import MilvusProvider, get_milvus_provider
 

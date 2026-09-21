@@ -5,7 +5,6 @@ import com.jh.knowledgeos.domain.IngestionRun;
 import com.jh.knowledgeos.mapper.KnowledgeMapper;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
-
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -22,20 +21,23 @@ import java.util.Map;
  */
 @Service
 public class IngestionObservabilityService {
-    /** Column widths of t_ingestion_event.message and t_ingestion_run.error_message. */
+
+    /**
+     * Column widths of t_ingestion_event.message and t_ingestion_run.error_message.
+     */
     private static final int MESSAGE_LIMIT = 1000;
+
     private static final int ERROR_LIMIT = 2000;
 
     private final KnowledgeMapper mapper;
+
     private final IdGenerator ids;
+
     private final ObjectMapper json;
+
     private final int detailLimit;
 
-    public IngestionObservabilityService(
-            KnowledgeMapper mapper,
-            IdGenerator ids,
-            ObjectMapper json,
-            @Value("${knowledge.ingestion.event-detail-chars:12000}") int detailChars) {
+    public IngestionObservabilityService(KnowledgeMapper mapper, IdGenerator ids, ObjectMapper json, @Value("${knowledge.ingestion.event-detail-chars:12000}") int detailChars) {
         this.mapper = mapper;
         this.ids = ids;
         this.json = json;
@@ -71,9 +73,7 @@ public class IngestionObservabilityService {
     public void fail(Long runId, String stage, Exception error) {
         // A wrapped failure often carries no message of its own; the type then has to stand in,
         // otherwise the run would fail with no explanation of which statement broke.
-        String message = error.getMessage() == null || error.getMessage().trim().isEmpty()
-                ? error.getClass().getSimpleName()
-                : error.getMessage();
+        String message = error.getMessage() == null || error.getMessage().trim().isEmpty() ? error.getClass().getSimpleName() : error.getMessage();
         mapper.completeIngestionRun(runId, "FAILED", stage, 0, 0, 0, clip(message, ERROR_LIMIT));
         event(runId, "INGESTION_FAILED", stage, "FAILED", message, null);
     }

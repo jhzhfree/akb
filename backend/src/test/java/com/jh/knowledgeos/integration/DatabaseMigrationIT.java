@@ -3,7 +3,6 @@ package com.jh.knowledgeos.integration;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-
 import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.Statement;
@@ -23,11 +22,9 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 @SpringBootTest
 @Testcontainers
 public class DatabaseMigrationIT {
+
     @Container
-    static final MySQLContainer<?> MYSQL = new MySQLContainer<>("mysql:8.0.36")
-            .withDatabaseName("knowledge_os")
-            .withUsername("knowledge")
-            .withPassword("knowledge123");
+    static final MySQLContainer<?> MYSQL = new MySQLContainer<>("mysql:8.0.36").withDatabaseName("knowledge_os").withUsername("knowledge").withPassword("knowledge123");
 
     @DynamicPropertySource
     static void databaseProperties(DynamicPropertyRegistry registry) {
@@ -48,7 +45,8 @@ public class DatabaseMigrationIT {
 
     @Test
     void flywayCreatesRequiredTablesAndTraceColumns() throws Exception {
-        try (Connection connection = dataSource.getConnection(); Statement st = connection.createStatement()) {
+        try (Connection connection = dataSource.getConnection();
+            Statement st = connection.createStatement()) {
             assertTrue(tableExists(st, "t_knowledge_card"));
             assertTrue(tableExists(st, "t_claim"));
             assertTrue(tableExists(st, "t_query_trace"));
@@ -97,7 +95,7 @@ public class DatabaseMigrationIT {
         trace.setTraceJson("{\"totalLatencyMs\":12}");
         trace.setAnswer("ok");
         assertEquals(1, knowledgeMapper.insertTrace(trace));
-        Map<String,Object> stored = knowledgeMapper.getTrace("Q_IT_001");
+        Map<String, Object> stored = knowledgeMapper.getTrace("Q_IT_001");
         assertNotNull(stored);
         assertEquals("TRACE_IT_001", String.valueOf(stored.get("traceId")));
         assertEquals("none", String.valueOf(stored.get("modelName")));
@@ -105,25 +103,24 @@ public class DatabaseMigrationIT {
 
     private boolean tableExists(Statement st, String table) throws Exception {
         try (ResultSet rs = st.executeQuery("SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=DATABASE() AND table_name='" + table + "'")) {
-            rs.next(); return rs.getInt(1) == 1;
+            rs.next();
+            return rs.getInt(1) == 1;
         }
     }
 
     private boolean indexExists(Statement st, String table, String index) throws Exception {
-        String sql = "SELECT COUNT(*) FROM information_schema.statistics "
-                + "WHERE table_schema=DATABASE() AND table_name='" + table
-                + "' AND index_name='" + index + "'";
+        String sql = "SELECT COUNT(*) FROM information_schema.statistics " + "WHERE table_schema=DATABASE() AND table_name='" + table + "' AND index_name='" + index + "'";
         try (ResultSet rs = st.executeQuery(sql)) {
-            rs.next(); return rs.getInt(1) > 0;
+            rs.next();
+            return rs.getInt(1) > 0;
         }
     }
 
     private boolean columnExists(Statement st, String table, String column) throws Exception {
-        String sql = "SELECT COUNT(*) FROM information_schema.columns "
-                + "WHERE table_schema=DATABASE() AND table_name='" + table
-                + "' AND column_name='" + column + "'";
+        String sql = "SELECT COUNT(*) FROM information_schema.columns " + "WHERE table_schema=DATABASE() AND table_name='" + table + "' AND column_name='" + column + "'";
         try (ResultSet rs = st.executeQuery(sql)) {
-            rs.next(); return rs.getInt(1) == 1;
+            rs.next();
+            return rs.getInt(1) == 1;
         }
     }
 }

@@ -6,7 +6,6 @@ import com.jh.knowledgeos.domain.KnowledgeCard;
 import com.jh.knowledgeos.domain.KnowledgeSource;
 import com.jh.knowledgeos.mapper.KnowledgeMapper;
 import org.springframework.stereotype.Service;
-
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -17,13 +16,16 @@ import java.util.LinkedHashMap;
  */
 @Service
 public class KnowledgeReadService {
+
     private final KnowledgeMapper mapper;
+
     private final AiClient aiClient;
+
     private final AuthoritativeGraphNeighborhoodService authoritativeGraph;
+
     private final ObjectMapper objectMapper;
 
-    public KnowledgeReadService(KnowledgeMapper mapper, AiClient aiClient,
-            AuthoritativeGraphNeighborhoodService authoritativeGraph, ObjectMapper objectMapper) {
+    public KnowledgeReadService(KnowledgeMapper mapper, AiClient aiClient, AuthoritativeGraphNeighborhoodService authoritativeGraph, ObjectMapper objectMapper) {
         this.mapper = mapper;
         this.aiClient = aiClient;
         this.authoritativeGraph = authoritativeGraph;
@@ -38,16 +40,13 @@ public class KnowledgeReadService {
      * back to the MySQL projection and says so through {@code source}, so the UI never renders an
      * empty canvas while real relations exist.</p>
      */
-    public Map<String, Object> graph(Long kb, String code, List<String> permissionTags,
-            Integer depth, Integer limit) {
+    public Map<String, Object> graph(Long kb, String code, List<String> permissionTags, Integer depth, Integer limit) {
         int hops = depth == null || depth < 1 ? 2 : Math.min(depth, 3);
         int cap = limit == null || limit < 10 ? 80 : Math.min(limit, 400);
         Map<String, Object> served = null;
         try {
-            String tags = String.join(",", permissionTags == null
-                    ? java.util.Collections.<String>emptyList() : permissionTags);
-            served = aiClient.get("/ai/graph/" + kb + "/" + code
-                    + "?depth=" + hops + "&limit=" + cap + "&permissionTags=" + tags);
+            String tags = String.join(",", permissionTags == null ? java.util.Collections.<String>emptyList() : permissionTags);
+            served = aiClient.get("/ai/graph/" + kb + "/" + code + "?depth=" + hops + "&limit=" + cap + "&permissionTags=" + tags);
         } catch (RuntimeException ex) {
             served = null;
         }
@@ -65,7 +64,9 @@ public class KnowledgeReadService {
     }
 
     private static boolean isEmpty(Object value) {
-        if (value == null) return true;
+        if (value == null) {
+            return true;
+        }
         return !(value instanceof List) || ((List<?>) value).isEmpty();
     }
 
@@ -77,7 +78,9 @@ public class KnowledgeReadService {
             return chunkDetail(kb, objectCode);
         }
         Map<String, Object> object = mapper.getKnowledgeObject(kb, type, objectCode, permissionTags);
-        if (object == null) return new LinkedHashMap<String, Object>();
+        if (object == null) {
+            return new LinkedHashMap<String, Object>();
+        }
         Map<String, Object> result = new LinkedHashMap<String, Object>();
         result.put("object", object);
         result.put("evidence", mapper.listEvidenceForObject(objectType, objectCode));
@@ -171,11 +174,15 @@ public class KnowledgeReadService {
         long effectiveCards = 0L;
         for (Map<String, Object> document : documents) {
             Object value = document.get("chunkCount");
-            if (value instanceof Number) chunks += ((Number) value).longValue();
+            if (value instanceof Number) {
+                chunks += ((Number) value).longValue();
+            }
         }
         for (KnowledgeCard card : cards) {
             String status = card.getStatus();
-            if ("APPROVED".equals(status) || "EFFECTIVE".equals(status)) effectiveCards++;
+            if ("APPROVED".equals(status) || "EFFECTIVE".equals(status)) {
+                effectiveCards++;
+            }
         }
         Map<String, Object> result = new LinkedHashMap<String, Object>();
         result.put("knowledgeBaseId", kb);
@@ -199,7 +206,9 @@ public class KnowledgeReadService {
         return mapper.getEvidenceDetail(kb, evidenceCode, permissionTags);
     }
 
-    /** Chunk list of one document, including the metadata that explains each chunk's boundaries. */
+    /**
+     * Chunk list of one document, including the metadata that explains each chunk's boundaries.
+     */
     public List<Map<String, Object>> documentChunks(Long documentId) {
         return mapper.listDocumentChunks(documentId);
     }
@@ -227,7 +236,9 @@ public class KnowledgeReadService {
 
     public Map<String, Object> trace(String queryId) {
         Map<String, Object> trace = mapper.getTrace(queryId);
-        if (trace == null) return new LinkedHashMap<String, Object>();
+        if (trace == null) {
+            return new LinkedHashMap<String, Object>();
+        }
         Map<String, Object> qualification = answerQualification(queryId);
         trace.put("answerQualification", qualification);
         // §12.5: expose the pipeline timeline as a parsed array; the raw column stays available
@@ -253,7 +264,9 @@ public class KnowledgeReadService {
 
     public Map<String, Object> answerQualification(String queryId) {
         Map<String, Object> qualification = mapper.getAnswerQualification(queryId);
-        if (qualification == null) return new LinkedHashMap<String, Object>();
+        if (qualification == null) {
+            return new LinkedHashMap<String, Object>();
+        }
         Map<String, Object> result = new LinkedHashMap<String, Object>(qualification);
         result.put("claims", mapper.listAnswerClaimAssessments(queryId));
         return result;

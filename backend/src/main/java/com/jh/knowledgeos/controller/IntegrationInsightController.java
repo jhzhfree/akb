@@ -14,7 +14,6 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
-
 import java.util.Map;
 
 /**
@@ -29,6 +28,7 @@ import java.util.Map;
 @CrossOrigin
 @Tag(name = "Integration", description = "知识集成：服务概览与调用日志")
 public class IntegrationInsightController {
+
     private final IntegrationInsightService service;
 
     public IntegrationInsightController(IntegrationInsightService service) {
@@ -44,11 +44,7 @@ public class IntegrationInsightController {
 
     @GetMapping("/call-logs")
     @Operation(summary = "调用日志：按协议与结果过滤，traceId 可回到 Query Trace")
-    public ApiResponse<Object> callLogs(
-            @RequestParam(value = "hours", required = false) Integer hours,
-            @RequestParam(value = "protocol", required = false) String protocol,
-            @RequestParam(value = "status", required = false) String status,
-            @RequestParam(value = "limit", required = false) Integer limit) {
+    public ApiResponse<Object> callLogs(@RequestParam(value = "hours", required = false) Integer hours, @RequestParam(value = "protocol", required = false) String protocol, @RequestParam(value = "status", required = false) String status, @RequestParam(value = "limit", required = false) Integer limit) {
         requireManager();
         return ApiResponse.ok(service.callLogs(hours, protocol, status, limit));
     }
@@ -70,10 +66,14 @@ public class IntegrationInsightController {
         return ApiResponse.ok(detail);
     }
 
-    /** Integration surfaces are governed by administrators or knowledge-base administrators. */
+    /**
+     * Integration surfaces are governed by administrators or knowledge-base administrators.
+     */
     private User requireManager() {
         User user = AuthContext.get();
-        if (user == null) throw new UnauthorizedException("请先登录控制台");
+        if (user == null) {
+            throw new UnauthorizedException("请先登录控制台");
+        }
         UserRole role = UserRole.of(user.getRole());
         if (role != UserRole.ADMIN && role != UserRole.KNOWLEDGE_ADMIN) {
             throw new SecurityException("需要系统管理员或知识库管理员角色");

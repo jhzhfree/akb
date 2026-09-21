@@ -3,7 +3,6 @@ package com.jh.knowledgeos.service;
 import com.jh.knowledgeos.domain.ApiKey;
 import com.jh.knowledgeos.mapper.ExternalApiMapper;
 import org.springframework.stereotype.Service;
-
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -23,11 +22,15 @@ import java.util.Map;
  */
 @Service
 public class ApiKeyService {
+
     public static final String SECRET_PREFIX = "kos_ak_";
+
     private static final int SECRET_BYTES = 24;
+
     private static final SecureRandom RANDOM = new SecureRandom();
 
     private final ExternalApiMapper mapper;
+
     private final IdGenerator ids;
 
     public ApiKeyService(ExternalApiMapper mapper, IdGenerator ids) {
@@ -46,13 +49,7 @@ public class ApiKeyService {
     /**
      * Creates a credential and returns its profile including the one-time plaintext secret.
      */
-    public Map<String, Object> create(
-            String name,
-            Long knowledgeBaseId,
-            List<String> scopes,
-            Integer rateLimitPerMinute,
-            LocalDateTime expiresAt,
-            Long createdBy) {
+    public Map<String, Object> create(String name, Long knowledgeBaseId, List<String> scopes, Integer rateLimitPerMinute, LocalDateTime expiresAt, Long createdBy) {
         String secret = newSecret();
         ApiKey key = new ApiKey();
         key.setKeyCode(ids.next("AK_"));
@@ -78,11 +75,17 @@ public class ApiKeyService {
         return key == null ? null : profile(key);
     }
 
-    /** Resolves a presented secret to an active credential, or returns null. */
+    /**
+     * Resolves a presented secret to an active credential, or returns null.
+     */
     public ApiKey authenticate(String secret) {
-        if (secret == null || secret.trim().isEmpty()) return null;
+        if (secret == null || secret.trim().isEmpty()) {
+            return null;
+        }
         ApiKey key = mapper.getApiKeyByHash(hash(secret.trim()));
-        if (key == null || !key.isUsable()) return null;
+        if (key == null || !key.isUsable()) {
+            return null;
+        }
         mapper.touchApiKey(key.getId());
         return key;
     }
@@ -97,7 +100,9 @@ public class ApiKeyService {
 
     public Map<String, Object> profile(ApiKey key) {
         Map<String, Object> row = new LinkedHashMap<String, Object>();
-        if (key == null) return row;
+        if (key == null) {
+            return row;
+        }
         row.put("id", key.getId());
         row.put("keyCode", key.getKeyCode());
         row.put("name", key.getName());
@@ -125,19 +130,23 @@ public class ApiKeyService {
         if (scopes != null) {
             for (String scope : scopes) {
                 String value = String.valueOf(scope == null ? "" : scope).trim().toUpperCase();
-                if (value.isEmpty() || cleaned.contains(value)) continue;
-                if (ApiKey.SCOPE_READ.equals(value)
-                        || ApiKey.SCOPE_WRITE.equals(value)
-                        || ApiKey.SCOPE_INGEST.equals(value)) {
+                if (value.isEmpty() || cleaned.contains(value)) {
+                    continue;
+                }
+                if (ApiKey.SCOPE_READ.equals(value) || ApiKey.SCOPE_WRITE.equals(value) || ApiKey.SCOPE_INGEST.equals(value)) {
                     cleaned.add(value);
                 }
             }
         }
-        if (cleaned.isEmpty()) cleaned.add(ApiKey.SCOPE_READ);
+        if (cleaned.isEmpty()) {
+            cleaned.add(ApiKey.SCOPE_READ);
+        }
         return String.join(",", cleaned);
     }
 
-    /** API Key 是高熵随机串，SHA-256 查表即可，无需慢哈希。 */
+    /**
+     * API Key 是高熵随机串，SHA-256 查表即可，无需慢哈希。
+     */
     private String hash(String secret) {
         try {
             MessageDigest digest = MessageDigest.getInstance("SHA-256");

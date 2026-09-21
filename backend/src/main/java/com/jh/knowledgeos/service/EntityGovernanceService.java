@@ -2,7 +2,6 @@ package com.jh.knowledgeos.service;
 
 import com.jh.knowledgeos.mapper.KnowledgeMapper;
 import org.springframework.stereotype.Service;
-
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashSet;
@@ -22,11 +21,14 @@ import java.util.Set;
  */
 @Service
 public class EntityGovernanceService {
-    /** Statuses an operator may assign to a canonical node, besides retiring a wrong merge. */
-    private static final Set<String> ALLOWED_STATUSES = new HashSet<String>(Arrays.asList(
-            "ACTIVE", "APPROVED", "EFFECTIVE", "MERGED", "DEPRECATED"));
+
+    /**
+     * Statuses an operator may assign to a canonical node, besides retiring a wrong merge.
+     */
+    private static final Set<String> ALLOWED_STATUSES = new HashSet<String>(Arrays.asList("ACTIVE", "APPROVED", "EFFECTIVE", "MERGED", "DEPRECATED"));
 
     private final KnowledgeMapper mapper;
+
     private final TransactionRunner transactionRunner;
 
     public EntityGovernanceService(KnowledgeMapper mapper, TransactionRunner transactionRunner) {
@@ -34,7 +36,9 @@ public class EntityGovernanceService {
         this.transactionRunner = transactionRunner;
     }
 
-    /** Entities of a knowledge base with alias and mention cardinality, merged ones included. */
+    /**
+     * Entities of a knowledge base with alias and mention cardinality, merged ones included.
+     */
     public List<Map<String, Object>> entities(Long knowledgeBaseId) {
         return mapper.listEntitiesWithUsage(knowledgeBaseId);
     }
@@ -56,17 +60,13 @@ public class EntityGovernanceService {
         return result;
     }
 
-    public Map<String, Object> addAlias(
-            Long knowledgeBaseId, String entityCode, String alias, String aliasType, Double confidence) {
+    public Map<String, Object> addAlias(Long knowledgeBaseId, String entityCode, String alias, String aliasType, Double confidence) {
         requireEntity(knowledgeBaseId, entityCode);
         String normalized = normalize(alias);
         if (normalized.isEmpty()) {
             throw new IllegalArgumentException("别名不能为空");
         }
-        mapper.upsertEntityAlias(
-                knowledgeBaseId, entityCode, normalized,
-                aliasType == null || aliasType.trim().isEmpty() ? "MANUAL" : aliasType.trim(),
-                confidence == null ? 1.0D : confidence);
+        mapper.upsertEntityAlias(knowledgeBaseId, entityCode, normalized, aliasType == null || aliasType.trim().isEmpty() ? "MANUAL" : aliasType.trim(), confidence == null ? 1.0D : confidence);
         Map<String, Object> summary = new LinkedHashMap<String, Object>();
         summary.put("entityCode", entityCode);
         summary.put("alias", normalized);
@@ -105,7 +105,6 @@ public class EntityGovernanceService {
         }
         requireEntity(knowledgeBaseId, fromCode);
         requireEntity(knowledgeBaseId, toCode);
-
         Map<String, Object> impact = findUsage(knowledgeBaseId, fromCode);
         List<String> movedAliases = new ArrayList<String>();
         for (Map<String, Object> alias : mapper.listEntityAliases(knowledgeBaseId, fromCode)) {
@@ -114,7 +113,6 @@ public class EntityGovernanceService {
                 movedAliases.add(String.valueOf(value));
             }
         }
-
         // Retried on deadlock for the same reason resolution is: the steps are idempotent and a
         // manual merge can race a batch that is retiring entities in the same knowledge base.
         transactionRunner.retryingOnDeadlock(() -> {
@@ -125,7 +123,6 @@ public class EntityGovernanceService {
             mapper.updateEntityStatus(knowledgeBaseId, fromCode, "MERGED");
             return null;
         });
-
         Map<String, Object> summary = new LinkedHashMap<String, Object>();
         summary.put("knowledgeBaseId", knowledgeBaseId);
         summary.put("from", fromCode);

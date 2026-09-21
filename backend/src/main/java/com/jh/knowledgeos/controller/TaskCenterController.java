@@ -18,7 +18,6 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
-
 import java.util.LinkedHashMap;
 import java.util.Map;
 
@@ -35,13 +34,16 @@ import java.util.Map;
 @CrossOrigin
 @Tag(name = "TaskCenter", description = "任务中心：任务、重试、死信与告警")
 public class TaskCenterController {
+
     private final TaskCenterService tasks;
+
     private final AlertService alerts;
+
     private final DocumentIngestionService ingestion;
+
     private final BatchIngestionService batchIngestion;
 
-    public TaskCenterController(TaskCenterService tasks, AlertService alerts,
-            @Lazy DocumentIngestionService ingestion, BatchIngestionService batchIngestion) {
+    public TaskCenterController(TaskCenterService tasks, AlertService alerts, @Lazy DocumentIngestionService ingestion, BatchIngestionService batchIngestion) {
         this.tasks = tasks;
         this.alerts = alerts;
         this.ingestion = ingestion;
@@ -50,12 +52,7 @@ public class TaskCenterController {
 
     @GetMapping
     @Operation(summary = "任务与告警总览：任务列表、统计、告警与死信")
-    public ApiResponse<Object> overview(
-            @RequestParam(value = "kb", required = false) Long kb,
-            @RequestParam(value = "status", required = false) String status,
-            @RequestParam(value = "taskType", required = false) String taskType,
-            @RequestParam(value = "triggerType", required = false) String triggerType,
-            @RequestParam(value = "limit", required = false) Integer limit) {
+    public ApiResponse<Object> overview(@RequestParam(value = "kb", required = false) Long kb, @RequestParam(value = "status", required = false) String status, @RequestParam(value = "taskType", required = false) String taskType, @RequestParam(value = "triggerType", required = false) String triggerType, @RequestParam(value = "limit", required = false) Integer limit) {
         Map<String, Object> payload = new LinkedHashMap<String, Object>();
         payload.put("tasks", tasks.list(kb, status, taskType, triggerType, limit));
         payload.put("stats", tasks.stats(kb));
@@ -96,18 +93,15 @@ public class TaskCenterController {
      */
     @PostMapping("/{taskCode}/retry")
     @Operation(summary = "重试任务：失败与死信任务重新入队，接入类任务重新执行")
-    public ApiResponse<Object> retry(@PathVariable String taskCode,
-            @RequestParam(value = "kb", required = false) Long kb) {
+    public ApiResponse<Object> retry(@PathVariable String taskCode, @RequestParam(value = "kb", required = false) Long kb) {
         Map<String, Object> task = tasks.retry(taskCode);
         Map<String, Object> payload = new LinkedHashMap<String, Object>(task);
-        if (TaskCenterService.TYPE_INGESTION.equals(String.valueOf(task.get("taskType")))
-                && task.get("targetCode") != null) {
+        if (TaskCenterService.TYPE_INGESTION.equals(String.valueOf(task.get("taskType"))) && task.get("targetCode") != null) {
             if (BatchIngestionService.BATCH_TARGET_TYPE.equals(String.valueOf(task.get("targetType")))) {
                 // 批次父任务只记总账；真正能推进它的是批次本身，交给 batch 服务只重跑其中的失败文件，
                 // 否则这条任务会在重入队后永远停在 QUEUED，没人负责把它带出队列。
                 try {
-                    payload.put("execution",
-                            batchIngestion.retryFailed(String.valueOf(task.get("targetCode"))));
+                    payload.put("execution", batchIngestion.retryFailed(String.valueOf(task.get("targetCode"))));
                 } catch (Exception e) {
                     payload.put("execution", "重跑批量失败文件失败：" + e.getMessage());
                 }
@@ -132,14 +126,9 @@ public class TaskCenterController {
     }
 
     // ---------------------------------------------------------------- alerting
-
     @GetMapping("/alerts")
     @Operation(summary = "告警事件：未处理优先，可按下状态与级别筛选")
-    public ApiResponse<Object> alerts(
-            @RequestParam(value = "kb", required = false) Long kb,
-            @RequestParam(value = "status", required = false) String status,
-            @RequestParam(value = "severity", required = false) String severity,
-            @RequestParam(value = "limit", required = false) Integer limit) {
+    public ApiResponse<Object> alerts(@RequestParam(value = "kb", required = false) Long kb, @RequestParam(value = "status", required = false) String status, @RequestParam(value = "severity", required = false) String severity, @RequestParam(value = "limit", required = false) Integer limit) {
         Map<String, Object> payload = new LinkedHashMap<String, Object>();
         payload.put("events", alerts.events(kb, status, severity, limit));
         payload.put("stats", alerts.stats(kb));
@@ -154,26 +143,20 @@ public class TaskCenterController {
 
     @PostMapping("/alerts/{alertCode}/ack")
     @Operation(summary = "认领告警：有人接手，条件可能仍未恢复")
-    public ApiResponse<Object> acknowledge(@PathVariable String alertCode,
-            @RequestBody(required = false) Map<String, Object> payload) {
-        return ApiResponse.ok(alerts.acknowledge(alertCode, payload == null ? null
-                : payload.get("note") == null ? null : String.valueOf(payload.get("note"))));
+    public ApiResponse<Object> acknowledge(@PathVariable String alertCode, @RequestBody(required = false) Map<String, Object> payload) {
+        return ApiResponse.ok(alerts.acknowledge(alertCode, payload == null ? null : payload.get("note") == null ? null : String.valueOf(payload.get("note"))));
     }
 
     @PostMapping("/alerts/{alertCode}/resolve")
     @Operation(summary = "关闭告警并记录处理说明")
-    public ApiResponse<Object> resolve(@PathVariable String alertCode,
-            @RequestBody(required = false) Map<String, Object> payload) {
-        return ApiResponse.ok(alerts.resolve(alertCode, payload == null ? null
-                : payload.get("note") == null ? null : String.valueOf(payload.get("note"))));
+    public ApiResponse<Object> resolve(@PathVariable String alertCode, @RequestBody(required = false) Map<String, Object> payload) {
+        return ApiResponse.ok(alerts.resolve(alertCode, payload == null ? null : payload.get("note") == null ? null : String.valueOf(payload.get("note"))));
     }
 
     @PostMapping("/alerts/{alertCode}/reopen")
     @Operation(summary = "重新打开已关闭的告警")
-    public ApiResponse<Object> reopen(@PathVariable String alertCode,
-            @RequestBody(required = false) Map<String, Object> payload) {
-        return ApiResponse.ok(alerts.reopen(alertCode, payload == null ? null
-                : payload.get("note") == null ? null : String.valueOf(payload.get("note"))));
+    public ApiResponse<Object> reopen(@PathVariable String alertCode, @RequestBody(required = false) Map<String, Object> payload) {
+        return ApiResponse.ok(alerts.reopen(alertCode, payload == null ? null : payload.get("note") == null ? null : String.valueOf(payload.get("note"))));
     }
 
     @GetMapping("/alerts/rules")
@@ -184,15 +167,13 @@ public class TaskCenterController {
 
     @PostMapping("/alerts/rules")
     @Operation(summary = "新增告警规则：指标、阈值、窗口与级别")
-    public ApiResponse<Object> createRule(@RequestParam(value = "kb", required = false) Long kb,
-            @RequestBody(required = false) Map<String, Object> payload) {
+    public ApiResponse<Object> createRule(@RequestParam(value = "kb", required = false) Long kb, @RequestBody(required = false) Map<String, Object> payload) {
         return ApiResponse.ok(alerts.createRule(kb, payload));
     }
 
     @PutMapping("/alerts/rules/{ruleCode}")
     @Operation(summary = "修改告警规则")
-    public ApiResponse<Object> updateRule(@PathVariable String ruleCode,
-            @RequestBody(required = false) Map<String, Object> payload) {
+    public ApiResponse<Object> updateRule(@PathVariable String ruleCode, @RequestBody(required = false) Map<String, Object> payload) {
         return ApiResponse.ok(alerts.updateRule(ruleCode, payload));
     }
 

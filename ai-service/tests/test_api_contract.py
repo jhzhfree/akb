@@ -1,7 +1,8 @@
 import json
 from pathlib import Path
-from fastapi.testclient import TestClient
+
 from app.main import app
+from fastapi.testclient import TestClient
 
 ROOT = Path(__file__).resolve().parents[2]
 CONTRACT = json.loads((ROOT / "contracts" / "ai-api-v1.1.json").read_text(encoding="utf-8"))
@@ -16,7 +17,11 @@ def require_fields(payload, fields):
 def test_contract_version_and_query_response():
     assert CONTRACT["version"] == "1.1"
     spec = CONTRACT["endpoints"]["query"]
-    response = client.post(spec["path"], json={"queryId": "contract-test", "knowledgeBaseId": 1, "query": "不存在的测试问题", "topK": 3}, headers={"X-Trace-Id": "contract-trace"})
+    response = client.post(
+        spec["path"],
+        json={"queryId": "contract-test", "knowledgeBaseId": 1, "query": "不存在的测试问题", "topK": 3},
+        headers={"X-Trace-Id": "contract-trace"},
+    )
     assert response.status_code == 200, response.text
     assert response.headers.get("X-Trace-Id") == "contract-trace"
     payload = response.json()

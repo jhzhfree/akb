@@ -38,6 +38,7 @@ def test_claim_triple_parses_indexed_claim_rows():
 
 def test_supporting_claims_projects_claim_candidates():
     """Only CLAIM-typed candidates become chips, deduplicated and capped at eight."""
+
     def claim(claim_id, content, status="EFFECTIVE"):
         return {
             "id": claim_id,
@@ -63,12 +64,8 @@ def test_confidence_follows_rerank_strength():
     """Rerank scores dominate; effective claims add a bonus; blocked answers are halved."""
     reranked = [{"rerankScore": 0.8}, {"rerankScore": 0.6}, {"rerankScore": 0.4}]
     assert QueryEngine._confidence(reranked, [], [], {"gateStatus": "PASS"}) == 0.6
-    assert QueryEngine._confidence(
-        reranked, [{"index": 1}], [{"status": "EFFECTIVE"}], {"gateStatus": "PASS"}
-    ) == 0.7
-    assert QueryEngine._confidence(
-        reranked, [], [], {"gateStatus": "BLOCKED"}
-    ) == 0.3
+    assert QueryEngine._confidence(reranked, [{"index": 1}], [{"status": "EFFECTIVE"}], {"gateStatus": "PASS"}) == 0.7
+    assert QueryEngine._confidence(reranked, [], [], {"gateStatus": "BLOCKED"}) == 0.3
 
 
 def test_confidence_falls_back_to_citation_coverage():

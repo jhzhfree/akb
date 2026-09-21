@@ -215,8 +215,6 @@ const measures = computed(() => policyState.value.schema?.measures || [])
 const ranges = computed(() => policyState.value.schema?.ranges || {})
 const strategyDescription = computed(() =>
   strategies.value.find(item => item.name === policy.value.strategy)?.description || '')
-const selectedDoc = computed(() => props.documents.find(doc => doc.id === selectedId.value))
-
 const filtered = computed(() => chunks.value.filter(row => {
   if (typeFilter.value && String(row.chunkType || '') !== typeFilter.value) return false
   const key = keyword.value.trim().toLowerCase()

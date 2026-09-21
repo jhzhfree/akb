@@ -9,7 +9,7 @@ import re
 import zipfile
 from datetime import datetime, timezone
 from pathlib import PurePosixPath
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 import yaml
 
@@ -29,7 +29,7 @@ class OkfBundleInspector:
     STATUS_VALUES = {"draft", "stable", "deprecated"}
     LINK_PATTERN = re.compile(r"(?<!!)\[[^\]]*\]\(([^)]+)\)")
 
-    def inspect(self, content: bytes, filename: str = "bundle.zip") -> Dict[str, Any]:
+    def inspect(self, content: bytes, filename: str = "bundle.zip") -> dict[str, Any]:
         if not content:
             raise OkfBundleError("OKF bundle is empty")
         if len(content) > self.MAX_ARCHIVE_BYTES:
@@ -43,12 +43,12 @@ class OkfBundleInspector:
             raise OkfBundleError("OKF bundle contains no Markdown files")
 
         root = self._detect_root(markdown)
-        relative = {name[len(root):]: data for name, data in markdown.items() if name.startswith(root)}
+        relative = {name[len(root) :]: data for name, data in markdown.items() if name.startswith(root)}
         paths = set(relative)
-        concepts: List[Dict[str, Any]] = []
-        errors: List[Dict[str, str]] = []
-        warnings: List[Dict[str, str]] = []
-        version: Optional[str] = None
+        concepts: list[dict[str, Any]] = []
+        errors: list[dict[str, str]] = []
+        warnings: list[dict[str, str]] = []
+        version: str | None = None
 
         for path in sorted(relative):
             raw = relative[path]
@@ -99,8 +99,8 @@ class OkfBundleInspector:
             "warnings": warnings,
         }
 
-    def _read_archive(self, content: bytes) -> Dict[str, bytes]:
-        result: Dict[str, bytes] = {}
+    def _read_archive(self, content: bytes) -> dict[str, bytes]:
+        result: dict[str, bytes] = {}
         expanded = 0
         with zipfile.ZipFile(io.BytesIO(content)) as archive:
             entries = [item for item in archive.infolist() if not item.is_dir()]
@@ -120,8 +120,8 @@ class OkfBundleInspector:
         return result
 
     @staticmethod
-    def _detect_root(files: Dict[str, bytes]) -> str:
-        roots = [name[:-len("index.md")] for name in files if name.endswith("index.md")]
+    def _detect_root(files: dict[str, bytes]) -> str:
+        roots = [name[: -len("index.md")] for name in files if name.endswith("index.md")]
         if "" in roots:
             return ""
         # A common enclosing directory is packaging noise only when every file
@@ -132,7 +132,7 @@ class OkfBundleInspector:
         return ""
 
     @staticmethod
-    def _parse_markdown(text: str) -> Tuple[Dict[str, Any], str]:
+    def _parse_markdown(text: str) -> tuple[dict[str, Any], str]:
         if not text.startswith("---"):
             raise OkfBundleError("YAML frontmatter opening delimiter is required")
         match = re.match(r"^---[ \t]*\r?\n(.*?)\r?\n---[ \t]*(?:\r?\n|$)", text, re.DOTALL)
@@ -144,18 +144,21 @@ class OkfBundleInspector:
             raise OkfBundleError("YAML frontmatter is not parseable") from exc
         if not isinstance(frontmatter, dict):
             raise OkfBundleError("YAML frontmatter must be a mapping")
-        return frontmatter, text[match.end():]
+        return frontmatter, text[match.end() :]
 
-    def _normalize_concept(self, path: str, fm: Dict[str, Any], body: str,
-                           paths: set) -> Tuple[Dict[str, Any], List[Dict[str, str]]]:
-        warnings: List[Dict[str, str]] = []
+    def _normalize_concept(
+        self, path: str, fm: dict[str, Any], body: str, paths: set
+    ) -> tuple[dict[str, Any], list[dict[str, str]]]:
+        warnings: list[dict[str, str]] = []
         status = fm.get("status", "stable")
         if status not in self.STATUS_VALUES:
             warnings.append(self._issue(path, "UNKNOWN_STATUS", "Unknown lifecycle status was preserved"))
         verified = self._actors(fm.get("verified"))
         generated = self._actors(fm.get("generated"))
-        trust = "human-reviewed" if any(v.startswith("human:") for v in verified) else (
-            "machine-confirmed" if verified else "unverified"
+        trust = (
+            "human-reviewed"
+            if any(v.startswith("human:") for v in verified)
+            else ("machine-confirmed" if verified else "unverified")
         )
         links = []
         for raw_target in self.LINK_PATTERN.findall(body):
@@ -169,9 +172,23 @@ class OkfBundleInspector:
                 warnings.append(self._issue(path, "BROKEN_LINK", raw_target))
         stale_after = fm.get("stale_after")
         stale = self._is_stale(stale_after, path, warnings)
-        known = {"type", "title", "description", "resource", "tags", "sources", "generated",
-                 "verified", "status", "stale_after", "runtime", "parameters", "computation",
-                 "executor", "attester"}
+        known = {
+            "type",
+            "title",
+            "description",
+            "resource",
+            "tags",
+            "sources",
+            "generated",
+            "verified",
+            "status",
+            "stale_after",
+            "runtime",
+            "parameters",
+            "computation",
+            "executor",
+            "attester",
+        }
         return {
             "conceptId": path[:-3],
             "path": path,
@@ -194,13 +211,13 @@ class OkfBundleInspector:
         }, warnings
 
     @staticmethod
-    def _actors(value: Any) -> List[str]:
+    def _actors(value: Any) -> list[str]:
         if value is None:
             return []
         values = value if isinstance(value, list) else [value]
         return [str(item).strip() for item in values if str(item).strip()]
 
-    def _is_stale(self, value: Any, path: str, warnings: List[Dict[str, str]]) -> bool:
+    def _is_stale(self, value: Any, path: str, warnings: list[dict[str, str]]) -> bool:
         if value is None:
             return False
         try:
@@ -214,13 +231,13 @@ class OkfBundleInspector:
             return False
 
     @staticmethod
-    def _counts(items: List[Dict[str, Any]], key: str) -> Dict[str, int]:
-        counts: Dict[str, int] = {}
+    def _counts(items: list[dict[str, Any]], key: str) -> dict[str, int]:
+        counts: dict[str, int] = {}
         for item in items:
             value = str(item.get(key))
             counts[value] = counts.get(value, 0) + 1
         return counts
 
     @staticmethod
-    def _issue(path: str, code: str, message: str) -> Dict[str, str]:
+    def _issue(path: str, code: str, message: str) -> dict[str, str]:
         return {"path": path, "code": code, "message": message}

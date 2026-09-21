@@ -16,7 +16,8 @@ the resulting decision carries its own score so downstream services can audit it
 
 import logging
 import re
-from typing import Any, Dict, Iterable, List, Optional, Tuple
+from collections.abc import Iterable
+from typing import Any
 
 from app.core.config import settings
 from app.services.embedding import cosine, get_embedding_provider
@@ -25,7 +26,7 @@ logger = logging.getLogger(__name__)
 
 # Operator-maintained synonyms. Kept here rather than in a table so the AI service stays
 # deployable without a database dependency; business-specific overrides come from the caller.
-ALIAS_DICTIONARY: Dict[str, str] = {
+ALIAS_DICTIONARY: dict[str, str] = {
     "tomcat8.5": "tomcat",
     "tomcat 8.5": "tomcat",
     "jdk8": "jdk",
@@ -63,9 +64,9 @@ class EntityResolver:
 
     async def resolve(
         self,
-        entities: List[Dict[str, Any]],
-        canonical_entities: Optional[List[Dict[str, Any]]] = None,
-    ) -> Dict[str, Any]:
+        entities: list[dict[str, Any]],
+        canonical_entities: list[dict[str, Any]] | None = None,
+    ) -> dict[str, Any]:
         """Return merge decisions and alias records for a batch of extracted mentions.
 
         Args:
@@ -78,12 +79,17 @@ class EntityResolver:
         """
         canonical_entities = canonical_entities or []
         if not getattr(settings, "entity_resolution_enabled", False) or not entities:
-            return {"merges": [], "aliases": [], "canonicalCount": len(canonical_entities),
-                    "enabled": False, "reason": "disabled"}
+            return {
+                "merges": [],
+                "aliases": [],
+                "canonicalCount": len(canonical_entities),
+                "enabled": False,
+                "reason": "disabled",
+            }
 
-        merges: List[Dict[str, Any]] = []
-        aliases: List[Dict[str, Any]] = []
-        unmatched: List[Tuple[Dict[str, Any], str]] = []
+        merges: list[dict[str, Any]] = []
+        aliases: list[dict[str, Any]] = []
+        unmatched: list[tuple[dict[str, Any], str]] = []
 
         for mention in entities:
             code = str(mention.get("code") or mention.get("entity_code") or "").strip()
@@ -104,7 +110,7 @@ class EntityResolver:
             unmatched.append((mention, normalized))
 
         if unmatched and getattr(settings, "entity_resolution_embedding_enabled", False):
-            anchors: List[Tuple[str, str]] = []
+            anchors: list[tuple[str, str]] = []
             for canonical in canonical_entities:
                 code = str(canonical.get("entityCode") or canonical.get("code") or "").strip()
                 name = str(canonical.get("canonicalName") or canonical.get("name") or "").strip()
@@ -126,9 +132,13 @@ class EntityResolver:
             "reason": "ok",
         }
 
-    async def _embedding_pass(self, unmatched: List[Tuple[Dict[str, Any], str]],
-                              anchors: List[Tuple[str, str]], merges: List[Dict[str, Any]],
-                              aliases: List[Dict[str, Any]]) -> None:
+    async def _embedding_pass(
+        self,
+        unmatched: list[tuple[dict[str, Any], str]],
+        anchors: list[tuple[str, str]],
+        merges: list[dict[str, Any]],
+        aliases: list[dict[str, Any]],
+    ) -> None:
         """Attach remaining mentions to their closest canonical anchor by embedding cosine."""
         threshold = float(getattr(settings, "entity_resolution_similarity", 0.86))
         if not anchors:
@@ -150,15 +160,14 @@ class EntityResolver:
                 score = float(cosine(vector, anchor_vector))
                 if score > best_score:
                     best_anchor, best_score = anchors[position][0], score
-            if best_anchor is not None and best_score >= threshold \
-                    and best_anchor != str(mention.get("code") or ""):
+            if best_anchor is not None and best_score >= threshold and best_anchor != str(mention.get("code") or ""):
                 merges.append(self._merge_record(mention, best_anchor, "EMBEDDING_MATCH", best_score))
-                aliases.append(self._alias_record(
-                    best_anchor, str(mention.get("name") or ""), "EMBEDDING_MATCH", best_score))
+                aliases.append(
+                    self._alias_record(best_anchor, str(mention.get("name") or ""), "EMBEDDING_MATCH", best_score)
+                )
 
     @staticmethod
-    def _exact_target(canonical_entities: Iterable[Dict[str, Any]], normalized: str,
-                      raw_name: str) -> Optional[str]:
+    def _exact_target(canonical_entities: Iterable[dict[str, Any]], normalized: str, raw_name: str) -> str | None:
         for canonical in canonical_entities:
             code = str(canonical.get("entityCode") or canonical.get("code") or "").strip()
             name = str(canonical.get("canonicalName") or canonical.get("name") or "").strip()
@@ -171,7 +180,7 @@ class EntityResolver:
         return None
 
     @staticmethod
-    def _exact_target_from_merges(merges, entities, normalized) -> Optional[str]:
+    def _exact_target_from_merges(merges, entities, normalized) -> str | None:
         """Mentions inside the same batch may already share a canonical representative."""
         merged_codes = {str(m.get("from")) for m in merges}
         for mention in entities:
@@ -184,8 +193,7 @@ class EntityResolver:
         return None
 
     @staticmethod
-    def _merge_record(mention: Dict[str, Any], target: str, strategy: str,
-                      score: float) -> Dict[str, Any]:
+    def _merge_record(mention: dict[str, Any], target: str, strategy: str, score: float) -> dict[str, Any]:
         return {
             "from": str(mention.get("code") or mention.get("entity_code") or ""),
             "to": target,
@@ -195,7 +203,7 @@ class EntityResolver:
         }
 
     @staticmethod
-    def _alias_record(target: str, alias: str, strategy: str, score: float) -> Dict[str, Any]:
+    def _alias_record(target: str, alias: str, strategy: str, score: float) -> dict[str, Any]:
         return {
             "entityCode": target,
             "alias": alias,
@@ -204,7 +212,7 @@ class EntityResolver:
         }
 
 
-_resolver: Optional[EntityResolver] = None
+_resolver: EntityResolver | None = None
 
 
 def get_entity_resolver() -> EntityResolver:

@@ -8,7 +8,6 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
-
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -25,19 +24,20 @@ import java.util.concurrent.atomic.AtomicBoolean;
  */
 @Service
 public class ExternalStreamService {
+
     private static final Logger log = LoggerFactory.getLogger(ExternalStreamService.class);
-    private static final String[] ANSWER_STAGES = {"REWRITE", "RECALL", "FUSION", "RERANK", "ANSWER"};
+
+    private static final String[] ANSWER_STAGES = { "REWRITE", "RECALL", "FUSION", "RERANK", "ANSWER" };
 
     private final ExternalKnowledgeFacade facade;
+
     private final IngestionObservabilityService ingestionService;
+
     private final KnowledgeProperties.External properties;
+
     private final Executor executor;
 
-    public ExternalStreamService(
-            ExternalKnowledgeFacade facade,
-            IngestionObservabilityService ingestionService,
-            KnowledgeProperties properties,
-            @Qualifier("externalStreamExecutor") Executor executor) {
+    public ExternalStreamService(ExternalKnowledgeFacade facade, IngestionObservabilityService ingestionService, KnowledgeProperties properties, @Qualifier("externalStreamExecutor") Executor executor) {
         this.facade = facade;
         this.ingestionService = ingestionService;
         this.properties = properties.external();
@@ -51,14 +51,11 @@ public class ExternalStreamService {
      * slices; the event contract (stage / delta / citation / done) is what clients depend on,
      * and switching to token-level streaming later needs no client change.</p>
      */
-    public void streamQuery(
-            ApiKey key, Long knowledgeBaseId, String question, Integer topK, SseEmitter emitter) {
+    public void streamQuery(ApiKey key, Long knowledgeBaseId, String question, Integer topK, SseEmitter emitter) {
         executor.execute(() -> {
             try {
                 for (String stage : ANSWER_STAGES) {
-                    emitter.send(SseEmitter.event()
-                            .name("stage")
-                            .data(stagePayload(knowledgeBaseId, stage)));
+                    emitter.send(SseEmitter.event().name("stage").data(stagePayload(knowledgeBaseId, stage)));
                 }
                 Map<String, Object> result = facade.query(knowledgeBaseId, question, topK, null);
                 String answer = result.get("answer") == null ? "" : String.valueOf(result.get("answer"));
@@ -96,29 +93,24 @@ public class ExternalStreamService {
         emitter.onTimeout(() -> running.set(false));
         emitter.onError(e -> running.set(false));
         executor.execute(() -> {
-            long deadline = System.currentTimeMillis()
-                    + Math.max(properties.getSseMaxMinutes(), 1) * 60_000L;
+            long deadline = System.currentTimeMillis() + Math.max(properties.getSseMaxMinutes(), 1) * 60_000L;
             long lastHeartbeat = System.currentTimeMillis();
             String lastRunSignature = "";
             String lastKnowledgeSignature = "";
             try {
-                emitter.send(SseEmitter.event().name("open").data(
-                        eventPayload(knowledgeBaseId, "订阅已建立")));
+                emitter.send(SseEmitter.event().name("open").data(eventPayload(knowledgeBaseId, "订阅已建立")));
                 while (running.get() && System.currentTimeMillis() < deadline) {
                     String runSignature = ingestionSignature(knowledgeBaseId);
                     if (!runSignature.isEmpty() && !runSignature.equals(lastRunSignature)) {
                         lastRunSignature = runSignature;
-                        emitter.send(SseEmitter.event().name("ingestion").data(
-                                eventPayload(knowledgeBaseId, runSignature)));
+                        emitter.send(SseEmitter.event().name("ingestion").data(eventPayload(knowledgeBaseId, runSignature)));
                     }
                     String knowledgeSignature = knowledgeSignature(knowledgeBaseId);
                     if (!knowledgeSignature.isEmpty() && !knowledgeSignature.equals(lastKnowledgeSignature)) {
                         lastKnowledgeSignature = knowledgeSignature;
-                        emitter.send(SseEmitter.event().name("knowledge").data(
-                                eventPayload(knowledgeBaseId, knowledgeSignature)));
+                        emitter.send(SseEmitter.event().name("knowledge").data(eventPayload(knowledgeBaseId, knowledgeSignature)));
                     }
-                    if (System.currentTimeMillis() - lastHeartbeat
-                            > Math.max(properties.getSseHeartbeatSeconds(), 3) * 1000L) {
+                    if (System.currentTimeMillis() - lastHeartbeat > Math.max(properties.getSseHeartbeatSeconds(), 3) * 1000L) {
                         lastHeartbeat = System.currentTimeMillis();
                         emitter.send(SseEmitter.event().comment("heartbeat"));
                     }
@@ -126,29 +118,29 @@ public class ExternalStreamService {
                 }
                 emitter.complete();
             } catch (Exception e) {
-                if (running.get()) fail(emitter, e);
+                if (running.get()) {
+                    fail(emitter, e);
+                }
             }
         });
     }
 
     private String ingestionSignature(Long kb) {
         List<IngestionRun> runs = ingestionService.list(kb, 5);
-        if (runs == null || runs.isEmpty()) return "";
+        if (runs == null || runs.isEmpty()) {
+            return "";
+        }
         IngestionRun latest = runs.get(0);
-        return "run=" + latest.getRunCode()
-                + " status=" + latest.getStatus()
-                + " stage=" + latest.getCurrentStage()
-                + " source=" + latest.getSourceName();
+        return "run=" + latest.getRunCode() + " status=" + latest.getStatus() + " stage=" + latest.getCurrentStage() + " source=" + latest.getSourceName();
     }
 
     private String knowledgeSignature(Long kb) {
         Object overview = facade.overview(kb, null);
-        if (!(overview instanceof Map)) return "";
+        if (!(overview instanceof Map)) {
+            return "";
+        }
         Map<String, Object> values = (Map<String, Object>) overview;
-        return "cards=" + values.get("cardCount")
-                + " claims=" + values.get("claimCount")
-                + " chunks=" + values.get("chunkCount")
-                + " pending=" + values.get("pendingReviewCount");
+        return "cards=" + values.get("cardCount") + " claims=" + values.get("claimCount") + " chunks=" + values.get("chunkCount") + " pending=" + values.get("pendingReviewCount");
     }
 
     private Map<String, Object> stagePayload(Long kb, String stage) {

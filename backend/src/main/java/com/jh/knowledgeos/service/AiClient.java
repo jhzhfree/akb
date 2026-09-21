@@ -12,7 +12,6 @@ import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.multipart.MultipartFile;
-
 import java.io.IOException;
 import java.util.Map;
 
@@ -21,12 +20,14 @@ import java.util.Map;
  */
 @Service
 public class AiClient {
+
     private final RestTemplate restTemplate;
+
     private final String baseUrl;
+
     private final ObjectMapper objectMapper;
 
-    public AiClient(RestTemplate restTemplate, KnowledgeProperties properties,
-            ObjectMapper objectMapper) {
+    public AiClient(RestTemplate restTemplate, KnowledgeProperties properties, ObjectMapper objectMapper) {
         this.restTemplate = restTemplate;
         this.baseUrl = properties.getAiServiceBaseUrl();
         this.objectMapper = objectMapper;
@@ -75,20 +76,16 @@ public class AiClient {
     }
 
     @SuppressWarnings("unchecked")
-    private Map<String, Object> postFile(String path, MultipartFile file,
-            Map<String, Object> policy) throws IOException {
+    private Map<String, Object> postFile(String path, MultipartFile file, Map<String, Object> policy) throws IOException {
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.MULTIPART_FORM_DATA);
-
         MultiValueMap<String, Object> body = new LinkedMultiValueMap<String, Object>();
         Resource resource = file.getResource();
         body.add("file", resource);
         if (policy != null && !policy.isEmpty()) {
             body.add("policy", objectMapper.writeValueAsString(policy));
         }
-
-        HttpEntity<MultiValueMap<String, Object>> request =
-                new HttpEntity<MultiValueMap<String, Object>>(body, headers);
+        HttpEntity<MultiValueMap<String, Object>> request = new HttpEntity<MultiValueMap<String, Object>>(body, headers);
         return restTemplate.postForObject(baseUrl + path, request, Map.class);
     }
 }

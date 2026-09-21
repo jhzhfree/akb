@@ -7,7 +7,6 @@ import com.jh.knowledgeos.domain.PlatformEvent;
 import com.jh.knowledgeos.domain.User;
 import com.jh.knowledgeos.mapper.KnowledgeMapper;
 import org.springframework.stereotype.Service;
-
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -23,12 +22,13 @@ import java.util.Set;
  */
 @Service
 public class PlatformEventVisibilityService {
-    private static final Set<String> EXTERNAL_DENYLIST = new HashSet<String>(Arrays.asList(
-            "permissionTags", "aclTags", "requirePermissionTags", "effectiveTags", "tagScope",
-            "tagScopes", "userId", "subjectCode"));
+
+    private static final Set<String> EXTERNAL_DENYLIST = new HashSet<String>(Arrays.asList("permissionTags", "aclTags", "requirePermissionTags", "effectiveTags", "tagScope", "tagScopes", "userId", "subjectCode"));
+
     private static final int EXTERNAL_TEXT_LIMIT = 240;
 
     private final KnowledgeMapper mapper;
+
     private final KnowledgeBaseAccessService accessService;
 
     public PlatformEventVisibilityService(KnowledgeMapper mapper, KnowledgeBaseAccessService accessService) {
@@ -36,16 +36,21 @@ public class PlatformEventVisibilityService {
         this.accessService = accessService;
     }
 
-    /** Console session: everything the account can read, platform-wide events reserved to admins. */
+    /**
+     * Console session: everything the account can read, platform-wide events reserved to admins.
+     */
     public PlatformEventHub.Visibility forSession(User user, Long requestedKb) {
         return new PlatformEventHub.Visibility() {
+
             @Override
             public boolean visible(PlatformEvent event) {
                 Long kb = event.getKnowledgeBaseId();
                 if (kb == null) {
                     return user != null && UserRole.of(user.getRole()) == UserRole.ADMIN;
                 }
-                if (requestedKb != null && !requestedKb.equals(kb)) return false;
+                if (requestedKb != null && !requestedKb.equals(kb)) {
+                    return false;
+                }
                 KnowledgeBase base = mapper.getKnowledgeBase(kb);
                 return base != null && accessService.canRead(user, base);
             }
@@ -63,9 +68,12 @@ public class PlatformEventVisibilityService {
      */
     public PlatformEventHub.Visibility forApiKey(ApiKey key, Long kb) {
         return new PlatformEventHub.Visibility() {
+
             @Override
             public boolean visible(PlatformEvent event) {
-                if (event.getKnowledgeBaseId() == null) return false;
+                if (event.getKnowledgeBaseId() == null) {
+                    return false;
+                }
                 return kb == null || kb.equals(event.getKnowledgeBaseId());
             }
 
@@ -78,21 +86,26 @@ public class PlatformEventVisibilityService {
 
     private Map<String, Object> redact(Map<String, Object> detail) {
         Map<String, Object> safe = new LinkedHashMap<String, Object>();
-        if (detail == null) return safe;
+        if (detail == null) {
+            return safe;
+        }
         for (Map.Entry<String, Object> entry : detail.entrySet()) {
             String key = entry.getKey();
-            if (key == null || EXTERNAL_DENYLIST.contains(key)) continue;
+            if (key == null || EXTERNAL_DENYLIST.contains(key)) {
+                continue;
+            }
             safe.put(key, truncate(entry.getValue()));
         }
         return safe;
     }
 
-    /** Bridges can be metered by payload size, so long free-text fields leave the process trimmed. */
+    /**
+     * Bridges can be metered by payload size, so long free-text fields leave the process trimmed.
+     */
     private Object truncate(Object value) {
         if (value instanceof String) {
             String text = (String) value;
-            return text.length() > EXTERNAL_TEXT_LIMIT
-                    ? text.substring(0, EXTERNAL_TEXT_LIMIT) + "…" : text;
+            return text.length() > EXTERNAL_TEXT_LIMIT ? text.substring(0, EXTERNAL_TEXT_LIMIT) + "…" : text;
         }
         return value;
     }

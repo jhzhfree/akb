@@ -8,7 +8,6 @@ import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-
 import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -23,6 +22,7 @@ import java.util.Map;
 @CrossOrigin
 @Tag(name = "Environment", description = "运行环境：profile、版本与依赖形态")
 public class EnvironmentController {
+
     private final Environment environment;
 
     public EnvironmentController(Environment environment) {

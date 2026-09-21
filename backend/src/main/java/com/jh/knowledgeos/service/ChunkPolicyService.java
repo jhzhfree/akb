@@ -4,7 +4,6 @@ import com.jh.knowledgeos.domain.User;
 import com.jh.knowledgeos.mapper.KnowledgeMapper;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -25,18 +24,25 @@ import java.util.Set;
  */
 @Service
 public class ChunkPolicyService {
+
     public static final String DEFAULT_STRATEGY = "SEMANTIC";
+
     public static final int DEFAULT_CHUNK_SIZE = 900;
+
     public static final int DEFAULT_CHUNK_OVERLAP = 120;
+
     public static final int DEFAULT_MIN_CHUNK_SIZE = 120;
+
     public static final String DEFAULT_MEASURE = "CHAR";
 
-    private static final Set<String> STRATEGIES = Collections.unmodifiableSet(new HashSet<String>(
-            Arrays.asList("SEMANTIC", "FIXED", "SENTENCE", "STRUCTURE", "PARENT_CHILD")));
-    private static final Set<String> MEASURES = Collections.unmodifiableSet(new HashSet<String>(
-            Arrays.asList("CHAR", "TOKEN")));
+    private static final Set<String> STRATEGIES = Collections.unmodifiableSet(new HashSet<String>(Arrays.asList("SEMANTIC", "FIXED", "SENTENCE", "STRUCTURE", "PARENT_CHILD")));
+
+    private static final Set<String> MEASURES = Collections.unmodifiableSet(new HashSet<String>(Arrays.asList("CHAR", "TOKEN")));
+
     private static final int CHUNK_SIZE_MIN = 200;
+
     private static final int CHUNK_SIZE_MAX = 4000;
+
     private static final int OVERLAP_MAX = 1000;
 
     private final KnowledgeMapper mapper;
@@ -45,7 +51,9 @@ public class ChunkPolicyService {
         this.mapper = mapper;
     }
 
-    /** Built-in policy: what a knowledge base uses until someone tunes it. */
+    /**
+     * Built-in policy: what a knowledge base uses until someone tunes it.
+     */
     public Map<String, Object> defaults() {
         Map<String, Object> policy = new LinkedHashMap<String, Object>();
         policy.put("strategy", DEFAULT_STRATEGY);
@@ -59,7 +67,9 @@ public class ChunkPolicyService {
         return policy;
     }
 
-    /** Effective policy of a knowledge base, plus whether it was customized. */
+    /**
+     * Effective policy of a knowledge base, plus whether it was customized.
+     */
     public Map<String, Object> policy(Long kb) {
         Map<String, Object> stored = mapper.getChunkPolicy(kb);
         Map<String, Object> result = new LinkedHashMap<String, Object>();
@@ -70,7 +80,9 @@ public class ChunkPolicyService {
         return result;
     }
 
-    /** Policy handed to the parser on upload: never null, always bounded. */
+    /**
+     * Policy handed to the parser on upload: never null, always bounded.
+     */
     public Map<String, Object> policyFor(Long kb) {
         Map<String, Object> stored = mapper.getChunkPolicy(kb);
         return stored == null ? defaults() : fromRow(stored);
@@ -81,17 +93,7 @@ public class ChunkPolicyService {
         Map<String, Object> policy = normalize(request);
         User current = AuthContext.get();
         String updatedBy = current == null ? "" : String.valueOf(current.getUsername());
-        mapper.saveChunkPolicy(
-                kb,
-                String.valueOf(policy.get("strategy")),
-                intValue(policy.get("chunkSize"), DEFAULT_CHUNK_SIZE),
-                intValue(policy.get("chunkOverlap"), DEFAULT_CHUNK_OVERLAP),
-                intValue(policy.get("minChunkSize"), DEFAULT_MIN_CHUNK_SIZE),
-                String.valueOf(policy.get("measure")),
-                boolValue(policy.get("keepStructure"), true),
-                boolValue(policy.get("respectSentence"), true),
-                boolValue(policy.get("parentChild"), false),
-                updatedBy);
+        mapper.saveChunkPolicy(kb, String.valueOf(policy.get("strategy")), intValue(policy.get("chunkSize"), DEFAULT_CHUNK_SIZE), intValue(policy.get("chunkOverlap"), DEFAULT_CHUNK_OVERLAP), intValue(policy.get("minChunkSize"), DEFAULT_MIN_CHUNK_SIZE), String.valueOf(policy.get("measure")), boolValue(policy.get("keepStructure"), true), boolValue(policy.get("respectSentence"), true), boolValue(policy.get("parentChild"), false), updatedBy);
         return policy(kb);
     }
 
@@ -109,9 +111,7 @@ public class ChunkPolicyService {
         Map<String, Object> schema = new LinkedHashMap<String, Object>();
         schema.put("default", defaults());
         schema.put("strategies", strategies());
-        schema.put("measures", Arrays.asList(
-                measure("CHAR", "字符数"),
-                measure("TOKEN", "估算 Token")));
+        schema.put("measures", Arrays.asList(measure("CHAR", "字符数"), measure("TOKEN", "估算 Token")));
         Map<String, Object> ranges = new LinkedHashMap<String, Object>();
         ranges.put("chunkSize", range(CHUNK_SIZE_MIN, CHUNK_SIZE_MAX));
         ranges.put("chunkOverlap", range(0, OVERLAP_MAX));
@@ -120,7 +120,9 @@ public class ChunkPolicyService {
         return schema;
     }
 
-    /** Merge a console payload over the defaults, clamping every value into bounds. */
+    /**
+     * Merge a console payload over the defaults, clamping every value into bounds.
+     */
     public Map<String, Object> normalize(Map<String, Object> request) {
         Map<String, Object> base = defaults();
         if (request == null || request.isEmpty()) {
@@ -134,12 +136,9 @@ public class ChunkPolicyService {
         if (!MEASURES.contains(measure)) {
             measure = DEFAULT_MEASURE;
         }
-        int size = clamp(intValue(request.get("chunkSize"), DEFAULT_CHUNK_SIZE),
-                CHUNK_SIZE_MIN, CHUNK_SIZE_MAX);
-        int overlap = clamp(intValue(request.get("chunkOverlap"), DEFAULT_CHUNK_OVERLAP),
-                0, OVERLAP_MAX);
-        int minSize = clamp(intValue(request.get("minChunkSize"), DEFAULT_MIN_CHUNK_SIZE),
-                0, OVERLAP_MAX);
+        int size = clamp(intValue(request.get("chunkSize"), DEFAULT_CHUNK_SIZE), CHUNK_SIZE_MIN, CHUNK_SIZE_MAX);
+        int overlap = clamp(intValue(request.get("chunkOverlap"), DEFAULT_CHUNK_OVERLAP), 0, OVERLAP_MAX);
+        int minSize = clamp(intValue(request.get("minChunkSize"), DEFAULT_MIN_CHUNK_SIZE), 0, OVERLAP_MAX);
         // An overlap that swallows the window would duplicate the whole document.
         overlap = Math.min(overlap, size / 2);
         minSize = Math.min(minSize, size / 2);
@@ -157,16 +156,11 @@ public class ChunkPolicyService {
 
     private List<Map<String, Object>> strategies() {
         List<Map<String, Object>> items = new ArrayList<Map<String, Object>>();
-        items.add(strategy("SEMANTIC", "语义分段（默认）",
-                "按语义块累积到窗口上限，表格与代码独立成块，遇到新章节即切分"));
-        items.add(strategy("FIXED", "固定窗口滑窗",
-                "按窗口在整篇正文上滑动并带真实重叠，适合无结构长文本"));
-        items.add(strategy("SENTENCE", "句子聚合",
-                "以句子为最小单位聚合到窗口，切分点始终落在句末"));
-        items.add(strategy("STRUCTURE", "章节结构",
-                "每个标题路径生成一块，仅在超长时硬切，适合手册与规程"));
-        items.add(strategy("PARENT_CHILD", "父子分块",
-                "先按章节生成父块，再生成窗口子块，检索命中子块、回答回看父块"));
+        items.add(strategy("SEMANTIC", "语义分段（默认）", "按语义块累积到窗口上限，表格与代码独立成块，遇到新章节即切分"));
+        items.add(strategy("FIXED", "固定窗口滑窗", "按窗口在整篇正文上滑动并带真实重叠，适合无结构长文本"));
+        items.add(strategy("SENTENCE", "句子聚合", "以句子为最小单位聚合到窗口，切分点始终落在句末"));
+        items.add(strategy("STRUCTURE", "章节结构", "每个标题路径生成一块，仅在超长时硬切，适合手册与规程"));
+        items.add(strategy("PARENT_CHILD", "父子分块", "先按章节生成父块，再生成窗口子块，检索命中子块、回答回看父块"));
         return items;
     }
 
@@ -237,8 +231,7 @@ public class ChunkPolicyService {
         if ("1".equals(text) || "true".equalsIgnoreCase(text) || "yes".equalsIgnoreCase(text)) {
             return true;
         }
-        return "0".equals(text) || "false".equalsIgnoreCase(text) || "no".equalsIgnoreCase(text)
-                ? false : fallback;
+        return "0".equals(text) || "false".equalsIgnoreCase(text) || "no".equalsIgnoreCase(text) ? false : fallback;
     }
 
     private static String stringValue(Object value, String fallback) {

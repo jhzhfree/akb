@@ -14,8 +14,9 @@ Design rules:
 import hashlib
 import json
 import logging
+from collections.abc import Iterable
 from functools import lru_cache
-from typing import Any, Dict, Iterable, List, Optional
+from typing import Any
 
 import httpx
 
@@ -41,7 +42,7 @@ SEARCH_METADATA_FIELDS = [
 ]
 
 
-def _status_filter() -> Dict[str, Any]:
+def _status_filter() -> dict[str, Any]:
     """Allow raw chunks or formally published knowledge objects."""
     return {
         "bool": {
@@ -54,7 +55,7 @@ def _status_filter() -> Dict[str, Any]:
     }
 
 
-def _permission_filter(tags: Optional[Iterable[str]]) -> Dict[str, Any]:
+def _permission_filter(tags: Iterable[str] | None) -> dict[str, Any]:
     """Build the Elasticsearch ACL filter.
 
     Missing ``permission_tags`` means the object is public. Restricted objects
@@ -67,7 +68,7 @@ def _permission_filter(tags: Optional[Iterable[str]]) -> Dict[str, Any]:
     return {"bool": {"should": should, "minimum_should_match": 1}}
 
 
-def _candidate(source: Dict[str, Any], channel: str, score: float, provider: str) -> Dict[str, Any]:
+def _candidate(source: dict[str, Any], channel: str, score: float, provider: str) -> dict[str, Any]:
     """Convert provider-specific hits to the internal candidate shape."""
     metadata = {key: source.get(key) for key in SEARCH_METADATA_FIELDS}
     metadata["retrieval_provider"] = provider
@@ -102,7 +103,7 @@ class ElasticsearchProvider:
         )
         self.index = settings.elasticsearch_index
         self.read_alias = settings.elasticsearch_read_alias
-        self._active_read_index: Optional[str] = None
+        self._active_read_index: str | None = None
 
     async def available(self) -> bool:
         """Return whether Elasticsearch responds without a server-side failure."""
@@ -115,7 +116,7 @@ class ElasticsearchProvider:
             logger.debug("Elasticsearch availability check failed: %s", exc)
             return False
 
-    async def ensure_index(self, index_name: Optional[str] = None) -> None:
+    async def ensure_index(self, index_name: str | None = None) -> None:
         """Create a physical index when it does not already exist."""
         target = index_name or self.index
         response = await self.client.head("/%s" % target)
@@ -167,16 +168,16 @@ class ElasticsearchProvider:
 
     async def upsert(
         self,
-        docs: List[Dict[str, Any]],
-        target: Optional[str] = None,
-    ) -> Dict[str, Any]:
+        docs: list[dict[str, Any]],
+        target: str | None = None,
+    ) -> dict[str, Any]:
         """Idempotently bulk-upsert retrieval documents."""
         if not self.enabled or not docs:
             return {"provider": "elasticsearch", "indexed": 0, "skipped": True}
 
         write_target = target or self.index
         await self.ensure_index(write_target)
-        lines: List[str] = []
+        lines: list[str] = []
         for doc in docs:
             identity = "%s:%s" % (doc.get("knowledge_base_id"), doc.get("id"))
             document_id = hashlib.sha256(identity.encode("utf-8")).hexdigest()
@@ -201,15 +202,9 @@ class ElasticsearchProvider:
         )
         response.raise_for_status()
         payload = response.json()
-        errors = [
-            item
-            for item in payload.get("items", [])
-            if item.get("index", {}).get("error")
-        ]
+        errors = [item for item in payload.get("items", []) if item.get("index", {}).get("error")]
         if errors:
-            raise RuntimeError(
-                "Elasticsearch bulk indexing failed for %s documents" % len(errors)
-            )
+            raise RuntimeError("Elasticsearch bulk indexing failed for %s documents" % len(errors))
         return {"provider": "elasticsearch", "indexed": len(docs)}
 
     def schema_target(self, schema_version: str) -> str:
@@ -256,34 +251,33 @@ class ElasticsearchProvider:
         response.raise_for_status()
 
     @staticmethod
-    def _standard_doc(**kwargs: Any) -> Dict[str, Any]:
+    def _standard_doc(**kwargs: Any) -> dict[str, Any]:
         return {key: value for key, value in kwargs.items() if value is not None}
 
     async def upsert_standard(
         self,
         kb: int,
         document_id: int,
-        units: List[Dict[str, Any]],
+        units: list[dict[str, Any]],
         source_name: str = "",
         source_uri: str = "",
         doc_id: str = "",
         source_format: str = "",
         title: str = "",
-        permission_tags: Optional[List[str]] = None,
-        source_id: Optional[int] = None,
+        permission_tags: list[str] | None = None,
+        source_id: int | None = None,
         index_version: int = 0,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Write normalized source units into the standard-document index."""
         if not self.enabled or not units:
             return {"provider": "elasticsearch", "standardIndexed": 0, "skipped": True}
         await self.ensure_standard_index()
         target = settings.standard_document_index
-        lines: List[str] = []
+        lines: list[str] = []
         for unit in units:
             identity = "%s:%s:%s" % (kb, document_id, unit.get("unit_id") or unit.get("seq"))
             document_key = hashlib.sha256(identity.encode("utf-8")).hexdigest()
-            lines.append(json.dumps(
-                {"index": {"_index": target, "_id": document_key}}, ensure_ascii=False))
+            lines.append(json.dumps({"index": {"_index": target, "_id": document_key}}, ensure_ascii=False))
             body = self._standard_doc(
                 knowledge_base_id=kb,
                 document_id=document_id,
@@ -316,29 +310,23 @@ class ElasticsearchProvider:
             headers={"Content-Type": "application/x-ndjson"},
         )
         response.raise_for_status()
-        errors = [
-            item for item in response.json().get("items", [])
-            if item.get("index", {}).get("error")
-        ]
+        errors = [item for item in response.json().get("items", []) if item.get("index", {}).get("error")]
         if errors:
-            raise RuntimeError(
-                "Elasticsearch standard-document indexing failed for %s units" % len(errors)
-            )
-        return {"provider": "elasticsearch", "standardIndexed": len(units),
-                "target": target}
+            raise RuntimeError("Elasticsearch standard-document indexing failed for %s units" % len(errors))
+        return {"provider": "elasticsearch", "standardIndexed": len(units), "target": target}
 
     async def search_standard(
         self,
         kb: int,
         query: str,
         top_k: int = 20,
-        permission_tags: Optional[Iterable[str]] = None,
-        document_id: Optional[int] = None,
-    ) -> List[Dict[str, Any]]:
+        permission_tags: Iterable[str] | None = None,
+        document_id: int | None = None,
+    ) -> list[dict[str, Any]]:
         """Full-text search over normalized source units."""
         if not self.enabled:
             return []
-        filters: List[Dict[str, Any]] = [
+        filters: list[dict[str, Any]] = [
             {"term": {"knowledge_base_id": kb}},
             _permission_filter(permission_tags),
         ]
@@ -346,17 +334,22 @@ class ElasticsearchProvider:
             filters.append({"term": {"document_id": document_id}})
         body = {
             "size": top_k,
-            "query": {"bool": {
-                "must": [{"multi_match": {
-                    "query": query,
-                    "fields": ["title^2", "heading_path^1.5", "content"],
-                    "type": "best_fields",
-                }}],
-                "filter": filters,
-            }},
+            "query": {
+                "bool": {
+                    "must": [
+                        {
+                            "multi_match": {
+                                "query": query,
+                                "fields": ["title^2", "heading_path^1.5", "content"],
+                                "type": "best_fields",
+                            }
+                        }
+                    ],
+                    "filter": filters,
+                }
+            },
         }
-        response = await self.client.post(
-            "/%s/_search" % settings.standard_document_index, json=body)
+        response = await self.client.post("/%s/_search" % settings.standard_document_index, json=body)
         if response.status_code == 404:
             return []
         response.raise_for_status()
@@ -373,42 +366,51 @@ class ElasticsearchProvider:
             hits.append(candidate)
         return hits
 
-    async def get_standard_units(self, kb: int, document_id: int) -> List[Dict[str, Any]]:
+    async def get_standard_units(self, kb: int, document_id: int) -> list[dict[str, Any]]:
         """Return every normalized unit of one document, ordered by sequence."""
         if not self.enabled:
             return []
         body = {
             "size": 10000,
-            "query": {"bool": {"filter": [
-                {"term": {"knowledge_base_id": kb}},
-                {"term": {"document_id": document_id}},
-            ]}},
+            "query": {
+                "bool": {
+                    "filter": [
+                        {"term": {"knowledge_base_id": kb}},
+                        {"term": {"document_id": document_id}},
+                    ]
+                }
+            },
             "sort": [{"seq": {"order": "asc"}}],
         }
-        response = await self.client.post(
-            "/%s/_search" % settings.standard_document_index, json=body)
+        response = await self.client.post("/%s/_search" % settings.standard_document_index, json=body)
         if response.status_code == 404:
             return []
         response.raise_for_status()
         return [hit.get("_source", {}) for hit in response.json().get("hits", {}).get("hits", [])]
 
-    async def delete_standard_document(self, kb: int, document_id: int) -> Dict[str, Any]:
+    async def delete_standard_document(self, kb: int, document_id: int) -> dict[str, Any]:
         """Remove normalized units of one document."""
         if not self.enabled:
             return {"deleted": 0, "skipped": True}
         response = await self.client.post(
             "/%s/_delete_by_query?refresh=true" % settings.standard_document_index,
-            json={"query": {"bool": {"filter": [
-                {"term": {"knowledge_base_id": kb}},
-                {"term": {"document_id": document_id}},
-            ]}}},
+            json={
+                "query": {
+                    "bool": {
+                        "filter": [
+                            {"term": {"knowledge_base_id": kb}},
+                            {"term": {"document_id": document_id}},
+                        ]
+                    }
+                }
+            },
         )
         if response.status_code == 404:
             return {"deleted": 0}
         response.raise_for_status()
         return {"deleted": response.json().get("deleted", 0)}
 
-    async def delete_standard_knowledge_base(self, kb: int) -> Dict[str, Any]:
+    async def delete_standard_knowledge_base(self, kb: int) -> dict[str, Any]:
         """Remove every normalized unit of one knowledge base, used by a knowledge-base purge."""
         if not self.enabled:
             return {"deleted": 0, "skipped": True}
@@ -423,9 +425,9 @@ class ElasticsearchProvider:
 
     async def rebuild_target(
         self,
-        docs: List[Dict[str, Any]],
+        docs: list[dict[str, Any]],
         schema_version: str,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Reset and populate a green index for a schema release."""
         target = self.schema_target(schema_version)
         head = await self.client.head("/%s" % target)
@@ -438,25 +440,30 @@ class ElasticsearchProvider:
     async def acl_target_rows(self, knowledge_base_id: int, schema_version=None):
         """Return green-target ACL metadata for machine qualification only."""
         index = self.schema_target(schema_version) if schema_version else self.read_alias
-        body = {"size": 10000, "query": {"bool": {"filter": [
-            {"term": {"knowledge_base_id": knowledge_base_id}}]}},
-            "_source": ["object_id", "permission_tags", "object_key", "content_hash", "status", "generation_id"]}
+        body = {
+            "size": 10000,
+            "query": {"bool": {"filter": [{"term": {"knowledge_base_id": knowledge_base_id}}]}},
+            "_source": ["object_id", "permission_tags", "object_key", "content_hash", "status", "generation_id"],
+        }
         response = await self.client.post("/%s/_search" % index, json=body)
         response.raise_for_status()
-        return [{
-            "id": str((hit.get("_source") or {}).get("object_id") or hit.get("_id")),
-            "permission_tags": (hit.get("_source") or {}).get("permission_tags") or [],
-            "object_key": (hit.get("_source") or {}).get("object_key"),
-            "content_hash": (hit.get("_source") or {}).get("content_hash") or "",
-            "status": (hit.get("_source") or {}).get("status"),
-            "generation_id": (hit.get("_source") or {}).get("generation_id"),
-        } for hit in response.json().get("hits", {}).get("hits", [])]
-
+        return [
+            {
+                "id": str((hit.get("_source") or {}).get("object_id") or hit.get("_id")),
+                "permission_tags": (hit.get("_source") or {}).get("permission_tags") or [],
+                "object_key": (hit.get("_source") or {}).get("object_key"),
+                "content_hash": (hit.get("_source") or {}).get("content_hash") or "",
+                "status": (hit.get("_source") or {}).get("status"),
+                "generation_id": (hit.get("_source") or {}).get("generation_id"),
+            }
+            for hit in response.json().get("hits", {}).get("hits", [])
+        ]
 
     async def target_manifest(self, knowledge_base_id: int, schema_version: str):
         """Calculate deterministic ACL/content manifest for one physical green index."""
         import hashlib
         import json
+
         rows = await self.acl_target_rows(knowledge_base_id, schema_version)
         digest = hashlib.sha256()
         for row in sorted(rows, key=lambda item: str(item.get("object_key") or "")):
@@ -468,28 +475,32 @@ class ElasticsearchProvider:
             }
             digest.update((json.dumps(canonical, ensure_ascii=False, separators=(",", ":")) + "\n").encode("utf-8"))
         generations = sorted({str(row.get("generation_id")) for row in rows if row.get("generation_id")})
-        return {"provider": "elasticsearch", "manifestHash": digest.hexdigest(),
-                "count": len(rows), "generations": generations}
+        return {
+            "provider": "elasticsearch",
+            "manifestHash": digest.hexdigest(),
+            "count": len(rows),
+            "generations": generations,
+        }
 
-    async def qualify_acl_target(self, knowledge_base_id: int, schema_version: str,
-                                 permission_tags, admin=False):
+    async def qualify_acl_target(self, knowledge_base_id: int, schema_version: str, permission_tags, admin=False):
         rows = await self.acl_target_rows(knowledge_base_id, schema_version)
         if admin:
             return [str(row["id"]) for row in rows]
         caller = set(permission_tags or [])
-        return [str(row["id"]) for row in rows
-                if not row["permission_tags"] or caller.intersection(row["permission_tags"])]
+        return [
+            str(row["id"]) for row in rows if not row["permission_tags"] or caller.intersection(row["permission_tags"])
+        ]
 
-    async def activate_target(self, schema_version: str) -> Dict[str, Any]:
+    async def activate_target(self, schema_version: str) -> dict[str, Any]:
         """Atomically move the read alias to a validated physical index."""
         target = self.schema_target(schema_version)
         if (await self.client.head("/%s" % target)).status_code != 200:
             raise RuntimeError("Elasticsearch target does not exist: %s" % target)
 
-        actions: List[Dict[str, Any]] = []
+        actions: list[dict[str, Any]] = []
         aliases = await self.client.get("/_alias/%s" % self.read_alias)
         if aliases.status_code == 200:
-            for old in aliases.json().keys():
+            for old in aliases.json():
                 actions.append({"remove": {"index": old, "alias": self.read_alias}})
         actions.append({"add": {"index": target, "alias": self.read_alias}})
 
@@ -508,12 +519,10 @@ class ElasticsearchProvider:
         if self._active_read_index:
             return self._active_read_index
         aliases = await self.client.get("/_alias/%s" % self.read_alias)
-        self._active_read_index = (
-            self.read_alias if aliases.status_code == 200 else self.index
-        )
+        self._active_read_index = self.read_alias if aliases.status_code == 200 else self.index
         return self._active_read_index
 
-    async def delete_document(self, kb: int, document_id: int) -> Dict[str, Any]:
+    async def delete_document(self, kb: int, document_id: int) -> dict[str, Any]:
         """Delete all indexed objects belonging to one authoritative document."""
         if not self.enabled:
             return {"deleted": 0, "skipped": True}
@@ -537,7 +546,7 @@ class ElasticsearchProvider:
         response.raise_for_status()
         return {"deleted": response.json().get("deleted", 0)}
 
-    async def delete_knowledge_base(self, kb: int) -> Dict[str, Any]:
+    async def delete_knowledge_base(self, kb: int) -> dict[str, Any]:
         """Delete all indexed objects of one knowledge base, used by a knowledge-base purge."""
         if not self.enabled:
             return {"deleted": 0, "skipped": True}
@@ -558,7 +567,7 @@ class ElasticsearchProvider:
         object_id: str,
         status: str,
         index_version: int,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Update publication state only when the event version is not stale."""
         if not self.enabled:
             return {"provider": "elasticsearch", "updated": 0, "skipped": True}
@@ -588,8 +597,12 @@ class ElasticsearchProvider:
         return {"provider": "elasticsearch", "updated": 1}
 
     async def update_object_acl(
-        self, kb: int, object_id: str, permission_tags, index_version: int,
-    ) -> Dict[str, Any]:
+        self,
+        kb: int,
+        object_id: str,
+        permission_tags,
+        index_version: int,
+    ) -> dict[str, Any]:
         if not self.enabled:
             return {"provider": "elasticsearch", "updated": 0, "skipped": True}
         identity = "%s:%s" % (kb, object_id)
@@ -612,7 +625,7 @@ class ElasticsearchProvider:
         response.raise_for_status()
         return {"provider": "elasticsearch", "updated": 1}
 
-    async def count(self, kb: int) -> Dict[str, Any]:
+    async def count(self, kb: int) -> dict[str, Any]:
         """Return the exact number of indexed objects for one knowledge base."""
         if not self.enabled:
             return {"provider": "elasticsearch", "count": 0, "skipped": True}
@@ -633,11 +646,11 @@ class ElasticsearchProvider:
         kb: int,
         query: str,
         top_k: int,
-        permission_tags: Optional[Iterable[str]] = None,
-        object_type: Optional[str] = None,
-    ) -> List[Dict[str, Any]]:
+        permission_tags: Iterable[str] | None = None,
+        object_type: str | None = None,
+    ) -> list[dict[str, Any]]:
         """Run ACL-aware BM25/full-text retrieval."""
-        filters: List[Dict[str, Any]] = [
+        filters: list[dict[str, Any]] = [
             {"term": {"knowledge_base_id": kb}},
             _permission_filter(permission_tags),
             _status_filter(),
@@ -680,7 +693,7 @@ class ElasticsearchProvider:
             for hit in response.json().get("hits", {}).get("hits", [])
         ]
 
-    async def stats(self) -> Dict[str, Any]:
+    async def stats(self) -> dict[str, Any]:
         """Expose provider configuration and current availability for diagnostics."""
         return {
             "provider": "elasticsearch",
@@ -690,7 +703,6 @@ class ElasticsearchProvider:
             "readAlias": self.read_alias,
             "activeRead": self._active_read_index,
         }
-
 
 
 @lru_cache(maxsize=1)

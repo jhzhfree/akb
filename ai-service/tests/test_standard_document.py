@@ -5,11 +5,6 @@ matter) is what used to leak into card titles and claim subjects. These tests pi
 the contract that normalization removes it before anything else reads the source.
 """
 
-import tempfile
-from pathlib import Path
-
-import pytest
-
 from app.services.document_parser import DocumentParser
 from app.services.extractor import KnowledgeExtractor
 from app.services.standard_document import (
@@ -20,7 +15,6 @@ from app.services.standard_document import (
     from_markdown,
     from_text,
 )
-
 
 MARKDOWN = """---
 title: 差旅报销标准
@@ -116,8 +110,7 @@ def test_parser_produces_standard_model_and_clean_chunks(tmp_path):
 
 
 def test_extractor_cards_and_claims_carry_no_layout_markers():
-    units = [{"unit_id": "U1", "heading_path": "差旅报销标准 / 适用范围",
-              "content": "本标准适用于所有国内出差员工。"}]
+    units = [{"unit_id": "U1", "heading_path": "差旅报销标准 / 适用范围", "content": "本标准适用于所有国内出差员工。"}]
     result = KnowledgeExtractor()._fallback("", units)
 
     assert result["cards"], "expected at least one card from clean units"

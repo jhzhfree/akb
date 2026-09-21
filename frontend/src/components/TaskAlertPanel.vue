@@ -211,8 +211,8 @@
 import { computed, onMounted, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
-  ackAlert, cancelTask, createAlertRule, deleteAlertRule, evaluateAlerts, getAlerts,
-  getTaskDetail, getTaskDictionaries, getTaskOverview, reopenAlert, resolveAlert, retryTask,
+  ackAlert, cancelTask, createAlertRule, deleteAlertRule, evaluateAlerts, getTaskDetail,
+  getTaskDictionaries, getTaskOverview, reopenAlert, resolveAlert, retryTask,
   unwrap, updateAlertRule,
 } from '../api/knowledge'
 import type { AlertEvent, AlertRule, TaskDictionaries, TaskRun } from '../types'

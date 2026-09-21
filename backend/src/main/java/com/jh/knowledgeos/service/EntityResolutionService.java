@@ -2,7 +2,6 @@ package com.jh.knowledgeos.service;
 
 import com.jh.knowledgeos.mapper.KnowledgeMapper;
 import org.springframework.stereotype.Service;
-
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -21,12 +20,14 @@ import java.util.Map;
  */
 @Service
 public class EntityResolutionService {
+
     private final KnowledgeMapper mapper;
+
     private final AiClient aiClient;
+
     private final TransactionRunner transactionRunner;
 
-    public EntityResolutionService(
-            KnowledgeMapper mapper, AiClient aiClient, TransactionRunner transactionRunner) {
+    public EntityResolutionService(KnowledgeMapper mapper, AiClient aiClient, TransactionRunner transactionRunner) {
         this.mapper = mapper;
         this.aiClient = aiClient;
         this.transactionRunner = transactionRunner;
@@ -58,7 +59,6 @@ public class EntityResolutionService {
                 mentions.add(mention);
             }
         }
-
         Map<String, Object> summary = new LinkedHashMap<String, Object>();
         summary.put("knowledgeBaseId", knowledgeBaseId);
         summary.put("mentions", mentions.size());
@@ -67,13 +67,11 @@ public class EntityResolutionService {
             summary.put("aliases", 0);
             return summary;
         }
-
         List<Map<String, Object>> canonical = mapper.listEntityNames(knowledgeBaseId);
         Map<String, Object> request = new LinkedHashMap<String, Object>();
         request.put("knowledgeBaseId", knowledgeBaseId);
         request.put("entities", mentions);
         request.put("canonicalEntities", canonical);
-
         Map<String, Object> result;
         try {
             result = aiClient.post(AiApiPaths.ENTITY_RESOLVE, request);
@@ -84,12 +82,10 @@ public class EntityResolutionService {
             summary.put("aliases", 0);
             return summary;
         }
-
         Object mergesObject = result.get("merges");
         Object aliasesObject = result.get("aliases");
         List<Map<String, Object>> merges = asMaps(mergesObject);
         List<Map<String, Object>> aliases = asMaps(aliasesObject);
-
         // Retried on deadlock: several documents of a batch merge entities against the same
         // knowledge base at once, and the merge is idempotent — re-pointing links that already
         // moved affects nothing, so losing to a deadlock costs time, never correctness.
@@ -111,16 +107,10 @@ public class EntityResolutionService {
                 if (entityCode.isEmpty() || aliasValue.isEmpty()) {
                     continue;
                 }
-                mapper.upsertEntityAlias(
-                        knowledgeBaseId,
-                        entityCode,
-                        aliasValue,
-                        stringValue(alias.get("aliasType")),
-                        doubleValue(alias.get("confidence"), 0.0D));
+                mapper.upsertEntityAlias(knowledgeBaseId, entityCode, aliasValue, stringValue(alias.get("aliasType")), doubleValue(alias.get("confidence"), 0.0D));
             }
             return null;
         });
-
         summary.put("merged", merges.size());
         summary.put("aliases", aliases.size());
         summary.put("mergeDetails", merges);

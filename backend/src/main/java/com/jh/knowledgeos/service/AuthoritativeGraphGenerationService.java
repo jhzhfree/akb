@@ -5,7 +5,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.jh.knowledgeos.mapper.KnowledgeMapper;
 import com.jh.knowledgeos.projection.AuthoritativeGraphSnapshotRow;
 import org.springframework.stereotype.Service;
-
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.util.ArrayList;
@@ -14,11 +13,16 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-/** Builds the Entity/Relation graph from MySQL and records its graph manifest. */
+/**
+ * Builds the Entity/Relation graph from MySQL and records its graph manifest.
+ */
 @Service
 public class AuthoritativeGraphGenerationService {
+
     private final KnowledgeMapper mapper;
+
     private final AiClient ai;
+
     private final ObjectMapper json;
 
     public AuthoritativeGraphGenerationService(KnowledgeMapper mapper, AiClient ai, ObjectMapper json) {
@@ -27,7 +31,9 @@ public class AuthoritativeGraphGenerationService {
         this.json = json;
     }
 
-    /** Rebuild one green graph generation without changing its active pointer. */
+    /**
+     * Rebuild one green graph generation without changing its active pointer.
+     */
     public Map<String, Object> rebuild(Long kb, String generation, String releaseId) {
         try {
             List<AuthoritativeGraphSnapshotRow> rows = mapper.listAuthoritativeGraphSnapshot(kb);
@@ -42,8 +48,11 @@ public class AuthoritativeGraphGenerationService {
                 digest.update(canonical);
                 if ("ENTITY_FACET".equals(row.getGraphType()) || "RELATION_FACET".equals(row.getGraphType())) {
                     facetDigest.update(canonical);
-                    if ("ENTITY_FACET".equals(row.getGraphType())) entityFacetCount++;
-                    else relationFacetCount++;
+                    if ("ENTITY_FACET".equals(row.getGraphType())) {
+                        entityFacetCount++;
+                    } else {
+                        relationFacetCount++;
+                    }
                 }
                 payload.add(item);
             }
@@ -60,14 +69,10 @@ public class AuthoritativeGraphGenerationService {
                 evidenceDigest.update((json.writeValueAsString(binding) + "\n").getBytes(StandardCharsets.UTF_8));
             }
             request.put("evidenceBindings", bindings);
-            Map<String, Object> response = ai.post(
-                    AiApiPaths.INDEX_SCHEMA_GRAPH_REBUILD_PREFIX + kb, request);
-            mapper.insertGraphManifest(
-                    releaseId, kb, generation, hash, entityCount, relationCount);
-            mapper.insertGraphFacetManifest(releaseId, kb, generation, hex(facetDigest.digest()),
-                    entityFacetCount, relationFacetCount);
-            mapper.insertGraphEvidenceManifest(releaseId, kb, generation, hex(evidenceDigest.digest()),
-                    (long) bindings.size(), (long) bindings.size());
+            Map<String, Object> response = ai.post(AiApiPaths.INDEX_SCHEMA_GRAPH_REBUILD_PREFIX + kb, request);
+            mapper.insertGraphManifest(releaseId, kb, generation, hash, entityCount, relationCount);
+            mapper.insertGraphFacetManifest(releaseId, kb, generation, hex(facetDigest.digest()), entityFacetCount, relationFacetCount);
+            mapper.insertGraphEvidenceManifest(releaseId, kb, generation, hex(evidenceDigest.digest()), (long) bindings.size(), (long) bindings.size());
             response.put("expectedManifestHash", hash);
             response.put("expectedEntityCount", entityCount);
             response.put("expectedRelationCount", relationCount);
@@ -98,7 +103,8 @@ public class AuthoritativeGraphGenerationService {
         if (raw == null || raw.trim().isEmpty()) {
             return Collections.emptyList();
         }
-        return json.readValue(raw, new TypeReference<List<String>>() { });
+        return json.readValue(raw, new TypeReference<List<String>>() {
+        });
     }
 
     private String hex(byte[] bytes) {

@@ -4,7 +4,6 @@ import com.jh.knowledgeos.domain.SourceFile;
 import com.jh.knowledgeos.mapper.KnowledgeMapper;
 import org.springframework.core.io.FileSystemResource;
 import org.springframework.stereotype.Service;
-
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -25,10 +24,13 @@ import java.util.Map;
  */
 @Service
 public class SourcePreviewService {
+
     private static final int DEFAULT_LIMIT = 20000;
+
     private static final int MAX_LIMIT = 200000;
 
     private final KnowledgeMapper mapper;
+
     private final SourceFileStorageService storage;
 
     public SourcePreviewService(KnowledgeMapper mapper, SourceFileStorageService storage) {
@@ -42,8 +44,7 @@ public class SourcePreviewService {
      * @return a map that always carries {@code available}; {@code false} means the source is
      *         unknown to this knowledge base or outside the caller's permission scope
      */
-    public Map<String, Object> preview(
-            Long kb, Long sourceId, Integer requestedLimit, List<String> permissionTags) {
+    public Map<String, Object> preview(Long kb, Long sourceId, Integer requestedLimit, List<String> permissionTags) {
         Map<String, Object> result = new LinkedHashMap<String, Object>();
         result.put("knowledgeBaseId", kb);
         result.put("sourceId", sourceId);
@@ -59,7 +60,6 @@ public class SourcePreviewService {
         result.put("source", sourceMeta(row));
         result.put("document", documentMeta(row));
         result.put("fileUrl", "/api/knowledge/sources/" + kb + "/" + sourceId + "/file");
-
         Path file = storage.resolve(text(row.get("storagePath")));
         String parsed = text(row.get("rawText"));
         result.put("stored", file != null);
@@ -82,16 +82,19 @@ public class SourcePreviewService {
         return result;
     }
 
-    /** Stream the stored original upload, or null when it is unknown, unreadable or out of scope. */
+    /**
+     * Stream the stored original upload, or null when it is unknown, unreadable or out of scope.
+     */
     public SourceFile file(Long kb, Long sourceId, List<String> permissionTags) {
         Map<String, Object> row = mapper.getSourcePreview(kb, sourceId, permissionTags);
-        if (row == null) return null;
+        if (row == null) {
+            return null;
+        }
         Path path = storage.resolve(text(row.get("storagePath")));
-        if (path == null) return null;
-        return new SourceFile(
-                text(row.get("name")),
-                contentType(text(row.get("name")), path),
-                new FileSystemResource(path.toFile()));
+        if (path == null) {
+            return null;
+        }
+        return new SourceFile(text(row.get("name")), contentType(text(row.get("name")), path), new FileSystemResource(path.toFile()));
     }
 
     private void applyParsed(Map<String, Object> result, String parsed, int limit) {
@@ -145,7 +148,9 @@ public class SourcePreviewService {
     }
 
     private int normalizeLimit(Integer requested) {
-        if (requested == null || requested <= 0) return DEFAULT_LIMIT;
+        if (requested == null || requested <= 0) {
+            return DEFAULT_LIMIT;
+        }
         return Math.min(requested, MAX_LIMIT);
     }
 
@@ -162,13 +167,23 @@ public class SourcePreviewService {
         if ("md".equals(extension) || "markdown".equals(extension) || "txt".equals(extension)) {
             return "text/plain; charset=UTF-8";
         }
-        if ("html".equals(extension) || "htm".equals(extension)) return "text/html; charset=UTF-8";
-        if ("json".equals(extension)) return "application/json; charset=UTF-8";
-        if ("csv".equals(extension)) return "text/csv; charset=UTF-8";
-        if ("pdf".equals(extension)) return "application/pdf";
+        if ("html".equals(extension) || "htm".equals(extension)) {
+            return "text/html; charset=UTF-8";
+        }
+        if ("json".equals(extension)) {
+            return "application/json; charset=UTF-8";
+        }
+        if ("csv".equals(extension)) {
+            return "text/csv; charset=UTF-8";
+        }
+        if ("pdf".equals(extension)) {
+            return "application/pdf";
+        }
         try {
             String probed = Files.probeContentType(path);
-            if (probed != null && !probed.isEmpty()) return probed;
+            if (probed != null && !probed.isEmpty()) {
+                return probed;
+            }
         } catch (IOException ex) {
             // Fall through to the generic binary type: the browser decides what to do with it.
         }

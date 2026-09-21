@@ -10,7 +10,6 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-
 import java.util.Collections;
 import java.util.Map;
 
@@ -23,8 +22,11 @@ import java.util.Map;
 @CrossOrigin
 @Tag(name = "ModelSettings", description = "模型配置：对话模型与向量模型")
 public class ModelSettingsController {
+
     private static final String AI_SETTINGS_MODEL = "/ai/settings/model";
+
     private static final String AI_SETTINGS_TEST = "/ai/settings/test";
+
     private static final String AI_SETTINGS_ENV = "/ai/settings/env";
 
     private final AiClient aiClient;

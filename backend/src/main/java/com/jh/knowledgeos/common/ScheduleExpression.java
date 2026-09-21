@@ -19,17 +19,22 @@ import java.util.TreeSet;
  * instead of silently firing at the wrong moment.</p>
  */
 public final class ScheduleExpression {
+
     private static final int MAX_DAYS = 366;
 
     private final Set<Integer> minutes;
+
     private final Set<Integer> hours;
+
     private final Set<Integer> days;
+
     private final Set<Integer> months;
+
     private final Set<Integer> weekdays;
+
     private final String source;
 
-    private ScheduleExpression(String source, Set<Integer> minutes, Set<Integer> hours,
-            Set<Integer> days, Set<Integer> months, Set<Integer> weekdays) {
+    private ScheduleExpression(String source, Set<Integer> minutes, Set<Integer> hours, Set<Integer> days, Set<Integer> months, Set<Integer> weekdays) {
         this.source = source;
         this.minutes = minutes;
         this.hours = hours;
@@ -38,19 +43,16 @@ public final class ScheduleExpression {
         this.weekdays = weekdays;
     }
 
-    /** Parse a five field expression; throws with the offending field when it cannot be read. */
+    /**
+     * Parse a five field expression; throws with the offending field when it cannot be read.
+     */
     public static ScheduleExpression of(String expression) {
         String raw = expression == null ? "" : expression.trim();
         String[] parts = raw.split("\\s+");
         if (parts.length != 5) {
             throw new IllegalArgumentException("计划表达式需要 5 段（分 时 日 月 周），例如：0 3 * * 1");
         }
-        return new ScheduleExpression(raw,
-                parseField(parts[0], 0, 59, "分钟"),
-                parseField(parts[1], 0, 23, "小时"),
-                parseField(parts[2], 1, 31, "日"),
-                parseField(parts[3], 1, 12, "月"),
-                parseField(parts[4], 1, 7, "星期"));
+        return new ScheduleExpression(raw, parseField(parts[0], 0, 59, "分钟"), parseField(parts[1], 0, 23, "小时"), parseField(parts[2], 1, 31, "日"), parseField(parts[3], 1, 12, "月"), parseField(parts[4], 1, 7, "星期"));
     }
 
     /**
@@ -91,7 +93,9 @@ public final class ScheduleExpression {
         return source;
     }
 
-    /** Human readable summary for the rule list, so a schedule can be checked at a glance. */
+    /**
+     * Human readable summary for the rule list, so a schedule can be checked at a glance.
+     */
     public String describe() {
         if (minutes.size() == 60) {
             return "每分钟";
@@ -122,7 +126,7 @@ public final class ScheduleExpression {
     }
 
     private static String joinWeekdays(Set<Integer> values) {
-        String[] names = {"一", "二", "三", "四", "五", "六", "日"};
+        String[] names = { "一", "二", "三", "四", "五", "六", "日" };
         List<String> parts = new ArrayList<String>();
         for (Integer value : values) {
             parts.add(names[value - 1]);
@@ -130,7 +134,9 @@ public final class ScheduleExpression {
         return String.join("、", parts);
     }
 
-    /** Parses one field: a wildcard, a stepped wildcard, a list or a range. */
+    /**
+     * Parses one field: a wildcard, a stepped wildcard, a list or a range.
+     */
     private static Set<Integer> parseField(String field, int min, int max, String label) {
         Set<Integer> values = new TreeSet<Integer>();
         for (String part : field.split(",")) {

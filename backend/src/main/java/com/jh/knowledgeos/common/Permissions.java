@@ -6,7 +6,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-
 import com.jh.knowledgeos.service.AuthContext;
 
 /**
@@ -18,56 +17,112 @@ import com.jh.knowledgeos.service.AuthContext;
  */
 public final class Permissions {
 
-    /** 系统配置：配置总览入口。 */
+    /**
+     * 系统配置：配置总览入口。
+     */
     public static final String SYSTEM_VIEW = "system:view";
-    /** 系统配置：用户与组织。 */
+
+    /**
+     * 系统配置：用户与组织。
+     */
     public static final String SYSTEM_USER = "system:user";
-    /** 系统配置：角色与权限（ACL）。 */
+
+    /**
+     * 系统配置：角色与权限（ACL）。
+     */
     public static final String SYSTEM_ACL = "system:acl";
-    /** 系统配置：模型配置。 */
+
+    /**
+     * 系统配置：模型配置。
+     */
     public static final String SYSTEM_MODEL = "system:model";
-    /** 系统配置：知识 Schema。 */
+
+    /**
+     * 系统配置：知识 Schema。
+     */
     public static final String SYSTEM_SCHEMA = "system:schema";
-    /** 系统配置：存储与索引（含重建、回滚、Outbox 重放）。 */
+
+    /**
+     * 系统配置：存储与索引（含重建、回滚、Outbox 重放）。
+     */
     public static final String SYSTEM_INDEX = "system:index";
-    /** 系统配置：任务与告警（含告警规则维护）。 */
+
+    /**
+     * 系统配置：任务与告警（含告警规则维护）。
+     */
     public static final String SYSTEM_TASK = "system:task";
-    /** 系统配置：审计日志。 */
+
+    /**
+     * 系统配置：审计日志。
+     */
     public static final String SYSTEM_AUDIT = "system:audit";
-    /** 系统配置：知识空间（知识库管理）。 */
+
+    /**
+     * 系统配置：知识空间（知识库管理）。
+     */
     public static final String SYSTEM_SPACE = "system:space";
-    /** 知识工作台：总览、版本、质量。 */
+
+    /**
+     * 知识工作台：总览、版本、质量。
+     */
     public static final String WORKBENCH_VIEW = "workbench:view";
-    /** 知识工作台：资产浏览。 */
+
+    /**
+     * 知识工作台：资产浏览。
+     */
     public static final String WORKBENCH_ASSET = "workbench:asset";
-    /** 知识生成：文档导入、解析与重跑。 */
+
+    /**
+     * 知识生成：文档导入、解析与重跑。
+     */
     public static final String GENERATE_IMPORT = "generate:import";
-    /** 知识生成：连接器与数据源。 */
+
+    /**
+     * 知识生成：连接器与数据源。
+     */
     public static final String GENERATE_CONNECTOR = "generate:connector";
-    /** 知识生成：知识裁决。 */
+
+    /**
+     * 知识生成：知识裁决。
+     */
     public static final String GENERATE_JUDGE = "generate:judge";
-    /** 知识生成：知识衍生。 */
+
+    /**
+     * 知识生成：知识衍生。
+     */
     public static final String GENERATE_DERIVE = "generate:derive";
-    /** 知识检索：问答检索。 */
+
+    /**
+     * 知识检索：问答检索。
+     */
     public static final String SEARCH_QUERY = "search:query";
-    /** 知识检索：知识图谱。 */
+
+    /**
+     * 知识检索：知识图谱。
+     */
     public static final String SEARCH_GRAPH = "search:graph";
-    /** 知识检索：检索测试与 Trace。 */
+
+    /**
+     * 知识检索：检索测试与 Trace。
+     */
     public static final String SEARCH_TEST = "search:test";
-    /** 知识检索：检索策略配置。 */
+
+    /**
+     * 知识检索：检索策略配置。
+     */
     public static final String SEARCH_POLICY = "search:policy";
-    /** 知识检索：检索评测（Benchmark）。 */
+
+    /**
+     * 知识检索：检索评测（Benchmark）。
+     */
     public static final String SEARCH_EVALUATE = "search:evaluate";
-    /** 知识集成：服务、协议、凭证与调用日志。 */
+
+    /**
+     * 知识集成：服务、协议、凭证与调用日志。
+     */
     public static final String INTEGRATION_VIEW = "integration:view";
 
-    public static final List<String> ALL = Collections.unmodifiableList(Arrays.asList(
-            SYSTEM_VIEW, SYSTEM_USER, SYSTEM_ACL, SYSTEM_MODEL, SYSTEM_SCHEMA,
-            SYSTEM_INDEX, SYSTEM_TASK, SYSTEM_AUDIT, SYSTEM_SPACE,
-            WORKBENCH_VIEW, WORKBENCH_ASSET,
-            GENERATE_IMPORT, GENERATE_CONNECTOR, GENERATE_JUDGE, GENERATE_DERIVE,
-            SEARCH_QUERY, SEARCH_GRAPH, SEARCH_TEST, SEARCH_POLICY, SEARCH_EVALUATE,
-            INTEGRATION_VIEW));
+    public static final List<String> ALL = Collections.unmodifiableList(Arrays.asList(SYSTEM_VIEW, SYSTEM_USER, SYSTEM_ACL, SYSTEM_MODEL, SYSTEM_SCHEMA, SYSTEM_INDEX, SYSTEM_TASK, SYSTEM_AUDIT, SYSTEM_SPACE, WORKBENCH_VIEW, WORKBENCH_ASSET, GENERATE_IMPORT, GENERATE_CONNECTOR, GENERATE_JUDGE, GENERATE_DERIVE, SEARCH_QUERY, SEARCH_GRAPH, SEARCH_TEST, SEARCH_POLICY, SEARCH_EVALUATE, INTEGRATION_VIEW));
 
     private static final Map<String, String> LABELS = new LinkedHashMap<String, String>();
 
@@ -102,7 +157,9 @@ public final class Permissions {
         return new java.util.LinkedHashSet<String>(ALL);
     }
 
-    /** 权限码字典：code → 中文名，供前端展示。 */
+    /**
+     * 权限码字典：code → 中文名，供前端展示。
+     */
     public static Map<String, String> labels() {
         return Collections.unmodifiableMap(LABELS);
     }
@@ -112,24 +169,38 @@ public final class Permissions {
         return text == null ? String.valueOf(permission) : text;
     }
 
-    /** 当前登录人是否拥有该权限；未开启认证时一律放行。 */
+    /**
+     * 当前登录人是否拥有该权限；未开启认证时一律放行。
+     */
     public static boolean has(String permission) {
-        if (permission == null || permission.isEmpty()) return true;
+        if (permission == null || permission.isEmpty()) {
+            return true;
+        }
         com.jh.knowledgeos.domain.User user = AuthContext.get();
-        if (user == null) return true;
+        if (user == null) {
+            return true;
+        }
         return UserRole.of(user.getRole()).has(permission);
     }
 
-    /** 当前登录人的权限码集合；未开启认证时返回全部权限。 */
+    /**
+     * 当前登录人的权限码集合；未开启认证时返回全部权限。
+     */
     public static Set<String> granted() {
         com.jh.knowledgeos.domain.User user = AuthContext.get();
-        if (user == null) return all();
+        if (user == null) {
+            return all();
+        }
         return UserRole.of(user.getRole()).permissions();
     }
 
-    /** 校验失败抛 SecurityException（由全局异常处理映射为 403）。 */
+    /**
+     * 校验失败抛 SecurityException（由全局异常处理映射为 403）。
+     */
     public static void require(String permission) {
-        if (has(permission)) return;
+        if (has(permission)) {
+            return;
+        }
         throw new SecurityException("当前角色无权执行该操作：" + label(permission));
     }
 }

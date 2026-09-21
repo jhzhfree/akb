@@ -7,7 +7,7 @@ evidence, or high-risk human-review rules.
 
 import logging
 from datetime import datetime, timezone
-from typing import Any, Dict
+from typing import Any
 
 from app.services.llm_provider import get_llm_provider
 
@@ -33,7 +33,7 @@ class AdjudicationEngine:
         except (TypeError, ValueError):
             return default
 
-    def score(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+    def score(self, payload: dict[str, Any]) -> dict[str, Any]:
         """Calculate the deterministic, explainable confidence/risk components."""
         evidence_count = int(payload.get("evidenceCount", 0) or 0)
         source_count = int(payload.get("sourceCount", 0) or 0)
@@ -42,9 +42,7 @@ class AdjudicationEngine:
         confidence = self._clamp(payload.get("confidence", 0.5), 0.5)
         authority = self._clamp(payload.get("authorityScore", 0.5), 0.5)
         freshness = self._clamp(payload.get("freshnessScore", 0.8), 0.8)
-        evidence_support = self._clamp(
-            payload.get("evidenceSupportScore", min(1.0, evidence_count / 2.0))
-        )
+        evidence_support = self._clamp(payload.get("evidenceSupportScore", min(1.0, evidence_count / 2.0)))
         cross_source = min(1.0, source_count / 2.0)
         completeness = self._clamp(
             payload.get(
@@ -93,11 +91,11 @@ class AdjudicationEngine:
             "weights": self.WEIGHTS,
         }
 
-    async def judge(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+    async def judge(self, payload: dict[str, Any]) -> dict[str, Any]:
         """Combine deterministic policy with optional semantic LLM judgment."""
         base = self.score(payload)
         llm = get_llm_provider()
-        ai_judge: Dict[str, Any] = {
+        ai_judge: dict[str, Any] = {
             "decision": "NOT_RUN",
             "confidence": 0.0,
             "reason": "未启用真实大模型裁决",
@@ -129,7 +127,7 @@ class AdjudicationEngine:
         }
 
     @staticmethod
-    def _judge_prompt(payload: Dict[str, Any]) -> str:
+    def _judge_prompt(payload: dict[str, Any]) -> str:
         return (
             "你是企业知识治理裁决器。只能输出JSON，不得补充其他文字。"
             "根据对象、证据、冲突信息判断知识是否被证据支持。"
@@ -146,9 +144,9 @@ class AdjudicationEngine:
 
     def _apply_policy(
         self,
-        payload: Dict[str, Any],
-        base: Dict[str, Any],
-        ai_judge: Dict[str, Any],
+        payload: dict[str, Any],
+        base: dict[str, Any],
+        ai_judge: dict[str, Any],
     ) -> tuple:
         """Apply hard governance boundaries after scoring and AI advice."""
         score = base["knowledgeConfidence"]

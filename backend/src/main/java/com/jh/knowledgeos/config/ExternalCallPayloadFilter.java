@@ -3,7 +3,6 @@ package com.jh.knowledgeos.config;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 import org.springframework.web.util.ContentCachingRequestWrapper;
-
 import javax.servlet.FilterChain;
 import javax.servlet.ServletException;
 import javax.servlet.http.HttpServletRequest;
@@ -28,8 +27,12 @@ import java.util.Map;
  */
 @Component
 public class ExternalCallPayloadFilter extends OncePerRequestFilter {
+
     public static final String PAYLOAD_ATTRIBUTE = ExternalCallPayloadFilter.class.getName() + ".payload";
-    /** Audited surface; everything else is untouched. */
+
+    /**
+     * Audited surface; everything else is untouched.
+     */
     public static final String PATH_PREFIX = "/api/v1/external/";
 
     @Override
@@ -39,8 +42,7 @@ public class ExternalCallPayloadFilter extends OncePerRequestFilter {
     }
 
     @Override
-    protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain chain)
-            throws ServletException, IOException {
+    protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain chain) throws ServletException, IOException {
         ContentCachingRequestWrapper wrapped = new ContentCachingRequestWrapper(request);
         request.setAttribute(PAYLOAD_ATTRIBUTE, wrapped);
         chain.doFilter(wrapped, response);
@@ -77,7 +79,9 @@ public class ExternalCallPayloadFilter extends OncePerRequestFilter {
     }
 
     private static String trimmed(String value) {
-        if (value == null) return null;
+        if (value == null) {
+            return null;
+        }
         String text = value.trim();
         return text.isEmpty() ? null : text;
     }

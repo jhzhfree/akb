@@ -4,7 +4,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
-
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
@@ -30,22 +29,20 @@ import java.util.Set;
  */
 @Service
 public class SourceFileStorageService {
+
     private static final Logger log = LoggerFactory.getLogger(SourceFileStorageService.class);
+
     private static final int TEXT_SNIFF_BYTES = 8192;
+
     private static final int TEXT_SNIFF_BUFFER = 4096;
 
-    private static final Set<String> TEXT_EXTENSIONS = new HashSet<String>(Arrays.asList(
-            "md", "markdown", "txt", "text", "csv", "tsv", "json", "yaml", "yml", "xml",
-            "html", "htm", "log", "ini", "properties", "sql", "rst", "tex"));
-    private static final Set<String> BINARY_EXTENSIONS = new HashSet<String>(Arrays.asList(
-            "pdf", "doc", "docx", "xls", "xlsx", "ppt", "pptx", "odt", "rtf",
-            "png", "jpg", "jpeg", "gif", "bmp", "svg", "webp",
-            "zip", "gz", "tar", "tgz", "7z", "rar", "jar", "class"));
+    private static final Set<String> TEXT_EXTENSIONS = new HashSet<String>(Arrays.asList("md", "markdown", "txt", "text", "csv", "tsv", "json", "yaml", "yml", "xml", "html", "htm", "log", "ini", "properties", "sql", "rst", "tex"));
+
+    private static final Set<String> BINARY_EXTENSIONS = new HashSet<String>(Arrays.asList("pdf", "doc", "docx", "xls", "xlsx", "ppt", "pptx", "odt", "rtf", "png", "jpg", "jpeg", "gif", "bmp", "svg", "webp", "zip", "gz", "tar", "tgz", "7z", "rar", "jar", "class"));
 
     private final Path root;
 
-    public SourceFileStorageService(
-            @Value("${knowledge.source-storage-dir:data/source-files}") String directory) {
+    public SourceFileStorageService(@Value("${knowledge.source-storage-dir:data/source-files}") String directory) {
         this.root = Paths.get(directory).toAbsolutePath().normalize();
     }
 
@@ -55,7 +52,9 @@ public class SourceFileStorageService {
      * @return relative path, or {@code null} when the file cannot be stored
      */
     public String store(Long knowledgeBaseId, String sourceCode, String filename, byte[] bytes) {
-        if (bytes == null || bytes.length == 0) return null;
+        if (bytes == null || bytes.length == 0) {
+            return null;
+        }
         try {
             Path directory = root.resolve(String.valueOf(knowledgeBaseId)).resolve(sanitize(sourceCode));
             Files.createDirectories(directory);
@@ -74,18 +73,24 @@ public class SourceFileStorageService {
      * @return the file, or {@code null} when it is absent or the path escapes the root
      */
     public Path resolve(String relativePath) {
-        if (relativePath == null || relativePath.trim().isEmpty()) return null;
+        if (relativePath == null || relativePath.trim().isEmpty()) {
+            return null;
+        }
         Path candidate;
         try {
             candidate = root.resolve(relativePath).normalize();
         } catch (RuntimeException ex) {
             return null;
         }
-        if (!candidate.startsWith(root)) return null;
+        if (!candidate.startsWith(root)) {
+            return null;
+        }
         return Files.isRegularFile(candidate) ? candidate : null;
     }
 
-    /** Read the first {@code limit} characters of a stored file as UTF-8 text. */
+    /**
+     * Read the first {@code limit} characters of a stored file as UTF-8 text.
+     */
     public String readText(Path file, int limit) throws IOException {
         StringBuilder text = new StringBuilder();
         try (Reader reader = new InputStreamReader(Files.newInputStream(file), StandardCharsets.UTF_8)) {
@@ -98,7 +103,9 @@ public class SourceFileStorageService {
         return text.toString();
     }
 
-    /** Read a bounded prefix used to decide whether a file can be rendered as text. */
+    /**
+     * Read a bounded prefix used to decide whether a file can be rendered as text.
+     */
     public byte[] head(Path file) {
         try (InputStream stream = Files.newInputStream(file)) {
             byte[] buffer = new byte[TEXT_SNIFF_BYTES];
@@ -124,20 +131,34 @@ public class SourceFileStorageService {
      */
     public boolean isText(String filename, byte[] head) {
         String extension = extension(filename);
-        if (TEXT_EXTENSIONS.contains(extension)) return true;
-        if (BINARY_EXTENSIONS.contains(extension)) return false;
-        if (head == null || head.length == 0) return false;
+        if (TEXT_EXTENSIONS.contains(extension)) {
+            return true;
+        }
+        if (BINARY_EXTENSIONS.contains(extension)) {
+            return false;
+        }
+        if (head == null || head.length == 0) {
+            return false;
+        }
         for (byte value : head) {
-            if (value == 0) return false;
+            if (value == 0) {
+                return false;
+            }
         }
         return true;
     }
 
-    /** Lower-cased extension without the dot; empty when the name has none. */
+    /**
+     * Lower-cased extension without the dot; empty when the name has none.
+     */
     public String extension(String filename) {
-        if (filename == null) return "";
+        if (filename == null) {
+            return "";
+        }
         int dot = filename.lastIndexOf('.');
-        if (dot < 0 || dot == filename.length() - 1) return "";
+        if (dot < 0 || dot == filename.length() - 1) {
+            return "";
+        }
         return filename.substring(dot + 1).toLowerCase();
     }
 

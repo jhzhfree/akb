@@ -2,7 +2,6 @@ import io
 import zipfile
 
 import pytest
-
 from app.services.okf_bundle import OkfBundleError, OkfBundleInspector
 
 
@@ -15,9 +14,10 @@ def bundle(files):
 
 
 def test_okf_v02_normalizes_trust_lifecycle_links_and_extensions():
-    content = bundle({
-        "knowledge/index.md": "---\nokf_version: '0.2'\n---\n# Index\n",
-        "knowledge/policy/access.md": """---
+    content = bundle(
+        {
+            "knowledge/index.md": "---\nokf_version: '0.2'\n---\n# Index\n",
+            "knowledge/policy/access.md": """---
 type: Policy
 title: Access policy
 verified:
@@ -29,8 +29,9 @@ vendor_extension: retained
 ---
 See [control](../control.md) and [missing](missing.md).
 """,
-        "knowledge/control.md": "---\ntype: Control\n---\n# Control\n",
-    })
+            "knowledge/control.md": "---\ntype: Control\n---\n# Control\n",
+        }
+    )
     result = OkfBundleInspector().inspect(content)
     concept = next(item for item in result["concepts"] if item["conceptId"] == "policy/access")
     assert result["specVersion"] == "0.2"
@@ -55,10 +56,14 @@ def test_archive_path_traversal_is_rejected():
 
 
 def test_unknown_version_and_type_are_best_effort_consumed():
-    result = OkfBundleInspector().inspect(bundle({
-        "index.md": "---\nokf_version: '9.9'\n---\n",
-        "x.md": "---\ntype: FutureType\nfuture: true\n---\n",
-    }))
+    result = OkfBundleInspector().inspect(
+        bundle(
+            {
+                "index.md": "---\nokf_version: '9.9'\n---\n",
+                "x.md": "---\ntype: FutureType\nfuture: true\n---\n",
+            }
+        )
+    )
     assert result["conformant"] is True
     assert result["concepts"][0]["type"] == "FutureType"
     assert any(item["code"] == "UNKNOWN_OKF_VERSION" for item in result["warnings"])

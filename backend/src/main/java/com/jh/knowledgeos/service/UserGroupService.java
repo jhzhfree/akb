@@ -3,16 +3,19 @@ package com.jh.knowledgeos.service;
 import com.jh.knowledgeos.domain.UserGroup;
 import com.jh.knowledgeos.mapper.AuthMapper;
 import org.springframework.stereotype.Service;
-
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-/** User groups are the sharing unit for GROUP-visible knowledge bases. */
+/**
+ * User groups are the sharing unit for GROUP-visible knowledge bases.
+ */
 @Service
 public class UserGroupService {
+
     private final AuthMapper mapper;
+
     private final IdGenerator ids;
 
     public UserGroupService(AuthMapper mapper, IdGenerator ids) {
@@ -40,8 +43,12 @@ public class UserGroupService {
 
     public Map<String, Object> update(Long id, String name, String description) {
         UserGroup group = requireGroup(id);
-        if (name != null && !name.trim().isEmpty()) group.setName(requireName(name));
-        if (description != null) group.setDescription(description);
+        if (name != null && !name.trim().isEmpty()) {
+            group.setName(requireName(name));
+        }
+        if (description != null) {
+            group.setDescription(description);
+        }
         mapper.updateGroup(group);
         return view(group);
     }
@@ -56,7 +63,9 @@ public class UserGroupService {
         mapper.deleteGroupMembers(id);
         if (memberIds != null) {
             for (Long userId : memberIds) {
-                if (userId != null) mapper.insertGroupMember(id, userId);
+                if (userId != null) {
+                    mapper.insertGroupMember(id, userId);
+                }
             }
         }
         return view(requireGroup(id));
@@ -64,7 +73,9 @@ public class UserGroupService {
 
     public UserGroup requireGroup(Long id) {
         UserGroup group = mapper.getGroup(id);
-        if (group == null) throw new IllegalArgumentException("用户组不存在：" + id);
+        if (group == null) {
+            throw new IllegalArgumentException("用户组不存在：" + id);
+        }
         return group;
     }
 
@@ -99,7 +110,9 @@ public class UserGroupService {
     }
 
     private Long toLong(Object value) {
-        if (value instanceof Number) return ((Number) value).longValue();
+        if (value instanceof Number) {
+            return ((Number) value).longValue();
+        }
         try {
             return Long.valueOf(String.valueOf(value));
         } catch (NumberFormatException e) {

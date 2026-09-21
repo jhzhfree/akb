@@ -9,10 +9,15 @@ package com.jh.knowledgeos.common;
  * for ingestion, extraction and indexing, which are the paths that actually retry.</p>
  */
 public final class EventTaskContext {
+
     private final String taskId;
+
     private final String objectId;
+
     private final String objectVersion;
+
     private final String idempotencyKey;
+
     private final int retryCount;
 
     private EventTaskContext(Builder builder) {
@@ -27,17 +32,36 @@ public final class EventTaskContext {
         return new Builder(taskId);
     }
 
-    public String getTaskId() { return taskId; }
-    public String getObjectId() { return objectId; }
-    public String getObjectVersion() { return objectVersion; }
-    public String getIdempotencyKey() { return idempotencyKey; }
-    public int getRetryCount() { return retryCount; }
+    public String getTaskId() {
+        return taskId;
+    }
+
+    public String getObjectId() {
+        return objectId;
+    }
+
+    public String getObjectVersion() {
+        return objectVersion;
+    }
+
+    public String getIdempotencyKey() {
+        return idempotencyKey;
+    }
+
+    public int getRetryCount() {
+        return retryCount;
+    }
 
     public static final class Builder {
+
         private final String taskId;
+
         private String objectId;
+
         private String objectVersion;
+
         private String idempotencyKey;
+
         private int retryCount;
 
         private Builder(String taskId) {

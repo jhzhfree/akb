@@ -5,7 +5,7 @@ hears about it. The vocabulary is persisted per knowledge base so a restart keep
 and read back by extraction on the next call.
 """
 
-from typing import Any, Dict, Optional
+from typing import Any
 
 from fastapi import APIRouter
 
@@ -15,7 +15,7 @@ router = APIRouter(tags=["schema"])
 
 
 @router.post("/ai/schema/apply")
-async def schema_apply(payload: Dict[str, Any]) -> Dict[str, Any]:
+async def schema_apply(payload: dict[str, Any]) -> dict[str, Any]:
     """Apply the published vocabulary of one knowledge base to extraction."""
     schema = apply_schema(payload or {})
     return {
@@ -29,7 +29,7 @@ async def schema_apply(payload: Dict[str, Any]) -> Dict[str, Any]:
 
 
 @router.get("/ai/schema/{knowledge_base_id}")
-async def schema_read(knowledge_base_id: int) -> Dict[str, Any]:
+async def schema_read(knowledge_base_id: int) -> dict[str, Any]:
     """Read the vocabulary currently in force, for diagnostics and tests."""
     schema = load_schema(knowledge_base_id)
     if not schema:

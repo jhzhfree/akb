@@ -20,28 +20,29 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-
 import javax.servlet.http.HttpServletRequest;
 import javax.validation.Valid;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
-/** Login, logout, and current-account endpoints for the console. */
+/**
+ * Login, logout, and current-account endpoints for the console.
+ */
 @RestController
 @RequestMapping("/api/auth")
 @CrossOrigin
 @Tag(name = "Auth", description = "用户登录与会话管理")
 public class AuthController {
+
     private final AuthService authService;
+
     private final UserService users;
+
     private final AuthMapper mapper;
+
     private final KnowledgeProperties.Auth properties;
 
-    public AuthController(
-            AuthService authService,
-            UserService users,
-            AuthMapper mapper,
-            KnowledgeProperties properties) {
+    public AuthController(AuthService authService, UserService users, AuthMapper mapper, KnowledgeProperties properties) {
         this.authService = authService;
         this.users = users;
         this.mapper = mapper;

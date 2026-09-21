@@ -4,7 +4,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.jh.knowledgeos.domain.User;
 import com.jh.knowledgeos.mapper.KnowledgeMapper;
 import org.springframework.stereotype.Service;
-
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.util.ArrayList;
@@ -31,33 +30,43 @@ import java.util.regex.Pattern;
  */
 @Service
 public class KnowledgeSchemaService {
+
     public static final String KIND_KNOWLEDGE = "KNOWLEDGE_TYPE";
+
     public static final String KIND_ENTITY = "ENTITY_TYPE";
+
     public static final String KIND_RELATION = "RELATION_TYPE";
 
     public static final String ACTIVE = "ACTIVE";
+
     public static final String DEPRECATED = "DEPRECATED";
 
     public static final String STATE_DRAFT = "DRAFT";
+
     public static final String STATE_PUBLISHED = "PUBLISHED";
+
     public static final String STATE_ARCHIVED = "ARCHIVED";
 
-    /** Property types a schema may declare; anything else is a typo waiting to happen. */
-    public static final List<String> PROPERTY_TYPES = Collections.unmodifiableList(Arrays.asList(
-            "STRING", "TEXT", "NUMBER", "BOOLEAN", "DATE", "ENUM", "REF"));
+    /**
+     * Property types a schema may declare; anything else is a typo waiting to happen.
+     */
+    public static final List<String> PROPERTY_TYPES = Collections.unmodifiableList(Arrays.asList("STRING", "TEXT", "NUMBER", "BOOLEAN", "DATE", "ENUM", "REF"));
 
     private static final Pattern CODE = Pattern.compile("^[A-Z][A-Z0-9_]{0,63}$");
+
     private static final Pattern PROPERTY_NAME = Pattern.compile("^[a-z][a-zA-Z0-9_]{0,63}$");
-    private static final List<String> KINDS = Collections.unmodifiableList(
-            Arrays.asList(KIND_KNOWLEDGE, KIND_ENTITY, KIND_RELATION));
+
+    private static final List<String> KINDS = Collections.unmodifiableList(Arrays.asList(KIND_KNOWLEDGE, KIND_ENTITY, KIND_RELATION));
 
     private final KnowledgeMapper mapper;
+
     private final IdGenerator ids;
+
     private final ObjectMapper objectMapper;
+
     private final AiClient aiClient;
 
-    public KnowledgeSchemaService(KnowledgeMapper mapper, IdGenerator ids, ObjectMapper objectMapper,
-            AiClient aiClient) {
+    public KnowledgeSchemaService(KnowledgeMapper mapper, IdGenerator ids, ObjectMapper objectMapper, AiClient aiClient) {
         this.mapper = mapper;
         this.ids = ids;
         this.objectMapper = objectMapper;
@@ -65,10 +74,8 @@ public class KnowledgeSchemaService {
     }
 
     // ------------------------------------------------------------------ types
-
     public List<Map<String, Object>> types(Long kb, String kind) {
-        return mapper.listSchemaTypes(kb == null ? 0 : kb,
-                kind == null || kind.trim().isEmpty() ? null : kind.trim().toUpperCase(Locale.ROOT));
+        return mapper.listSchemaTypes(kb == null ? 0 : kb, kind == null || kind.trim().isEmpty() ? null : kind.trim().toUpperCase(Locale.ROOT));
     }
 
     public Map<String, Object> upsertType(Long kb, Map<String, Object> body) {
@@ -87,25 +94,20 @@ public class KnowledgeSchemaService {
         if (!errors.isEmpty()) {
             throw new IllegalArgumentException(errors.get(0));
         }
-        mapper.upsertSchemaType(scope, kind, code,
-                text(body.get("label")).trim().isEmpty() ? code : text(body.get("label")).trim(),
-                text(body.get("description")), write(properties),
-                DEPRECATED.equals(text(body.get("status")).toUpperCase(Locale.ROOT))
-                        ? DEPRECATED : ACTIVE,
-                currentUser());
+        mapper.upsertSchemaType(scope, kind, code, text(body.get("label")).trim().isEmpty() ? code : text(body.get("label")).trim(), text(body.get("description")), write(properties), DEPRECATED.equals(text(body.get("status")).toUpperCase(Locale.ROOT)) ? DEPRECATED : ACTIVE, currentUser());
         return mapper.getSchemaType(scope, kind, code);
     }
 
-    /** Deprecate instead of delete: existing data keeps its type, new data should not use it. */
+    /**
+     * Deprecate instead of delete: existing data keeps its type, new data should not use it.
+     */
     public Map<String, Object> deprecate(Long kb, String kind, String typeCode) {
         long scope = kb == null ? 0 : kb;
         Map<String, Object> existing = mapper.getSchemaType(scope, kind, typeCode);
         if (existing == null) {
             throw new IllegalArgumentException("类型不存在：" + typeCode);
         }
-        mapper.upsertSchemaType(scope, kindOf(kind), typeCode, text(existing.get("label")),
-                text(existing.get("description")), text(existing.get("propertiesJson")), DEPRECATED,
-                currentUser());
+        mapper.upsertSchemaType(scope, kindOf(kind), typeCode, text(existing.get("label")), text(existing.get("description")), text(existing.get("propertiesJson")), DEPRECATED, currentUser());
         return mapper.getSchemaType(scope, kindOf(kind), typeCode);
     }
 
@@ -114,7 +116,6 @@ public class KnowledgeSchemaService {
     }
 
     // --------------------------------------------------------------- validation
-
     /**
      * Validate the dictionary and the data against it.
      *
@@ -143,8 +144,7 @@ public class KnowledgeSchemaService {
             }
             errors.addAll(validateProperties(readProperties(type.get("propertiesJson")), kind));
             if (KIND_RELATION.equals(kind)) {
-                warnings.addAll(validateConstraints(readProperties(type.get("propertiesJson")),
-                        known.get(KIND_ENTITY)));
+                warnings.addAll(validateConstraints(readProperties(type.get("propertiesJson")), known.get(KIND_ENTITY)));
             }
         }
         if (!known.get(KIND_KNOWLEDGE).contains("FACT")) {
@@ -162,7 +162,9 @@ public class KnowledgeSchemaService {
         return report;
     }
 
-    /** Data that uses a type the dictionary does not know about. */
+    /**
+     * Data that uses a type the dictionary does not know about.
+     */
     private List<Map<String, Object>> conformance(Long kb, Map<String, List<String>> known) {
         List<Map<String, Object>> violations = new ArrayList<Map<String, Object>>();
         if (kb == null) {
@@ -180,8 +182,7 @@ public class KnowledgeSchemaService {
         return violations;
     }
 
-    private void addViolation(List<Map<String, Object>> violations, String kind,
-            Map<String, Object> usage, List<String> knownTypes) {
+    private void addViolation(List<Map<String, Object>> violations, String kind, Map<String, Object> usage, List<String> knownTypes) {
         String code = text(usage.get("typeCode"));
         if (code.isEmpty() || knownTypes.contains(code)) {
             return;
@@ -252,7 +253,9 @@ public class KnowledgeSchemaService {
         return errors;
     }
 
-    /** Relation endpoints must point at entity types that exist, or the graph cannot be checked. */
+    /**
+     * Relation endpoints must point at entity types that exist, or the graph cannot be checked.
+     */
     private List<String> validateConstraints(Map<String, Object> properties, List<String> entityTypes) {
         List<String> warnings = new ArrayList<String>();
         if (properties == null || !(properties.get("constraints") instanceof Map)) {
@@ -275,14 +278,12 @@ public class KnowledgeSchemaService {
     }
 
     // ---------------------------------------------------------------- releases
-
     public Map<String, Object> publish(Long kb, String operator) {
         long scope = kb == null ? 0 : kb;
         Map<String, Object> report = validate(kb);
         Object valid = report.get("valid");
         if (!Boolean.TRUE.equals(valid)) {
-            throw new IllegalArgumentException(
-                    "Schema 校验未通过，无法发布：" + String.join("；", strings(report.get("errors"))));
+            throw new IllegalArgumentException("Schema 校验未通过，无法发布：" + String.join("；", strings(report.get("errors"))));
         }
         List<Map<String, Object>> types = mapper.listSchemaTypes(scope, null);
         Map<String, Object> definition = new LinkedHashMap<String, Object>();
@@ -293,8 +294,7 @@ public class KnowledgeSchemaService {
         String releaseCode = ids.next("SR");
         mapper.retireSchemaReleases(scope);
         String publishedBy = operator == null || operator.trim().isEmpty() ? currentUser() : operator;
-        mapper.insertSchemaRelease(releaseCode, scope, version, STATE_PUBLISHED, definitionJson,
-                write(report), sha256(definitionJson), publishedBy);
+        mapper.insertSchemaRelease(releaseCode, scope, version, STATE_PUBLISHED, definitionJson, write(report), sha256(definitionJson), publishedBy);
         Map<String, Object> release = mapper.getPublishedSchemaRelease(scope);
         if (release != null) {
             Map<String, Object> delivery = sync(scope, definition);
@@ -320,12 +320,13 @@ public class KnowledgeSchemaService {
         return row;
     }
 
-    /** Push the published vocabulary to the extraction side so prompts and parsing agree. */
+    /**
+     * Push the published vocabulary to the extraction side so prompts and parsing agree.
+     */
     public Map<String, Object> sync(Long kb, Map<String, Object> definition) {
         Map<String, Object> delivery = new LinkedHashMap<String, Object>();
         try {
-            Map<String, Object> payload = definition == null ? new LinkedHashMap<String, Object>()
-                    : new LinkedHashMap<String, Object>(definition);
+            Map<String, Object> payload = definition == null ? new LinkedHashMap<String, Object>() : new LinkedHashMap<String, Object>(definition);
             payload.put("knowledgeBaseId", kb);
             Map<String, Object> response = aiClient.post(AiApiPaths.SCHEMA_APPLY, payload);
             // An unreachable AI service answers with an empty body rather than an error, and an
@@ -353,7 +354,6 @@ public class KnowledgeSchemaService {
     }
 
     // ----------------------------------------------------------------- helpers
-
     private String kindOf(Object value) {
         String kind = text(value).trim().toUpperCase(Locale.ROOT);
         return KINDS.contains(kind) ? kind : KIND_ENTITY;

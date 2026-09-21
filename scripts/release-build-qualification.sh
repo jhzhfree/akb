@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-set -uo pipefail
+# -e：任一子命令失败立即退出，避免"测试挂了但产物仍被判定合格"
+set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 OUT="${OUT:-$ROOT/performance/results/build-qualification.json}"
 mkdir -p "$(dirname "$OUT")"

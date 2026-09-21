@@ -680,17 +680,17 @@ HEADERS = {"X-API-Key": KEY, "Content-Type": "application/json"}
 
 
 def ask(question: str, kb: int = 1, top_k: int = 5):
-    r = requests.post(f"{BASE}/query", headers=HEADERS,
-                      json={"knowledgeBaseId": kb, "question": question, "topK": top_k},
-                      timeout=120)
+    r = requests.post(
+        f"{BASE}/query", headers=HEADERS, json={"knowledgeBaseId": kb, "question": question, "topK": top_k}, timeout=120
+    )
     r.raise_for_status()
     body = r.json()
     if not body["success"]:
-        raise RuntimeError(f'{body["code"]} {body["message"]} traceId={body["traceId"]}')
+        raise RuntimeError(f"{body['code']} {body['message']} traceId={body['traceId']}")
     data = body["data"]
     print("答案：", data["answer"])
     for c in data.get("citations", []):
-        print(f'  [{c["index"]}] {c["title"]}（{c["sourceUri"]}）score={c["score"]}')
+        print(f"  [{c['index']}] {c['title']}（{c['sourceUri']}）score={c['score']}")
     return data["queryId"]
 
 
@@ -710,13 +710,18 @@ if __name__ == "__main__":
 import time, requests
 from requests.exceptions import HTTPError
 
+
 def call(method, path, **kw):
     for attempt in range(4):
-        r = requests.request(method, f"http://<host>:8080/api/v1/external{path}",
-                             headers={"X-API-Key": KEY, "Content-Type": "application/json"},
-                             timeout=120, **kw)
+        r = requests.request(
+            method,
+            f"http://<host>:8080/api/v1/external{path}",
+            headers={"X-API-Key": KEY, "Content-Type": "application/json"},
+            timeout=120,
+            **kw,
+        )
         if r.status_code in (429, 502, 503):
-            time.sleep(2 ** attempt)
+            time.sleep(2**attempt)
             continue
         r.raise_for_status()
         return r.json()
@@ -784,12 +789,17 @@ async function search(question, kb = 1, topK = 5) {
 ### 8.4 文本接入（Python）
 
 ```python
-r = requests.post(f"{BASE}/documents/text", headers=HEADERS, json={
-    "knowledgeBaseId": 1,
-    "title": "2026-09 客服话术更新",
-    "text": "一、退款时效：……\n二、升级路径：……",
-    "permissionTags": ["客服组"],
-}, timeout=180)
+r = requests.post(
+    f"{BASE}/documents/text",
+    headers=HEADERS,
+    json={
+        "knowledgeBaseId": 1,
+        "title": "2026-09 客服话术更新",
+        "text": "一、退款时效：……\n二、升级路径：……",
+        "permissionTags": ["客服组"],
+    },
+    timeout=180,
+)
 print(r.json()["data"]["documentId"], r.json()["data"]["chunkCount"])
 ```
 
@@ -802,7 +812,8 @@ r = requests.get(
     "http://<host>:8080/api/v1/external/stream/events",
     headers={"X-API-Key": KEY, "Accept": "text/event-stream"},
     params={"knowledgeBaseId": 1, "types": "INGESTION_COMPLETED,KNOWLEDGE_OBJECT_CREATED"},
-    stream=True, timeout=None,
+    stream=True,
+    timeout=None,
 )
 for line in r.iter_lines(decode_unicode=True):
     if not line:

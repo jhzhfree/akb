@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Small local regression benchmark. Results are directional, not release SLOs."""
+
 import json
 import sys
 import tempfile
@@ -18,8 +19,7 @@ def benchmark_index_cache():
         store = IndexStore()
         store._path = lambda kb: Path(directory) / ("kb_%s.json" % kb)
         docs = [
-            {"id": str(i), "title": "title", "content": "knowledge %s" % i, "vector": [0.1] * 64}
-            for i in range(5000)
+            {"id": str(i), "title": "title", "content": "knowledge %s" % i, "vector": [0.1] * 64} for i in range(5000)
         ]
         store.save(1, docs)
         started = time.perf_counter()

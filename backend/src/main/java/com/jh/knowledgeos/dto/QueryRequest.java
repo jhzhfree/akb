@@ -13,6 +13,7 @@ import java.util.Map;
  * API request for routed hybrid knowledge retrieval and answer generation.
  */
 public class QueryRequest {
+
     @NotNull
     @Min(1)
     private Long knowledgeBaseId;
@@ -26,6 +27,7 @@ public class QueryRequest {
     private Integer topK = 10;
 
     private String userId;
+
     private List<String> permissionTags;
 
     public Map<String, Object> toMap() {
@@ -42,14 +44,43 @@ public class QueryRequest {
         return payload;
     }
 
-    public Long getKnowledgeBaseId() { return knowledgeBaseId; }
-    public void setKnowledgeBaseId(Long knowledgeBaseId) { this.knowledgeBaseId = knowledgeBaseId; }
-    public String getQuery() { return query; }
-    public void setQuery(String query) { this.query = query; }
-    public Integer getTopK() { return topK; }
-    public void setTopK(Integer topK) { this.topK = topK; }
-    public String getUserId() { return userId; }
-    public void setUserId(String userId) { this.userId = userId; }
-    public List<String> getPermissionTags() { return permissionTags; }
-    public void setPermissionTags(List<String> permissionTags) { this.permissionTags = permissionTags; }
+    public Long getKnowledgeBaseId() {
+        return knowledgeBaseId;
+    }
+
+    public void setKnowledgeBaseId(Long knowledgeBaseId) {
+        this.knowledgeBaseId = knowledgeBaseId;
+    }
+
+    public String getQuery() {
+        return query;
+    }
+
+    public void setQuery(String query) {
+        this.query = query;
+    }
+
+    public Integer getTopK() {
+        return topK;
+    }
+
+    public void setTopK(Integer topK) {
+        this.topK = topK;
+    }
+
+    public String getUserId() {
+        return userId;
+    }
+
+    public void setUserId(String userId) {
+        this.userId = userId;
+    }
+
+    public List<String> getPermissionTags() {
+        return permissionTags;
+    }
+
+    public void setPermissionTags(List<String> permissionTags) {
+        this.permissionTags = permissionTags;
+    }
 }

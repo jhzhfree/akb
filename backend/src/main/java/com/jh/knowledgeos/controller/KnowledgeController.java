@@ -3,7 +3,6 @@ package com.jh.knowledgeos.controller;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.jh.knowledgeos.common.ApiResponse;
 import com.jh.knowledgeos.domain.KnowledgeBase;
-import com.jh.knowledgeos.domain.User;
 import com.jh.knowledgeos.service.AuthContext;
 import com.jh.knowledgeos.service.ChunkPolicyService;
 import com.jh.knowledgeos.service.KnowledgeBaseAccessService;
@@ -44,7 +43,6 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
-
 import javax.validation.Valid;
 import java.io.UnsupportedEncodingException;
 import java.net.URLEncoder;
@@ -61,40 +59,40 @@ import java.util.Map;
 @CrossOrigin
 @Tag(name = "Knowledge", description = "知识生成、治理、检索与可观测 API")
 public class KnowledgeController {
+
     private final KnowledgeService service;
+
     private final ObjectMapper objectMapper;
+
     private final AclContextResolver aclContextResolver;
+
     private final AclAuditService aclAuditService;
+
     private final IndexOutboxService outboxService;
+
     private final AiClient aiClient;
+
     private final IndexSchemaService indexSchemaService;
+
     private final AclRebuildOrchestrator aclRebuildOrchestrator;
+
     private final KnowledgeBaseService knowledgeBaseService;
+
     private final IngestionObservabilityService ingestionObservabilityService;
+
     private final KnowledgeLifecycleService knowledgeLifecycleService;
+
     private final EntityGovernanceService entityGovernanceService;
+
     private final KnowledgeBasePurgeService purgeService;
+
     private final KnowledgeBaseAccessService accessService;
+
     private final ChunkPolicyService chunkPolicyService;
+
     private final BatchIngestionService batchIngestionService;
 
-    public KnowledgeController(
-            KnowledgeService service,
-            ObjectMapper objectMapper,
-            AclContextResolver aclContextResolver,
-            AclAuditService aclAuditService,
-            IndexOutboxService outboxService,
-            AiClient aiClient,
-            IndexSchemaService indexSchemaService,
-            AclRebuildOrchestrator aclRebuildOrchestrator,
-            KnowledgeBaseService knowledgeBaseService,
-            IngestionObservabilityService ingestionObservabilityService,
-            KnowledgeLifecycleService knowledgeLifecycleService,
-            EntityGovernanceService entityGovernanceService,
-            KnowledgeBasePurgeService purgeService,
-            KnowledgeBaseAccessService accessService,
-            ChunkPolicyService chunkPolicyService,
-            BatchIngestionService batchIngestionService) {
+    public KnowledgeController(KnowledgeService service, ObjectMapper objectMapper, AclContextResolver aclContextResolver, AclAuditService aclAuditService, IndexOutboxService outboxService, AiClient aiClient, IndexSchemaService indexSchemaService, AclRebuildOrchestrator aclRebuildOrchestrator, KnowledgeBaseService knowledgeBaseService, IngestionObservabilityService ingestionObservabilityService, KnowledgeLifecycleService knowledgeLifecycleService, EntityGovernanceService entityGovernanceService, KnowledgeBasePurgeService purgeService, KnowledgeBaseAccessService accessService, ChunkPolicyService chunkPolicyService, BatchIngestionService batchIngestionService) {
         this.service = service;
         this.objectMapper = objectMapper;
         this.aclContextResolver = aclContextResolver;
@@ -115,8 +113,7 @@ public class KnowledgeController {
 
     @GetMapping("/settings/chunk-policy")
     @Operation(summary = "读取知识库分块策略与可选算法（设计 §4.1 分块策略）")
-    public ApiResponse<Object> readChunkPolicy(
-            @RequestParam(value = "kb", required = false) Long kb) {
+    public ApiResponse<Object> readChunkPolicy(@RequestParam(value = "kb", required = false) Long kb) {
         Map<String, Object> payload = new LinkedHashMap<String, Object>();
         payload.putAll(chunkPolicyService.policy(resolveKb(kb)));
         payload.put("schema", chunkPolicyService.schema());
@@ -125,20 +122,19 @@ public class KnowledgeController {
 
     @PutMapping("/settings/chunk-policy")
     @Operation(summary = "保存知识库分块策略（下次接入生效，已有文档需重新接入才能重切）")
-    public ApiResponse<Object> saveChunkPolicy(
-            @RequestParam(value = "kb", required = false) Long kb,
-            @RequestBody(required = false) Map<String, Object> payload) {
+    public ApiResponse<Object> saveChunkPolicy(@RequestParam(value = "kb", required = false) Long kb, @RequestBody(required = false) Map<String, Object> payload) {
         return ApiResponse.ok(chunkPolicyService.save(resolveKb(kb), payload));
     }
 
     @PostMapping("/settings/chunk-policy/reset")
     @Operation(summary = "恢复内置默认分块策略")
-    public ApiResponse<Object> resetChunkPolicy(
-            @RequestParam(value = "kb", required = false) Long kb) {
+    public ApiResponse<Object> resetChunkPolicy(@RequestParam(value = "kb", required = false) Long kb) {
         return ApiResponse.ok(chunkPolicyService.reset(resolveKb(kb)));
     }
 
-    /** Knowledge base of the request, defaulting to the first one the caller may see. */
+    /**
+     * Knowledge base of the request, defaulting to the first one the caller may see.
+     */
     private Long resolveKb(Long kb) {
         if (kb != null) {
             return kb;
@@ -149,25 +145,19 @@ public class KnowledgeController {
 
     @PostMapping("/lifecycle/{kb}/expire")
     @Operation(summary = "失效到期的知识对象（设计 V1.1 §5.5 / §17 有效期到期自动失效）")
-    public ApiResponse<Object> expireDueKnowledge(
-            @PathVariable Long kb,
-            @RequestParam(value = "dryRun", required = false, defaultValue = "false") boolean dryRun) {
+    public ApiResponse<Object> expireDueKnowledge(@PathVariable Long kb, @RequestParam(value = "dryRun", required = false, defaultValue = "false") boolean dryRun) {
         return ApiResponse.ok(knowledgeLifecycleService.expireDueClaims(kb, dryRun));
     }
 
     @GetMapping("/lifecycle/{kb}/summary")
     @Operation(summary = "知识生命周期看板：生效/过期/替代分布与即将到期数量（V1.0 §5.8）")
-    public ApiResponse<Object> lifecycleSummary(
-            @PathVariable Long kb,
-            @RequestParam(value = "withinDays", required = false) Integer withinDays) {
+    public ApiResponse<Object> lifecycleSummary(@PathVariable Long kb, @RequestParam(value = "withinDays", required = false) Integer withinDays) {
         return ApiResponse.ok(knowledgeLifecycleService.summary(kb, withinDays));
     }
 
     @GetMapping("/lifecycle/{kb}/expiring")
     @Operation(summary = "即将过期的断言清单，用于复核续期（V1.0 §5.8）")
-    public ApiResponse<Object> lifecycleExpiring(
-            @PathVariable Long kb,
-            @RequestParam(value = "withinDays", required = false) Integer withinDays) {
+    public ApiResponse<Object> lifecycleExpiring(@PathVariable Long kb, @RequestParam(value = "withinDays", required = false) Integer withinDays) {
         return ApiResponse.ok(knowledgeLifecycleService.expiringClaims(kb, withinDays));
     }
 
@@ -185,54 +175,32 @@ public class KnowledgeController {
 
     @PostMapping("/entities/{kb}/{entityCode}/aliases")
     @Operation(summary = "为实体补充人工别名（V1.0 §5.4.1）")
-    public ApiResponse<Object> addEntityAlias(
-            @PathVariable Long kb, @PathVariable String entityCode,
-            @RequestBody Map<String, Object> request) {
-        return ApiResponse.ok(entityGovernanceService.addAlias(
-                kb, entityCode,
-                request.get("alias") == null ? null : String.valueOf(request.get("alias")),
-                request.get("aliasType") == null ? null : String.valueOf(request.get("aliasType")),
-                request.get("confidence") instanceof Number
-                        ? ((Number) request.get("confidence")).doubleValue() : null));
+    public ApiResponse<Object> addEntityAlias(@PathVariable Long kb, @PathVariable String entityCode, @RequestBody Map<String, Object> request) {
+        return ApiResponse.ok(entityGovernanceService.addAlias(kb, entityCode, request.get("alias") == null ? null : String.valueOf(request.get("alias")), request.get("aliasType") == null ? null : String.valueOf(request.get("aliasType")), request.get("confidence") instanceof Number ? ((Number) request.get("confidence")).doubleValue() : null));
     }
 
     @PostMapping("/entities/{kb}/{entityCode}/aliases/remove")
     @Operation(summary = "解绑实体的错误别名（V1.0 §5.4.1）")
-    public ApiResponse<Object> removeEntityAlias(
-            @PathVariable Long kb, @PathVariable String entityCode,
-            @RequestBody Map<String, Object> request) {
-        return ApiResponse.ok(entityGovernanceService.removeAlias(
-                kb, entityCode,
-                request.get("alias") == null ? null : String.valueOf(request.get("alias"))));
+    public ApiResponse<Object> removeEntityAlias(@PathVariable Long kb, @PathVariable String entityCode, @RequestBody Map<String, Object> request) {
+        return ApiResponse.ok(entityGovernanceService.removeAlias(kb, entityCode, request.get("alias") == null ? null : String.valueOf(request.get("alias"))));
     }
 
     @PostMapping("/entities/{kb}/merge")
     @Operation(summary = "人工确认实体合并（V1.0 §5.4.1）")
     public ApiResponse<Object> mergeEntity(@PathVariable Long kb, @RequestBody Map<String, Object> request) {
-        return ApiResponse.ok(entityGovernanceService.merge(
-                kb,
-                request.get("from") == null ? null : String.valueOf(request.get("from")),
-                request.get("to") == null ? null : String.valueOf(request.get("to"))));
+        return ApiResponse.ok(entityGovernanceService.merge(kb, request.get("from") == null ? null : String.valueOf(request.get("from")), request.get("to") == null ? null : String.valueOf(request.get("to"))));
     }
 
     @PostMapping("/entities/{kb}/{entityCode}/status")
     @Operation(summary = "调整实体状态，可将误合并的实体恢复为 ACTIVE（V1.0 §5.4.1）")
-    public ApiResponse<Object> updateEntityStatus(
-            @PathVariable Long kb, @PathVariable String entityCode,
-            @RequestBody Map<String, Object> request) {
-        return ApiResponse.ok(entityGovernanceService.updateStatus(
-                kb, entityCode,
-                request.get("status") == null ? null : String.valueOf(request.get("status"))));
+    public ApiResponse<Object> updateEntityStatus(@PathVariable Long kb, @PathVariable String entityCode, @RequestBody Map<String, Object> request) {
+        return ApiResponse.ok(entityGovernanceService.updateStatus(kb, entityCode, request.get("status") == null ? null : String.valueOf(request.get("status"))));
     }
 
     @PostMapping("/lifecycle/{kb}/supersede")
     @Operation(summary = "用新版本替代旧版本知识对象（设计 V1.1 §5.5 版本管理）")
     public ApiResponse<Object> supersedeKnowledge(@PathVariable Long kb, @RequestBody Map<String, Object> request) {
-        return ApiResponse.ok(knowledgeLifecycleService.supersede(
-                kb,
-                String.valueOf(request.get("objectType")),
-                String.valueOf(request.get("oldObjectCode")),
-                String.valueOf(request.get("newObjectCode"))));
+        return ApiResponse.ok(knowledgeLifecycleService.supersede(kb, String.valueOf(request.get("objectType")), String.valueOf(request.get("oldObjectCode")), String.valueOf(request.get("newObjectCode"))));
     }
 
     @GetMapping("/lifecycle/sources/{sourceId}/impact")
@@ -243,24 +211,20 @@ public class KnowledgeController {
 
     @GetMapping("/bases")
     @Operation(summary = "列出知识库工作区")
-    public ApiResponse<Object> bases() { return ApiResponse.ok(knowledgeBaseService.list()); }
+    public ApiResponse<Object> bases() {
+        return ApiResponse.ok(knowledgeBaseService.list());
+    }
 
     @PostMapping("/bases")
     @Operation(summary = "创建知识库工作区，并指定创建人与可见范围（公开 / 私有 / 用户组）")
     public ApiResponse<Object> createBase(@Valid @RequestBody KnowledgeBaseRequest request) {
-        return ApiResponse.ok(knowledgeBaseService.create(
-                request.getName(),
-                request.getDescription(),
-                request.getVisibility(),
-                request.getOwnerGroupId(),
-                AuthContext.get()));
+        return ApiResponse.ok(knowledgeBaseService.create(request.getName(), request.getDescription(), request.getVisibility(), request.getOwnerGroupId(), AuthContext.get()));
     }
 
     @PostMapping("/bases/{id}/access")
     @Operation(summary = "调整知识库可见范围与所属用户组")
     public ApiResponse<Object> updateBaseAccess(@PathVariable Long id, @RequestBody KnowledgeBaseRequest request) {
-        return ApiResponse.ok(knowledgeBaseService.updateAccess(
-                id, request.getVisibility(), request.getOwnerGroupId()));
+        return ApiResponse.ok(knowledgeBaseService.updateAccess(id, request.getVisibility(), request.getOwnerGroupId()));
     }
 
     @PostMapping("/bases/{id}/archive")
@@ -271,11 +235,10 @@ public class KnowledgeController {
 
     @PostMapping("/bases/{id}/purge")
     @Operation(summary = "清空知识库内的全部知识数据（保留知识库本身）")
-    public ApiResponse<Object> purgeBase(
-            @PathVariable Long id,
-            @RequestParam(value = "dryRun", required = false, defaultValue = "false") boolean dryRun,
-            @RequestParam(value = "purgeIndex", required = false, defaultValue = "true") boolean purgeIndex) {
-        if (dryRun) return ApiResponse.ok(purgeService.preview(id));
+    public ApiResponse<Object> purgeBase(@PathVariable Long id, @RequestParam(value = "dryRun", required = false, defaultValue = "false") boolean dryRun, @RequestParam(value = "purgeIndex", required = false, defaultValue = "true") boolean purgeIndex) {
+        if (dryRun) {
+            return ApiResponse.ok(purgeService.preview(id));
+        }
         Map<String, Object> result = purgeService.purgeKnowledge(id);
         @SuppressWarnings("unchecked")
         List<String> storagePaths = (List<String>) result.remove("sourceStoragePaths");
@@ -284,8 +247,7 @@ public class KnowledgeController {
     }
 
     @GetMapping("/ingestion/{kb}/runs")
-    public ApiResponse<Object> ingestionRuns(@PathVariable Long kb,
-            @RequestParam(value = "limit", required = false) Integer limit) {
+    public ApiResponse<Object> ingestionRuns(@PathVariable Long kb, @RequestParam(value = "limit", required = false) Integer limit) {
         return ApiResponse.ok(ingestionObservabilityService.list(kb, limit));
     }
 
@@ -296,12 +258,7 @@ public class KnowledgeController {
 
     @PostMapping(value = "/documents/upload", consumes = "multipart/form-data")
     @Operation(summary = "上传并处理知识源文档")
-    public ApiResponse<Object> upload(
-            @RequestParam("knowledgeBaseId") Long knowledgeBaseId,
-            @RequestParam("file") MultipartFile file,
-            @RequestParam(value = "authorityScore", required = false) Double authorityScore,
-            @RequestParam(value = "permissionTags", required = false) String permissionTags)
-            throws Exception {
+    public ApiResponse<Object> upload(@RequestParam("knowledgeBaseId") Long knowledgeBaseId, @RequestParam("file") MultipartFile file, @RequestParam(value = "authorityScore", required = false) Double authorityScore, @RequestParam(value = "permissionTags", required = false) String permissionTags) throws Exception {
         return ApiResponse.ok(service.upload(knowledgeBaseId, file, authorityScore, permissionTags));
     }
 
@@ -312,20 +269,13 @@ public class KnowledgeController {
      */
     @PostMapping(value = "/documents/batch-upload", consumes = "multipart/form-data")
     @Operation(summary = "批量上传多个知识源文档：返回批次号异步执行，逐文件记录成功/失败（设计 §6.2）")
-    public ApiResponse<Object> batchUpload(
-            @RequestParam("knowledgeBaseId") Long knowledgeBaseId,
-            @RequestParam("files") List<MultipartFile> files,
-            @RequestParam(value = "authorityScore", required = false) Double authorityScore,
-            @RequestParam(value = "permissionTags", required = false) String permissionTags)
-            throws Exception {
-        return ApiResponse.ok(
-                batchIngestionService.submit(knowledgeBaseId, files, authorityScore, permissionTags));
+    public ApiResponse<Object> batchUpload(@RequestParam("knowledgeBaseId") Long knowledgeBaseId, @RequestParam("files") List<MultipartFile> files, @RequestParam(value = "authorityScore", required = false) Double authorityScore, @RequestParam(value = "permissionTags", required = false) String permissionTags) throws Exception {
+        return ApiResponse.ok(batchIngestionService.submit(knowledgeBaseId, files, authorityScore, permissionTags));
     }
 
     @GetMapping("/documents/batches/{kb}")
     @Operation(summary = "批量接入批次列表（按创建时间倒序）")
-    public ApiResponse<Object> batchList(
-            @PathVariable Long kb, @RequestParam(value = "limit", required = false) Integer limit) {
+    public ApiResponse<Object> batchList(@PathVariable Long kb, @RequestParam(value = "limit", required = false) Integer limit) {
         return ApiResponse.ok(batchIngestionService.list(kb, limit));
     }
 
@@ -341,7 +291,9 @@ public class KnowledgeController {
         return ApiResponse.ok(batchIngestionService.cancel(batchCode));
     }
 
-    /** Re-runs only the failed files of a finished batch: the successful ones keep their chunks. */
+    /**
+     * Re-runs only the failed files of a finished batch: the successful ones keep their chunks.
+     */
     @PostMapping("/documents/batch/{batchCode}/retry")
     @Operation(summary = "重跑批次内的失败文件，成功文件不受影响")
     public ApiResponse<Object> batchRetry(@PathVariable String batchCode) {
@@ -350,23 +302,18 @@ public class KnowledgeController {
 
     @GetMapping("/sources/{kb}/{sourceId}/preview")
     @Operation(summary = "预览摄入的源文件（文本格式取原文，二进制回退解析文本）")
-    public ApiResponse<Object> sourcePreview(@PathVariable Long kb, @PathVariable Long sourceId,
-            @RequestParam(value = "limit", required = false) Integer limit,
-            @RequestHeader(value = "X-Authenticated-Permission-Tags", required = false) String permissionTags) {
+    public ApiResponse<Object> sourcePreview(@PathVariable Long kb, @PathVariable Long sourceId, @RequestParam(value = "limit", required = false) Integer limit, @RequestHeader(value = "X-Authenticated-Permission-Tags", required = false) String permissionTags) {
         return ApiResponse.ok(service.sourcePreview(kb, sourceId, limit, aclContextResolver.resolve(permissionTags)));
     }
 
     @GetMapping("/sources/{kb}/{sourceId}/file")
     @Operation(summary = "下载/在线打开摄入的源文件原件")
-    public ResponseEntity<Resource> sourceFile(@PathVariable Long kb, @PathVariable Long sourceId,
-            @RequestHeader(value = "X-Authenticated-Permission-Tags", required = false) String permissionTags) {
-        com.jh.knowledgeos.domain.SourceFile file =
-                service.sourceFile(kb, sourceId, aclContextResolver.resolve(permissionTags));
-        if (file == null) return ResponseEntity.notFound().build();
-        return ResponseEntity.ok()
-                .header(HttpHeaders.CONTENT_DISPOSITION, inlineDisposition(file.getName()))
-                .contentType(MediaType.parseMediaType(file.getContentType()))
-                .body(file.getResource());
+    public ResponseEntity<Resource> sourceFile(@PathVariable Long kb, @PathVariable Long sourceId, @RequestHeader(value = "X-Authenticated-Permission-Tags", required = false) String permissionTags) {
+        com.jh.knowledgeos.domain.SourceFile file = service.sourceFile(kb, sourceId, aclContextResolver.resolve(permissionTags));
+        if (file == null) {
+            return ResponseEntity.notFound().build();
+        }
+        return ResponseEntity.ok().header(HttpHeaders.CONTENT_DISPOSITION, inlineDisposition(file.getName())).contentType(MediaType.parseMediaType(file.getContentType())).body(file.getResource());
     }
 
     private String inlineDisposition(String name) {
@@ -389,14 +336,12 @@ public class KnowledgeController {
 
     @GetMapping("/overview/{kb}")
     @Operation(summary = "知识库工作台概览")
-    public ApiResponse<Object> overview(@PathVariable Long kb,
-            @RequestHeader(value = "X-Authenticated-Permission-Tags", required = false) String permissionTags) {
+    public ApiResponse<Object> overview(@PathVariable Long kb, @RequestHeader(value = "X-Authenticated-Permission-Tags", required = false) String permissionTags) {
         return ApiResponse.ok(service.overview(kb, aclContextResolver.resolve(permissionTags)));
     }
 
     @GetMapping("/sources/{kb}")
-    public ApiResponse<Object> sources(@PathVariable Long kb,
-            @RequestHeader(value = "X-Authenticated-Permission-Tags", required = false) String permissionTags) {
+    public ApiResponse<Object> sources(@PathVariable Long kb, @RequestHeader(value = "X-Authenticated-Permission-Tags", required = false) String permissionTags) {
         return ApiResponse.ok(service.sources(kb, aclContextResolver.resolve(permissionTags)));
     }
 
@@ -419,10 +364,7 @@ public class KnowledgeController {
 
     @GetMapping("/lineage/{kb}/{objectCode}")
     @Operation(summary = "知识对象溯源链：对象 → Evidence → Chunk → Document → Source（设计 §9.4）")
-    public ApiResponse<Object> lineage(
-            @PathVariable Long kb,
-            @PathVariable String objectCode,
-            @RequestParam(value = "objectType", required = false) String objectType) {
+    public ApiResponse<Object> lineage(@PathVariable Long kb, @PathVariable String objectCode, @RequestParam(value = "objectType", required = false) String objectType) {
         return ApiResponse.ok(service.lineage(kb, objectType, objectCode));
     }
 
@@ -453,31 +395,25 @@ public class KnowledgeController {
 
     @PostMapping("/query")
     @Operation(summary = "执行可追溯混合知识问答")
-    public ApiResponse<QueryResponse> query(
-            @Valid @RequestBody QueryRequest request,
-            @RequestHeader(value = "X-Authenticated-Permission-Tags", required = false) String permissionTags) throws Exception {
+    public ApiResponse<QueryResponse> query(@Valid @RequestBody QueryRequest request, @RequestHeader(value = "X-Authenticated-Permission-Tags", required = false) String permissionTags) throws Exception {
         accessService.assertRead(request.getKnowledgeBaseId());
         request.setPermissionTags(aclContextResolver.resolve(permissionTags));
-        return ApiResponse.ok(
-                objectMapper.convertValue(service.query(request.toMap()), QueryResponse.class));
+        return ApiResponse.ok(objectMapper.convertValue(service.query(request.toMap()), QueryResponse.class));
     }
 
     @GetMapping("/cards/{kb}")
-    public ApiResponse<Object> cards(@PathVariable Long kb,
-            @RequestHeader(value = "X-Authenticated-Permission-Tags", required = false) String permissionTags) {
+    public ApiResponse<Object> cards(@PathVariable Long kb, @RequestHeader(value = "X-Authenticated-Permission-Tags", required = false) String permissionTags) {
         return ApiResponse.ok(service.cards(kb, aclContextResolver.resolve(permissionTags)));
     }
 
     @GetMapping("/claims/{kb}")
-    public ApiResponse<Object> claims(@PathVariable Long kb,
-            @RequestHeader(value = "X-Authenticated-Permission-Tags", required = false) String permissionTags) {
+    public ApiResponse<Object> claims(@PathVariable Long kb, @RequestHeader(value = "X-Authenticated-Permission-Tags", required = false) String permissionTags) {
         return ApiResponse.ok(service.claims(kb, aclContextResolver.resolve(permissionTags)));
     }
 
     @GetMapping("/assertions/{kb}")
     @Operation(summary = "断言（Assertion）清单，与 /claims 同义，供外部系统按领域术语调用（设计 §17.1）")
-    public ApiResponse<Object> assertions(@PathVariable Long kb,
-            @RequestHeader(value = "X-Authenticated-Permission-Tags", required = false) String permissionTags) {
+    public ApiResponse<Object> assertions(@PathVariable Long kb, @RequestHeader(value = "X-Authenticated-Permission-Tags", required = false) String permissionTags) {
         return ApiResponse.ok(service.claims(kb, aclContextResolver.resolve(permissionTags)));
     }
 
@@ -487,9 +423,7 @@ public class KnowledgeController {
     }
 
     @GetMapping("/adjudication/{kb}/assessments")
-    public ApiResponse<Object> assessments(
-            @PathVariable Long kb,
-            @RequestParam(value = "limit", required = false) Integer limit) {
+    public ApiResponse<Object> assessments(@PathVariable Long kb, @RequestParam(value = "limit", required = false) Integer limit) {
         return ApiResponse.ok(service.assessments(kb, limit));
     }
 
@@ -499,16 +433,12 @@ public class KnowledgeController {
     }
 
     @GetMapping("/conflicts/{kb}")
-    public ApiResponse<Object> conflicts(
-            @PathVariable Long kb,
-            @RequestParam(value = "status", required = false) String status) {
+    public ApiResponse<Object> conflicts(@PathVariable Long kb, @RequestParam(value = "status", required = false) String status) {
         return ApiResponse.ok(service.conflicts(kb, status));
     }
 
     @PostMapping("/conflicts/{id}/resolve")
-    public ApiResponse<Object> resolveConflict(
-            @PathVariable Long id,
-            @Valid @RequestBody ConflictResolveRequest request) {
+    public ApiResponse<Object> resolveConflict(@PathVariable Long id, @Valid @RequestBody ConflictResolveRequest request) {
         return ApiResponse.ok(service.resolveConflict(id, request.getStatus(), request.getResolution()));
     }
 
@@ -520,31 +450,21 @@ public class KnowledgeController {
 
     @PostMapping("/conflicts/{id}/adjudicate")
     @Operation(summary = "裁决知识冲突：保留一方或双弃，并同步两侧对象状态与快照")
-    public ApiResponse<Object> adjudicateConflict(
-            @PathVariable Long id,
-            @Valid @RequestBody ConflictAdjudicateRequest request) {
-        return ApiResponse.ok(service.adjudicateConflict(
-                id, request.getDecision(), request.getComment(), request.getReviewer()));
+    public ApiResponse<Object> adjudicateConflict(@PathVariable Long id, @Valid @RequestBody ConflictAdjudicateRequest request) {
+        return ApiResponse.ok(service.adjudicateConflict(id, request.getDecision(), request.getComment(), request.getReviewer()));
     }
 
     @GetMapping("/graph/{kb}/{code}")
-    public ApiResponse<Object> graph(@PathVariable Long kb, @PathVariable String code,
-            @RequestParam(value = "depth", required = false) Integer depth,
-            @RequestParam(value = "limit", required = false) Integer limit,
-            @RequestHeader(value = "X-Authenticated-Permission-Tags", required = false) String permissionTags) {
+    public ApiResponse<Object> graph(@PathVariable Long kb, @PathVariable String code, @RequestParam(value = "depth", required = false) Integer depth, @RequestParam(value = "limit", required = false) Integer limit, @RequestHeader(value = "X-Authenticated-Permission-Tags", required = false) String permissionTags) {
         return ApiResponse.ok(service.graph(kb, code, aclContextResolver.resolve(permissionTags), depth, limit));
     }
 
     @GetMapping("/objects/{kb}/{type}/{code}")
     @Operation(summary = "知识对象详情：Card / Evidence / Conflict / Review / Graph")
-    public ApiResponse<Object> knowledgeDetail(@PathVariable Long kb, @PathVariable String type,
-            @PathVariable String code,
-            @RequestHeader(value = "X-Authenticated-Permission-Tags", required = false) String permissionTags) {
+    public ApiResponse<Object> knowledgeDetail(@PathVariable Long kb, @PathVariable String type, @PathVariable String code, @RequestHeader(value = "X-Authenticated-Permission-Tags", required = false) String permissionTags) {
         java.util.List<String> tags = aclContextResolver.resolve(permissionTags);
         Object result = service.knowledgeDetail(kb, type.toUpperCase(), code, tags);
-        aclAuditService.record(kb, type.toUpperCase(), code, "READ_DETAIL",
-                result == null ? "DENY" : "ALLOW", tags,
-                result == null ? "ACL_FILTERED_OR_NOT_FOUND" : "ACL_MATCH");
+        aclAuditService.record(kb, type.toUpperCase(), code, "READ_DETAIL", result == null ? "DENY" : "ALLOW", tags, result == null ? "ACL_FILTERED_OR_NOT_FOUND" : "ACL_MATCH");
         return ApiResponse.ok(result);
     }
 
@@ -555,20 +475,13 @@ public class KnowledgeController {
 
     @GetMapping("/index/outbox/{kb}")
     @Operation(summary = "查询索引 Outbox 事件")
-    public ApiResponse<Object> outbox(
-            @PathVariable Long kb,
-            @RequestParam(value = "status", required = false) String status,
-            @RequestParam(value = "limit", required = false) Integer limit) {
+    public ApiResponse<Object> outbox(@PathVariable Long kb, @RequestParam(value = "status", required = false) String status, @RequestParam(value = "limit", required = false) Integer limit) {
         return ApiResponse.ok(outboxService.list(kb, status, limit));
     }
 
     @GetMapping("/index/outbox/{kb}/page")
     @Operation(summary = "分页查询索引 Outbox 事件")
-    public ApiResponse<Object> outboxPage(
-            @PathVariable Long kb,
-            @RequestParam(value = "status", required = false) String status,
-            @RequestParam(value = "page", required = false) Integer page,
-            @RequestParam(value = "size", required = false) Integer size) {
+    public ApiResponse<Object> outboxPage(@PathVariable Long kb, @RequestParam(value = "status", required = false) String status, @RequestParam(value = "page", required = false) Integer page, @RequestParam(value = "size", required = false) Integer size) {
         return ApiResponse.ok(outboxService.page(kb, status, page, size));
     }
 
@@ -598,17 +511,13 @@ public class KnowledgeController {
 
     @GetMapping("/content-unit/{kb}/{contentUnitId}")
     @Operation(summary = "按检索 ContentUnit 定位原文")
-    public ApiResponse<Object> contentUnitDetail(
-            @PathVariable Long kb, @PathVariable Long contentUnitId,
-            @RequestHeader(value = "X-Authenticated-Permission-Tags", required = false) String permissionTags) {
+    public ApiResponse<Object> contentUnitDetail(@PathVariable Long kb, @PathVariable Long contentUnitId, @RequestHeader(value = "X-Authenticated-Permission-Tags", required = false) String permissionTags) {
         return ApiResponse.ok(service.contentUnitDetail(kb, contentUnitId, aclContextResolver.resolve(permissionTags)));
     }
 
     @GetMapping("/evidence/{kb}/{evidenceCode}")
     @Operation(summary = "查看证据原文与来源定位")
-    public ApiResponse<Object> evidenceDetail(
-            @PathVariable Long kb, @PathVariable String evidenceCode,
-            @RequestHeader(value = "X-Authenticated-Permission-Tags", required = false) String permissionTags) {
+    public ApiResponse<Object> evidenceDetail(@PathVariable Long kb, @PathVariable String evidenceCode, @RequestHeader(value = "X-Authenticated-Permission-Tags", required = false) String permissionTags) {
         return ApiResponse.ok(service.evidenceDetail(kb, evidenceCode, aclContextResolver.resolve(permissionTags)));
     }
 
@@ -625,17 +534,13 @@ public class KnowledgeController {
 
     @GetMapping("/answer-qualifications/{kb}/summary")
     @Operation(summary = "统计答案资格状态和策略版本分布")
-    public ApiResponse<Object> answerQualificationSummary(
-            @PathVariable Long kb,
-            @RequestParam(value = "hours", required = false) Integer hours) {
+    public ApiResponse<Object> answerQualificationSummary(@PathVariable Long kb, @RequestParam(value = "hours", required = false) Integer hours) {
         return ApiResponse.ok(service.answerQualificationSummary(kb, hours));
     }
 
     @GetMapping("/traces/{kb}")
     @Operation(summary = "查询知识库问答历史")
-    public ApiResponse<Object> queryHistory(
-            @PathVariable Long kb,
-            @RequestParam(value = "limit", required = false) Integer limit) {
+    public ApiResponse<Object> queryHistory(@PathVariable Long kb, @RequestParam(value = "limit", required = false) Integer limit) {
         return ApiResponse.ok(service.queryHistory(kb, limit));
     }
 
@@ -655,26 +560,25 @@ public class KnowledgeController {
     }
 
     @GetMapping("/acl/rebuild/{kb}")
-    public ApiResponse<Object> listAclRebuilds(@PathVariable Long kb,
-            @RequestParam(value = "limit", required = false) Integer limit) {
+    public ApiResponse<Object> listAclRebuilds(@PathVariable Long kb, @RequestParam(value = "limit", required = false) Integer limit) {
         return ApiResponse.ok(aclRebuildOrchestrator.list(kb, limit));
     }
 
     @PostMapping("/index/schema/{kb}/rebuild")
-    public ApiResponse<Map<String, Object>> rebuildIndexSchema(
-            @PathVariable Long kb, @RequestParam String schemaVersion) {
+    public ApiResponse<Map<String, Object>> rebuildIndexSchema(@PathVariable Long kb, @RequestParam String schemaVersion) {
         return ApiResponse.ok(indexSchemaService.rebuild(kb, schemaVersion));
     }
+
     @PostMapping("/index/schema/{kb}/activate/{releaseId}")
-    public ApiResponse<Map<String, Object>> activateIndexSchema(
-            @PathVariable Long kb, @PathVariable String releaseId) {
+    public ApiResponse<Map<String, Object>> activateIndexSchema(@PathVariable Long kb, @PathVariable String releaseId) {
         return ApiResponse.ok(indexSchemaService.activate(kb, releaseId));
     }
+
     @PostMapping("/index/schema/{kb}/rollback/{releaseId}")
-    public ApiResponse<Map<String, Object>> rollbackIndexSchema(
-            @PathVariable Long kb, @PathVariable String releaseId) {
+    public ApiResponse<Map<String, Object>> rollbackIndexSchema(@PathVariable Long kb, @PathVariable String releaseId) {
         return ApiResponse.ok(indexSchemaService.rollback(kb, releaseId));
     }
+
     @GetMapping("/index/schema/{kb}")
     public ApiResponse<Object> listIndexSchemas(@PathVariable Long kb) {
         return ApiResponse.ok(indexSchemaService.list(kb));

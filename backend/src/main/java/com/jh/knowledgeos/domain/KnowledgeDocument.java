@@ -11,38 +11,114 @@ package com.jh.knowledgeos.domain;
  * can tell a parse failure from a dirty index without reading logs.</p>
  */
 public class KnowledgeDocument {
+
     private Long id;
+
     private Long sourceVersionId;
+
     private String documentCode;
+
     private String title;
+
     private String mimeType;
+
     private String parseStatus;
+
     private String status;
+
     private String currentStage;
+
     private String errorMessage;
+
     private Integer retryCount;
+
     private Integer chunkCount;
 
-    public Long getId() { return id; }
-    public void setId(Long id) { this.id = id; }
-    public Long getSourceVersionId() { return sourceVersionId; }
-    public void setSourceVersionId(Long sourceVersionId) { this.sourceVersionId = sourceVersionId; }
-    public String getDocumentCode() { return documentCode; }
-    public void setDocumentCode(String documentCode) { this.documentCode = documentCode; }
-    public String getTitle() { return title; }
-    public void setTitle(String title) { this.title = title; }
-    public String getMimeType() { return mimeType; }
-    public void setMimeType(String mimeType) { this.mimeType = mimeType; }
-    public String getParseStatus() { return parseStatus; }
-    public void setParseStatus(String parseStatus) { this.parseStatus = parseStatus; }
-    public String getStatus() { return status; }
-    public void setStatus(String status) { this.status = status; }
-    public String getCurrentStage() { return currentStage; }
-    public void setCurrentStage(String currentStage) { this.currentStage = currentStage; }
-    public String getErrorMessage() { return errorMessage; }
-    public void setErrorMessage(String errorMessage) { this.errorMessage = errorMessage; }
-    public Integer getRetryCount() { return retryCount; }
-    public void setRetryCount(Integer retryCount) { this.retryCount = retryCount; }
-    public Integer getChunkCount() { return chunkCount; }
-    public void setChunkCount(Integer chunkCount) { this.chunkCount = chunkCount; }
+    public Long getId() {
+        return id;
+    }
+
+    public void setId(Long id) {
+        this.id = id;
+    }
+
+    public Long getSourceVersionId() {
+        return sourceVersionId;
+    }
+
+    public void setSourceVersionId(Long sourceVersionId) {
+        this.sourceVersionId = sourceVersionId;
+    }
+
+    public String getDocumentCode() {
+        return documentCode;
+    }
+
+    public void setDocumentCode(String documentCode) {
+        this.documentCode = documentCode;
+    }
+
+    public String getTitle() {
+        return title;
+    }
+
+    public void setTitle(String title) {
+        this.title = title;
+    }
+
+    public String getMimeType() {
+        return mimeType;
+    }
+
+    public void setMimeType(String mimeType) {
+        this.mimeType = mimeType;
+    }
+
+    public String getParseStatus() {
+        return parseStatus;
+    }
+
+    public void setParseStatus(String parseStatus) {
+        this.parseStatus = parseStatus;
+    }
+
+    public String getStatus() {
+        return status;
+    }
+
+    public void setStatus(String status) {
+        this.status = status;
+    }
+
+    public String getCurrentStage() {
+        return currentStage;
+    }
+
+    public void setCurrentStage(String currentStage) {
+        this.currentStage = currentStage;
+    }
+
+    public String getErrorMessage() {
+        return errorMessage;
+    }
+
+    public void setErrorMessage(String errorMessage) {
+        this.errorMessage = errorMessage;
+    }
+
+    public Integer getRetryCount() {
+        return retryCount;
+    }
+
+    public void setRetryCount(Integer retryCount) {
+        this.retryCount = retryCount;
+    }
+
+    public Integer getChunkCount() {
+        return chunkCount;
+    }
+
+    public void setChunkCount(Integer chunkCount) {
+        this.chunkCount = chunkCount;
+    }
 }

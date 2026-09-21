@@ -4,7 +4,6 @@ import com.jh.knowledgeos.domain.ApiKey;
 import com.jh.knowledgeos.domain.KnowledgeBase;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
-
 import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.IOException;
@@ -23,7 +22,9 @@ import java.util.Map;
  */
 @Service
 public class ExternalKnowledgeFacade {
+
     private final KnowledgeService knowledgeService;
+
     private final KnowledgeBaseService knowledgeBaseService;
 
     public ExternalKnowledgeFacade(KnowledgeService knowledgeService, KnowledgeBaseService knowledgeBaseService) {
@@ -31,12 +32,16 @@ public class ExternalKnowledgeFacade {
         this.knowledgeBaseService = knowledgeBaseService;
     }
 
-    /** Visible workspaces for the caller: bound key sees its own, otherwise the public ones. */
+    /**
+     * Visible workspaces for the caller: bound key sees its own, otherwise the public ones.
+     */
     public List<Map<String, Object>> bases(Long boundKb) {
         List<Map<String, Object>> rows = new ArrayList<Map<String, Object>>();
         if (boundKb != null) {
             KnowledgeBase base = knowledgeBaseService.get(boundKb);
-            if (base != null) rows.add(toBaseRow(base));
+            if (base != null) {
+                rows.add(toBaseRow(base));
+            }
             return rows;
         }
         for (KnowledgeBase base : knowledgeBaseService.list()) {
@@ -52,8 +57,7 @@ public class ExternalKnowledgeFacade {
      * published downstream names its origin — otherwise an operator watching the stream could not
      * tell a console search from an MCP-driven one.</p>
      */
-    public Map<String, Object> query(ApiKey key, Long kb, String question, Integer topK,
-            List<String> permissionTags, String source) throws Exception {
+    public Map<String, Object> query(ApiKey key, Long kb, String question, Integer topK, List<String> permissionTags, String source) throws Exception {
         Map<String, Object> payload = new LinkedHashMap<String, Object>();
         payload.put("knowledgeBaseId", kb);
         payload.put("query", question);
@@ -69,9 +73,10 @@ public class ExternalKnowledgeFacade {
         return knowledgeService.query(payload);
     }
 
-    /** Legacy signature kept for internal callers that have no credential to report. */
-    public Map<String, Object> query(Long kb, String question, Integer topK, List<String> permissionTags)
-            throws Exception {
+    /**
+     * Legacy signature kept for internal callers that have no credential to report.
+     */
+    public Map<String, Object> query(Long kb, String question, Integer topK, List<String> permissionTags) throws Exception {
         return query(null, kb, question, topK, permissionTags, PlatformEventPublisher.SOURCE_REST);
     }
 
@@ -79,8 +84,7 @@ public class ExternalKnowledgeFacade {
      * Retrieval-only surface: the same pipeline as query minus answer generation detail, so
      * systems that already own their own prompt can assemble context themselves.
      */
-    public Map<String, Object> search(ApiKey key, Long kb, String question, Integer topK,
-            List<String> permissionTags, String source) throws Exception {
+    public Map<String, Object> search(ApiKey key, Long kb, String question, Integer topK, List<String> permissionTags, String source) throws Exception {
         Map<String, Object> result = query(key, kb, question, topK, permissionTags, source);
         Map<String, Object> search = new LinkedHashMap<String, Object>();
         search.put("queryId", result.get("queryId"));
@@ -96,9 +100,10 @@ public class ExternalKnowledgeFacade {
         return search;
     }
 
-    /** Legacy signature kept for internal callers that have no credential to report. */
-    public Map<String, Object> search(Long kb, String question, Integer topK, List<String> permissionTags)
-            throws Exception {
+    /**
+     * Legacy signature kept for internal callers that have no credential to report.
+     */
+    public Map<String, Object> search(Long kb, String question, Integer topK, List<String> permissionTags) throws Exception {
         return search(null, kb, question, topK, permissionTags, PlatformEventPublisher.SOURCE_REST);
     }
 
@@ -126,9 +131,10 @@ public class ExternalKnowledgeFacade {
         return knowledgeService.overview(kb, tags(permissionTags));
     }
 
-    /** Ingests a text payload by presenting it to the console's own upload pipeline. */
-    public Map<String, Object> ingestText(
-            Long kb, String title, String text, String permissionTags) throws Exception {
+    /**
+     * Ingests a text payload by presenting it to the console's own upload pipeline.
+     */
+    public Map<String, Object> ingestText(Long kb, String title, String text, String permissionTags) throws Exception {
         String name = (title == null || title.trim().isEmpty() ? "external-ingest" : title.trim());
         if (!name.toLowerCase().endsWith(".txt") && !name.toLowerCase().endsWith(".md")) {
             name = name + ".txt";
@@ -153,9 +159,13 @@ public class ExternalKnowledgeFacade {
         return row;
     }
 
-    /** Minimal in-memory upload so text ingestion reuses the console pipeline unchanged. */
+    /**
+     * Minimal in-memory upload so text ingestion reuses the console pipeline unchanged.
+     */
     private static class BytesMultipartFile implements MultipartFile {
+
         private final String name;
+
         private final byte[] content;
 
         BytesMultipartFile(String name, String text) {
@@ -164,25 +174,39 @@ public class ExternalKnowledgeFacade {
         }
 
         @Override
-        public String getName() { return name; }
+        public String getName() {
+            return name;
+        }
 
         @Override
-        public String getOriginalFilename() { return name; }
+        public String getOriginalFilename() {
+            return name;
+        }
 
         @Override
-        public String getContentType() { return "text/plain"; }
+        public String getContentType() {
+            return "text/plain";
+        }
 
         @Override
-        public boolean isEmpty() { return content.length == 0; }
+        public boolean isEmpty() {
+            return content.length == 0;
+        }
 
         @Override
-        public long getSize() { return content.length; }
+        public long getSize() {
+            return content.length;
+        }
 
         @Override
-        public byte[] getBytes() { return content; }
+        public byte[] getBytes() {
+            return content;
+        }
 
         @Override
-        public InputStream getInputStream() { return new ByteArrayInputStream(content); }
+        public InputStream getInputStream() {
+            return new ByteArrayInputStream(content);
+        }
 
         @Override
         public void transferTo(File dest) throws IOException, IllegalStateException {

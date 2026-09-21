@@ -5,16 +5,16 @@ import heapq
 import math
 import re
 import time
+from collections import Counter, defaultdict
+from collections.abc import Iterable, Mapping
+from dataclasses import dataclass
+from typing import Any
 
 import numpy as np
-from collections import Counter, defaultdict
-from collections.abc import Mapping
-from dataclasses import dataclass
-from typing import Any, Dict, Iterable, List, Optional, Set, Tuple
 
-from app.services.embedding import cosine, get_embedding_provider
-from app.services.graph_provider import get_graph_provider
 from app.core.config import settings
+from app.services.embedding import get_embedding_provider
+from app.services.graph_provider import get_graph_provider
 from app.services.retrieval.external import get_elasticsearch_provider, get_milvus_provider
 from app.storage.index_store import store
 
@@ -25,12 +25,12 @@ BM25_B = 0.75
 DEFAULT_CHANNEL_TOP_K = 20
 
 
-def toks(text: str) -> List[str]:
+def toks(text: str) -> list[str]:
     """Tokenize text for the local BM25 fallback."""
     return TOKEN_RE.findall((text or "").lower())
 
 
-def allowed(doc: Dict[str, Any], tags: Optional[Iterable[str]]) -> bool:
+def allowed(doc: dict[str, Any], tags: Iterable[str] | None) -> bool:
     """Evaluate publication-state and ACL visibility before local Top-K selection."""
     status = doc.get("status")
     if status and str(status).upper() not in {"APPROVED", "EFFECTIVE"}:
@@ -46,17 +46,18 @@ def allowed(doc: Dict[str, Any], tags: Optional[Iterable[str]]) -> bool:
 @dataclass(frozen=True)
 class LexicalDocument:
     """Pre-tokenized local lexical document used by BM25 fallback."""
-    doc: Dict[str, Any]
-    tokens: Tuple[str, ...]
+
+    doc: dict[str, Any]
+    tokens: tuple[str, ...]
     term_frequency: Counter
 
 
 class LexicalSnapshot:
     """Pre-tokenized lexical view for one knowledge-base index generation."""
 
-    def __init__(self, docs: List[Dict[str, Any]]):
-        self.documents: List[LexicalDocument] = []
-        self.documents_by_type: Dict[str, List[LexicalDocument]] = defaultdict(list)
+    def __init__(self, docs: list[dict[str, Any]]):
+        self.documents: list[LexicalDocument] = []
+        self.documents_by_type: dict[str, list[LexicalDocument]] = defaultdict(list)
         self.document_frequency: Counter = Counter()
         total_length = 0
 
@@ -73,8 +74,6 @@ class LexicalSnapshot:
         self.average_length = total_length / max(self.document_count, 1)
 
 
-
-
 class VectorSnapshot:
     """Dense float32 vector view built once per index generation.
 
@@ -84,7 +83,7 @@ class VectorSnapshot:
     one matrix-vector multiplication per query.
     """
 
-    def __init__(self, docs: List[Dict[str, Any]]):
+    def __init__(self, docs: list[dict[str, Any]]):
         vector_docs = []
         vectors = []
         dimension = None
@@ -115,9 +114,10 @@ class VectorSnapshot:
 
 class HybridRetriever:
     """Run external retrieval first and degrade to local lexical/vector/graph fallbacks when allowed."""
+
     def __init__(self):
-        self._lexical_cache: Dict[str, Tuple[int, LexicalSnapshot]] = {}
-        self._vector_cache: Dict[str, Tuple[int, VectorSnapshot]] = {}
+        self._lexical_cache: dict[str, tuple[int, LexicalSnapshot]] = {}
+        self._vector_cache: dict[str, tuple[int, VectorSnapshot]] = {}
 
     @staticmethod
     def size_for(top_k, channel):
@@ -188,6 +188,7 @@ class HybridRetriever:
                             raise
                         errors.setdefault("vector", []).append("milvus degraded: %s" % exc)
                 return await self._vector(kb, query, vector_size, permission_tags)
+
             result["vector"] = await measured("vector", vector_search())
         if "card" in channels:
             result["card"] = await measured("card", lexical("card", "CARD"))
@@ -205,6 +206,7 @@ class HybridRetriever:
                         errors.setdefault("graph", []).append("neo4j degraded: %s" % exc)
                         return await lexical("claim", "CLAIM", graph_size)
                 return await lexical("claim", "CLAIM", graph_size)
+
             result["graph"] = await measured("graph", graph_search())
 
         external_generations = set()
@@ -319,7 +321,7 @@ class HybridRetriever:
         ]
 
     @staticmethod
-    def _bm25_score(snapshot: LexicalSnapshot, item: LexicalDocument, query_tokens: List[str]) -> float:
+    def _bm25_score(snapshot: LexicalSnapshot, item: LexicalDocument, query_tokens: list[str]) -> float:
         score = 0.0
         length = len(item.tokens)
         for token in query_tokens:
@@ -327,14 +329,8 @@ class HybridRetriever:
             if not frequency:
                 continue
             document_frequency = snapshot.document_frequency.get(token, 0)
-            idf = math.log(
-                1
-                + (snapshot.document_count - document_frequency + 0.5)
-                / (document_frequency + 0.5)
-            )
-            denominator = frequency + BM25_K1 * (
-                1 - BM25_B + BM25_B * length / max(snapshot.average_length, 1)
-            )
+            idf = math.log(1 + (snapshot.document_count - document_frequency + 0.5) / (document_frequency + 0.5))
+            denominator = frequency + BM25_K1 * (1 - BM25_B + BM25_B * length / max(snapshot.average_length, 1))
             score += idf * (frequency * (BM25_K1 + 1)) / denominator
         return score
 
@@ -381,7 +377,7 @@ class HybridRetriever:
 
     def _typed(self, kb, object_type, query, top_k, permission_tags=None):
         snapshot = self._snapshot(kb)
-        query_tokens: Set[str] = set(toks(query))
+        query_tokens: set[str] = set(toks(query))
         if not query_tokens:
             return []
 

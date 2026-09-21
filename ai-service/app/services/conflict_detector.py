@@ -2,8 +2,9 @@
 
 import re
 from collections import defaultdict
+from collections.abc import Iterable
 from datetime import datetime
-from typing import Any, Dict, Iterable, List, Optional, Tuple
+from typing import Any
 
 NEGATIVE_WORDS = {"不", "不能", "不支持", "禁止", "不得", "无需", "无"}
 
@@ -13,7 +14,7 @@ def normalize(text: Any) -> str:
     return re.sub(r"\s+", "", str(text or "")).lower()
 
 
-def claim_code(claim: Dict[str, Any]) -> Optional[str]:
+def claim_code(claim: dict[str, Any]) -> str | None:
     """Return a stable identifier for a claim candidate."""
     value = claim.get("claimCode") or claim.get("claim_code") or claim.get("id")
     return str(value) if value is not None else None
@@ -29,11 +30,11 @@ class ConflictDetector:
 
     def detect(
         self,
-        claims: List[Dict[str, Any]],
-        focus_codes: Optional[Iterable[str]] = None,
-    ) -> List[Dict[str, Any]]:
+        claims: list[dict[str, Any]],
+        focus_codes: Iterable[str] | None = None,
+    ) -> list[dict[str, Any]]:
         focus = {str(code) for code in (focus_codes or []) if code is not None}
-        groups: Dict[Tuple[str, str], List[Dict[str, Any]]] = defaultdict(list)
+        groups: dict[tuple[str, str], list[dict[str, Any]]] = defaultdict(list)
 
         for item in claims:
             subject = normalize(item.get("subject"))
@@ -60,7 +61,7 @@ class ConflictDetector:
 
         return sorted(conflicts, key=lambda item: item["conflictScore"], reverse=True)
 
-    def compare(self, left: Dict[str, Any], right: Dict[str, Any]):
+    def compare(self, left: dict[str, Any], right: dict[str, Any]):
         subject_left = normalize(left.get("subject"))
         subject_right = normalize(right.get("subject"))
         predicate_left = normalize(left.get("predicate"))
@@ -111,7 +112,7 @@ class ConflictDetector:
         }
 
     @staticmethod
-    def polarity(claim: Dict[str, Any], object_text: str) -> bool:
+    def polarity(claim: dict[str, Any], object_text: str) -> bool:
         """Negative when the model stated it explicitly, otherwise fall back to wording."""
         explicit = str(claim.get("polarity") or claim.get("polarityValue") or "").strip().upper()
         if explicit in ("POSITIVE", "NEGATIVE"):
@@ -119,7 +120,7 @@ class ConflictDetector:
         return any(word in object_text for word in NEGATIVE_WORDS)
 
     @classmethod
-    def validity_relation(cls, left: Dict[str, Any], right: Dict[str, Any]) -> str:
+    def validity_relation(cls, left: dict[str, Any], right: dict[str, Any]) -> str:
         """Classify how the validity windows of two claims relate."""
         left_window = cls._window(left)
         right_window = cls._window(right)
@@ -131,7 +132,7 @@ class ConflictDetector:
         return "DISJOINT" if disjoint else "OVERLAPPING"
 
     @staticmethod
-    def _window(claim: Dict[str, Any]):
+    def _window(claim: dict[str, Any]):
         """Return (start, end) as naive datetimes; open bounds use datetime bounds."""
         start = ConflictDetector._moment(claim, "validFrom", "valid_from")
         end = ConflictDetector._moment(claim, "validTo", "valid_to")
@@ -140,7 +141,7 @@ class ConflictDetector:
         return start or datetime.min, end or datetime.max
 
     @staticmethod
-    def _moment(claim: Dict[str, Any], *keys):
+    def _moment(claim: dict[str, Any], *keys):
         for key in keys:
             raw = claim.get(key)
             if not raw:

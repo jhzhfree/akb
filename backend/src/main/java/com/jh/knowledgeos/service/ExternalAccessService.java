@@ -3,7 +3,6 @@ package com.jh.knowledgeos.service;
 import com.jh.knowledgeos.domain.ApiKey;
 import com.jh.knowledgeos.exception.UnauthorizedException;
 import org.springframework.stereotype.Service;
-
 import javax.servlet.http.HttpServletRequest;
 
 /**
@@ -15,24 +14,28 @@ import javax.servlet.http.HttpServletRequest;
  */
 @Service
 public class ExternalAccessService {
+
     public static final String KEY_ATTRIBUTE = "externalApiKey";
+
     private static final String BEARER = "Bearer ";
+
     public static final String HEADER = "X-API-Key";
 
     private final ApiKeyService apiKeyService;
+
     private final ExternalRateLimiter rateLimiter;
+
     private final KnowledgeBaseAccessService accessService;
 
-    public ExternalAccessService(
-            ApiKeyService apiKeyService,
-            ExternalRateLimiter rateLimiter,
-            KnowledgeBaseAccessService accessService) {
+    public ExternalAccessService(ApiKeyService apiKeyService, ExternalRateLimiter rateLimiter, KnowledgeBaseAccessService accessService) {
         this.apiKeyService = apiKeyService;
         this.rateLimiter = rateLimiter;
         this.accessService = accessService;
     }
 
-    /** Resolves the presented credential, enforcing status, expiry and the per-minute quota. */
+    /**
+     * Resolves the presented credential, enforcing status, expiry and the per-minute quota.
+     */
     public ApiKey authenticate(HttpServletRequest request) {
         String secret = extractSecret(request);
         if (secret == null) {
@@ -76,12 +79,16 @@ public class ExternalAccessService {
 
     public static String extractSecret(HttpServletRequest request) {
         String header = request.getHeader(HEADER);
-        if (header != null && !header.trim().isEmpty()) return header.trim();
+        if (header != null && !header.trim().isEmpty()) {
+            return header.trim();
+        }
         String authorization = request.getHeader("Authorization");
         if (authorization != null && authorization.startsWith(BEARER)) {
             return authorization.substring(BEARER.length()).trim();
         }
-        if (authorization != null && !authorization.trim().isEmpty()) return authorization.trim();
+        if (authorization != null && !authorization.trim().isEmpty()) {
+            return authorization.trim();
+        }
         return request.getParameter("apiKey");
     }
 }

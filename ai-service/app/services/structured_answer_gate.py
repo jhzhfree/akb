@@ -1,7 +1,7 @@
 """Claim-level entailment and conflict-aware answer qualification."""
 
 import re
-from typing import Any, Dict, List
+from typing import Any
 
 from app.services.answer_claims import split_claims
 
@@ -21,7 +21,7 @@ class StructuredAnswerGate:
     def __init__(self, entailment_min: float = 0.08) -> None:
         self.entailment_min = max(0.0, min(1.0, entailment_min))
 
-    def verify(self, answer: str, citations: List[Dict[str, Any]], candidates: List[Dict[str, Any]]) -> Dict[str, Any]:
+    def verify(self, answer: str, citations: list[dict[str, Any]], candidates: list[dict[str, Any]]) -> dict[str, Any]:
         citation_by_index = {int(c["index"]): c for c in citations if c.get("index") is not None}
         candidate_by_id = {str(c.get("id")): c for c in candidates}
         claims = self._claims(answer)
@@ -56,9 +56,7 @@ class StructuredAnswerGate:
         best = max(scores or [0.0])
         contradicted = any(status in _CONFLICTED for status in statuses)
         partial = any(status in _PARTIAL for status in statuses)
-        polarity_conflict = any(
-            self._polarity_conflict(statement, c.get("content") or "") for _, c in evidence
-        )
+        polarity_conflict = any(self._polarity_conflict(statement, c.get("content") or "") for _, c in evidence)
         if contradicted or (evidence and polarity_conflict and best >= self.entailment_min):
             decision = "CONTRADICTED"
         elif not evidence or best < self.entailment_min:
@@ -126,7 +124,7 @@ class StructuredAnswerGate:
         normalized = re.sub(r"\s+", "", (text or "").lower())
         latin = set(re.findall(r"[a-z0-9_.+-]{2,}", normalized))
         han = "".join(re.findall(r"[\u4e00-\u9fff]", normalized))
-        return latin.union({han[i:i + 2] for i in range(max(0, len(han) - 1))})
+        return latin.union({han[i : i + 2] for i in range(max(0, len(han) - 1))})
 
     @classmethod
     def _entailment(cls, claim, evidence):

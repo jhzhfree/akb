@@ -19,6 +19,8 @@
       </section>
       <section class="kb-card mb-4 overflow-hidden">
         <div class="kb-card-head"><div><b class="text-sm">内容单元原文</b><div class="text-[10px] text-ink-400">权威来源上下文</div></div></div>
+        <!-- 安全：computed highlighted 已 escapeHtml 后再拼接高亮标签，见文件内 highlighted 定义 -->
+        <!-- eslint-disable-next-line vue/no-v-html -->
         <div ref="contentBox" class="max-h-[58vh] overflow-auto p-5 text-sm leading-7 text-ink-700" v-html="highlighted"></div>
       </section>
       <section class="kb-card p-5">

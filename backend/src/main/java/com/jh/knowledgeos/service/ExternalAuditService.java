@@ -10,7 +10,6 @@ import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
-
 import javax.servlet.http.HttpServletRequest;
 import java.net.URLDecoder;
 import java.util.ArrayList;
@@ -37,10 +36,13 @@ import java.util.Set;
  */
 @Service
 public class ExternalAuditService {
+
     private static final Logger log = LoggerFactory.getLogger(ExternalAuditService.class);
 
     private static final int MESSAGE_LIMIT = 500;
+
     private static final int MAX_DEPTH = 6;
+
     private static final String REDACTED = "***";
 
     /**
@@ -50,28 +52,21 @@ public class ExternalAuditService {
      * {@code X-API-Key} all resolve to the same entry. Anything a caller could use to authenticate
      * belongs here: the audit table is readable by the whole operations surface.</p>
      */
-    private static final Set<String> SECRET_KEYS =
-            new HashSet<String>(Arrays.asList(
-                    "apikey", "apikeyid", "authorization", "token", "accesstoken", "refreshtoken",
-                    "secret", "secretkey", "accesskey", "password", "passwd", "credential",
-                    "credentialsecret", "privatekey", "cookie", "sessionid"));
+    private static final Set<String> SECRET_KEYS = new HashSet<String>(Arrays.asList("apikey", "apikeyid", "authorization", "token", "accesstoken", "refreshtoken", "secret", "secretkey", "accesskey", "password", "passwd", "credential", "credentialsecret", "privatekey", "cookie", "sessionid"));
 
     private final ExternalApiMapper mapper;
+
     private final ObjectMapper json;
+
     private final int payloadLimit;
 
-    public ExternalAuditService(
-            ExternalApiMapper mapper,
-            ObjectMapper json,
-            @Value("${knowledge.external.audit-payload-chars:4000}") int payloadChars) {
+    public ExternalAuditService(ExternalApiMapper mapper, ObjectMapper json, @Value("${knowledge.external.audit-payload-chars:4000}") int payloadChars) {
         this.mapper = mapper;
         this.json = json;
         this.payloadLimit = Math.max(200, payloadChars);
     }
 
-    public void record(
-            ApiKey key, String channel, String method, Long knowledgeBaseId,
-            int statusCode, long durationMillis, String message) {
+    public void record(ApiKey key, String channel, String method, Long knowledgeBaseId, int statusCode, long durationMillis, String message) {
         record(key, channel, method, knowledgeBaseId, statusCode, durationMillis, message, null, null);
     }
 
@@ -81,10 +76,7 @@ public class ExternalAuditService {
      * <p>Both extra arguments are accepted as objects and serialised here, so a caller hands over
      * whatever it already has — a map, a DTO, a raw query string — instead of assembling text.</p>
      */
-    public void record(
-            ApiKey key, String channel, String method, Long knowledgeBaseId,
-            int statusCode, long durationMillis, String message,
-            Object requestParams, Object responseData) {
+    public void record(ApiKey key, String channel, String method, Long knowledgeBaseId, int statusCode, long durationMillis, String message, Object requestParams, Object responseData) {
         ApiCallAudit audit = new ApiCallAudit();
         audit.setKeyId(key == null ? null : key.getId());
         audit.setKeyCode(key == null ? null : key.getKeyCode());
@@ -140,7 +132,9 @@ public class ExternalAuditService {
         return mapper.listApiCallAudits(keyId, Math.min(Math.max(limit, 1), 200));
     }
 
-    /** Recent calls of one channel, so an integration surface can be inspected on its own. */
+    /**
+     * Recent calls of one channel, so an integration surface can be inspected on its own.
+     */
     public List<ApiCallAudit> recentByChannel(String channel, int limit) {
         return mapper.listChannelAudits(channel, Math.min(Math.max(limit, 1), 200));
     }
@@ -153,14 +147,22 @@ public class ExternalAuditService {
      * identifier for joins, but it was never meant to be read by humans.</p>
      */
     private String callerName(ApiKey key) {
-        if (key == null) return null;
-        if (key.getName() != null && !key.getName().trim().isEmpty()) return key.getName().trim();
+        if (key == null) {
+            return null;
+        }
+        if (key.getName() != null && !key.getName().trim().isEmpty()) {
+            return key.getName().trim();
+        }
         return key.getKeyCode();
     }
 
-    /** Serialises and bounds anything too large to keep, credentials already removed. */
+    /**
+     * Serialises and bounds anything too large to keep, credentials already removed.
+     */
     private String payload(Object value) {
-        if (value == null) return null;
+        if (value == null) {
+            return null;
+        }
         String text;
         try {
             text = json.writeValueAsString(redact(value, 0));
@@ -179,7 +181,9 @@ public class ExternalAuditService {
      * an odd field than miss the one that broke the call.</p>
      */
     private Object redact(Object value, int depth) {
-        if (value == null || depth > MAX_DEPTH) return value;
+        if (value == null || depth > MAX_DEPTH) {
+            return value;
+        }
         if (value instanceof Map) {
             Map<Object, Object> source = (Map<Object, Object>) value;
             Map<String, Object> result = new LinkedHashMap<String, Object>();
@@ -212,15 +216,21 @@ public class ExternalAuditService {
         return SECRET_KEYS.contains(reduced) || reduced.endsWith("secret") || reduced.endsWith("password");
     }
 
-    /** Query string as parameters; repeated names keep every value rather than the last one. */
+    /**
+     * Query string as parameters; repeated names keep every value rather than the last one.
+     */
     private Map<String, Object> parseQuery(String query) {
         Map<String, Object> result = new LinkedHashMap<String, Object>();
         for (String pair : query.split("&")) {
-            if (pair.isEmpty()) continue;
+            if (pair.isEmpty()) {
+                continue;
+            }
             int split = pair.indexOf('=');
             String name = decode(split < 0 ? pair : pair.substring(0, split));
             String value = decode(split < 0 ? "" : pair.substring(split + 1));
-            if (name.isEmpty() && value.isEmpty()) continue;
+            if (name.isEmpty() && value.isEmpty()) {
+                continue;
+            }
             Object existing = result.get(name);
             if (existing == null) {
                 result.put(name, value);
@@ -237,7 +247,9 @@ public class ExternalAuditService {
     }
 
     private Object parseJson(String body) {
-        if (body.isEmpty() || (body.charAt(0) != '{' && body.charAt(0) != '[')) return null;
+        if (body.isEmpty() || (body.charAt(0) != '{' && body.charAt(0) != '[')) {
+            return null;
+        }
         try {
             return json.readValue(body, Object.class);
         } catch (Exception e) {
@@ -254,10 +266,16 @@ public class ExternalAuditService {
     }
 
     private String truncate(String value, int max) {
-        if (value == null) return null;
-        if (value.length() <= max) return value;
+        if (value == null) {
+            return null;
+        }
+        if (value.length() <= max) {
+            return value;
+        }
         int cut = max;
-        if (cut > 0 && Character.isHighSurrogate(value.charAt(cut - 1))) cut--;
+        if (cut > 0 && Character.isHighSurrogate(value.charAt(cut - 1))) {
+            cut--;
+        }
         return value.substring(0, cut);
     }
 }

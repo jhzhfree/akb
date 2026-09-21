@@ -3,7 +3,6 @@ package com.jh.knowledgeos.service;
 import com.jh.knowledgeos.domain.ApiKey;
 import com.jh.knowledgeos.exception.RateLimitException;
 import org.springframework.stereotype.Component;
-
 import java.util.ArrayDeque;
 import java.util.Deque;
 import java.util.Iterator;
@@ -19,12 +18,16 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 @Component
 public class ExternalRateLimiter {
+
     private static final long WINDOW_MILLIS = 60_000L;
+
     private final Map<Long, Deque<Long>> windows = new ConcurrentHashMap<Long, Deque<Long>>();
 
     public void check(ApiKey key) {
         int limit = key.getRateLimitPerMinute() == null ? 60 : Math.max(key.getRateLimitPerMinute(), 0);
-        if (limit <= 0) return;
+        if (limit <= 0) {
+            return;
+        }
         long now = System.currentTimeMillis();
         Deque<Long> window = windows.computeIfAbsent(key.getId(), id -> new ArrayDeque<Long>());
         synchronized (window) {
@@ -41,7 +44,9 @@ public class ExternalRateLimiter {
         }
     }
 
-    /** 长期不调用的历史窗口会持续占用内存，阈值触发时统一清理空窗口。 */
+    /**
+     * 长期不调用的历史窗口会持续占用内存，阈值触发时统一清理空窗口。
+     */
     private void evictIdleWindows(long now) {
         Iterator<Map.Entry<Long, Deque<Long>>> iterator = windows.entrySet().iterator();
         while (iterator.hasNext()) {

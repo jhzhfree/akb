@@ -1,7 +1,6 @@
 package com.jh.knowledgeos.service;
 
 import org.springframework.stereotype.Component;
-
 import java.util.UUID;
 
 /**
@@ -9,6 +8,7 @@ import java.util.UUID;
  */
 @Component
 public class IdGenerator {
+
     public String next(String prefix) {
         return prefix + UUID.randomUUID().toString().replace("-", "");
     }

@@ -11,26 +11,47 @@ import java.util.Map;
  * changes become visible to the compiler and code review.</p>
  */
 public class AuthoritativeIndexSnapshotRow {
+
     private String objectKey;
+
     private String objectId;
+
     private String objectType;
+
     private Long knowledgeBaseId;
+
     private Long documentId;
+
     private Long contentUnitId;
+
     private String title;
+
     private String content;
+
     private String sourceName;
+
     private String sourceUri;
+
     private Integer pageNo;
+
     private String headingPath;
+
     private String status;
+
     private String contentHash;
+
     private String permissionTags;
-    /** Evidence anchor: an answer citation without it cannot be verified, so it stays visible here. */
+
+    /**
+     * Evidence anchor: an answer citation without it cannot be verified, so it stays visible here.
+     */
     private String evidenceCode;
+
     private String evidenceHash;
 
-    /** Convert the typed database projection to the stable AI-service contract payload. */
+    /**
+     * Convert the typed database projection to the stable AI-service contract payload.
+     */
     public Map<String, Object> toPayload() {
         Map<String, Object> payload = new LinkedHashMap<String, Object>();
         payload.put("objectKey", objectKey);
@@ -53,38 +74,139 @@ public class AuthoritativeIndexSnapshotRow {
         return payload;
     }
 
-    public String getObjectKey() { return objectKey; }
-    public void setObjectKey(String objectKey) { this.objectKey = objectKey; }
-    public String getObjectId() { return objectId; }
-    public void setObjectId(String objectId) { this.objectId = objectId; }
-    public String getObjectType() { return objectType; }
-    public void setObjectType(String objectType) { this.objectType = objectType; }
-    public Long getKnowledgeBaseId() { return knowledgeBaseId; }
-    public void setKnowledgeBaseId(Long knowledgeBaseId) { this.knowledgeBaseId = knowledgeBaseId; }
-    public Long getDocumentId() { return documentId; }
-    public void setDocumentId(Long documentId) { this.documentId = documentId; }
-    public Long getContentUnitId() { return contentUnitId; }
-    public void setContentUnitId(Long contentUnitId) { this.contentUnitId = contentUnitId; }
-    public String getTitle() { return title; }
-    public void setTitle(String title) { this.title = title; }
-    public String getContent() { return content; }
-    public void setContent(String content) { this.content = content; }
-    public String getSourceName() { return sourceName; }
-    public void setSourceName(String sourceName) { this.sourceName = sourceName; }
-    public String getSourceUri() { return sourceUri; }
-    public void setSourceUri(String sourceUri) { this.sourceUri = sourceUri; }
-    public Integer getPageNo() { return pageNo; }
-    public void setPageNo(Integer pageNo) { this.pageNo = pageNo; }
-    public String getHeadingPath() { return headingPath; }
-    public void setHeadingPath(String headingPath) { this.headingPath = headingPath; }
-    public String getStatus() { return status; }
-    public void setStatus(String status) { this.status = status; }
-    public String getPermissionTags() { return permissionTags; }
-    public void setPermissionTags(String permissionTags) { this.permissionTags = permissionTags; }
-    public String getContentHash() { return contentHash; }
-    public void setContentHash(String contentHash) { this.contentHash = contentHash; }
-    public String getEvidenceCode() { return evidenceCode; }
-    public void setEvidenceCode(String evidenceCode) { this.evidenceCode = evidenceCode; }
-    public String getEvidenceHash() { return evidenceHash; }
-    public void setEvidenceHash(String evidenceHash) { this.evidenceHash = evidenceHash; }
+    public String getObjectKey() {
+        return objectKey;
+    }
+
+    public void setObjectKey(String objectKey) {
+        this.objectKey = objectKey;
+    }
+
+    public String getObjectId() {
+        return objectId;
+    }
+
+    public void setObjectId(String objectId) {
+        this.objectId = objectId;
+    }
+
+    public String getObjectType() {
+        return objectType;
+    }
+
+    public void setObjectType(String objectType) {
+        this.objectType = objectType;
+    }
+
+    public Long getKnowledgeBaseId() {
+        return knowledgeBaseId;
+    }
+
+    public void setKnowledgeBaseId(Long knowledgeBaseId) {
+        this.knowledgeBaseId = knowledgeBaseId;
+    }
+
+    public Long getDocumentId() {
+        return documentId;
+    }
+
+    public void setDocumentId(Long documentId) {
+        this.documentId = documentId;
+    }
+
+    public Long getContentUnitId() {
+        return contentUnitId;
+    }
+
+    public void setContentUnitId(Long contentUnitId) {
+        this.contentUnitId = contentUnitId;
+    }
+
+    public String getTitle() {
+        return title;
+    }
+
+    public void setTitle(String title) {
+        this.title = title;
+    }
+
+    public String getContent() {
+        return content;
+    }
+
+    public void setContent(String content) {
+        this.content = content;
+    }
+
+    public String getSourceName() {
+        return sourceName;
+    }
+
+    public void setSourceName(String sourceName) {
+        this.sourceName = sourceName;
+    }
+
+    public String getSourceUri() {
+        return sourceUri;
+    }
+
+    public void setSourceUri(String sourceUri) {
+        this.sourceUri = sourceUri;
+    }
+
+    public Integer getPageNo() {
+        return pageNo;
+    }
+
+    public void setPageNo(Integer pageNo) {
+        this.pageNo = pageNo;
+    }
+
+    public String getHeadingPath() {
+        return headingPath;
+    }
+
+    public void setHeadingPath(String headingPath) {
+        this.headingPath = headingPath;
+    }
+
+    public String getStatus() {
+        return status;
+    }
+
+    public void setStatus(String status) {
+        this.status = status;
+    }
+
+    public String getPermissionTags() {
+        return permissionTags;
+    }
+
+    public void setPermissionTags(String permissionTags) {
+        this.permissionTags = permissionTags;
+    }
+
+    public String getContentHash() {
+        return contentHash;
+    }
+
+    public void setContentHash(String contentHash) {
+        this.contentHash = contentHash;
+    }
+
+    public String getEvidenceCode() {
+        return evidenceCode;
+    }
+
+    public void setEvidenceCode(String evidenceCode) {
+        this.evidenceCode = evidenceCode;
+    }
+
+    public String getEvidenceHash() {
+        return evidenceHash;
+    }
+
+    public void setEvidenceHash(String evidenceHash) {
+        this.evidenceHash = evidenceHash;
+    }
 }

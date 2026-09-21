@@ -8,7 +8,6 @@ import com.jh.knowledgeos.domain.EvaluationResult;
 import com.jh.knowledgeos.domain.EvaluationRun;
 import com.jh.knowledgeos.mapper.KnowledgeMapper;
 import org.springframework.stereotype.Service;
-
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.ArrayList;
@@ -30,19 +29,27 @@ import java.util.Set;
 @Service
 public class EvaluationService {
 
-    /** Regression threshold on ranking metrics: below this the change is noise, not a regression. */
+    /**
+     * Regression threshold on ranking metrics: below this the change is noise, not a regression.
+     */
     private static final double METRIC_EPSILON = 0.01;
-    /** Latency regressions are noisy, so only a relative jump counts. */
+
+    /**
+     * Latency regressions are noisy, so only a relative jump counts.
+     */
     private static final double LATENCY_REGRESSION_RATIO = 0.25;
 
     private final KnowledgeMapper mapper;
+
     private final AiClient aiClient;
+
     private final IdGenerator idGenerator;
+
     private final PlatformEventPublisher events;
+
     private final ObjectMapper objectMapper;
 
-    public EvaluationService(KnowledgeMapper mapper, AiClient aiClient, IdGenerator idGenerator,
-            PlatformEventPublisher events, ObjectMapper objectMapper) {
+    public EvaluationService(KnowledgeMapper mapper, AiClient aiClient, IdGenerator idGenerator, PlatformEventPublisher events, ObjectMapper objectMapper) {
         this.mapper = mapper;
         this.aiClient = aiClient;
         this.idGenerator = idGenerator;
@@ -56,7 +63,9 @@ public class EvaluationService {
 
     public Map<String, Object> createDataset(Long kb, Map<String, Object> body) {
         String name = string(body.get("name"));
-        if (name.isEmpty()) throw new IllegalArgumentException("数据集名称不能为空");
+        if (name.isEmpty()) {
+            throw new IllegalArgumentException("数据集名称不能为空");
+        }
         EvaluationDataset dataset = new EvaluationDataset();
         dataset.setDatasetCode(idGenerator.next("EDS_"));
         dataset.setKnowledgeBaseId(kb);
@@ -74,25 +83,34 @@ public class EvaluationService {
         return result;
     }
 
-    /** Updates name / description / status; a dataset is never physically deleted once runs exist. */
+    /**
+     * Updates name / description / status; a dataset is never physically deleted once runs exist.
+     */
     public int updateDataset(String datasetCode, Map<String, Object> body) {
         Map<String, Object> existing = mapper.getEvaluationDataset(datasetCode);
-        if (existing == null) throw new IllegalArgumentException("评测数据集不存在：" + datasetCode);
-        return mapper.updateEvaluationDataset(datasetCode, string(body.get("name")),
-                string(body.get("description")), defaultString(body.get("status"), "ACTIVE"));
+        if (existing == null) {
+            throw new IllegalArgumentException("评测数据集不存在：" + datasetCode);
+        }
+        return mapper.updateEvaluationDataset(datasetCode, string(body.get("name")), string(body.get("description")), defaultString(body.get("status"), "ACTIVE"));
     }
 
     public List<Map<String, Object>> listCases(String datasetCode) {
         Map<String, Object> dataset = mapper.getEvaluationDataset(datasetCode);
-        if (dataset == null) throw new IllegalArgumentException("评测数据集不存在：" + datasetCode);
+        if (dataset == null) {
+            throw new IllegalArgumentException("评测数据集不存在：" + datasetCode);
+        }
         return mapper.listEvaluationCases(longValue(dataset.get("id")));
     }
 
     public Map<String, Object> createCase(String datasetCode, Map<String, Object> body) {
         Map<String, Object> dataset = mapper.getEvaluationDataset(datasetCode);
-        if (dataset == null) throw new IllegalArgumentException("评测数据集不存在：" + datasetCode);
+        if (dataset == null) {
+            throw new IllegalArgumentException("评测数据集不存在：" + datasetCode);
+        }
         String question = string(body.get("question"));
-        if (question.isEmpty()) throw new IllegalArgumentException("评测问题不能为空");
+        if (question.isEmpty()) {
+            throw new IllegalArgumentException("评测问题不能为空");
+        }
         List<String> expected = stringList(body.get("expectedObjectCodes"));
         if (expected.isEmpty()) {
             // An unanswerable grade is worse than no grade: a case without expected knowledge would
@@ -130,7 +148,9 @@ public class EvaluationService {
 
     public Map<String, Object> runDetail(String runCode) {
         Map<String, Object> run = mapper.getEvaluationRun(runCode);
-        if (run == null) throw new IllegalArgumentException("评测运行不存在：" + runCode);
+        if (run == null) {
+            throw new IllegalArgumentException("评测运行不存在：" + runCode);
+        }
         run.put("results", mapper.listEvaluationResults(longValue(run.get("id"))));
         if (run.get("baselineRunCode") != null) {
             Map<String, Object> baseline = mapper.getEvaluationRun(String.valueOf(run.get("baselineRunCode")));
@@ -142,14 +162,20 @@ public class EvaluationService {
         return run;
     }
 
-    /** Unanswered questions of one run: the gap list the knowledge owner has to close. */
+    /**
+     * Unanswered questions of one run: the gap list the knowledge owner has to close.
+     */
     public Map<String, Object> gaps(String runCode) {
         Map<String, Object> run = mapper.getEvaluationRun(runCode);
-        if (run == null) throw new IllegalArgumentException("评测运行不存在：" + runCode);
+        if (run == null) {
+            throw new IllegalArgumentException("评测运行不存在：" + runCode);
+        }
         List<Map<String, Object>> results = mapper.listEvaluationResults(longValue(run.get("id")));
         List<Map<String, Object>> gaps = new ArrayList<Map<String, Object>>();
         for (Map<String, Object> result : results) {
-            if (longValue(result.get("hitAt5")) > 0) continue;
+            if (longValue(result.get("hitAt5")) > 0) {
+                continue;
+            }
             Map<String, Object> gap = new LinkedHashMap<String, Object>();
             gap.put("caseCode", result.get("caseCode"));
             gap.put("queryId", result.get("queryId"));
@@ -176,18 +202,20 @@ public class EvaluationService {
     public Map<String, Object> run(Long kb, Map<String, Object> body) {
         String datasetCode = string(body.get("datasetCode"));
         Map<String, Object> dataset = mapper.getEvaluationDataset(datasetCode);
-        if (dataset == null) throw new IllegalArgumentException("评测数据集不存在：" + datasetCode);
+        if (dataset == null) {
+            throw new IllegalArgumentException("评测数据集不存在：" + datasetCode);
+        }
         if (!kb.equals(longValue(dataset.get("knowledgeBaseId")))) {
             throw new IllegalArgumentException("评测数据集不属于当前知识库");
         }
         List<Map<String, Object>> cases = mapper.listEvaluationCases(longValue(dataset.get("id")));
-        if (cases.isEmpty()) throw new IllegalArgumentException("评测数据集没有可用用例：" + datasetCode);
-
+        if (cases.isEmpty()) {
+            throw new IllegalArgumentException("评测数据集没有可用用例：" + datasetCode);
+        }
         boolean full = "FULL".equalsIgnoreCase(defaultString(body.get("mode"), "RETRIEVAL"));
         int topK = body.get("topK") == null ? 8 : Math.max(1, Math.min(intValue(body.get("topK")), 50));
         String baselineRunCode = string(body.get("baselineRunCode"));
         List<String> permissionTags = stringList(body.get("permissionTags"));
-
         String runCode = idGenerator.next("ER_");
         EvaluationRun run = new EvaluationRun();
         run.setRunCode(runCode);
@@ -199,7 +227,6 @@ public class EvaluationService {
         run.setBaselineRunCode(baselineRunCode.isEmpty() ? null : baselineRunCode);
         run.setCaseCount(cases.size());
         mapper.insertEvaluationRun(run);
-
         try {
             List<EvaluationResult> results = new ArrayList<EvaluationResult>();
             List<Long> latencies = new ArrayList<Long>();
@@ -209,9 +236,10 @@ public class EvaluationService {
                 result.setRunId(run.getId());
                 mapper.insertEvaluationResult(result);
                 results.add(result);
-                if (result.getLatencyMs() != null) latencies.add(Long.valueOf(result.getLatencyMs()));
+                if (result.getLatencyMs() != null) {
+                    latencies.add(Long.valueOf(result.getLatencyMs()));
+                }
             }
-
             run.setStatus("SUCCESS");
             run.setCaseCount(results.size());
             run.setHitAt1Rate(averageHits(results, r -> r.getHitAt1()));
@@ -228,7 +256,6 @@ public class EvaluationService {
             run.setGapsJson(json(gapCodes(results)));
             applyBaseline(run, baselineRunCode);
             mapper.finishEvaluationRun(run);
-
             announce(kb, datasetCode, run, results);
             return runDetail(runCode);
         } catch (RuntimeException e) {
@@ -237,21 +264,20 @@ public class EvaluationService {
         }
     }
 
-    /** Grades one case: retrieval metrics always, citation and faithfulness only in FULL mode. */
-    private EvaluationResult gradeOne(Map<String, Object> evaluationCase, Long kb, int topK,
-            boolean full, List<String> permissionTags, String[] policyVersionHolder) {
+    /**
+     * Grades one case: retrieval metrics always, citation and faithfulness only in FULL mode.
+     */
+    private EvaluationResult gradeOne(Map<String, Object> evaluationCase, Long kb, int topK, boolean full, List<String> permissionTags, String[] policyVersionHolder) {
         EvaluationResult result = new EvaluationResult();
         result.setCaseId(longValue(evaluationCase.get("id")));
         result.setCaseCode(String.valueOf(evaluationCase.get("caseCode")));
         List<String> expected = readCodes(evaluationCase.get("expectedObjectCodesJson"));
         result.setExpectedCodesJson(json(expected));
-
         Map<String, Object> payload = new LinkedHashMap<String, Object>();
         payload.put("knowledgeBaseId", kb);
         payload.put("query", evaluationCase.get("question"));
         payload.put("topK", topK);
         payload.put("permissionTags", permissionTags);
-
         long startedAt = System.currentTimeMillis();
         Map<String, Object> response;
         try {
@@ -263,8 +289,12 @@ public class EvaluationService {
             result.setStatus("FAILED");
             result.setLatencyMs((int) (System.currentTimeMillis() - startedAt));
             result.setErrorMessage(String.valueOf(e.getMessage()));
-            result.setHitAt1(0); result.setHitAt3(0); result.setHitAt5(0);
-            result.setReciprocalRank(0.0); result.setRecallAt5(0.0); result.setNdcgAt10(0.0);
+            result.setHitAt1(0);
+            result.setHitAt3(0);
+            result.setHitAt5(0);
+            result.setReciprocalRank(0.0);
+            result.setRecallAt5(0.0);
+            result.setNdcgAt10(0.0);
             return result;
         }
         result.setLatencyMs((int) (System.currentTimeMillis() - startedAt));
@@ -272,10 +302,8 @@ public class EvaluationService {
         result.setStatus("SUCCESS");
         // Runs are only comparable under the same policy, so the version travels with the run.
         if (policyVersionHolder[0] == null) {
-            policyVersionHolder[0] = firstNonBlank(traceValue(response, "answerPolicyVersion"),
-                    traceValue(response, "policyVersion"));
+            policyVersionHolder[0] = firstNonBlank(traceValue(response, "answerPolicyVersion"), traceValue(response, "policyVersion"));
         }
-
         // Grading matches on every identity a candidate carries: retrieval returns content units,
         // while a case is written in terms of whatever the author can name — unit id, document,
         // evidence code or knowledge object code.
@@ -287,7 +315,6 @@ public class EvaluationService {
         result.setReciprocalRank(reciprocalRank(retrieved, expected));
         result.setRecallAt5(recallAt(retrieved, expected, 5));
         result.setNdcgAt10(ndcgAt(retrieved, expected, 10));
-
         if (full) {
             double[] citation = citationAccuracy(response, expected);
             if (citation[1] > 0) {
@@ -296,33 +323,48 @@ public class EvaluationService {
                 result.setCitationAccuracy(citation[0] / citation[1]);
             }
             Double faithfulness = faithfulness(response);
-            if (faithfulness != null) result.setFaithfulness(faithfulness);
+            if (faithfulness != null) {
+                result.setFaithfulness(faithfulness);
+            }
         }
         return result;
     }
 
-    /** Candidate identity is whichever code the pipeline stamped: object code, unit code or id. */
+    /**
+     * Candidate identity is whichever code the pipeline stamped: object code, unit code or id.
+     */
     private List<String> retrievedCodes(Map<String, Object> response) {
         List<String> codes = new ArrayList<String>();
         Object raw = response.get("candidates");
-        if (!(raw instanceof List)) return codes;
+        if (!(raw instanceof List)) {
+            return codes;
+        }
         for (Object item : (List<?>) raw) {
-            if (!(item instanceof Map)) continue;
+            if (!(item instanceof Map)) {
+                continue;
+            }
             Map<?, ?> candidate = (Map<?, ?>) item;
-            String code = firstNonBlank(candidate.get("objectCode"), candidate.get("unitCode"),
-                    candidate.get("claimCode"), candidate.get("id"));
-            if (code != null) codes.add(code);
+            String code = firstNonBlank(candidate.get("objectCode"), candidate.get("unitCode"), candidate.get("claimCode"), candidate.get("id"));
+            if (code != null) {
+                codes.add(code);
+            }
         }
         return codes;
     }
 
-    /** Every identity one candidate can be referred to by (unit id, document, evidence, object). */
+    /**
+     * Every identity one candidate can be referred to by (unit id, document, evidence, object).
+     */
     private List<Set<String>> candidateAliases(Map<String, Object> response) {
         List<Set<String>> aliases = new ArrayList<Set<String>>();
         Object raw = response.get("candidates");
-        if (!(raw instanceof List)) return aliases;
+        if (!(raw instanceof List)) {
+            return aliases;
+        }
         for (Object item : (List<?>) raw) {
-            if (!(item instanceof Map)) continue;
+            if (!(item instanceof Map)) {
+                continue;
+            }
             Map<?, ?> candidate = (Map<?, ?>) item;
             Object metadata = candidate.get("metadata");
             Map<?, ?> meta = metadata instanceof Map ? (Map<?, ?>) metadata : null;
@@ -343,14 +385,18 @@ public class EvaluationService {
 
     private void addAlias(Set<String> identity, Object value) {
         String text = string(value);
-        if (!text.isEmpty() && !"null".equals(text)) identity.add(text);
+        if (!text.isEmpty() && !"null".equals(text)) {
+            identity.add(text);
+        }
     }
 
     private int hit(List<Set<String>> retrieved, List<String> expected, int k) {
         Set<String> expectedSet = new LinkedHashSet<String>(expected);
         int limit = Math.min(k, retrieved.size());
         for (int i = 0; i < limit; i++) {
-            if (intersects(retrieved.get(i), expectedSet)) return 1;
+            if (intersects(retrieved.get(i), expectedSet)) {
+                return 1;
+            }
         }
         return 0;
     }
@@ -358,102 +404,134 @@ public class EvaluationService {
     private double reciprocalRank(List<Set<String>> retrieved, List<String> expected) {
         Set<String> expectedSet = new LinkedHashSet<String>(expected);
         for (int i = 0; i < retrieved.size(); i++) {
-            if (intersects(retrieved.get(i), expectedSet)) return round(1.0 / (i + 1));
+            if (intersects(retrieved.get(i), expectedSet)) {
+                return round(1.0 / (i + 1));
+            }
         }
         return 0.0;
     }
 
     private double recallAt(List<Set<String>> retrieved, List<String> expected, int k) {
-        if (expected.isEmpty()) return 0.0;
+        if (expected.isEmpty()) {
+            return 0.0;
+        }
         Set<String> expectedSet = new LinkedHashSet<String>(expected);
         int found = 0;
         int limit = Math.min(k, retrieved.size());
         for (int i = 0; i < limit; i++) {
-            if (intersects(retrieved.get(i), expectedSet)) found++;
+            if (intersects(retrieved.get(i), expectedSet)) {
+                found++;
+            }
         }
         return round((double) found / expectedSet.size());
     }
 
-    /** Binary-relevance NDCG: every expected object is equally relevant, rank position is the gain. */
+    /**
+     * Binary-relevance NDCG: every expected object is equally relevant, rank position is the gain.
+     */
     private double ndcgAt(List<Set<String>> retrieved, List<String> expected, int k) {
-        if (expected.isEmpty()) return 0.0;
+        if (expected.isEmpty()) {
+            return 0.0;
+        }
         Set<String> expectedSet = new LinkedHashSet<String>(expected);
         double dcg = 0.0;
         int limit = Math.min(k, retrieved.size());
         for (int i = 0; i < limit; i++) {
-            if (intersects(retrieved.get(i), expectedSet)) dcg += 1.0 / Math.log(i + 2);
+            if (intersects(retrieved.get(i), expectedSet)) {
+                dcg += 1.0 / Math.log(i + 2);
+            }
         }
         double idcg = 0.0;
         int ideal = Math.min(k, expectedSet.size());
-        for (int i = 0; i < ideal; i++) idcg += 1.0 / Math.log(i + 2);
+        for (int i = 0; i < ideal; i++) {
+            idcg += 1.0 / Math.log(i + 2);
+        }
         return idcg == 0.0 ? 0.0 : round(dcg / idcg);
     }
 
     private boolean intersects(Set<String> identity, Set<String> expected) {
         for (String code : expected) {
-            if (identity.contains(code)) return true;
+            if (identity.contains(code)) {
+                return true;
+            }
         }
         return false;
     }
 
-    /** Returns {hits, total} over the citations the answer actually shipped. */
+    /**
+     * Returns {hits, total} over the citations the answer actually shipped.
+     */
     private double[] citationAccuracy(Map<String, Object> response, List<String> expected) {
         Set<String> expectedSet = new LinkedHashSet<String>(expected);
         Object raw = response.get("citations");
-        if (!(raw instanceof List)) return new double[] {0.0, 0.0};
+        if (!(raw instanceof List)) {
+            return new double[] { 0.0, 0.0 };
+        }
         double hit = 0.0;
         double total = 0.0;
         for (Object item : (List<?>) raw) {
-            if (!(item instanceof Map)) continue;
+            if (!(item instanceof Map)) {
+                continue;
+            }
             Map<?, ?> citation = (Map<?, ?>) item;
             total++;
-            String code = firstNonBlank(citation.get("objectCode"), citation.get("objectId"),
-                    citation.get("evidenceCode"));
-            if (code != null && expectedSet.contains(code)) hit++;
+            String code = firstNonBlank(citation.get("objectCode"), citation.get("objectId"), citation.get("evidenceCode"));
+            if (code != null && expectedSet.contains(code)) {
+                hit++;
+            }
         }
-        return new double[] {hit, total};
+        return new double[] { hit, total };
     }
 
-    /** Faithfulness comes from the claim ledger: the share of shipped claims the evidence supports. */
+    /**
+     * Faithfulness comes from the claim ledger: the share of shipped claims the evidence supports.
+     */
     private Double faithfulness(Map<String, Object> response) {
         Object qualification = response.get("answerQualification");
-        if (!(qualification instanceof Map)) return null;
+        if (!(qualification instanceof Map)) {
+            return null;
+        }
         Object claims = ((Map<?, ?>) qualification).get("claims");
-        if (!(claims instanceof List) || ((List<?>) claims).isEmpty()) return null;
+        if (!(claims instanceof List) || ((List<?>) claims).isEmpty()) {
+            return null;
+        }
         double supported = 0.0;
         double total = 0.0;
         for (Object item : (List<?>) claims) {
-            if (!(item instanceof Map)) continue;
+            if (!(item instanceof Map)) {
+                continue;
+            }
             total++;
             Object decision = ((Map<?, ?>) item).get("decision");
-            if (decision != null && String.valueOf(decision).toUpperCase().contains("SUPPORT")) supported++;
+            if (decision != null && String.valueOf(decision).toUpperCase().contains("SUPPORT")) {
+                supported++;
+            }
         }
         return total == 0.0 ? null : Double.valueOf(round(supported / total));
     }
 
-    /** Compares against a baseline run so "better" and "worse" are decided, not eyeballed. */
+    /**
+     * Compares against a baseline run so "better" and "worse" are decided, not eyeballed.
+     */
     private void applyBaseline(EvaluationRun run, String baselineRunCode) {
-        if (baselineRunCode == null || baselineRunCode.isEmpty()) return;
+        if (baselineRunCode == null || baselineRunCode.isEmpty()) {
+            return;
+        }
         Map<String, Object> baseline = mapper.getEvaluationRun(baselineRunCode);
-        if (baseline == null || !"SUCCESS".equals(String.valueOf(baseline.get("status")))) return;
-
+        if (baseline == null || !"SUCCESS".equals(String.valueOf(baseline.get("status")))) {
+            return;
+        }
         Map<String, Object> delta = new LinkedHashMap<String, Object>();
         delta.put("hitAt1Rate", delta(run.getHitAt1Rate(), number(baseline.get("hitAt1Rate"))));
         delta.put("mrr", delta(run.getMrr(), number(baseline.get("mrr"))));
         delta.put("recallAt5", delta(run.getRecallAt5(), number(baseline.get("recallAt5"))));
-        delta.put("latencyP50Ms", run.getLatencyP50Ms() == null ? null
-                : run.getLatencyP50Ms() - intValue(baseline.get("latencyP50Ms")));
-
-        boolean regressed = worse(run.getHitAt1Rate(), number(baseline.get("hitAt1Rate")))
-                || worse(run.getMrr(), number(baseline.get("mrr")))
-                || worse(run.getRecallAt5(), number(baseline.get("recallAt5")));
+        delta.put("latencyP50Ms", run.getLatencyP50Ms() == null ? null : run.getLatencyP50Ms() - intValue(baseline.get("latencyP50Ms")));
+        boolean regressed = worse(run.getHitAt1Rate(), number(baseline.get("hitAt1Rate"))) || worse(run.getMrr(), number(baseline.get("mrr"))) || worse(run.getRecallAt5(), number(baseline.get("recallAt5")));
         Integer baselineLatency = baseline.get("latencyP50Ms") == null ? null : intValue(baseline.get("latencyP50Ms"));
         if (!regressed && run.getLatencyP50Ms() != null && baselineLatency != null && baselineLatency > 0) {
             regressed = run.getLatencyP50Ms() > baselineLatency * (1 + LATENCY_REGRESSION_RATIO);
         }
-        boolean improved = better(run.getHitAt1Rate(), number(baseline.get("hitAt1Rate")))
-                && better(run.getMrr(), number(baseline.get("mrr")));
-
+        boolean improved = better(run.getHitAt1Rate(), number(baseline.get("hitAt1Rate"))) && better(run.getMrr(), number(baseline.get("mrr")));
         run.setBaselineDeltaJson(json(delta));
         run.setRegressionVerdict(regressed ? "REGRESSED" : improved ? "IMPROVED" : "NEUTRAL");
     }
@@ -468,65 +546,84 @@ public class EvaluationService {
         detail.put("mrr", run.getMrr());
         detail.put("latencyP50Ms", run.getLatencyP50Ms());
         detail.put("verdict", run.getRegressionVerdict());
-        events.emitSystem(PlatformEventTypes.EVALUATION_COMPLETED, kb, "EVALUATION_RUN", run.getRunCode(),
-                "评测完成：Hit@1 " + percent(run.getHitAt1Rate()) + "，MRR " + percent(run.getMrr()), detail);
-
+        events.emitSystem(PlatformEventTypes.EVALUATION_COMPLETED, kb, "EVALUATION_RUN", run.getRunCode(), "评测完成：Hit@1 " + percent(run.getHitAt1Rate()) + "，MRR " + percent(run.getMrr()), detail);
         List<String> missed = gapCodes(results);
         if (!missed.isEmpty()) {
             Map<String, Object> gapDetail = new LinkedHashMap<String, Object>(detail);
             gapDetail.put("missedCases", missed);
-            events.emitSystem(PlatformEventTypes.KNOWLEDGE_GAP_DETECTED, kb, "EVALUATION_RUN", run.getRunCode(),
-                    "发现知识缺口：" + missed.size() + " 个问题未召回期望知识", gapDetail);
+            events.emitSystem(PlatformEventTypes.KNOWLEDGE_GAP_DETECTED, kb, "EVALUATION_RUN", run.getRunCode(), "发现知识缺口：" + missed.size() + " 个问题未召回期望知识", gapDetail);
         }
     }
 
     private List<String> gapCodes(List<EvaluationResult> results) {
         List<String> missed = new ArrayList<String>();
         for (EvaluationResult result : results) {
-            if (result.getHitAt5() == null || result.getHitAt5() == 0) missed.add(result.getCaseCode());
+            if (result.getHitAt5() == null || result.getHitAt5() == 0) {
+                missed.add(result.getCaseCode());
+            }
         }
         return missed;
     }
 
-    /** Reads a scalar from the trace block; absent diagnostics must not fail the run. */
+    /**
+     * Reads a scalar from the trace block; absent diagnostics must not fail the run.
+     */
     private Object traceValue(Map<String, Object> response, String key) {
         Object trace = response.get("trace");
         return trace instanceof Map ? ((Map<?, ?>) trace).get(key) : null;
     }
 
-    private interface Metric { Double get(EvaluationResult result); }
+    private interface Metric {
 
-    private interface HitMetric { Integer get(EvaluationResult result); }
+        Double get(EvaluationResult result);
+    }
 
-    /** Hit@K is a 0/1 flag per case, so its average is the share of cases answered at K. */
+    private interface HitMetric {
+
+        Integer get(EvaluationResult result);
+    }
+
+    /**
+     * Hit@K is a 0/1 flag per case, so its average is the share of cases answered at K.
+     */
     private Double averageHits(List<EvaluationResult> results, HitMetric metric) {
         double sum = 0.0;
         int count = 0;
         for (EvaluationResult result : results) {
             Integer value = metric.get(result);
-            if (value == null) continue;
+            if (value == null) {
+                continue;
+            }
             sum += value.intValue();
             count++;
         }
         return count == 0 ? null : Double.valueOf(round(sum / count));
     }
 
-    /** Averages over the values that exist: an ungraded metric must not be counted as zero. */
+    /**
+     * Averages over the values that exist: an ungraded metric must not be counted as zero.
+     */
     private Double average(List<EvaluationResult> results, Metric metric) {
         double sum = 0.0;
         int count = 0;
         for (EvaluationResult result : results) {
             Double value = metric.get(result);
-            if (value == null) continue;
+            if (value == null) {
+                continue;
+            }
             sum += value;
             count++;
         }
         return count == 0 ? null : Double.valueOf(round(sum / count));
     }
 
-    /** Nearest-rank percentile over the observed latencies. */
+    /**
+     * Nearest-rank percentile over the observed latencies.
+     */
     private Integer percentile(List<Long> values, int pct) {
-        if (values.isEmpty()) return null;
+        if (values.isEmpty()) {
+            return null;
+        }
         List<Long> sorted = new ArrayList<Long>(values);
         Collections.sort(sorted);
         int index = (int) Math.ceil(sorted.size() * pct / 100.0) - 1;
@@ -534,7 +631,9 @@ public class EvaluationService {
     }
 
     private double delta(Double current, Double baseline) {
-        if (current == null || baseline == null) return 0.0;
+        if (current == null || baseline == null) {
+            return 0.0;
+        }
         return round(current - baseline);
     }
 
@@ -559,10 +658,14 @@ public class EvaluationService {
     }
 
     private List<String> readCodes(Object json) {
-        if (json == null) return Collections.emptyList();
+        if (json == null) {
+            return Collections.emptyList();
+        }
         if (json instanceof List) {
             List<String> codes = new ArrayList<String>();
-            for (Object item : (List<?>) json) codes.add(String.valueOf(item));
+            for (Object item : (List<?>) json) {
+                codes.add(String.valueOf(item));
+            }
             return codes;
         }
         if (json instanceof String) {
@@ -581,7 +684,9 @@ public class EvaluationService {
             List<String> values = new ArrayList<String>();
             for (Object item : (List<?>) value) {
                 String text = string(item);
-                if (!text.isEmpty()) values.add(text);
+                if (!text.isEmpty()) {
+                    values.add(text);
+                }
             }
             return values;
         }
@@ -601,7 +706,9 @@ public class EvaluationService {
     private String firstNonBlank(Object... values) {
         for (Object value : values) {
             String text = string(value);
-            if (!text.isEmpty() && !"null".equals(text)) return text;
+            if (!text.isEmpty() && !"null".equals(text)) {
+                return text;
+            }
         }
         return null;
     }

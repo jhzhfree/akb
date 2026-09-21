@@ -7,7 +7,6 @@ import com.jh.knowledgeos.mapper.AuthMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
-
 import java.security.SecureRandom;
 import java.time.LocalDateTime;
 import java.util.Base64;
@@ -21,21 +20,24 @@ import java.util.Map;
  */
 @Service
 public class AuthService {
+
     private static final Logger log = LoggerFactory.getLogger(AuthService.class);
+
     private static final int TOKEN_BYTES = 32;
+
     private static final int TOUCH_INTERVAL_MINUTES = 5;
 
     private final AuthMapper mapper;
+
     private final UserService users;
+
     private final PasswordHasher hasher;
+
     private final KnowledgeProperties.Auth properties;
+
     private final SecureRandom random = new SecureRandom();
 
-    public AuthService(
-            AuthMapper mapper,
-            UserService users,
-            PasswordHasher hasher,
-            KnowledgeProperties properties) {
+    public AuthService(AuthMapper mapper, UserService users, PasswordHasher hasher, KnowledgeProperties properties) {
         this.mapper = mapper;
         this.users = users;
         this.hasher = hasher;
@@ -65,7 +67,6 @@ public class AuthService {
         mapper.insertSession(session);
         mapper.updateUserLoginTime(user.getId());
         log.info("user signed in username={} userId={}", user.getUsername(), user.getId());
-
         Map<String, Object> result = new java.util.LinkedHashMap<String, Object>();
         result.put("token", token);
         result.put("expiresAt", String.valueOf(expiresAt));
@@ -74,24 +75,35 @@ public class AuthService {
     }
 
     public void logout(String token) {
-        if (token == null || token.trim().isEmpty()) return;
+        if (token == null || token.trim().isEmpty()) {
+            return;
+        }
         mapper.revokeSession(token.trim());
         AuthContext.clear();
     }
 
-    /** Returns the session owner, or null when the token is unknown, revoked, or expired. */
+    /**
+     * Returns the session owner, or null when the token is unknown, revoked, or expired.
+     */
     public User authenticate(String token) {
-        if (token == null || token.trim().isEmpty()) return null;
+        if (token == null || token.trim().isEmpty()) {
+            return null;
+        }
         AuthSession session = mapper.getSession(token.trim());
-        if (session == null || !"ACTIVE".equalsIgnoreCase(String.valueOf(session.getStatus()))) return null;
+        if (session == null || !"ACTIVE".equalsIgnoreCase(String.valueOf(session.getStatus()))) {
+            return null;
+        }
         if (session.getExpiresAt() == null || session.getExpiresAt().isBefore(LocalDateTime.now())) {
-            if (session.getId() != null) mapper.revokeSession(session.getToken());
+            if (session.getId() != null) {
+                mapper.revokeSession(session.getToken());
+            }
             return null;
         }
         User user = mapper.getUserById(session.getUserId());
-        if (user == null || !"ACTIVE".equalsIgnoreCase(String.valueOf(user.getStatus()))) return null;
-        if (session.getLastAccessedAt() == null
-                || session.getLastAccessedAt().isBefore(LocalDateTime.now().minusMinutes(TOUCH_INTERVAL_MINUTES))) {
+        if (user == null || !"ACTIVE".equalsIgnoreCase(String.valueOf(user.getStatus()))) {
+            return null;
+        }
+        if (session.getLastAccessedAt() == null || session.getLastAccessedAt().isBefore(LocalDateTime.now().minusMinutes(TOUCH_INTERVAL_MINUTES))) {
             mapper.touchSession(session.getToken());
         }
         return user;

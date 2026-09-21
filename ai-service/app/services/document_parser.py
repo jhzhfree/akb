@@ -9,7 +9,7 @@ now the cleaned standard units rather than raw text slices.
 
 import hashlib
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any
 
 from app.core import chunk_policy
 from app.core.config import settings
@@ -30,8 +30,7 @@ SUPPORTED_EXTENSIONS = set(SOURCE_FORMATS)
 class DocumentParser:
     """Parse supported files into the canonical standard document model."""
 
-    def parse(self, file_path: str, filename: str = "",
-              policy: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    def parse(self, file_path: str, filename: str = "", policy: dict[str, Any] | None = None) -> dict[str, Any]:
         path = Path(file_path)
         ext = path.suffix.lower()
         if ext not in SUPPORTED_EXTENSIONS:

@@ -5,7 +5,6 @@ import com.jh.knowledgeos.common.PlatformEventTypes;
 import com.jh.knowledgeos.domain.User;
 import com.jh.knowledgeos.mapper.KnowledgeMapper;
 import org.springframework.stereotype.Service;
-
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -24,27 +23,38 @@ import java.util.Map;
  */
 @Service
 public class AlertService {
+
     public static final String INFO = "INFO";
+
     public static final String WARNING = "WARNING";
+
     public static final String CRITICAL = "CRITICAL";
 
     public static final String OPEN = "OPEN";
+
     public static final String ACKED = "ACKED";
+
     public static final String RESOLVED = "RESOLVED";
 
     public static final String METRIC_TASK_FAILURE_COUNT = "TASK_FAILURE_COUNT";
+
     public static final String METRIC_TASK_FAILURE_RATE = "TASK_FAILURE_RATE";
+
     public static final String METRIC_DLQ_BACKLOG = "DLQ_BACKLOG";
+
     public static final String METRIC_DOCUMENT_FAILED = "DOCUMENT_FAILED";
+
     public static final String METRIC_DERIVED_STALE = "DERIVED_STALE";
+
     public static final String METRIC_SCHEMA_VIOLATION = "SCHEMA_VIOLATION";
 
-    /** Metrics the console offers when a rule is created or edited. */
-    public static final List<String> METRICS = Collections.unmodifiableList(Arrays.asList(
-            METRIC_TASK_FAILURE_COUNT, METRIC_TASK_FAILURE_RATE, METRIC_DLQ_BACKLOG,
-            METRIC_DOCUMENT_FAILED, METRIC_DERIVED_STALE, METRIC_SCHEMA_VIOLATION));
+    /**
+     * Metrics the console offers when a rule is created or edited.
+     */
+    public static final List<String> METRICS = Collections.unmodifiableList(Arrays.asList(METRIC_TASK_FAILURE_COUNT, METRIC_TASK_FAILURE_RATE, METRIC_DLQ_BACKLOG, METRIC_DOCUMENT_FAILED, METRIC_DERIVED_STALE, METRIC_SCHEMA_VIOLATION));
 
     private static final Map<String, String> METRIC_LABELS;
+
     static {
         Map<String, String> labels = new LinkedHashMap<String, String>();
         labels.put(METRIC_TASK_FAILURE_COUNT, "任务失败数");
@@ -57,14 +67,18 @@ public class AlertService {
     }
 
     private final KnowledgeMapper mapper;
+
     private final IdGenerator ids;
+
     private final ObjectMapper objectMapper;
+
     private final TaskCenterService tasks;
+
     private final KnowledgeSchemaService schema;
+
     private final PlatformEventPublisher publisher;
 
-    public AlertService(KnowledgeMapper mapper, IdGenerator ids, ObjectMapper objectMapper,
-            TaskCenterService tasks, KnowledgeSchemaService schema, PlatformEventPublisher publisher) {
+    public AlertService(KnowledgeMapper mapper, IdGenerator ids, ObjectMapper objectMapper, TaskCenterService tasks, KnowledgeSchemaService schema, PlatformEventPublisher publisher) {
         this.mapper = mapper;
         this.ids = ids;
         this.objectMapper = objectMapper;
@@ -74,7 +88,6 @@ public class AlertService {
     }
 
     // ------------------------------------------------------------------ rules
-
     public List<Map<String, Object>> rules(Long kb) {
         List<Map<String, Object>> rules = new ArrayList<Map<String, Object>>();
         for (Map<String, Object> rule : mapper.listAlertRules(kb)) {
@@ -98,9 +111,7 @@ public class AlertService {
         int window = toInt(body.get("windowMinutes"), 60);
         String severity = severity(body.get("severity"));
         String ruleCode = ids.next("AR");
-        mapper.insertAlertRule(ruleCode, kb, name, metric, severity, threshold, window,
-                text(body.get("channels")).isEmpty() ? "IN_APP" : text(body.get("channels")),
-                currentUser());
+        mapper.insertAlertRule(ruleCode, kb, name, metric, severity, threshold, window, text(body.get("channels")).isEmpty() ? "IN_APP" : text(body.get("channels")), currentUser());
         return rule(ruleCode);
     }
 
@@ -109,20 +120,11 @@ public class AlertService {
         if (existing == null) {
             throw new IllegalArgumentException("告警规则不存在：" + ruleCode);
         }
-        String metric = body.get("metric") == null ? text(existing.get("metric"))
-                : text(body.get("metric")).trim().toUpperCase();
+        String metric = body.get("metric") == null ? text(existing.get("metric")) : text(body.get("metric")).trim().toUpperCase();
         if (!METRICS.contains(metric)) {
             throw new IllegalArgumentException("不支持的告警指标：" + metric);
         }
-        mapper.updateAlertRule(ruleCode,
-                body.get("name") == null ? text(existing.get("name")) : text(body.get("name")).trim(),
-                metric,
-                severity(body.get("severity") == null ? existing.get("severity") : body.get("severity")),
-                toDouble(body.get("threshold"), toDouble(existing.get("threshold"), 1)),
-                toInt(body.get("windowMinutes"), toInt(existing.get("windowMinutes"), 60)),
-                body.get("channels") == null ? text(existing.get("channels")) : text(body.get("channels")),
-                body.get("enabled") == null ? toBoolean(existing.get("enabled"))
-                        : toBoolean(body.get("enabled")));
+        mapper.updateAlertRule(ruleCode, body.get("name") == null ? text(existing.get("name")) : text(body.get("name")).trim(), metric, severity(body.get("severity") == null ? existing.get("severity") : body.get("severity")), toDouble(body.get("threshold"), toDouble(existing.get("threshold"), 1)), toInt(body.get("windowMinutes"), toInt(existing.get("windowMinutes"), 60)), body.get("channels") == null ? text(existing.get("channels")) : text(body.get("channels")), body.get("enabled") == null ? toBoolean(existing.get("enabled")) : toBoolean(body.get("enabled")));
         return rule(ruleCode);
     }
 
@@ -150,10 +152,8 @@ public class AlertService {
     }
 
     // ----------------------------------------------------------------- events
-
     public List<Map<String, Object>> events(Long kb, String status, String severity, Integer limit) {
-        return mapper.listAlertEvents(kb, blank(status), blank(severity),
-                limit == null || limit <= 0 ? 50 : Math.min(limit, 200));
+        return mapper.listAlertEvents(kb, blank(status), blank(severity), limit == null || limit <= 0 ? 50 : Math.min(limit, 200));
     }
 
     public Map<String, Object> stats(Long kb) {
@@ -181,7 +181,9 @@ public class AlertService {
         return stats;
     }
 
-    /** Acknowledge: somebody owns it now, but the condition may still hold. */
+    /**
+     * Acknowledge: somebody owns it now, but the condition may still hold.
+     */
     public Map<String, Object> acknowledge(String alertCode, String note) {
         return changeStatus(alertCode, ACKED, note);
     }
@@ -204,7 +206,6 @@ public class AlertService {
     }
 
     // -------------------------------------------------------------- evaluation
-
     /**
      * Evaluate every enabled rule for one knowledge base (or platform wide when kb is null),
      * raising, updating and clearing alerts as the metrics move.
@@ -217,8 +218,7 @@ public class AlertService {
             if (!toBoolean(rule.get("enabled"))) {
                 continue;
             }
-            Long scope = rule.get("knowledgeBaseId") == null ? null
-                    : Long.valueOf(text(rule.get("knowledgeBaseId")));
+            Long scope = rule.get("knowledgeBaseId") == null ? null : Long.valueOf(text(rule.get("knowledgeBaseId")));
             if (kb != null && scope != null && !scope.equals(kb)) {
                 continue;
             }
@@ -238,7 +238,9 @@ public class AlertService {
         return outcome;
     }
 
-    /** Current value of one metric. Every metric is a count or a ratio over a time window. */
+    /**
+     * Current value of one metric. Every metric is a count or a ratio over a time window.
+     */
     private double measure(String metric, Long scope, int windowMinutes) {
         if (METRIC_DLQ_BACKLOG.equals(metric)) {
             return mapper.countOutboxDead(scope);
@@ -263,8 +265,7 @@ public class AlertService {
         }
         if (METRIC_TASK_FAILURE_RATE.equals(metric)) {
             int failure = tasks.countOutcome(scope, windowMinutes, TaskCenterService.failureStatuses());
-            int success = tasks.countOutcome(scope, windowMinutes,
-                    Collections.singletonList(TaskCenterService.SUCCEEDED));
+            int success = tasks.countOutcome(scope, windowMinutes, Collections.singletonList(TaskCenterService.SUCCEEDED));
             int total = failure + success;
             return total == 0 ? 0 : failure * 100.0 / total;
         }
@@ -274,8 +275,7 @@ public class AlertService {
     private void raise(Map<String, Object> rule, Long scope, double value, String dedupKey) {
         String metric = text(rule.get("metric"));
         String severity = severity(rule.get("severity"));
-        String title = text(rule.get("name")) + "：" + METRIC_LABELS.get(metric) + " "
-                + round(value) + " ≥ 阈值 " + round(toDouble(rule.get("threshold"), 1));
+        String title = text(rule.get("name")) + "：" + METRIC_LABELS.get(metric) + " " + round(value) + " ≥ 阈值 " + round(toDouble(rule.get("threshold"), 1));
         Map<String, Object> detail = new LinkedHashMap<String, Object>();
         detail.put("metric", metric);
         detail.put("metricLabel", METRIC_LABELS.get(metric));
@@ -287,13 +287,11 @@ public class AlertService {
         // that is already open only grows its occurrence count, it does not re-notify.
         Map<String, Object> existing = mapper.getAlertEventByDedup(dedupKey);
         boolean announce = existing == null || !OPEN.equals(text(existing.get("status")));
-        mapper.upsertAlertEvent(ids.next("AL"), text(rule.get("ruleCode")), scope, severity, title,
-                write(detail), value, dedupKey);
+        mapper.upsertAlertEvent(ids.next("AL"), text(rule.get("ruleCode")), scope, severity, title, write(detail), value, dedupKey);
         if (announce) {
             Map<String, Object> current = mapper.getAlertEventByDedup(dedupKey);
             detail.put("severity", severity);
-            publisher.emitSystem(PlatformEventTypes.KNOWLEDGE_GAP_DETECTED, scope, "ALERT",
-                    text(current == null ? null : current.get("alertCode")), title, detail);
+            publisher.emitSystem(PlatformEventTypes.KNOWLEDGE_GAP_DETECTED, scope, "ALERT", text(current == null ? null : current.get("alertCode")), title, detail);
         }
     }
 

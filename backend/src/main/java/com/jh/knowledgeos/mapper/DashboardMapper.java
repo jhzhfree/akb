@@ -1,7 +1,6 @@
 package com.jh.knowledgeos.mapper;
 
 import org.apache.ibatis.annotations.Param;
-
 import java.util.List;
 import java.util.Map;
 
@@ -15,15 +14,23 @@ import java.util.Map;
  */
 public interface DashboardMapper {
 
-    /** Asset counters: source / document / card / assertion / entity / relation. */
+    /**
+     * Asset counters: source / document / card / assertion / entity / relation.
+     */
     Map<String, Object> countCoreObjects(@Param("kb") Long kb);
 
-    /** Per-stage counters of the lifecycle: ingest → parse → extract → derive → judge → publish. */
+    /**
+     * Per-stage counters of the lifecycle: ingest → parse → extract → derive → judge → publish.
+     */
     Map<String, Object> countLifecycle(@Param("kb") Long kb);
 
-    /** Governance backlog: pending review / conflict / expired / no-evidence / low-confidence / stale. */
+    /**
+     * Governance backlog: pending review / conflict / expired / no-evidence / low-confidence / stale.
+     */
     Map<String, Object> countGovernance(@Param("kb") Long kb, @Param("lowConfidence") Double lowConfidence);
 
-    /** Recently updated knowledge objects, used by the "最近更新" list on the workbench. */
+    /**
+     * Recently updated knowledge objects, used by the "最近更新" list on the workbench.
+     */
     List<Map<String, Object>> listRecentObjects(@Param("kb") Long kb, @Param("limit") int limit);
 }

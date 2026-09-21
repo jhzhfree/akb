@@ -20,7 +20,6 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
-
 import java.time.LocalDateTime;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
@@ -39,23 +38,25 @@ import java.util.Map;
 @RequestMapping("/api/external/admin")
 @Tag(name = "External Service Admin", description = "对外服务治理：API Key、通道开关与调用审计")
 public class ExternalServiceAdminController {
+
     private final ApiKeyService apiKeyService;
+
     private final ExternalAuditService auditService;
+
     private final McpServerService mcpServerService;
+
     private final KnowledgeProperties.External properties;
 
-    public ExternalServiceAdminController(
-            ApiKeyService apiKeyService,
-            ExternalAuditService auditService,
-            McpServerService mcpServerService,
-            KnowledgeProperties properties) {
+    public ExternalServiceAdminController(ApiKeyService apiKeyService, ExternalAuditService auditService, McpServerService mcpServerService, KnowledgeProperties properties) {
         this.apiKeyService = apiKeyService;
         this.auditService = auditService;
         this.mcpServerService = mcpServerService;
         this.properties = properties.external();
     }
 
-    /** Live contract of the three channels, used by the console to render examples. */
+    /**
+     * Live contract of the three channels, used by the console to render examples.
+     */
     @GetMapping("/services")
     @Operation(summary = "对外服务总览：RESTful / MCP / SSE 端点与开关状态")
     public ApiResponse<Object> services() {
@@ -64,39 +65,18 @@ public class ExternalServiceAdminController {
         rest.put("enabled", properties.isEnabled());
         rest.put("basePath", "/api/v1/external");
         rest.put("auth", "X-API-Key 或 Authorization: Bearer");
-        rest.put("endpoints", Arrays.asList(
-                endpoint("GET", "/bases", "可见知识库列表"),
-                endpoint("POST", "/query", "可追溯问答"),
-                endpoint("POST", "/search", "检索（不生成答案）"),
-                endpoint("GET", "/cards", "知识卡片清单"),
-                endpoint("GET", "/cards/{code}", "知识卡片详情"),
-                endpoint("GET", "/claims", "断言清单"),
-                endpoint("GET", "/claims/{code}", "断言详情"),
-                endpoint("GET", "/evidence/{code}", "证据原文"),
-                endpoint("GET", "/graph/{code}", "图谱邻域"),
-                endpoint("GET", "/queries/{queryId}", "问答链路回放"),
-                endpoint("GET", "/overview", "知识库概览"),
-                endpoint("POST", "/documents/text", "文本接入（INGEST）")));
-
+        rest.put("endpoints", Arrays.asList(endpoint("GET", "/bases", "可见知识库列表"), endpoint("POST", "/query", "可追溯问答"), endpoint("POST", "/search", "检索（不生成答案）"), endpoint("GET", "/cards", "知识卡片清单"), endpoint("GET", "/cards/{code}", "知识卡片详情"), endpoint("GET", "/claims", "断言清单"), endpoint("GET", "/claims/{code}", "断言详情"), endpoint("GET", "/evidence/{code}", "证据原文"), endpoint("GET", "/graph/{code}", "图谱邻域"), endpoint("GET", "/queries/{queryId}", "问答链路回放"), endpoint("GET", "/overview", "知识库概览"), endpoint("POST", "/documents/text", "文本接入（INGEST）")));
         Map<String, Object> mcp = new LinkedHashMap<String, Object>();
         mcp.put("enabled", properties.isEnabled() && properties.isMcpEnabled());
         mcp.put("endpoint", "/api/mcp");
         mcp.put("protocolVersion", McpServerService.PROTOCOL_VERSION);
-        mcp.put("methods", Arrays.asList("initialize", "tools/list", "tools/call",
-                "resources/list", "resources/read", "ping"));
+        mcp.put("methods", Arrays.asList("initialize", "tools/list", "tools/call", "resources/list", "resources/read", "ping"));
         mcp.put("tools", toolNames());
-
         Map<String, Object> sse = new LinkedHashMap<String, Object>();
         sse.put("enabled", properties.isEnabled() && properties.isSseEnabled());
         sse.put("heartbeatSeconds", properties.getSseHeartbeatSeconds());
         sse.put("maxMinutes", properties.getSseMaxMinutes());
-        sse.put("endpoints", Arrays.asList(
-                endpoint("GET", "/api/v1/external/stream/query", "流式问答：stage / delta / citation / done"),
-                endpoint("GET", "/api/v1/external/stream/events",
-                        "事件订阅：知识库 / 卡片 / 检索 / 权限等事件，支持 types 过滤与 Last-Event-ID 续传"),
-                endpoint("GET", "/api/v1/external/stream/events?legacy=true",
-                        "旧版计数轮询订阅：ingestion / knowledge / heartbeat")));
-
+        sse.put("endpoints", Arrays.asList(endpoint("GET", "/api/v1/external/stream/query", "流式问答：stage / delta / citation / done"), endpoint("GET", "/api/v1/external/stream/events", "事件订阅：知识库 / 卡片 / 检索 / 权限等事件，支持 types 过滤与 Last-Event-ID 续传"), endpoint("GET", "/api/v1/external/stream/events?legacy=true", "旧版计数轮询订阅：ingestion / knowledge / heartbeat")));
         Map<String, Object> payload = new LinkedHashMap<String, Object>();
         payload.put("rest", rest);
         payload.put("mcp", mcp);
@@ -129,15 +109,8 @@ public class ExternalServiceAdminController {
                 throw new IllegalArgumentException("expiresAt 需为 ISO 时间，如 2026-12-31T23:59:59");
             }
         }
-        Integer limit = request.getRateLimitPerMinute() == null
-                ? properties.getDefaultRateLimitPerMinute() : request.getRateLimitPerMinute();
-        return ApiResponse.ok(apiKeyService.create(
-                request.getName(),
-                request.getKnowledgeBaseId(),
-                request.getScopes(),
-                limit,
-                expiresAt,
-                operator.getId()));
+        Integer limit = request.getRateLimitPerMinute() == null ? properties.getDefaultRateLimitPerMinute() : request.getRateLimitPerMinute();
+        return ApiResponse.ok(apiKeyService.create(request.getName(), request.getKnowledgeBaseId(), request.getScopes(), limit, expiresAt, operator.getId()));
     }
 
     @PostMapping("/keys/{id}/revoke")
@@ -149,9 +122,7 @@ public class ExternalServiceAdminController {
 
     @GetMapping("/audits")
     @Operation(summary = "对外调用审计：RESTful / MCP / SSE 合并展示")
-    public ApiResponse<Object> audits(
-            @RequestParam(value = "keyId", required = false) Long keyId,
-            @RequestParam(value = "limit", required = false) Integer limit) {
+    public ApiResponse<Object> audits(@RequestParam(value = "keyId", required = false) Long keyId, @RequestParam(value = "limit", required = false) Integer limit) {
         requireManager();
         return ApiResponse.ok(auditService.recent(keyId, limit == null ? 50 : limit));
     }
@@ -177,11 +148,12 @@ public class ExternalServiceAdminController {
         return ApiResponse.ok(manifest);
     }
 
-    /** Recent MCP-channel calls: the only way to tell "nobody uses it" from "it is broken". */
+    /**
+     * Recent MCP-channel calls: the only way to tell "nobody uses it" from "it is broken".
+     */
     @GetMapping("/mcp/calls")
     @Operation(summary = "MCP 通道最近调用")
-    public ApiResponse<Object> mcpCalls(
-            @RequestParam(value = "limit", required = false, defaultValue = "50") int limit) {
+    public ApiResponse<Object> mcpCalls(@RequestParam(value = "limit", required = false, defaultValue = "50") int limit) {
         requireManager();
         return ApiResponse.ok(auditService.recentByChannel(ApiCallAudit.CHANNEL_MCP, limit));
     }
@@ -191,7 +163,9 @@ public class ExternalServiceAdminController {
         Object tools = mcpServerService.toolsList().get("tools");
         if (tools instanceof List) {
             for (Object tool : (List<?>) tools) {
-                if (tool instanceof Map) names.add(String.valueOf(((Map<?, ?>) tool).get("name")));
+                if (tool instanceof Map) {
+                    names.add(String.valueOf(((Map<?, ?>) tool).get("name")));
+                }
             }
         }
         return names;
@@ -205,10 +179,14 @@ public class ExternalServiceAdminController {
         return row;
     }
 
-    /** External services are signed by administrators or knowledge-base administrators. */
+    /**
+     * External services are signed by administrators or knowledge-base administrators.
+     */
     private User requireManager() {
         User user = AuthContext.get();
-        if (user == null) throw new UnauthorizedException("请先登录控制台");
+        if (user == null) {
+            throw new UnauthorizedException("请先登录控制台");
+        }
         UserRole role = UserRole.of(user.getRole());
         if (role != UserRole.ADMIN && role != UserRole.KNOWLEDGE_ADMIN) {
             throw new SecurityException("需要系统管理员或知识库管理员角色");

@@ -8,6 +8,7 @@ Example:
 Use this after enabling the real MySQL/Neo4j/Ollama/BGE stack. The local capacity
 benchmark intentionally does not fake those external runtimes.
 """
+
 import argparse
 import asyncio
 import json
@@ -49,6 +50,7 @@ async def main():
     stage_latencies = []
 
     async with httpx.AsyncClient(base_url=args.base_url.rstrip("/"), timeout=args.timeout) as client:
+
         async def one(index):
             trace_id = "load-%s-%d" % (uuid.uuid4().hex[:12], index)
             payload = {
@@ -102,6 +104,7 @@ async def main():
         "failures": failures[:20],
     }
     from pathlib import Path
+
     out = Path(args.out)
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")

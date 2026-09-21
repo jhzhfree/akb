@@ -9,7 +9,6 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
-
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -20,48 +19,41 @@ import java.util.UUID;
  */
 @Service
 public class IndexOutboxService {
+
     private final KnowledgeMapper mapper;
+
     private final ObjectMapper objectMapper;
+
     private final int maxAttempts;
 
     private static final int DEFAULT_LIMIT = 100;
+
     private static final int MAX_LIMIT = 500;
+
     private static final int PAGE_SIZE = 20;
 
-    public IndexOutboxService(
-            KnowledgeMapper mapper,
-            ObjectMapper objectMapper,
-            @Value("${indexing.outbox.max-attempts:8}") int maxAttempts) {
+    public IndexOutboxService(KnowledgeMapper mapper, ObjectMapper objectMapper, @Value("${indexing.outbox.max-attempts:8}") int maxAttempts) {
         this.mapper = mapper;
         this.objectMapper = objectMapper;
         this.maxAttempts = Math.max(1, maxAttempts);
     }
 
     @Transactional(propagation = Propagation.MANDATORY)
-    /**
+    public /**
      * Appends an idempotent event and allocates the next aggregate version inside the
      * caller transaction. Duplicate idempotency keys return the existing event.
      */
-    public Map<String, Object> enqueue(
-            Long kb,
-            String aggregateType,
-            String aggregateKey,
-            String eventType,
-            String targetPath,
-            Map<String, Object> payload,
-            String idempotencyKey) {
+    Map<String, Object> enqueue(Long kb, String aggregateType, String aggregateKey, String eventType, String targetPath, Map<String, Object> payload, String idempotencyKey) {
         IndexOutboxEvent existing = mapper.findOutboxByIdempotencyKey(idempotencyKey);
         if (existing != null) {
             return summary(existing, true);
         }
-
         mapper.incrementIndexAggregateVersion(aggregateKey);
         Long version = mapper.getIndexAggregateVersion(aggregateKey);
         String eventId = UUID.randomUUID().toString();
         Map<String, Object> versionedPayload = new LinkedHashMap<String, Object>(payload);
         versionedPayload.put("eventId", eventId);
         versionedPayload.put("indexVersion", version);
-
         IndexOutboxEvent event = new IndexOutboxEvent();
         event.setEventId(eventId);
         event.setIdempotencyKey(idempotencyKey);
@@ -87,8 +79,7 @@ public class IndexOutboxService {
     }
 
     @Transactional(propagation = Propagation.MANDATORY)
-    public Map<String, Object> enqueueObjectStatus(
-            Long kb, String objectType, String objectCode, String status, String operationId) {
+    public Map<String, Object> enqueueObjectStatus(Long kb, String objectType, String objectCode, String status, String operationId) {
         String type = objectType == null ? "CARD" : objectType.toUpperCase();
         String aggregateKey = "KB:" + kb + ":" + type + ":" + objectCode;
         Map<String, Object> payload = new LinkedHashMap<String, Object>();
@@ -96,16 +87,7 @@ public class IndexOutboxService {
         payload.put("objectType", type);
         payload.put("objectId", objectCode);
         payload.put("status", status);
-        return enqueue(
-                kb,
-                type,
-                aggregateKey,
-                "OBJECT_STATUS_CHANGED",
-                AiApiPaths.INDEX_OBJECT_STATUS,
-                payload,
-                "STATUS:" + aggregateKey + ":" + status + ":"
-                        + (operationId == null || operationId.trim().isEmpty()
-                                ? UUID.randomUUID().toString() : operationId));
+        return enqueue(kb, type, aggregateKey, "OBJECT_STATUS_CHANGED", AiApiPaths.INDEX_OBJECT_STATUS, payload, "STATUS:" + aggregateKey + ":" + status + ":" + (operationId == null || operationId.trim().isEmpty() ? UUID.randomUUID().toString() : operationId));
     }
 
     public List<IndexOutboxEvent> list(Long kb, String status, Integer limit) {
@@ -125,8 +107,7 @@ public class IndexOutboxService {
             current = totalPages;
         }
         Map<String, Object> result = new LinkedHashMap<String, Object>();
-        result.put("items", mapper.listIndexOutbox(
-                kb, blankToNull(status), pageSize, (current - 1) * pageSize));
+        result.put("items", mapper.listIndexOutbox(kb, blankToNull(status), pageSize, (current - 1) * pageSize));
         result.put("total", total);
         result.put("page", current);
         result.put("size", pageSize);
@@ -138,14 +119,18 @@ public class IndexOutboxService {
         return mapper.indexOutboxStats(kb);
     }
 
-    /** Requeue a failed event without changing its aggregate ordering/version. */
+    /**
+     * Requeue a failed event without changing its aggregate ordering/version.
+     */
     public Map<String, Object> replay(String eventId) {
         mapper.replayIndexOutbox(eventId);
         IndexOutboxEvent event = mapper.findOutboxByEventId(eventId);
         return event == null ? new LinkedHashMap<String, Object>() : summary(event, false);
     }
 
-    /** Explicitly skip an unrecoverable event so later aggregate versions may proceed. */
+    /**
+     * Explicitly skip an unrecoverable event so later aggregate versions may proceed.
+     */
     public Map<String, Object> skip(String eventId) {
         mapper.skipIndexOutbox(eventId);
         IndexOutboxEvent event = mapper.findOutboxByEventId(eventId);
@@ -169,9 +154,8 @@ public class IndexOutboxService {
     @SuppressWarnings("unchecked")
     public Map<String, Object> payload(IndexOutboxEvent event) {
         try {
-            Map<String, Object> payload = objectMapper.readValue(
-                    event.getPayloadJson(),
-                    new TypeReference<Map<String, Object>>() {});
+            Map<String, Object> payload = objectMapper.readValue(event.getPayloadJson(), new TypeReference<Map<String, Object>>() {
+            });
             if ("DOCUMENT_CHUNKS_UPSERT".equals(event.getEventType())) {
                 return hydrateDocumentPayload(event, payload);
             }
@@ -181,8 +165,7 @@ public class IndexOutboxService {
         }
     }
 
-    private Map<String, Object> hydrateDocumentPayload(
-            IndexOutboxEvent event, Map<String, Object> reference) {
+    private Map<String, Object> hydrateDocumentPayload(IndexOutboxEvent event, Map<String, Object> reference) {
         Long documentId = Long.valueOf(String.valueOf(reference.get("documentId")));
         Map<String, Object> header = mapper.getDocumentIndexHeader(documentId);
         if (header == null) {
@@ -195,7 +178,9 @@ public class IndexOutboxService {
         return payload;
     }
 
-    /** Keeps a caller-supplied window size inside the safe range for this table. */
+    /**
+     * Keeps a caller-supplied window size inside the safe range for this table.
+     */
     private int normalizeLimit(Integer value, int fallback) {
         int resolved = value == null || value < 1 ? fallback : value;
         return Math.min(MAX_LIMIT, resolved);

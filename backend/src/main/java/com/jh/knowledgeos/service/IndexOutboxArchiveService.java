@@ -4,7 +4,6 @@ import com.jh.knowledgeos.mapper.KnowledgeMapper;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
-
 import java.time.LocalDateTime;
 
 /**
@@ -12,20 +11,20 @@ import java.time.LocalDateTime;
  */
 @Service
 public class IndexOutboxArchiveService {
+
     private final KnowledgeMapper mapper;
+
     private final TransactionRunner transactionRunner;
+
     private final IndexOutboxMetrics metrics;
+
     private final boolean enabled;
+
     private final int retentionDays;
+
     private final int batchSize;
 
-    public IndexOutboxArchiveService(
-            KnowledgeMapper mapper,
-            TransactionRunner transactionRunner,
-            IndexOutboxMetrics metrics,
-            @Value("${indexing.outbox.archive.enabled:true}") boolean enabled,
-            @Value("${indexing.outbox.archive.retention-days:14}") int retentionDays,
-            @Value("${indexing.outbox.archive.batch-size:500}") int batchSize) {
+    public IndexOutboxArchiveService(KnowledgeMapper mapper, TransactionRunner transactionRunner, IndexOutboxMetrics metrics, @Value("${indexing.outbox.archive.enabled:true}") boolean enabled, @Value("${indexing.outbox.archive.retention-days:14}") int retentionDays, @Value("${indexing.outbox.archive.batch-size:500}") int batchSize) {
         this.mapper = mapper;
         this.transactionRunner = transactionRunner;
         this.metrics = metrics;

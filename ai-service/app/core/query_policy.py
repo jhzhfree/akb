@@ -25,12 +25,12 @@ import logging
 import os
 import re
 import threading
-from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
-from app.core.config import DATA_DIR, settings as env_settings
+from app.core.config import DATA_DIR
+from app.core.config import settings as env_settings
 
 POLICY_FILE = DATA_DIR / "query_policy.json"
 POLICY_FILE_MODE = 0o600
@@ -39,7 +39,7 @@ POLICY_VERSION = "query-policy-v1"
 logger = logging.getLogger(__name__)
 
 _lock = threading.RLock()
-_cache: Optional["QueryPolicy"] = None
+_cache: QueryPolicy | None = None
 
 CHANNELS = ("bm25", "vector", "card", "claim", "graph")
 
@@ -80,7 +80,7 @@ NO_ANSWER_TEXT = "现有知识库中未检索到足够证据，暂时无法确�
 # Built-in routing table (design V1.1 section 8.1). Order still matters: when two rules
 # match with the same longest keyword, the higher priority wins, and equal priority keeps
 # the earlier declaration.
-DEFAULT_ROUTE_RULES: List[Dict[str, Any]] = [
+DEFAULT_ROUTE_RULES: list[dict[str, Any]] = [
     {
         "questionType": "EXACT",
         "keywords": ["错误码", "配置项", "接口", "类名", "参数名", "型号"],
@@ -140,9 +140,9 @@ DEFAULT_ROUTE_RULES: List[Dict[str, Any]] = [
 ]
 
 
-def _clean_channels(values: Any) -> List[str]:
+def _clean_channels(values: Any) -> list[str]:
     """Normalize a channel list and reject names the retriever cannot serve."""
-    cleaned: List[str] = []
+    cleaned: list[str] = []
     for item in values or []:
         name = str(item).strip().lower()
         if name and name not in cleaned:
@@ -153,9 +153,9 @@ def _clean_channels(values: Any) -> List[str]:
     return cleaned
 
 
-def _clean_keywords(values: Any) -> List[str]:
+def _clean_keywords(values: Any) -> list[str]:
     """Normalize trigger keywords: trimmed, de-duplicated, order preserving."""
-    cleaned: List[str] = []
+    cleaned: list[str] = []
     for item in values or []:
         text = str(item).strip()
         if text and text not in cleaned:
@@ -168,8 +168,8 @@ class RouteRule(BaseModel):
 
     questionType: str
     enabled: bool = True
-    keywords: List[str] = Field(default_factory=list)
-    strategies: List[str] = Field(default_factory=list)
+    keywords: list[str] = Field(default_factory=list)
+    strategies: list[str] = Field(default_factory=list)
     priority: int = Field(default=50, ge=0, le=999)
     reason: str = ""
 
@@ -184,13 +184,13 @@ class RouteRule(BaseModel):
 
     @field_validator("keywords")
     @classmethod
-    def _keywords(cls, value: List[str]) -> List[str]:
+    def _keywords(cls, value: list[str]) -> list[str]:
         """Keep keyword arrays canonical (trimmed and unique)."""
         return _clean_keywords(value)
 
     @field_validator("strategies")
     @classmethod
-    def _channels(cls, value: List[str]) -> List[str]:
+    def _channels(cls, value: list[str]) -> list[str]:
         """A rule must point at real channels, otherwise recall silently returns nothing."""
         cleaned = _clean_channels(value)
         if not cleaned:
@@ -202,14 +202,14 @@ class RoutePolicy(BaseModel):
     """Question-understanding routing behaviour."""
 
     enabled: bool = True
-    rules: List[RouteRule] = Field(
+    rules: list[RouteRule] = Field(
         default_factory=lambda: [RouteRule.model_validate(item) for item in DEFAULT_ROUTE_RULES]
     )
-    defaultStrategies: List[str] = Field(default_factory=lambda: ["card", "vector", "bm25", "claim"])
+    defaultStrategies: list[str] = Field(default_factory=lambda: ["card", "vector", "bm25", "claim"])
 
     @field_validator("defaultStrategies")
     @classmethod
-    def _default_channels(cls, value: List[str]) -> List[str]:
+    def _default_channels(cls, value: list[str]) -> list[str]:
         """Fallback strategies must also name real channels."""
         cleaned = _clean_channels(value)
         if not cleaned:
@@ -217,7 +217,7 @@ class RoutePolicy(BaseModel):
         return cleaned
 
     @model_validator(mode="after")
-    def _unique_types(self) -> "RoutePolicy":
+    def _unique_types(self) -> RoutePolicy:
         """Two rules fighting over the same question type would make routing unexplainable."""
         seen = set()
         for rule in self.rules:
@@ -235,7 +235,7 @@ class RewritePolicy(BaseModel):
     llmEnabled: bool = False
     maxVariants: int = Field(default=4, ge=1, le=8)
     maxRecallRounds: int = Field(default=2, ge=1, le=5)
-    synonyms: Dict[str, List[str]] = Field(default_factory=lambda: dict(DEFAULT_SYNONYMS))
+    synonyms: dict[str, list[str]] = Field(default_factory=lambda: dict(DEFAULT_SYNONYMS))
 
 
 class ChannelPolicy(BaseModel):
@@ -249,7 +249,7 @@ class ChannelPolicy(BaseModel):
 class RecallPolicy(BaseModel):
     """Multi-channel recall configuration."""
 
-    channels: Dict[str, ChannelPolicy] = Field(
+    channels: dict[str, ChannelPolicy] = Field(
         default_factory=lambda: {
             name: ChannelPolicy(weight=DEFAULT_CHANNEL_WEIGHTS.get(name, 1.0)) for name in CHANNELS
         }
@@ -259,7 +259,7 @@ class RecallPolicy(BaseModel):
 
     @field_validator("channels")
     @classmethod
-    def _known_channels(cls, value: Dict[str, ChannelPolicy]) -> Dict[str, ChannelPolicy]:
+    def _known_channels(cls, value: dict[str, ChannelPolicy]) -> dict[str, ChannelPolicy]:
         """Only declared channels exist; typos must fail loudly instead of being ignored."""
         unknown = [name for name in (value or {}) if name not in CHANNELS]
         if unknown:
@@ -340,7 +340,7 @@ class QueryPolicy(BaseModel):
     )
 
 
-def _deep_merge(base: Dict[str, Any], patch: Dict[str, Any]) -> Dict[str, Any]:
+def _deep_merge(base: dict[str, Any], patch: dict[str, Any]) -> dict[str, Any]:
     """Recursively merge a console patch into a policy dump; lists replace wholesale."""
     merged = dict(base)
     for key, value in (patch or {}).items():
@@ -364,7 +364,7 @@ def _now() -> str:
     return datetime.datetime.utcnow().replace(microsecond=0).isoformat() + "Z"
 
 
-def _summary_of(policy: "QueryPolicy") -> Dict[str, Any]:
+def _summary_of(policy: QueryPolicy) -> dict[str, Any]:
     """Console fingerprint of a profile: enough to compare two strategies at a glance."""
     return {
         "channels": [name for name, channel in policy.recall.channels.items() if channel.enabled],
@@ -387,9 +387,9 @@ def _profile_name(raw: Any) -> str:
     return name
 
 
-def _read_store() -> Dict[str, Any]:
+def _read_store() -> dict[str, Any]:
     """Read the persisted policy store, promoting a legacy single-policy file on the fly."""
-    store: Dict[str, Any] = {"active": DEFAULT_PROFILE, "profiles": {}}
+    store: dict[str, Any] = {"active": DEFAULT_PROFILE, "profiles": {}}
     if POLICY_FILE.exists():
         try:
             raw = json.loads(POLICY_FILE.read_text(encoding="utf-8"))
@@ -411,7 +411,9 @@ def _read_store() -> Dict[str, Any]:
             else:
                 # Legacy layout: one anonymous policy becomes the default profile.
                 store["profiles"][DEFAULT_PROFILE] = {
-                    "label": "默认策略", "updatedAt": "", "policy": raw,
+                    "label": "默认策略",
+                    "updatedAt": "",
+                    "policy": raw,
                 }
     if store["active"] not in store["profiles"]:
         store["active"] = next(iter(store["profiles"]), DEFAULT_PROFILE)
@@ -420,12 +422,12 @@ def _read_store() -> Dict[str, Any]:
     return store
 
 
-def _validate(payload: Dict[str, Any]) -> "QueryPolicy":
+def _validate(payload: dict[str, Any]) -> QueryPolicy:
     """Validate a stored payload against the defaults so partial files still load."""
     return QueryPolicy.model_validate(_deep_merge(default_policy().model_dump(), payload or {}))
 
 
-def _write_store(store: Dict[str, Any]) -> None:
+def _write_store(store: dict[str, Any]) -> None:
     """Write the whole store atomically so a crash cannot leave a half-written file."""
     POLICY_FILE.parent.mkdir(parents=True, exist_ok=True)
     tmp = POLICY_FILE.with_suffix(".json.tmp")
@@ -434,7 +436,7 @@ def _write_store(store: Dict[str, Any]) -> None:
     tmp.replace(POLICY_FILE)
 
 
-def load_policy(force: bool = False) -> "QueryPolicy":
+def load_policy(force: bool = False) -> QueryPolicy:
     """Return the effective policy: the active profile's policy."""
     global _cache
     with _lock:
@@ -446,7 +448,7 @@ def load_policy(force: bool = False) -> "QueryPolicy":
         return _cache
 
 
-def save_policy(payload: Dict[str, Any]) -> "QueryPolicy":
+def save_policy(payload: dict[str, Any]) -> QueryPolicy:
     """Merge a console update into the active profile and refresh the cache."""
     global _cache
     with _lock:
@@ -465,7 +467,7 @@ def save_policy(payload: Dict[str, Any]) -> "QueryPolicy":
         return policy
 
 
-def reset_policy() -> "QueryPolicy":
+def reset_policy() -> QueryPolicy:
     """Restore the built-in defaults for the active profile, keeping other profiles."""
     global _cache
     with _lock:
@@ -483,26 +485,29 @@ def reset_policy() -> "QueryPolicy":
         return policy
 
 
-def list_profiles() -> Dict[str, Any]:
+def list_profiles() -> dict[str, Any]:
     """Every saved strategy with the fingerprint the console compares them by."""
     with _lock:
         store = _read_store()
-        items: List[Dict[str, Any]] = []
+        items: list[dict[str, Any]] = []
         for name, entry in store["profiles"].items():
             policy = _validate(entry.get("policy") or {})
-            items.append({
-                "name": name,
-                "label": entry.get("label") or name,
-                "updatedAt": entry.get("updatedAt") or "",
-                "active": name == store["active"],
-                "summary": _summary_of(policy),
-            })
+            items.append(
+                {
+                    "name": name,
+                    "label": entry.get("label") or name,
+                    "updatedAt": entry.get("updatedAt") or "",
+                    "active": name == store["active"],
+                    "summary": _summary_of(policy),
+                }
+            )
         items.sort(key=lambda item: (not item["active"], item["name"]))
         return {"active": store["active"], "profiles": items}
 
 
-def create_profile(name: str, label: Optional[str] = None, base: Optional[str] = None,
-                   policy: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+def create_profile(
+    name: str, label: str | None = None, base: str | None = None, policy: dict[str, Any] | None = None
+) -> dict[str, Any]:
     """Create a strategy by cloning another one (or the defaults), without activating it."""
     with _lock:
         clean = _profile_name(name)
@@ -522,7 +527,7 @@ def create_profile(name: str, label: Optional[str] = None, base: Optional[str] =
         return list_profiles()
 
 
-def update_profile(name: str, payload: Dict[str, Any]) -> Dict[str, Any]:
+def update_profile(name: str, payload: dict[str, Any]) -> dict[str, Any]:
     """Merge a console patch into one profile; only the active one invalidates the cache."""
     global _cache
     with _lock:
@@ -543,8 +548,7 @@ def update_profile(name: str, payload: Dict[str, Any]) -> Dict[str, Any]:
         return list_profiles()
 
 
-def rename_profile(name: str, label: Optional[str] = None,
-                   new_name: Optional[str] = None) -> Dict[str, Any]:
+def rename_profile(name: str, label: str | None = None, new_name: str | None = None) -> dict[str, Any]:
     """Rename a profile or change its display label, keeping it the active one if it was."""
     with _lock:
         store = _read_store()
@@ -565,7 +569,7 @@ def rename_profile(name: str, label: Optional[str] = None,
         return list_profiles()
 
 
-def delete_profile(name: str) -> Dict[str, Any]:
+def delete_profile(name: str) -> dict[str, Any]:
     """Delete a profile; the active one and the last survivor are protected."""
     global _cache
     with _lock:
@@ -582,7 +586,7 @@ def delete_profile(name: str) -> Dict[str, Any]:
         return list_profiles()
 
 
-def activate_profile(name: str) -> Dict[str, Any]:
+def activate_profile(name: str) -> dict[str, Any]:
     """Switch every following query to another saved strategy."""
     global _cache
     with _lock:
@@ -602,7 +606,7 @@ def reset_cache() -> None:
         _cache = None
 
 
-def public_policy(policy: Optional[QueryPolicy] = None) -> Dict[str, Any]:
+def public_policy(policy: QueryPolicy | None = None) -> dict[str, Any]:
     """Return the console payload with persistence metadata attached."""
     data = (policy or load_policy()).model_dump()
     data["source"] = "file" if POLICY_FILE.exists() else "default"
@@ -614,7 +618,7 @@ def public_policy(policy: Optional[QueryPolicy] = None) -> Dict[str, Any]:
     return data
 
 
-def policy_schema() -> Dict[str, Any]:
+def policy_schema() -> dict[str, Any]:
     """Return the vocabulary the console editor renders from."""
     return {
         "channels": [
@@ -627,12 +631,12 @@ def policy_schema() -> Dict[str, Any]:
     }
 
 
-def channel_weights(policy: QueryPolicy) -> Dict[str, float]:
+def channel_weights(policy: QueryPolicy) -> dict[str, float]:
     """Return the fusion weight of every configured channel."""
     return {name: float(channel.weight) for name, channel in policy.recall.channels.items()}
 
 
-def recall_sizes(policy: QueryPolicy, top_k: int) -> Dict[str, int]:
+def recall_sizes(policy: QueryPolicy, top_k: int) -> dict[str, int]:
     """Return the per-channel Top-K budget derived from the global Top-K."""
     base = max(int(policy.recall.recallMultiplier), 1) * max(int(top_k), 1)
     return {
@@ -641,7 +645,7 @@ def recall_sizes(policy: QueryPolicy, top_k: int) -> Dict[str, int]:
     }
 
 
-def effective_strategies(policy: QueryPolicy, strategies: List[str]) -> List[str]:
+def effective_strategies(policy: QueryPolicy, strategies: list[str]) -> list[str]:
     """Drop channels the policy disabled, then fall back so recall never receives an empty list."""
     enabled = [name for name in strategies if policy.recall.channels[name].enabled]
     if enabled:
@@ -650,7 +654,7 @@ def effective_strategies(policy: QueryPolicy, strategies: List[str]) -> List[str
     return fallback or [name for name in CHANNELS if policy.recall.channels[name].enabled]
 
 
-def quality_weights(policy: QueryPolicy) -> Dict[str, float]:
+def quality_weights(policy: QueryPolicy) -> dict[str, float]:
     """Return the quality-signal weights of the final score, or ``{}`` when disabled."""
     if not policy.fusion.qualitySignalsEnabled:
         return {}
@@ -663,7 +667,7 @@ def quality_weights(policy: QueryPolicy) -> Dict[str, float]:
     }
 
 
-def policy_summary(policy: QueryPolicy) -> Dict[str, Any]:
+def policy_summary(policy: QueryPolicy) -> dict[str, Any]:
     """Return the compact policy fingerprint recorded in every query trace."""
     return {
         "version": policy.version,

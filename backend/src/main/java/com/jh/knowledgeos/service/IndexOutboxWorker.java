@@ -9,7 +9,6 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
-
 import java.net.InetAddress;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -22,31 +21,32 @@ import java.util.UUID;
  */
 @Service
 public class IndexOutboxWorker {
+
     private static final Logger log = LoggerFactory.getLogger(IndexOutboxWorker.class);
 
     private final KnowledgeMapper mapper;
+
     private final IndexOutboxService outboxService;
+
     private final AiClient aiClient;
+
     private final ObjectMapper objectMapper;
+
     private final TransactionRunner transactionRunner;
+
     private final IndexOutboxMetrics metrics;
+
     private final int batchSize;
+
     private final int lockTimeoutSeconds;
+
     private final long retryBaseSeconds;
+
     private final boolean enabled;
+
     private final String workerId;
 
-    public IndexOutboxWorker(
-            KnowledgeMapper mapper,
-            IndexOutboxService outboxService,
-            AiClient aiClient,
-            ObjectMapper objectMapper,
-            TransactionRunner transactionRunner,
-            IndexOutboxMetrics metrics,
-            @Value("${indexing.outbox.enabled:true}") boolean enabled,
-            @Value("${indexing.outbox.batch-size:20}") int batchSize,
-            @Value("${indexing.outbox.lock-timeout-seconds:300}") int lockTimeoutSeconds,
-            @Value("${indexing.outbox.retry-base-seconds:2}") long retryBaseSeconds) {
+    public IndexOutboxWorker(KnowledgeMapper mapper, IndexOutboxService outboxService, AiClient aiClient, ObjectMapper objectMapper, TransactionRunner transactionRunner, IndexOutboxMetrics metrics, @Value("${indexing.outbox.enabled:true}") boolean enabled, @Value("${indexing.outbox.batch-size:20}") int batchSize, @Value("${indexing.outbox.lock-timeout-seconds:300}") int lockTimeoutSeconds, @Value("${indexing.outbox.retry-base-seconds:2}") long retryBaseSeconds) {
         this.mapper = mapper;
         this.outboxService = outboxService;
         this.aiClient = aiClient;
@@ -96,16 +96,14 @@ public class IndexOutboxWorker {
     private void deliver(IndexOutboxEvent event) {
         long started = System.currentTimeMillis();
         try {
-            Map<String, Object> response = aiClient.post(
-                    event.getTargetPath(), outboxService.payload(event));
+            Map<String, Object> response = aiClient.post(event.getTargetPath(), outboxService.payload(event));
             failOnNestedError(response);
             long duration = System.currentTimeMillis() - started;
             String responseJson = objectMapper.writeValueAsString(response);
             transactionRunner.required(() -> {
                 mapper.markIndexOutboxSucceeded(event.getId(), responseJson);
                 updateAclPropagationAfterSuccess(event, response, responseJson);
-                mapper.insertIndexDeliveryAttempt(
-                        event.getEventId(), event.getAttemptCount(), "SUCCEEDED", duration, responseJson, null);
+                mapper.insertIndexDeliveryAttempt(event.getEventId(), event.getAttemptCount(), "SUCCEEDED", duration, responseJson, null);
                 metrics.deliverySucceeded(duration);
             });
         } catch (Exception ex) {
@@ -132,16 +130,13 @@ public class IndexOutboxWorker {
             } else {
                 mapper.markIndexOutboxRetry(event.getId(), message, nextAttempt);
             }
-            mapper.insertIndexDeliveryAttempt(
-                    event.getEventId(), attempt, dead ? "DEAD" : "RETRY", duration, null, message);
+            mapper.insertIndexDeliveryAttempt(event.getEventId(), attempt, dead ? "DEAD" : "RETRY", duration, null, message);
             metrics.deliveryFailed(duration, dead);
         });
-        log.warn("Index outbox delivery failed eventId={} attempt={}/{} status={}: {}",
-                event.getEventId(), attempt, maxAttempts, dead ? "DEAD" : "RETRY", message);
+        log.warn("Index outbox delivery failed eventId={} attempt={}/{} status={}: {}", event.getEventId(), attempt, maxAttempts, dead ? "DEAD" : "RETRY", message);
     }
 
-    private void updateAclPropagationAfterSuccess(IndexOutboxEvent event,
-            Map<String, Object> response, String responseJson) {
+    private void updateAclPropagationAfterSuccess(IndexOutboxEvent event, Map<String, Object> response, String responseJson) {
         if (!"ACL_CHANGED".equals(event.getEventType())) {
             return;
         }
@@ -150,25 +145,31 @@ public class IndexOutboxWorker {
         updateAclPropagation(event, state, responseJson, null);
     }
 
-    private void updateAclPropagation(IndexOutboxEvent event, String state,
-            String resultJson, String lastError) {
+    private void updateAclPropagation(IndexOutboxEvent event, String state, String resultJson, String lastError) {
         if (!"ACL_CHANGED".equals(event.getEventType())) {
             return;
         }
-        mapper.updateAclChangePropagation(
-                event.getIdempotencyKey(), state, resultJson, lastError);
+        mapper.updateAclChangePropagation(event.getIdempotencyKey(), state, resultJson, lastError);
     }
 
-    /** Flags the owning document DIRTY when its index update is dead-lettered. */
+    /**
+     * Flags the owning document DIRTY when its index update is dead-lettered.
+     */
     private void markDocumentDirty(IndexOutboxEvent event, String message) {
         Long documentId = documentIdOf(event.getAggregateKey());
-        if (documentId == null) return;
+        if (documentId == null) {
+            return;
+        }
         mapper.updateDocumentState(documentId, "DIRTY", "INDEX", abbreviate(message, 900), 0);
     }
 
-    /** Aggregate keys look like "KB:1:DOCUMENT:12"; the segment after DOCUMENT is the object id. */
+    /**
+     * Aggregate keys look like "KB:1:DOCUMENT:12"; the segment after DOCUMENT is the object id.
+     */
     private Long documentIdOf(String aggregateKey) {
-        if (aggregateKey == null) return null;
+        if (aggregateKey == null) {
+            return null;
+        }
         String[] parts = aggregateKey.split(":");
         for (int i = 0; i < parts.length - 1; i++) {
             if ("DOCUMENT".equalsIgnoreCase(parts[i])) {
