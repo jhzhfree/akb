@@ -7,8 +7,14 @@
 <LoginView v-else-if="needLogin" :hint="loginHint" @success="onLogin"/>
 <div v-else class="kos-shell">
 <header class="kos-topbar">
-  <div class="kos-brand"><span class="kos-logo">◈</span>智能知识平台</div>
-  <span class="kos-pill">V2.2</span>
+  <div class="kos-brand">
+    <KosBrandMark :size="28"/>
+    <span class="kos-brand-copy">
+      <b>智能知识平台</b>
+      <small>Knowledge OS</small>
+    </span>
+  </div>
+  <span class="kos-pill" title="平台版本">V2.2</span>
   <div class="kos-grow"></div>
   <!-- 设计 §2.2：知识空间选择器固定在顶栏；全局搜索回车后进入搜索页并直接执行检索。 -->
   <button class="kos-kbswitch" @click="showBases=true">
@@ -153,6 +159,7 @@ import type {
 import type { AssetType } from './components/AssetBrowserPanel.vue'
 import TaskCenterDrawer from './components/TaskCenterDrawer.vue'
 import SpaceContextBar from'./components/SpaceContextBar.vue';
+import KosBrandMark from './components/KosBrandMark.vue'
 import KnowledgeBaseDialog from './components/KnowledgeBaseDialog.vue'
 import KnowledgeDetailWorkspace from './components/KnowledgeDetailWorkspace.vue'
 import QueryTracePanel from './components/QueryTracePanel.vue'
