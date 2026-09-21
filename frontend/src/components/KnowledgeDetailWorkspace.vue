@@ -19,10 +19,10 @@
         </header>
 
         <div class="mb-5 grid gap-3 sm:grid-cols-4">
-          <div class="kb-metric"><span>Evidence</span><b>{{ detail.evidence.length }}</b></div>
-          <div class="kb-metric"><span>Conflict</span><b>{{ detail.conflicts.length }}</b></div>
-          <div class="kb-metric"><span>Review</span><b>{{ detail.reviews.length }}</b></div>
-          <div class="kb-metric"><span>Assessment</span><b>{{ detail.assessments.length }}</b></div>
+          <div class="kb-metric"><span>证据</span><b>{{ detail.evidence.length }}</b></div>
+          <div class="kb-metric"><span>冲突</span><b>{{ detail.conflicts.length }}</b></div>
+          <div class="kb-metric"><span>复核</span><b>{{ detail.reviews.length }}</b></div>
+          <div class="kb-metric"><span>评估</span><b>{{ detail.assessments.length }}</b></div>
         </div>
 
         <!-- 设计 §8：统一详情框架——概览 / 关联 / Evidence / 版本 / 权限 / 审计，所有对象共用。 -->
@@ -31,7 +31,7 @@
           <el-tab-pane label="原文" name="raw">
             <section class="kb-card p-5">
               <div class="kb-section-head">
-                <div><small>RAW TEXT</small><h3>原始正文</h3></div>
+                <div><small>原文</small><h3>原始正文</h3></div>
                 <button class="kb-btn kb-btn-outline" @click="copy(rawText)">复制原文</button>
               </div>
               <div class="max-h-[46vh] overflow-auto whitespace-pre-wrap break-words rounded-lg bg-ink-50 p-4 text-[13px] leading-7 text-ink-700">{{ rawText }}</div>
@@ -43,7 +43,7 @@
               </div>
             </section>
             <section v-if="neighbors.length" class="kb-card mt-4 p-5">
-              <div class="kb-section-head"><div><small>CONTEXT</small><h3>同文档上下文</h3></div></div>
+              <div class="kb-section-head"><div><small>相邻内容</small><h3>同文档上下文</h3></div></div>
               <article
                 v-for="n in neighbors" :key="String(n.unitCode)"
                 class="mb-2 rounded-lg border p-3 text-xs"
@@ -58,11 +58,11 @@
 
           <el-tab-pane label="概览" name="overview">
             <section class="kb-card p-5">
-              <div class="kb-section-head"><div><small>KNOWLEDGE</small><h3>知识正文</h3></div></div>
+              <div class="kb-section-head"><div><small>正文</small><h3>知识正文</h3></div></div>
               <div class="whitespace-pre-wrap text-sm leading-7 text-ink-700">{{ content }}</div>
             </section>
             <section class="kb-card mt-4 p-5">
-              <div class="kb-section-head"><div><small>ATTRIBUTES</small><h3>关键属性</h3></div></div>
+              <div class="kb-section-head"><div><small>属性</small><h3>关键属性</h3></div></div>
               <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                 <div v-for="row in attributes" :key="row.label" class="rounded-lg bg-ink-50 p-3">
                   <div class="text-[11px] text-ink-500">{{ row.label }}</div>
@@ -76,7 +76,7 @@
           <el-tab-pane :label="`关联 ${graphNodes.length}`" name="relation">
             <section class="kb-card p-5">
               <div class="kb-section-head">
-                <div><small>GRAPH</small><h3>关联对象</h3></div>
+                <div><small>关联图谱</small><h3>关联对象</h3></div>
                 <button class="kb-btn kb-btn-outline" @click="$emit('open-graph',code)">打开图谱</button>
               </div>
               <div v-if="graphNodes.length" class="space-y-2">
@@ -91,7 +91,7 @@
               <div v-else class="py-8 text-center text-sm text-ink-400">暂无关联对象</div>
             </section>
             <section v-if="detail.conflicts.length" class="kb-card mt-4 border-amber-200 p-5">
-              <div class="kb-section-head"><div><small>CONFLICT</small><h3>知识冲突</h3></div></div>
+              <div class="kb-section-head"><div><small>知识知识冲突</small><h3>知识冲突</h3></div></div>
               <div
                 v-for="(c,i) in detail.conflicts"
                 :key="i"
@@ -101,9 +101,9 @@
             </section>
           </el-tab-pane>
 
-          <el-tab-pane :label="`Evidence ${detail.evidence.length}`" name="evidence">
+          <el-tab-pane :label="`证据 ${detail.evidence.length}`" name="evidence">
             <section class="kb-card p-5">
-              <div class="kb-section-head"><div><small>EVIDENCE CHAIN</small><h3>证据与来源</h3></div></div>
+              <div class="kb-section-head"><div><small>证据链</small><h3>证据与来源</h3></div></div>
               <div class="space-y-3">
                 <article v-for="e in detail.evidence" :key="e.evidenceCode"
                   class="cursor-pointer rounded-lg border border-ink-100 bg-white p-4 transition hover:border-indigo-200 hover:shadow-sm"
@@ -133,7 +133,7 @@
 
           <el-tab-pane label="权限" name="acl">
             <section class="kb-card p-5">
-              <div class="kb-section-head"><div><small>ACCESS</small><h3>权限与可见范围</h3></div></div>
+              <div class="kb-section-head"><div><small>访问控制</small><h3>权限与可见范围</h3></div></div>
               <div class="space-y-3">
                 <div class="rounded-lg bg-ink-50 p-3">
                   <div class="text-[11px] text-ink-500">可见范围</div>
@@ -148,17 +148,17 @@
                   </div>
                   <div v-else class="text-sm text-ink-400">未设置权限标签，按知识库默认可见范围继承</div>
                 </div>
-                <p class="kb-muted">权限变更会写入传播 Outbox 并重建索引，可在「系统配置 / 权限与审计」查看变更记录。</p>
+                <p class="kb-muted">权限变更会写入传播队列并重建索引，可在「系统配置 / 权限与审计」查看变更记录。</p>
               </div>
             </section>
           </el-tab-pane>
 
-          <!-- 原始 JSON：接口原生报文，字段对不上契约时直接在这里比对 -->
-          <el-tab-pane label="原始 JSON" name="json">
+          <!-- 接口原始报文：接口原生报文，字段对不上契约时直接在这里比对 -->
+          <el-tab-pane label="接口原始报文" name="json">
             <section class="kb-card p-5">
               <div class="kb-section-head">
-                <div><small>RAW JSON</small><h3>接口原生报文</h3></div>
-                <button class="kb-btn kb-btn-outline" @click="copy(jsonText)">复制 JSON</button>
+                <div><small>原始报文</small><h3>接口原生报文</h3></div>
+                <button class="kb-btn kb-btn-outline" @click="copy(jsonText)">复制报文</button>
               </div>
               <pre class="max-h-[60vh] overflow-auto rounded-lg bg-ink-900 p-4 text-[12px] leading-6 text-emerald-200">{{ jsonText }}</pre>
               <p class="kb-muted">与 GET /api/knowledge/objects/{kb}/{type}/{code} 返回一致，用于对照接口契约核对字段。</p>
@@ -167,7 +167,7 @@
 
           <el-tab-pane label="审计" name="audit">
             <section class="kb-card p-5">
-              <div class="kb-section-head"><div><small>GOVERNANCE</small><h3>智能裁决记录</h3></div></div>
+              <div class="kb-section-head"><div><small>机器裁决</small><h3>智能裁决记录</h3></div></div>
               <div
                 v-for="a in detail.assessments"
                 :key="String(a.id)"
@@ -177,7 +177,7 @@
               <div v-if="!detail.assessments.length" class="text-sm text-ink-400">暂无智能裁决记录</div>
             </section>
             <section class="kb-card mt-4 p-5">
-              <div class="kb-section-head"><div><small>REVIEW HISTORY</small><h3>人工复核历史</h3></div></div>
+              <div class="kb-section-head"><div><small>复核记录</small><h3>人工复核历史</h3></div></div>
               <div
                 v-for="r in detail.reviews"
                 :key="r.id"

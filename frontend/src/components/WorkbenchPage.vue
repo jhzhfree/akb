@@ -24,8 +24,8 @@
 import type {
   Capabilities, DashboardGovernance, DashboardLifecycle, DashboardSummary, Overview,
 } from '../types'
+import { computed } from 'vue'
 import type { AssetType } from './AssetBrowserPanel.vue'
-import { NAV_SECTIONS } from '../navigation'
 import { useShell } from '../shell'
 import ModuleTabs from './ModuleTabs.vue'
 import OverviewPanel from './OverviewPanel.vue'
@@ -46,7 +46,7 @@ defineProps<{
 defineEmits<{ select: [key: string]; 'update:assetType': [type: AssetType] }>()
 
 const shell = useShell()
-const tabs = NAV_SECTIONS[0].tabs
+const tabs = computed(() => shell.tabs('workbench'))
 
 /** 版本快照只带类型与对象码，详情仍走统一对象详情抽屉。 */
 function openDetailFromVersion(type: string, code: string) {

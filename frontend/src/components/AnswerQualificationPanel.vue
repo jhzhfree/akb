@@ -1,18 +1,18 @@
 <template>
   <section class="kb-card p-4">
     <div class="kb-section-head">
-      <div><small>ANSWER QUALIFICATION</small><h3>答案资格与 Claim 审计</h3></div>
+      <div><small>答案校验</small><h3>答案资格与 断言 审计</h3></div>
       <span :class="badgeClass">{{ value?.gateStatus || 'UNKNOWN' }}</span>
     </div>
     <div class="grid gap-2 sm:grid-cols-4">
       <div class="kb-metric"><span>策略版本</span><b class="text-xs">{{ value?.policyVersion || '—' }}</b></div>
-      <div class="kb-metric"><span>Evidence Gate</span><b>{{ value?.evidenceGateStatus || '—' }}</b></div>
-      <div class="kb-metric"><span>Structured Gate</span><b>{{ value?.structuredGateStatus || '—' }}</b></div>
-      <div class="kb-metric"><span>Claims</span><b>{{ claims.length }}</b></div>
+      <div class="kb-metric"><span>证据门槛</span><b>{{ value?.evidenceGateStatus || '—' }}</b></div>
+      <div class="kb-metric"><span>结构化门槛</span><b>{{ value?.structuredGateStatus || '—' }}</b></div>
+      <div class="kb-metric"><span>断言数</span><b>{{ claims.length }}</b></div>
     </div>
     <div v-if="claims.length" class="mt-4 overflow-x-auto">
       <table class="w-full text-left text-xs">
-        <thead class="text-ink-400"><tr><th class="p-2">Claim</th><th class="p-2">判定</th><th class="p-2">蕴含度</th><th class="p-2">Evidence</th></tr></thead>
+        <thead class="text-ink-400"><tr><th class="p-2">断言</th><th class="p-2">判定</th><th class="p-2">蕴含度</th><th class="p-2">证据</th></tr></thead>
         <tbody>
           <tr v-for="claim in claims" :key="claim.claimId" class="border-t border-ink-100">
             <td class="max-w-xl p-2 text-ink-700">{{ claim.statement }}</td>

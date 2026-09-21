@@ -96,8 +96,8 @@
             </div>
 
             <div class="judge-actions">
-              <el-button size="small" type="success" :disabled="!selectedConflictId" @click="submitConflict('KEEP_A')">采用 A</el-button>
-              <el-button size="small" type="success" :disabled="!selectedConflictId" @click="submitConflict('KEEP_B')">采用 B</el-button>
+              <el-button size="small" type="success" :disabled="!selectedConflictId" @click="submitConflict('KEEP_A')">采用方案 A</el-button>
+              <el-button size="small" type="success" :disabled="!selectedConflictId" @click="submitConflict('KEEP_B')">采用方案 B</el-button>
               <el-button size="small" type="primary" :disabled="!selectedConflictId" @click="submitConflict('MERGE')">合并</el-button>
               <el-button size="small" type="danger" :disabled="!selectedConflictId" @click="submitConflict('REJECT_BOTH')">全部拒绝</el-button>
               <el-button size="small" type="warning" :disabled="!selectedConflictId" @click="submitConflict('REQUEST_EVIDENCE')">要求补充证据</el-button>
@@ -142,7 +142,7 @@
       <el-col :span="7">
         <el-card shadow="never" class="judge-col">
           <template #header>
-            <div class="judge-head"><span>Evidence</span><el-tag size="small">{{ evidenceTotal }}</el-tag></div>
+            <div class="judge-head"><span>证据</span><el-tag size="small">{{ evidenceTotal }}</el-tag></div>
           </template>
           <div v-for="group in evidenceGroups" :key="group.key" class="judge-evidence-group">
             <div class="judge-evidence-label">{{ group.label }}</div>

@@ -22,18 +22,12 @@
     :subjects="aclSubjects" :roles="aclRoles" :changes="aclChanges" :audits="aclAudits"
     @change="$emit('acl-change',$event)" />
 
-  <PanelState
-    v-else-if="active==='system.schema'"
-    :empty="true" empty-text="知识 Schema：规划中"
-    empty-hint="信息架构已保留该位置，能力落地后会在此开放" />
+  <SchemaPanel v-else-if="active==='system.schema'" :knowledge-base-id="knowledgeBaseId" />
 
   <OpsPanel v-else-if="active==='system.index'" :knowledge-base-id="knowledgeBaseId" :base-name="baseName"
     @refresh="$emit('refresh')" />
 
-  <PanelState
-    v-else-if="active==='system.tasks'"
-    :empty="true" empty-text="任务与告警：规划中"
-    empty-hint="信息架构已保留该位置，能力落地后会在此开放" />
+  <TaskAlertPanel v-else-if="active==='system.tasks'" :knowledge-base-id="knowledgeBaseId" />
 
   <!-- 审计日志与权限同源：同一治理面板的审计区块，不另造一份日志来源。 -->
   <AclAdministrationPanel
@@ -49,7 +43,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import type { AclAudit, AclChange, AclRole, AclSubject, KnowledgeBase, Overview } from '../types'
-import { NAV_SECTIONS } from '../navigation'
+import { useShell } from '../shell'
 import ModuleTabs from './ModuleTabs.vue'
 import ModelSettingsPanel from './ModelSettingsPanel.vue'
 import UserAdminPanel from './UserAdminPanel.vue'
@@ -57,6 +51,8 @@ import AclAdministrationPanel from './AclAdministrationPanel.vue'
 import OpsPanel from './OpsPanel.vue'
 import SpacePanel from './SpacePanel.vue'
 import PanelState from './PanelState.vue'
+import SchemaPanel from './SchemaPanel.vue'
+import TaskAlertPanel from './TaskAlertPanel.vue'
 
 const props = defineProps<{
   active: string
@@ -79,9 +75,11 @@ defineEmits<{
   refresh: []
 }>()
 
-const allTabs = NAV_SECTIONS[4].tabs
+const shell = useShell()
+/** 登录信息是异步拿到的，Tab 必须跟着权限一起重算，否则会停留在未裁剪的快照上。 */
+const allTabs = computed(() => shell.tabs('system'))
 /** 卡片宫格与 Tab 同源：隐藏无权访问的入口，保留规划中入口但不提供假数据页面。 */
-const leaves = computed(() => allTabs.filter(tab => !tab.adminOnly || props.canManageUsers))
+const leaves = computed(() => allTabs.value.filter(tab => !tab.adminOnly || props.canManageUsers))
 const modules = computed(() => {
   const desc: Record<string, string> = {
     'system.model': '统一模型配置与健康检查',

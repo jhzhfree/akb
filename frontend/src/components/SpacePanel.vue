@@ -2,7 +2,7 @@
   <section class="kb-page">
     <header class="kb-section-head">
       <div>
-        <div class="kb-eyebrow">KNOWLEDGE SPACE</div>
+        <div class="kb-eyebrow">知识空间</div>
         <h1 class="kb-title mt-1">知识库</h1>
         <p class="kb-muted mt-1">
           知识空间是权限与检索的最小边界：数据源、文档、知识对象与索引都归属于某个知识库。

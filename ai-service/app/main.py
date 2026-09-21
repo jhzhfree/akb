@@ -13,6 +13,8 @@ from app.core.runtime_settings import load_model_settings
 from app.routes import router
 from app.settings_routes import router as settings_router
 from app.query_policy_routes import router as query_policy_router
+from app.derivation_routes import router as derivation_router
+from app.schema_routes import router as schema_router
 
 logging.basicConfig(
     level=getattr(logging, os.getenv("LOG_LEVEL", "INFO").upper(), logging.INFO),
@@ -34,6 +36,8 @@ app = FastAPI(title="AI 原生企业知识库平台 - AI Service", version="1.1.
 app.include_router(router)
 app.include_router(settings_router)
 app.include_router(query_policy_router)
+app.include_router(derivation_router)
+app.include_router(schema_router)
 
 
 @app.middleware("http")

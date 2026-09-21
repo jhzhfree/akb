@@ -14,9 +14,9 @@
     </header>
 
     <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-      <MetricCard label="Outbox Pending" :value="outbox.pending ?? 0" hint="待投递事件" />
+      <MetricCard label="待同步事件" :value="outbox.pending ?? 0" hint="待投递事件" />
       <MetricCard label="Retry" :value="outbox.retry ?? 0" hint="自动重试中" />
-      <MetricCard label="Dead Letter" :value="outbox.dead ?? 0" :hint="deadHint" />
+      <MetricCard label="死信积压" :value="outbox.dead ?? 0" :hint="deadHint" />
       <MetricCard label="索引漂移" :value="driftCount" :hint="driftHint" />
     </div>
 
@@ -26,7 +26,7 @@
 
     <div class="mt-4 grid grid-cols-1 gap-4 xl:grid-cols-2">
       <article class="kb-card">
-        <div class="kb-card-head"><b class="text-sm">蓝绿索引版本</b><span class="kb-muted">Index Releases</span></div>
+        <div class="kb-card-head"><b class="text-sm">蓝绿索引版本</b><span class="kb-muted">索引版本发布</span></div>
         <div class="p-3">
           <PanelState
             :loading="loading"
@@ -43,13 +43,13 @@
               <el-table-column label="一致性" width="120">
                 <template #default="{ row }">
                   <el-tag :type="integrityType(row.integrityState)" size="small" effect="plain">
-                    {{ row.integrityState || '—' }}
+                    {{ integrityLabel(row.integrityState) }}
                   </el-tag>
                 </template>
               </el-table-column>
               <el-table-column label="状态" width="100">
                 <template #default="{ row }">
-                  <el-tag :type="isActive(row) ? 'success' : 'info'" size="small" effect="plain">{{ row.status || '—' }}</el-tag>
+                  <el-tag :type="isActive(row) ? 'success' : 'info'" size="small" effect="plain">{{ statusLabel(row.status) }}</el-tag>
                 </template>
               </el-table-column>
               <el-table-column label="操作" width="180" fixed="right">
@@ -71,7 +71,7 @@
 
       <article class="kb-card">
         <div class="kb-card-head">
-          <b class="text-sm">索引事件（Outbox）</b>
+          <b class="text-sm">索引事件（待同步队列）</b>
           <div class="flex items-center gap-2">
             <select v-model="eventStatus" class="kb-input w-32" @change="resetEvents">
               <option value="">全部状态</option>
@@ -97,7 +97,7 @@
               </el-table-column>
               <el-table-column label="状态" width="100">
                 <template #default="{ row }">
-                  <el-tag :type="eventTagType(row.status)" size="small" effect="plain">{{ row.status || '—' }}</el-tag>
+                  <el-tag :type="eventTagType(row.status)" size="small" effect="plain">{{ statusLabel(row.status) }}</el-tag>
                 </template>
               </el-table-column>
               <el-table-column label="重试" width="80">
@@ -184,6 +184,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { integrityLabel, statusLabel } from '../types'
 import type { DriftResult, IndexSchema, OutboxEvent, OutboxStats } from '../types'
 import { errorMessage as message } from '../utils/feedback'
 import {

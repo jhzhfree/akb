@@ -2,10 +2,10 @@
   <section class="kb-page">
     <header class="kb-section-head">
       <div>
-        <div class="kb-eyebrow">EXTERNAL SERVICE</div>
+        <div class="kb-eyebrow">外部服务</div>
         <h1 class="kb-title mt-1">外部服务</h1>
         <p class="kb-muted mt-1">
-          对外以 RESTful、MCP Server、SSE 三种形态开放同一套知识能力：一个 API Key 决定可见的知识库范围与可用动作，
+          对外以 RESTful、MCP 服务、SSE 三种形态开放同一套知识能力：一个 API 密钥 决定可见的知识库范围与可用动作，
           三个通道共用一套限流与调用审计。
         </p>
       </div>
@@ -19,9 +19,9 @@
 
     <div v-if="section==='services'" class="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
       <MetricCard label="RESTful" :value="overview?.rest?.endpoints?.length ?? 0" hint="对外接口数" />
-      <MetricCard label="MCP Tools" :value="overview?.mcp?.tools?.length ?? 0" hint="智能体可用工具" />
+      <MetricCard label="MCP 工具" :value="overview?.mcp?.tools?.length ?? 0" hint="智能体可用工具" />
       <MetricCard label="SSE" :value="overview?.sse?.endpoints?.length ?? 0" hint="推送通道" />
-      <MetricCard label="在用凭证" :value="overview?.activeKeys ?? 0" hint="ACTIVE 状态的 API Key" />
+      <MetricCard label="在用凭证" :value="overview?.activeKeys ?? 0" hint="有效状态的 API 密钥" />
     </div>
 
     <div v-if="error" class="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2.5 text-xs text-amber-700">
@@ -31,7 +31,7 @@
     <div class="mt-4 grid grid-cols-1 gap-4 xl:grid-cols-3">
       <article class="kb-card">
         <div class="kb-card-head">
-          <b class="text-sm">RESTful 接口</b>
+          <b class="text-sm">REST 接口</b>
           <el-tag :type="overview?.rest?.enabled ? 'success' : 'info'" size="small" effect="plain">
             {{ overview?.rest?.enabled ? '已开放' : '已关闭' }}
           </el-tag>
@@ -54,7 +54,7 @@
 
       <article class="kb-card">
         <div class="kb-card-head">
-          <b class="text-sm">MCP Server</b>
+          <b class="text-sm">MCP 服务</b>
           <el-tag :type="overview?.mcp?.enabled ? 'success' : 'info'" size="small" effect="plain">
             {{ overview?.mcp?.enabled ? '已开放' : '已关闭' }}
           </el-tag>
@@ -96,7 +96,7 @@
 
     <article v-if="section==='credentials'" class="kb-card mt-4">
       <div class="kb-card-head">
-        <b class="text-sm">API Key 凭证</b>
+        <b class="text-sm">API 密钥凭证</b>
         <div class="flex items-center gap-2">
           <span class="kb-muted">明文只在签发时展示一次</span>
           <button class="kb-btn-primary" @click="openCreate">签发凭证</button>
@@ -128,7 +128,7 @@
             <el-table-column label="状态" width="110">
               <template #default="{ row }">
                 <el-tag :type="row.status === 'ACTIVE' ? 'success' : 'info'" size="small" effect="plain">
-                  {{ row.status === 'ACTIVE' ? '有效（ACTIVE）' : '已吊销（REVOKED）' }}
+                  {{ row.status === 'ACTIVE' ? '有效' : '已吊销' }}
                 </el-tag>
               </template>
             </el-table-column>
@@ -166,7 +166,7 @@
           </el-tabs>
           <div class="mt-3 border-t border-ink-100 pt-3">
             <div class="flex flex-wrap items-center gap-2">
-              <input v-model="probeSecret" class="kb-input flex-1" placeholder="粘贴明文 API Key 做连通性自检" />
+              <input v-model="probeSecret" class="kb-input flex-1" placeholder="粘贴明文 API 密钥做连通性自检" />
               <button class="kb-btn-outline" :disabled="probing || !probeSecret.trim()" @click="probe">REST 自检</button>
               <button class="kb-btn-outline" :disabled="probing || !probeSecret.trim()" @click="probeSse">SSE 自检</button>
             </div>
@@ -203,6 +203,9 @@
                 </template>
               </el-table-column>
               <el-table-column prop="method" label="方法 / 工具" min-width="180" show-overflow-tooltip />
+              <el-table-column label="调用方" width="140" show-overflow-tooltip>
+                <template #default="{ row }">{{ row.callerName || row.keyCode || '—' }}</template>
+              </el-table-column>
               <el-table-column label="知识库" width="100">
                 <template #default="{ row }">{{ row.knowledgeBaseId || '—' }}</template>
               </el-table-column>
@@ -223,7 +226,7 @@
       </article>
     </div>
 
-    <el-dialog v-model="createVisible" title="签发 API Key" width="480px">
+    <el-dialog v-model="createVisible" title="签发 API 密钥" width="480px">
       <el-form label-width="96px" size="small">
         <el-form-item label="调用方名称">
           <el-input v-model="form.name" placeholder="如：ERP 问答助手" />

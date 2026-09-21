@@ -2,7 +2,7 @@
   <section class="kb-page">
     <header class="kb-section-head">
       <div>
-        <div class="kb-eyebrow">ENTITY RESOLUTION</div>
+        <div class="kb-eyebrow">实体归一</div>
         <h1 class="kb-title mt-1">实体与别名词典</h1>
         <p class="kb-muted mt-1">
           自动归一的结果必须可被人看见与纠正：别名词典命中为第一级判定，向量相似度为第二级；误合并可解绑别名并恢复实体。

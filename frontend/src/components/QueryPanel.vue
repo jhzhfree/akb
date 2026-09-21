@@ -1,7 +1,7 @@
 <template>
 <section class="kb-page max-w-[1180px]">
-  <header class="kb-section-head"><div><div class="kb-eyebrow">HYBRID / GRAPH RAG</div>
-    <h2 class="kb-title mt-1">智能问答</h2><p class="kb-muted mt-1">查询理解 → 多路召回 → RRF → Rerank → Evidence Context → 可追溯回答。</p></div></header>
+  <header class="kb-section-head"><div><div class="kb-eyebrow">混合检索与图谱增强</div>
+    <h2 class="kb-title mt-1">智能问答</h2><p class="kb-muted mt-1">查询理解 → 多路召回 → 融合排序 → 重排 → 证据上下文 → 可追溯回答。</p></div></header>
   <!-- §5 检索模块的二级入口：左侧不再展开二级菜单，改在默认页直接给出 -->
   <nav class="kos-modnav" aria-label="知识检索">
     <button
@@ -19,7 +19,7 @@
         <textarea :value="query" rows="5" class="w-full resize-none border-0 bg-white px-5 py-4 text-[15px] leading-7 text-ink-900 outline-none"
           placeholder="向企业知识库提问…" @input="$emit('update:query',($event.target as HTMLTextAreaElement).value)" />
         <footer class="flex items-center justify-between border-t border-ink-100 bg-ink-50/70 px-4 py-2.5">
-          <span class="text-[11px] text-ink-400">回答必须可追溯到 Evidence / Source</span>
+          <span class="text-[11px] text-ink-400">回答必须可追溯到 证据 / 来源</span>
           <button class="kb-btn-primary" :disabled="asking" @click="$emit('ask')">{{ asking ? '检索中…' : '发送问题' }}</button>
         </footer>
       </article>
@@ -79,14 +79,14 @@
           </div>
 
           <div class="mt-3 flex justify-end border-t border-ink-100 pt-3">
-            <button v-if="result.queryId" class="kb-btn kb-btn-outline text-xs" @click="$emit('open-trace',result.queryId)">查看完整 Trace</button>
+            <button v-if="result.queryId" class="kb-btn kb-btn-outline text-xs" @click="$emit('open-trace',result.queryId)">查看完整链路</button>
           </div>
         </article>
       </template>
       <div v-else class="mt-16 text-center text-sm text-ink-400">输入问题开始检索</div>
     </div>
     <aside class="kb-card h-fit overflow-hidden">
-      <div class="kb-card-head"><div><b class="text-sm">问答历史</b><div class="text-[10px] text-ink-400">QUERY HISTORY</div></div>
+      <div class="kb-card-head"><div><b class="text-sm">问答历史</b><div class="text-[10px] text-ink-400">查询历史</div></div>
         <button class="text-xs text-indigo-600" @click="$emit('refresh-history')">刷新</button></div>
       <div class="max-h-[620px] divide-y divide-ink-100 overflow-auto">
         <button v-for="item in history" :key="item.queryId" class="block w-full p-3 text-left hover:bg-ink-50" @click="$emit('open-trace',item.queryId)">
@@ -103,16 +103,22 @@
 import { computed } from 'vue'
 import type { QueryCitation, QueryHistoryItem, QueryResult, QuerySupportClaim } from '../types'
 import { renderMarkdown } from '../utils/markdown'
+import { useShell } from '../shell'
+import { PERM } from '../permissions'
 
+const shell = useShell()
 const props = defineProps<{ query:string; result:QueryResult|null; asking:boolean; history:QueryHistoryItem[] }>()
 defineEmits<{ ask:[]; 'update:query':[value:string]; 'open-trace':[qid:string]; 'refresh-history':[]; 'open-citation':[citation:QueryCitation]; navigate:[key:string] }>()
-/** 检索模块的其余入口：调试（检索测试 / Query Trace）与调优（策略 / Benchmark）。 */
-const tools = [
-  { key:'search.test', icon:'🧪', label:'检索测试' },
-  { key:'search.profile', icon:'⌗', label:'检索策略' },
-  { key:'search.trace', icon:'🛰', label:'Query Trace' },
-  { key:'search.benchmark', icon:'📈', label:'Benchmark' },
-]
+/**
+ * 检索模块的其余入口：调试（检索测试 / 检索链路追踪）与调优（策略 / Benchmark）。
+ * 运营员不能配置策略、不能测评，审核员只多出测评，剩余入口按角色裁剪。
+ */
+const tools = computed(() => [
+  { key:'search.test', icon:'🧪', label:'检索测试', permission: PERM.SEARCH_TEST },
+  { key:'search.profile', icon:'⌗', label:'检索策略', permission: PERM.SEARCH_POLICY },
+  { key:'search.trace', icon:'🛰', label:'检索链路追踪', permission: PERM.SEARCH_TEST },
+  { key:'search.benchmark', icon:'📈', label:'Benchmark', permission: PERM.SEARCH_EVALUATE },
+].filter(tool => shell.can(tool.permission)))
 const time=(v?:string)=>v?new Date(v).toLocaleString():'—'
 
 /** Markdown 答案 + [证据N] 上标引用（llmwiki 式排版）。 */

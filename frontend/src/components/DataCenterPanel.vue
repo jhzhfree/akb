@@ -10,22 +10,32 @@
 <div class="ingest-layout" :style="{order:blockOrder('upload')}">
   <el-card shadow="never" class="panel-card upload-card">
     <div class="ingest-box">
-    <el-upload ref="uploadRef" drag :auto-upload="false" :limit="1" :on-change="onPick" :on-remove="onRemove" :on-exceed="onExceed">
+    <el-upload ref="uploadRef" drag multiple :auto-upload="false" :limit="batchLimit" :on-change="onPick" :on-remove="onRemove" :on-exceed="onExceed">
       <div class="upload-icon">📥</div>
-<b>拖拽或选择资料</b>
-<small>PDF / DOCX / Markdown / HTML / TXT</small>
-      <p>Source 保存后进入 Parse → Persist → Extract → Outbox/Index</p>
+<b>拖拽或选择资料（支持多选，批量异步解析）</b>
+<small>PDF / DOCX / Markdown / HTML / TXT · 单次最多 {{batchLimit}} 个</small>
+      <p>来源保存后进入 解析 → 入库 → 抽取 → 异步索引</p>
     </el-upload>
-    <div v-if="pickedName" class="picked-file">
-<span>已选择：{{pickedName}}</span>
-<el-button link type="primary" :disabled="uploading" @click="clearPicked">移除</el-button>
+    <div v-if="pickedFiles.length" class="picked-file">
+<div class="picked-head">
+<span>已选择 {{pickedFiles.length}} 个文件 · 合计 {{pickedSizeText}}</span>
+<el-button link type="primary" :disabled="uploading" @click="clearPicked">全部移除</el-button>
 </div>
+<div class="picked-list">
+<div v-for="name in pickedNames" :key="name" class="picked-row">
+<span class="picked-name" :title="name">{{name}}</span>
+<el-button link type="danger" :disabled="uploading" @click="removeOne(name)">移除</el-button>
+</div>
+</div>
+</div>
+    <div v-if="exceedHint" class="exceed-hint">{{exceedHint}}</div>
     <div class="ingest-settings">
 <label>来源权威分</label>
 <el-input-number :model-value="authority" :min="0" :max="1" :step=".05" @update:model-value="updateAuthority"/>
 <label>来源 ACL 标签</label>
 <el-input :model-value="permissionTags" placeholder="如 team-a,ops；留空=公开" @update:model-value="$emit('update:permission-tags',String($event))"/>
-      <el-button type="primary" :loading="uploading" :disabled="!pickedName" @click="$emit('upload')">上传并生成知识</el-button>
+      <el-button type="primary" :loading="uploading" :disabled="!pickedFiles.length||batchRunning"
+        @click="submitPicked">上传并生成知识{{pickedFiles.length>1?`（${pickedFiles.length} 个文件）`:''}}</el-button>
       <div v-if="uploading" class="ingest-live">
 <span class="live-dot"></span>
 <span>
@@ -36,6 +46,35 @@
 </div>
 </div>
   </el-card>
+  <el-card v-if="batchStatus" shadow="never" class="panel-card batch-card" :style="{order:blockOrder('batch')}">
+<template #header>
+<div class="batch-head">
+<b>批量接入 · {{batchStatus.progress}}%</b>
+<el-tag size="small" :type="batchTagType">{{batchText}}</el-tag>
+</div>
+</template>
+<el-progress :percentage="batchStatus.progress" :status="batchProgressStatus"/>
+<div class="batch-summary">
+<span>成功 {{batchStatus.succeededCount}}</span>
+<span>失败 {{batchStatus.failedCount}}</span>
+<span v-if="batchStatus.canceledCount">取消 {{batchStatus.canceledCount}}</span>
+<span class="batch-code">批次 {{batchStatus.batchCode}}</span>
+</div>
+<div class="batch-list">
+<div v-for="item in batchStatus.items" :key="item.index" class="batch-row">
+<span class="batch-dot" :class="'s-'+(item.status||'').toLowerCase()"></span>
+<span class="batch-name" :title="item.error||item.filename">{{item.filename}}</span>
+<small v-if="item.status==='SUCCEEDED'">Chunk {{item.chunkCount}} · 卡片 {{item.cardCount}} · 断言 {{item.claimCount}}</small>
+<small v-else-if="item.error" class="err">{{item.error}}</small>
+<small v-else>{{itemStatusText(item.status)}}</small>
+</div>
+</div>
+<div class="batch-actions">
+<el-button v-if="batchRunning" size="small" @click="$emit('cancel-batch',batchStatus.batchCode)">取消剩余文件</el-button>
+<el-button v-else-if="batchStatus.failedCount" size="small" type="primary"
+  @click="$emit('retry-batch',batchStatus.batchCode)">重跑失败文件（{{batchStatus.failedCount}}）</el-button>
+</div>
+</el-card>
   <el-card shadow="never" class="panel-card source-card">
 <template #header>
 <b>原始资料 · {{sources.length}}</b>
@@ -52,7 +91,7 @@
 <el-tag size="small" type="success">{{source.status}}</el-tag>
 <el-button link type="primary" size="small" class="preview-btn" @click.stop="openPreview(source.id)">预览</el-button>
 </div>
-<div v-if="!sources.length" class="empty">raw/source 暂无资料</div>
+<div v-if="!sources.length" class="empty">原始内容/来源暂无资料</div>
 </div>
   </el-card>
 </div>
@@ -91,7 +130,7 @@
 </el-table-column>
 <el-table-column label="操作" width="150">
 <template #default="{row}">
-<el-button link type="primary" size="small" @click.stop="viewChunks(row)">Chunk</el-button>
+<el-button link type="primary" size="small" @click.stop="viewChunks(row)">文本分块</el-button>
 <el-button link type="warning" size="small" :disabled="!isRetryableDocument(row)||retryingId===row.id"
   :loading="retryingId===row.id" @click.stop="retryDocumentRow(row)">重跑</el-button>
 </template>
@@ -138,7 +177,7 @@
 <el-table-column label="版本" width="130">
 <template #default="{row}">
 <span>rev {{row.revision}}</span>
-<el-tag size="small" :type="row.status==='ACTIVE'?'success':'info'">{{row.status||'—'}}</el-tag>
+<el-tag size="small" :type="row.status==='ACTIVE'?'success':'info'">{{statusLabel(row.status)}}</el-tag>
 </template>
 </el-table-column>
 <el-table-column label="内容" min-width="180" show-overflow-tooltip>
@@ -177,9 +216,11 @@
 </template>
 <script setup lang="ts">
 import{computed,ref,watch}from'vue'
-import type{UploadFile,UploadInstance,UploadRawFile}from'element-plus'
+import { statusLabel } from '../types'
+import type{UploadFile,UploadInstance}from'element-plus'
 import type{
-  DocumentChunk, IngestionRun, IngestionRunDetail, KnowledgeDocument, KnowledgeSource, SourcePreview,
+  BatchIngestStatus, DocumentChunk, IngestionRun, IngestionRunDetail, KnowledgeDocument,
+  KnowledgeSource, SourcePreview,
 }from'../types'
 import{
   documentStatusLabel, documentStatusTag, isRetryableDocument, stageLabel,
@@ -198,9 +239,16 @@ const props=defineProps<{
   focus?:'sources'|'documents'|'ingestion';
   /** 上传复位令牌：一次摄入完成后由外壳自增，面板收到后清空已选文件。 */
   resetToken?:number;
+  /** 批量接入批次状态：多文件上传后在外壳轮询，这里逐文件展示结果。 */
+  batchStatus?:BatchIngestStatus|null;
+  /** 批次执行中：禁用「批量上传」按钮，避免同一批文件被提交两次。 */
+  batchRunning?:boolean;
 }>()
 const emit=defineEmits<{
   pick:[file:UploadFile]; remove:[]; upload:[]
+  /** 批量提交：面板只负责收集选中的原始 File，发文入哦 由外壳负责批次编排。 */
+  'upload-files':[files:File[]]
+  'cancel-batch':[batchCode:string]; 'retry-batch':[batchCode:string]
   'update:authority':[value:number]; 'update:permission-tags':[value:string]
   'select-run':[id:number]; preview:[id:number]
   /** 重跑结束：文档状态与运行日志都已变化，交由父组件重新拉取。 */
@@ -211,9 +259,9 @@ const emit=defineEmits<{
  * 用 order 调整区块前后，聚焦入口的区块置顶，其余按流程顺序排在后面。
  */
 const BLOCK_ORDER:Record<string,Record<string,number>>={
-  sources:{upload:1,ingestion:2,documents:3},
-  documents:{documents:1,upload:2,ingestion:3},
-  ingestion:{ingestion:1,upload:2,documents:3},
+  sources:{upload:1,batch:1,ingestion:2,documents:3},
+  documents:{documents:1,upload:2,batch:2,ingestion:3},
+  ingestion:{ingestion:1,upload:2,batch:2,documents:3},
 }
 const FOCUS_TEXT:Record<string,{eyebrow:string;title:string;hint:string}>={
   sources:{eyebrow:'INGESTION PIPELINE',title:'资料与摄入',
@@ -229,20 +277,74 @@ const focusTitle=computed(()=>FOCUS_TEXT[focusKey.value]?.title||FOCUS_TEXT.sour
 const focusHint=computed(()=>FOCUS_TEXT[focusKey.value]?.hint||FOCUS_TEXT.sources.hint)
 function blockOrder(block:string){return BLOCK_ORDER[focusKey.value]?.[block]??9}
 
-const uploadRef=ref<UploadInstance>(), pickedName=ref('')
-function onPick(file:UploadFile){pickedName.value=file?.name||'';emit('pick',file)}
-function onRemove(){pickedName.value='';emit('remove')}
-/** 已选一个文件时再次拖拽/选择：替换旧文件，而不是被 limit=1 拦下。 */
-function onExceed(files:File[]){
-  const next=files[0]
-  if(!next)return
-  const raw=Object.assign(next,{uid:Date.now()}) as UploadRawFile
-  uploadRef.value?.clearFiles()
-  uploadRef.value?.handleStart(raw)
-  pickedName.value=raw.name
-  emit('pick',{name:raw.name,raw} as unknown as UploadFile)
+const uploadRef=ref<UploadInstance>()
+/** 单次批量上限：与后端 knowledge.batch.max-files 一致，先此处挡住，避免提交后才被拒绝。 */
+const batchLimit=50
+/**
+ * 选中的原始 File 由面板持有（不再逐个上报 pick）：
+ * 多选的价值在于一次提交多个文件，外壳拿到完整清单才能走批次而非逐个串行等待。
+ */
+interface PickedEntry{
+  /** 原始 File：提交时交给外壳，接收方只认字节，不认 el-upload 的包装。 */
+  file:File; name:string; size:number
+  /** el-upload 内部条目：按同名记录下来，移除时才有东西交给它的删除流程。 */
+  entry:UploadFile
 }
-function clearPicked(){uploadRef.value?.clearFiles();pickedName.value='';emit('remove')}
+const pickedFiles=ref<PickedEntry[]>([])
+const exceedHint=ref('')
+const pickedNames=computed(()=>pickedFiles.value.map(item=>item.name))
+const pickedSizeText=computed(()=>{
+  const total=pickedFiles.value.reduce((sum,item)=>sum+(item.size||0),0)
+  return total>=1048576?(total/1048576).toFixed(1)+' MB':Math.max(1,Math.round(total/1024))+' KB'
+})
+function onPick(file:UploadFile){
+  const raw=file?.raw as File|undefined
+  if(!raw||!file)return
+  if(pickedFiles.value.length>=batchLimit){exceedHint.value=`单次最多 ${batchLimit} 个文件`;return}
+  if(pickedFiles.value.some(item=>item.name===raw.name&&item.size===raw.size))return
+  exceedHint.value=''
+  pickedFiles.value=[...pickedFiles.value,{file:raw,name:raw.name,size:raw.size,entry:file}]
+}
+/** el-upload 自己的删除也会走到这里：两边都从这里同步，清单不会和控件各说一套。 */
+function onRemove(file:UploadFile){removePicked(file?.raw?.name||file?.name)}
+function removeOne(name:string){
+  const picked=pickedFiles.value.find(item=>item.name===name)
+  // 走 el-upload 的删除流程：它会回调 onRemove 同步本组件的清单，不必再删一次。
+  if(picked)uploadRef.value?.handleRemove(picked.entry)
+  else removePicked(name)
+}
+function removePicked(name?:string){
+  if(!name)return
+  pickedFiles.value=pickedFiles.value.filter(item=>item.name!==name)
+  if(!pickedFiles.value.length)emit('remove')
+}
+function onExceed(){exceedHint.value=`单次最多 ${batchLimit} 个文件，超出部分未加入`}
+function submitPicked(){
+  if(!pickedFiles.value.length)return
+  emit('upload-files',pickedFiles.value.map(item=>item.file))
+}
+function clearPicked(){
+  uploadRef.value?.clearFiles()
+  pickedFiles.value=[]
+  exceedHint.value=''
+  emit('remove')
+}
+/** 批量进度文案/配色：状态由后端收敛成五种，这里只负责翻译成人读的话。 */
+const BATCH_STATUS:Record<string,{text:string;tag:string;progress:string}>={
+  RUNNING:{text:'执行中',tag:'',progress:''},
+  SUCCEEDED:{text:'全部成功',tag:'success',progress:'success'},
+  PARTIAL:{text:'部分成功',tag:'warning',progress:'warning'},
+  FAILED:{text:'全部失败',tag:'danger',progress:'exception'},
+  CANCELED:{text:'已取消',tag:'info',progress:'warning'},
+}
+const ITEM_STATUS:Record<string,string>={
+  QUEUED:'排队中',RUNNING:'解析中',SUCCEEDED:'成功',FAILED:'失败',CANCELED:'已跳过',
+}
+function itemStatusText(status?:string){return ITEM_STATUS[status||'']||status||'排队中'}
+const batchKey=computed(()=>props.batchStatus?.status||'')
+const batchText=computed(()=>BATCH_STATUS[batchKey.value]?.text||batchKey.value)
+const batchTagType=computed(()=>BATCH_STATUS[batchKey.value]?.tag||'info')
+const batchProgressStatus=computed(()=>BATCH_STATUS[batchKey.value]?.progress||'')
 /** 摄入完成后由父组件复位上传区：清空 el-upload 内部列表，否则名额被占用无法再选下一个文件。 */
 function resetUpload(){clearPicked()}
 defineExpose({resetUpload})
@@ -426,4 +528,66 @@ color:#94a3b8;
 font-size:12px}
 @media(max-width:950px){.ingest-box{grid-template-columns:1fr}
 }
+.picked-file{display:flex;
+flex-direction:column;
+gap:6px;
+border:1px dashed #cbd5e1;
+border-radius:8px;
+padding:8px 10px}
+.picked-head{display:flex;
+justify-content:space-between;
+align-items:center;
+font-size:12px;
+color:#64748b}
+.picked-list{max-height:132px;
+overflow:auto;
+display:flex;
+flex-direction:column;
+gap:4px}
+.picked-row{display:flex;
+justify-content:space-between;
+align-items:center;
+gap:8px;
+font-size:12px}
+.picked-name{overflow:hidden;
+text-overflow:ellipsis;
+white-space:nowrap}
+.exceed-hint{font-size:12px;
+color:#b45309}
+.batch-head{display:flex;
+justify-content:space-between;
+align-items:center}
+.batch-summary{display:flex;
+flex-wrap:wrap;
+gap:10px;
+font-size:12px;
+color:#64748b;
+margin:8px 0}
+.batch-code{color:#94a3b8}
+.batch-list{max-height:220px;
+overflow:auto;
+display:flex;
+flex-direction:column;
+gap:6px}
+.batch-row{display:flex;
+align-items:center;
+gap:8px;
+font-size:12px}
+.batch-dot{width:8px;
+height:8px;
+border-radius:50%;
+background:#cbd5e1;
+flex:none}
+.batch-dot.s-succeeded{background:#16a34a}
+.batch-dot.s-running{background:#2563eb}
+.batch-dot.s-failed{background:#dc2626}
+.batch-dot.s-canceled{background:#94a3b8}
+.batch-name{flex:1;
+overflow:hidden;
+text-overflow:ellipsis;
+white-space:nowrap}
+.batch-row .err{color:#dc2626}
+.batch-actions{display:flex;
+justify-content:flex-end;
+margin-top:10px}
 </style>

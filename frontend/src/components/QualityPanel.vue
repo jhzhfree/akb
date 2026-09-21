@@ -2,7 +2,7 @@
   <section class="kb-card p-5">
     <div class="kb-section-head">
       <div>
-        <small>KNOWLEDGE QUALITY</small>
+        <small>知识质量</small>
         <h3>知识质量</h3>
         <p class="kb-muted mt-1">
           可信覆盖率、引用准确率、检索命中、新鲜度。每个数字都能追到表里的数据；没有跑过的评测显示未测，不用 0 假装测过。
@@ -22,12 +22,12 @@
       <div v-if="data" class="space-y-5">
         <div class="grid grid-cols-2 gap-3 md:grid-cols-4">
           <div class="kb-metric">
-            <span>可信覆盖率 TKC</span>
+            <span>可信覆盖率（TKC）</span>
             <b>{{ percent(data.trustedCoverage.ratio) }}</b>
             <small>{{ data.trustedCoverage.approved }} / {{ data.trustedCoverage.total }} 已批准</small>
           </div>
           <div class="kb-metric">
-            <span>Citation Accuracy</span>
+            <span>引用准确率</span>
             <b>{{ data.citation.answerCount ? percent(data.citation.accuracy) : '未测' }}</b>
             <small>
               {{ data.citation.supportedClaimCount }} / {{ data.citation.claimCount }} 条声明有证据 ·
@@ -35,7 +35,7 @@
             </small>
           </div>
           <div class="kb-metric">
-            <span>Hit@5（最近评测）</span>
+            <span>召回命中率@5（最近评测）</span>
             <b>{{ data.retrieval?.hitAt5Rate == null ? '未测' : percent(data.retrieval.hitAt5Rate) }}</b>
             <small>
               {{ data.retrieval ? `${data.retrieval.datasetName || data.retrieval.runCode} · ${data.retrieval.caseCount} 题` : '到评测中心跑一次后自动带上' }}
@@ -52,29 +52,53 @@
         <div>
           <b class="text-xs font-medium text-ink-700">生产健康度</b>
           <div class="mt-2 grid grid-cols-2 gap-2 md:grid-cols-3">
-            <button class="health-tile" @click="go('create.judgment')">
+            <button
+              class="health-tile disabled:cursor-not-allowed disabled:opacity-60"
+              :disabled="!canGo('create.judgment')"
+              :title="canGo('create.judgment') ? '' : '当前角色无权访问该页面'"
+              @click="go('create.judgment')">
               <span>待审核知识</span>
               <b :class="data.health.pendingReview + data.health.pendingCardReview ? 'text-amber-600' : ''">
                 {{ data.health.pendingReview + data.health.pendingCardReview }}
               </b>
             </button>
-            <button class="health-tile" @click="go('create.judgment')">
+            <button
+              class="health-tile disabled:cursor-not-allowed disabled:opacity-60"
+              :disabled="!canGo('create.judgment')"
+              :title="canGo('create.judgment') ? '' : '当前角色无权访问该页面'"
+              @click="go('create.judgment')">
               <span>开放冲突</span>
               <b :class="data.health.openConflict ? 'text-rose-600' : ''">{{ data.health.openConflict }}</b>
             </button>
-            <button class="health-tile" @click="go('create.jobs')">
+            <button
+              class="health-tile disabled:cursor-not-allowed disabled:opacity-60"
+              :disabled="!canGo('create.jobs')"
+              :title="canGo('create.jobs') ? '' : '当前角色无权访问该页面'"
+              @click="go('create.jobs')">
               <span>解析失败任务</span>
               <b :class="data.health.failedIngestion ? 'text-rose-600' : ''">{{ data.health.failedIngestion }}</b>
             </button>
-            <button class="health-tile" @click="go('create.judgment')">
+            <button
+              class="health-tile disabled:cursor-not-allowed disabled:opacity-60"
+              :disabled="!canGo('create.judgment')"
+              :title="canGo('create.judgment') ? '' : '当前角色无权访问该页面'"
+              @click="go('create.judgment')">
               <span>不确定声明</span>
               <b :class="data.health.uncertainClaim ? 'text-amber-600' : ''">{{ data.health.uncertainClaim }}</b>
             </button>
-            <button class="health-tile" @click="go('create.judgment')">
+            <button
+              class="health-tile disabled:cursor-not-allowed disabled:opacity-60"
+              :disabled="!canGo('create.judgment')"
+              :title="canGo('create.judgment') ? '' : '当前角色无权访问该页面'"
+              @click="go('create.judgment')">
               <span>冲突中声明</span>
               <b :class="data.health.conflictedClaim ? 'text-rose-600' : ''">{{ data.health.conflictedClaim }}</b>
             </button>
-            <button class="health-tile" @click="go('search.benchmark')">
+            <button
+              class="health-tile disabled:cursor-not-allowed disabled:opacity-60"
+              :disabled="!canGo('search.benchmark')"
+              :title="canGo('search.benchmark') ? '' : '当前角色无权访问该页面'"
+              @click="go('search.benchmark')">
               <span>已过期声明</span>
               <b :class="data.freshness.expiredCount ? 'text-amber-600' : ''">{{ data.freshness.expiredCount }}</b>
             </button>
@@ -98,8 +122,8 @@
           <div>
             <b class="text-xs font-medium text-ink-700">答案侧质量</b>
             <div class="mt-2 grid grid-cols-2 gap-2">
-              <div class="kb-metric"><span>Faithfulness</span><b>{{ fixed(data.citation.faithfulness) }}</b></div>
-              <div class="kb-metric"><span>Completeness</span><b>{{ fixed(data.citation.completeness) }}</b></div>
+              <div class="kb-metric"><span>忠实度</span><b>{{ fixed(data.citation.faithfulness) }}</b></div>
+              <div class="kb-metric"><span>完整度</span><b>{{ fixed(data.citation.completeness) }}</b></div>
             </div>
             <p class="kb-muted mt-2">
               样本来自最近 {{ data.citation.answerCount }} 次带证据评估的回答；
@@ -122,9 +146,12 @@ import PanelState from './PanelState.vue'
 import { getQualityOverview } from '../api/knowledge'
 import { statusLabel } from '../types'
 import type { QualityOverview } from '../types'
+import { useShell } from '../shell'
 
 const props = defineProps<{ knowledgeBaseId:number }>()
 const emit = defineEmits<{ navigate:[view:string] }>()
+
+const shell = useShell()
 
 const data = ref<QualityOverview | null>(null)
 const loading = ref(false)
@@ -140,6 +167,8 @@ const barWidth = (total:number) => {
   return Math.round((total / max) * 100)
 }
 const go = (view:string) => emit('navigate', view)
+/** 健康度磁贴的下钻目标可能超出当前角色（裁决 / 生成任务 / Benchmark），无权时置灰。 */
+const canGo = (view:string) => shell.canNavigate(view)
 
 async function load() {
   loading.value = true

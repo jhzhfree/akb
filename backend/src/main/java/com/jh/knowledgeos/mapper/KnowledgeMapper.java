@@ -526,10 +526,40 @@ public interface KnowledgeMapper {
             @Param("aliasType") String aliasType,
             @Param("confidence") Double confidence);
 
-    int mergeEntityLinks(@Param("kb") Long kb, @Param("fromCode") String fromCode, @Param("toCode") String toCode);
+    /**
+     * Mention link ids to be re-pointed, ascending by primary key.
+     *
+     * <p>The ids are read before they are written, and in a fixed order, because moving a link with
+     * {@code UPDATE ... JOIN} lets the optimiser choose which rows it locks first. Two concurrent
+     * merges then take the same rows in opposite orders and neither can proceed; MySQL resolves it
+     * by killing one transaction. Walking the ids in ascending order gives every merge the same
+     * lock order, so batches running several documents at once interleave instead of colliding.</p>
+     */
+    List<Long> selectCardEntityLinkIds(@Param("kb") Long kb, @Param("fromCode") String fromCode);
 
-    int mergeClaimEntityLinks(
-            @Param("kb") Long kb, @Param("fromCode") String fromCode, @Param("toCode") String toCode);
+    int updateCardEntityLinkTargets(
+            @Param("ids") List<Long> ids, @Param("fromCode") String fromCode, @Param("toCode") String toCode);
+
+    List<Long> selectClaimEntityLinkIds(@Param("kb") Long kb, @Param("fromCode") String fromCode);
+
+    int updateClaimEntityLinkTargets(
+            @Param("ids") List<Long> ids, @Param("fromCode") String fromCode, @Param("toCode") String toCode);
+
+    /** Re-point the card→entity links of a retiring entity to its canonical successor. */
+    default void reassignCardEntityLinks(Long kb, String fromCode, String toCode) {
+        List<Long> ids = selectCardEntityLinkIds(kb, fromCode);
+        if (ids != null && !ids.isEmpty()) {
+            updateCardEntityLinkTargets(ids, fromCode, toCode);
+        }
+    }
+
+    /** Re-point the claim→entity links of a retiring entity to its canonical successor. */
+    default void reassignClaimEntityLinks(Long kb, String fromCode, String toCode) {
+        List<Long> ids = selectClaimEntityLinkIds(kb, fromCode);
+        if (ids != null && !ids.isEmpty()) {
+            updateClaimEntityLinkTargets(ids, fromCode, toCode);
+        }
+    }
 
     /** Retire an entity that was absorbed by a canonical one; graph queries only return live nodes. */
     int updateEntityStatus(@Param("kb") Long kb, @Param("code") String code, @Param("status") String status);
@@ -709,4 +739,186 @@ public interface KnowledgeMapper {
     /** The chunk before and after one chunk: reading a hit in its own context. */
     List<Map<String, Object>> listNeighborContentUnits(@Param("documentId") Long documentId,
             @Param("id") Long id);
+
+    // ---------------------------------------------------------------- task centre
+
+    int insertTaskRun(@Param("taskCode") String taskCode, @Param("kb") Long kb,
+            @Param("taskType") String taskType, @Param("taskName") String taskName,
+            @Param("targetType") String targetType, @Param("targetCode") String targetCode,
+            @Param("triggerType") String triggerType, @Param("triggeredBy") String triggeredBy,
+            @Param("maxAttempts") int maxAttempts, @Param("payloadJson") String payloadJson);
+
+    int updateTaskRun(@Param("taskCode") String taskCode, @Param("status") String status,
+            @Param("stage") String stage, @Param("progress") int progress,
+            @Param("errorMessage") String errorMessage, @Param("resultJson") String resultJson);
+
+    Map<String, Object> getTaskRun(@Param("taskCode") String taskCode);
+
+    List<Map<String, Object>> listTaskRuns(@Param("kb") Long kb, @Param("status") String status,
+            @Param("taskType") String taskType, @Param("triggerType") String triggerType,
+            @Param("limit") int limit);
+
+    /** Task counts grouped by status: the four tiles of the task centre. */
+    List<Map<String, Object>> taskStats(@Param("kb") Long kb);
+
+    /** Tasks in one of the given outcomes since a point in time, for alert metrics. */
+    int countTaskOutcome(@Param("kb") Long kb, @Param("since") String since,
+            @Param("statuses") List<String> statuses);
+
+    int countDocumentFailed(@Param("kb") Long kb);
+
+    int countOutboxDead(@Param("kb") Long kb);
+
+    // ------------------------------------------------------------------- alerting
+
+    int insertAlertRule(@Param("ruleCode") String ruleCode, @Param("kb") Long kb,
+            @Param("name") String name, @Param("metric") String metric,
+            @Param("severity") String severity, @Param("threshold") double threshold,
+            @Param("windowMinutes") int windowMinutes, @Param("channels") String channels,
+            @Param("createdBy") String createdBy);
+
+    int updateAlertRule(@Param("ruleCode") String ruleCode, @Param("name") String name,
+            @Param("metric") String metric, @Param("severity") String severity,
+            @Param("threshold") double threshold, @Param("windowMinutes") int windowMinutes,
+            @Param("channels") String channels, @Param("enabled") boolean enabled);
+
+    int deleteAlertRule(@Param("ruleCode") String ruleCode);
+
+    Map<String, Object> getAlertRule(@Param("ruleCode") String ruleCode);
+
+    /** Rules that apply to a knowledge base: its own plus the platform wide ones. */
+    List<Map<String, Object>> listAlertRules(@Param("kb") Long kb);
+
+    /** Raise or re-raise: a repeated condition grows the occurrence count in place. */
+    int upsertAlertEvent(@Param("alertCode") String alertCode, @Param("ruleCode") String ruleCode,
+            @Param("kb") Long kb, @Param("severity") String severity, @Param("title") String title,
+            @Param("detailJson") String detailJson, @Param("metricValue") double metricValue,
+            @Param("dedupKey") String dedupKey);
+
+    Map<String, Object> getAlertEvent(@Param("alertCode") String alertCode);
+
+    Map<String, Object> getAlertEventByDedup(@Param("dedupKey") String dedupKey);
+
+    List<Map<String, Object>> listAlertEvents(@Param("kb") Long kb, @Param("status") String status,
+            @Param("severity") String severity, @Param("limit") int limit);
+
+    List<Map<String, Object>> alertStats(@Param("kb") Long kb);
+
+    int updateAlertStatus(@Param("alertCode") String alertCode, @Param("status") String status,
+            @Param("operator") String operator, @Param("note") String note);
+
+    /** Clear an alert when the metric recovered: the condition no longer holds. */
+    int resolveAlertByDedup(@Param("dedupKey") String dedupKey, @Param("note") String note);
+
+    int countOpenAlerts(@Param("kb") Long kb);
+
+    // ---------------------------------------------------------------- derivation
+
+    int insertDerivationRule(@Param("ruleCode") String ruleCode, @Param("kb") Long kb,
+            @Param("name") String name, @Param("derivationType") String derivationType,
+            @Param("scheduleType") String scheduleType, @Param("cronExpr") String cronExpr,
+            @Param("nextFireAt") String nextFireAt, @Param("sourceScopeJson") String sourceScopeJson,
+            @Param("definitionJson") String definitionJson, @Param("algorithmVersion") String algorithmVersion,
+            @Param("createdBy") String createdBy);
+
+    int updateDerivationRule(@Param("ruleCode") String ruleCode, @Param("name") String name,
+            @Param("derivationType") String derivationType, @Param("scheduleType") String scheduleType,
+            @Param("cronExpr") String cronExpr, @Param("nextFireAt") String nextFireAt,
+            @Param("sourceScopeJson") String sourceScopeJson, @Param("definitionJson") String definitionJson,
+            @Param("algorithmVersion") String algorithmVersion, @Param("enabled") boolean enabled);
+
+    int updateDerivationRuleState(@Param("ruleCode") String ruleCode, @Param("status") String status,
+            @Param("lastFireAt") String lastFireAt, @Param("nextFireAt") String nextFireAt,
+            @Param("lastError") String lastError);
+
+    int deleteDerivationRule(@Param("ruleCode") String ruleCode);
+
+    Map<String, Object> getDerivationRule(@Param("ruleCode") String ruleCode);
+
+    List<Map<String, Object>> listDerivationRules(@Param("kb") Long kb);
+
+    /** Scheduled rules whose next fire time has arrived. */
+    List<Map<String, Object>> listDueDerivationRules(@Param("now") String now);
+
+    int insertDerivedCandidate(@Param("candidateCode") String candidateCode, @Param("kb") Long kb,
+            @Param("ruleCode") String ruleCode, @Param("derivationType") String derivationType,
+            @Param("algorithmVersion") String algorithmVersion, @Param("title") String title,
+            @Param("content") String content, @Param("confidence") double confidence,
+            @Param("baseAssertionCodes") String baseAssertionCodes, @Param("graphPath") String graphPath,
+            @Param("evidenceJson") String evidenceJson, @Param("derivedFromJson") String derivedFromJson,
+            @Param("permissionTags") String permissionTags, @Param("authorityScore") double authorityScore,
+            @Param("contentHash") String contentHash, @Param("createdBy") String createdBy);
+
+    /** Same rule, same content: refresh the derivation instead of duplicating it. */
+    int touchDerivedCandidate(@Param("ruleCode") String ruleCode, @Param("contentHash") String contentHash,
+            @Param("confidence") double confidence, @Param("status") String status);
+
+    Map<String, Object> getDerivedCandidate(@Param("candidateCode") String candidateCode);
+
+    Map<String, Object> getDerivedCandidateByHash(@Param("ruleCode") String ruleCode,
+            @Param("contentHash") String contentHash);
+
+    List<Map<String, Object>> listDerivedCandidates(@Param("kb") Long kb, @Param("status") String status,
+            @Param("ruleCode") String ruleCode, @Param("limit") int limit);
+
+    List<Map<String, Object>> derivedCandidateStats(@Param("kb") Long kb);
+
+    int updateDerivedCandidateStatus(@Param("candidateCode") String candidateCode,
+            @Param("status") String status, @Param("staleReason") String staleReason);
+
+    /** Candidates whose base assertions changed: they are stale, not wrong forever. */
+    List<Map<String, Object>> listCandidatesByBaseAssertion(@Param("kb") Long kb,
+            @Param("codes") List<String> codes);
+
+    int insertDerivationRun(@Param("runCode") String runCode, @Param("kb") Long kb,
+            @Param("ruleCode") String ruleCode, @Param("triggerType") String triggerType);
+
+    int updateDerivationRun(@Param("runCode") String runCode, @Param("status") String status,
+            @Param("scannedCount") int scannedCount, @Param("candidateCount") int candidateCount,
+            @Param("staleCount") int staleCount, @Param("errorMessage") String errorMessage,
+            @Param("finishedTime") String finishedTime);
+
+    List<Map<String, Object>> listDerivationRuns(@Param("kb") Long kb, @Param("ruleCode") String ruleCode,
+            @Param("limit") int limit);
+
+    /** Two-hop entity paths: the raw material of a GRAPH_PATH derivation. */
+    List<Map<String, Object>> listGraphPathPairs(@Param("kb") Long kb, @Param("firstType") String firstType,
+            @Param("secondType") String secondType, @Param("minConfidence") double minConfidence,
+            @Param("limit") int limit);
+
+    /** Assertions a TEMPLATE derivation can build on. */
+    List<Map<String, Object>> listDerivationSourceClaims(@Param("kb") Long kb,
+            @Param("minConfidence") double minConfidence, @Param("limit") int limit);
+
+    // ------------------------------------------------------------ knowledge schema
+
+    int upsertSchemaType(@Param("kb") Long kb, @Param("kind") String kind, @Param("typeCode") String typeCode,
+            @Param("label") String label, @Param("description") String description,
+            @Param("propertiesJson") String propertiesJson, @Param("status") String status,
+            @Param("updatedBy") String updatedBy);
+
+    int deleteSchemaType(@Param("kb") Long kb, @Param("kind") String kind, @Param("typeCode") String typeCode);
+
+    Map<String, Object> getSchemaType(@Param("kb") Long kb, @Param("kind") String kind,
+            @Param("typeCode") String typeCode);
+
+    List<Map<String, Object>> listSchemaTypes(@Param("kb") Long kb, @Param("kind") String kind);
+
+    int insertSchemaRelease(@Param("releaseCode") String releaseCode, @Param("kb") Long kb,
+            @Param("version") String version, @Param("state") String state,
+            @Param("definitionJson") String definitionJson, @Param("validationJson") String validationJson,
+            @Param("checksum") String checksum, @Param("publishedBy") String publishedBy);
+
+    List<Map<String, Object>> listSchemaReleases(@Param("kb") Long kb);
+
+    Map<String, Object> getPublishedSchemaRelease(@Param("kb") Long kb);
+
+    int retireSchemaReleases(@Param("kb") Long kb);
+
+    /** How the data actually uses entity / relation types: the schema conformance check. */
+    List<Map<String, Object>> listEntityTypeUsage(@Param("kb") Long kb);
+
+    List<Map<String, Object>> listRelationTypeUsage(@Param("kb") Long kb);
+
+    List<Map<String, Object>> listKnowledgeTypeUsage(@Param("kb") Long kb);
 }

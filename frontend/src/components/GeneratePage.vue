@@ -1,11 +1,10 @@
 <template>
   <!-- 设计 §4：知识生成 = 建知识。四个任务卡是主入口，下方 Tab 组织完整工作区。 -->
   <div class="gen-hero">
-    <button v-for="action in actions" :key="action.key" class="gen-action" :disabled="action.planned"
+    <button v-for="action in actions" :key="action.key" class="gen-action"
       @click="$emit('select',action.key)">
       <b>{{ action.label }}</b>
       <small>{{ action.desc }}</small>
-      <em v-if="action.planned">规划中</em>
     </button>
   </div>
 
@@ -43,8 +42,11 @@
     :ingest-live="ingestLive" :ingest-stage="ingestStage" :ingest-message="ingestMessage"
     :preview="preview" :preview-loading="previewLoading" :preview-error="previewError" :preview-id="previewId"
     :reset-token="resetToken"
+    :batch-status="batchStatus" :batch-running="batchRunning"
     @preview="shell.previewSource"
     @pick="shell.pick" @remove="shell.remove" @upload="shell.upload"
+    @upload-files="shell.uploadFiles"
+    @cancel-batch="shell.cancelBatch" @retry-batch="shell.retryBatch"
     @select-run="shell.selectRun" @reloaded="shell.reloadAfterRetry" />
 
   <!-- 设计 §4.4：裁决工作台同时承载冲突与待审核，左列表 + 中对比 + 右 Evidence。 -->
@@ -64,22 +66,25 @@
     @adjudicate-conflict="(id,decision,comment)=>shell.adjudicateConflict(id,decision,comment)"
     @open-evidence="shell.openEvidence" />
 
-  <PanelState v-else :empty="true" empty-text="知识衍生：规划中"
-    empty-hint="信息架构已保留该位置，能力落地后会在此开放" />
+  <DerivationPanel v-else-if="active==='create.derive'" :knowledge-base-id="knowledgeBaseId" />
+
+  <PanelState v-else :empty="true" empty-text="请选择一个生成动作"
+    empty-hint="左侧动作卡片进入对应工作台" />
 </template>
 <script setup lang="ts">
 import { computed } from 'vue'
 import type {
-  AssessmentRow, ConflictDetail, ConflictRow, IngestionRun, IngestionRunDetail, KnowledgeDocument,
-  KnowledgeSource, ReviewRow, SourcePreview,
+  AssessmentRow, BatchIngestStatus, ConflictDetail, ConflictRow, IngestionRun, IngestionRunDetail,
+  KnowledgeDocument, KnowledgeSource, ReviewRow, SourcePreview,
 } from '../types'
-import { NAV_SECTIONS } from '../navigation'
 import { useShell } from '../shell'
+import { PERM } from '../permissions'
 import ModuleTabs from './ModuleTabs.vue'
 import GenerateHomePanel from './GenerateHomePanel.vue'
 import DataCenterPanel from './DataCenterPanel.vue'
 import ReviewPanel from './ReviewPanel.vue'
 import PanelState from './PanelState.vue'
+import DerivationPanel from './DerivationPanel.vue'
 
 const props = defineProps<{
   active: string
@@ -111,6 +116,10 @@ const props = defineProps<{
   previewId: number | null
   /** 上传复位令牌：由外壳自增后透传给摄入面板。 */
   resetToken: number
+  /** 批量接入批次状态：多文件上传的进度与逐文件结果在外壳轮询后下发。 */
+  batchStatus: BatchIngestStatus | null
+  /** 批次是否仍在执行：用于禁用「批量上传」按钮，避免重复提交同一批文件。 */
+  batchRunning: boolean
 }>()
 defineEmits<{
   select: [key: string]
@@ -119,14 +128,17 @@ defineEmits<{
 }>()
 
 const shell = useShell()
-const tabs = NAV_SECTIONS[1].tabs
-/** 四个任务卡：文档导入 / 连接数据源 / 知识裁决 / 知识衍生（设计 §4）。 */
-const actions = [
-  { key: 'create.import', label: '导入文档', desc: '文件 / URL / 文本' },
-  { key: 'create.connector', label: '连接数据源', desc: '数据库 / API / 对象存储 / SaaS' },
-  { key: 'create.judgment', label: '知识裁决', desc: '待审核 / 冲突 / Evidence' },
-  { key: 'create.derive', label: '知识衍生', desc: '规则 / 计算 / Graph / AI', planned: true },
-]
+const tabs = computed(() => shell.tabs('create'))
+/**
+ * 生成动作卡：按角色裁剪——运营员只看到导入文档，审核员额外看到裁决，
+ * 只有知识系统管理员才看到连接器与衍生（设计 §4 + 角色权限矩阵）。
+ */
+const actions = computed(() => [
+  { key: 'create.import', label: '导入文档', desc: '文件 / URL / 文本', permission: PERM.GENERATE_IMPORT },
+  { key: 'create.connector', label: '连接数据源', desc: '数据库 / API / 对象存储 / SaaS', permission: PERM.GENERATE_CONNECTOR },
+  { key: 'create.judgment', label: '知识裁决', desc: '待审核 / 冲突 / Evidence', permission: PERM.GENERATE_JUDGE },
+  { key: 'create.derive', label: '知识衍生', desc: '规则 / 计算 / Graph / AI', permission: PERM.GENERATE_DERIVE },
+].filter(action => shell.can(action.permission)))
 const badges = computed<Record<string, number | string>>(() => ({
   'create.judgment': props.pendingReviews.length + props.conflicts.length || '',
 }))
@@ -140,7 +152,8 @@ const dcFocus = computed<'sources' | 'documents' | 'ingestion' | ''>(() => {
 </script>
 <style scoped>
 /* 四个任务入口卡：知识生成页的主操作区，与原型 hero 卡片一致。 */
-.gen-hero{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+/* 动作卡数量随角色变化，用 auto-fit 保证 1~4 张卡都排得下。 */
+.gen-hero{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}
 .gen-action{
   position:relative;padding:16px 18px;text-align:left;background:#fff;
   border:1px solid #e2e9f2;border-radius:11px;box-shadow:0 2px 9px #1d35570a;cursor:pointer}

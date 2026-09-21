@@ -2,7 +2,7 @@
   <section class="kb-page">
     <header class="kb-section-head">
       <div>
-        <div class="kb-eyebrow">KNOWLEDGE GENERATION</div>
+        <div class="kb-eyebrow">知识生成</div>
         <h1 class="kb-title mt-1">生成概览</h1>
         <p class="kb-muted mt-1">
           从原始数据到可信知识资产：拖入资料即可走完「接入 → 解析 → 抽取 → 索引」，右侧实时跟踪运行日志。
@@ -19,22 +19,19 @@
         v-for="task in tasks"
         :key="task.key"
         class="gen-task"
-        :class="{planned:task.planned}"
-        :disabled="task.planned"
-        :title="task.planned?'规划中：该能力尚未实现':task.desc"
+        :title="task.desc"
         @click="$emit('navigate',task.key)">
         <span class="gen-task-ic">{{ task.icon }}</span>
         <b>{{ task.label }}</b>
         <small>{{ task.desc }}</small>
         <em v-if="task.badge" class="gen-task-badge">{{ task.badge }}</em>
-        <em v-else-if="task.planned" class="gen-task-planned">规划</em>
       </button>
     </div>
 
     <!-- §4 生成概览：四个数字说明「今天进来多少、正在跑多少、多少卡在人工环节」。 -->
     <div class="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
       <div class="kb-metric"><span>今日导入</span><b>{{ todayRuns }}</b><small class="kb-muted">已接收的资料运行</small></div>
-      <div class="kb-metric"><span>运行中</span><b>{{ runningRuns }}</b><small class="kb-muted">Pipeline 未结束</small></div>
+      <div class="kb-metric"><span>运行中</span><b>{{ runningRuns }}</b><small class="kb-muted">流水线未结束</small></div>
       <div class="kb-metric"><span>待裁决</span><b>{{ pendingTotal }}</b><small class="kb-muted">待审核 + 冲突</small></div>
       <div class="kb-metric"><span>候选衍生</span><b>—</b><small class="kb-muted">衍生能力规划中</small></div>
     </div>
@@ -45,7 +42,7 @@
       <article class="kb-card p-3">
         <div class="kb-card-head">
           <b class="text-sm">拖入资料</b>
-          <span class="kb-muted">Source 保存后即入摄入流水线</span>
+          <span class="kb-muted">来源保存后即进入摄入流水线</span>
         </div>
         <!-- 关闭内置文件列表：已选文件由下方 .picked-file 一行呈现并提供「移除」，
              避免同一文件在拖拽区下方再叠一层列表，让上传区保持紧凑。 -->
@@ -131,7 +128,7 @@
         <div class="flex items-center gap-2">
           <span class="kb-muted">{{ currentHint }}</span>
           <button class="kb-btn-outline" :class="{'kb-btn-primary':tool===''}" @click="tool=''">文档</button>
-          <button class="kb-btn-outline" :class="{'kb-btn-primary':tool==='chunk'}" @click="tool='chunk'">Chunk</button>
+          <button class="kb-btn-outline" :class="{'kb-btn-primary':tool==='chunk'}" @click="tool='chunk'">文本分块</button>
           <button class="kb-btn-outline" :class="{'kb-btn-primary':tool==='entity'}" @click="tool='entity'">实体归一</button>
         </div>
       </div>
@@ -157,7 +154,7 @@
             </el-table-column>
             <el-table-column label="操作" width="130">
               <template #default="{ row }">
-                <el-button link type="primary" size="small" @click="tool='chunk'">Chunk</el-button>
+                <el-button link type="primary" size="small" @click="tool='chunk'">文本分块</el-button>
                 <el-button
                   link type="warning" size="small"
                   :disabled="!isRetryableDocument(row)||retryingId===row.id"
@@ -215,6 +212,8 @@ import type {
 import { documentStatusLabel, documentStatusTag, isRetryableDocument, stageLabel } from '../types'
 import { retryDocument, unwrap } from '../api/knowledge'
 import { confirmAction, notifyError, notifySuccess } from '../utils/feedback'
+import { useShell } from '../shell'
+import { PERM } from '../permissions'
 import IngestionLogPanel from './IngestionLogPanel.vue'
 import ChunkExplorerPanel from './ChunkExplorerPanel.vue'
 import EntityGovernancePanel from './EntityGovernancePanel.vue'
@@ -238,6 +237,7 @@ const props = defineProps<{
   /** 上传复位令牌：一次摄入完成后由外壳自增，面板收到后清空已选文件。 */
   resetToken?:number
 }>()
+const shell = useShell()
 const emit = defineEmits<{
   navigate:[key:string]
   pick:[file:UploadFile]
@@ -266,12 +266,15 @@ const currentTitle = computed(() => VIEWS[tool.value].title)
 const currentHint = computed(() => VIEWS[tool.value].hint)
 /** §4 四个任务入口：文档导入 / 连接器 / 知识裁决 / 知识衍生，替代原有的左侧二级菜单。 */
 const tasks = computed(() => [
-  { key:'create.import', icon:'📄', label:'文档导入', desc:'文件 / URL / 文本走完整条摄入流水线', badge:'' },
-  { key:'create.connector', icon:'⇪', label:'连接器', desc:'外部系统的增量同步与字段权限映射', badge:'' },
+  { key:'create.import', icon:'📄', label:'文档导入', desc:'文件 / URL / 文本走完整条摄入流水线', badge:'',
+    permission: PERM.GENERATE_IMPORT },
+  { key:'create.connector', icon:'⇪', label:'连接器', desc:'外部系统的增量同步与字段权限映射', badge:'',
+    permission: PERM.GENERATE_CONNECTOR },
   { key:'create.judgment', icon:'⚖', label:'知识裁决', desc:'冲突与待审核的采用 / 拒绝判定',
-    badge: props.pendingReviews.length + props.conflicts.length || '' },
-  { key:'create.derive', icon:'⑃', label:'知识衍生', desc:'由基础断言推导衍生知识', badge:'', planned:true },
-])
+    badge: props.pendingReviews.length + props.conflicts.length || '', permission: PERM.GENERATE_JUDGE },
+  { key:'create.derive', icon:'⑃', label:'知识衍生', desc:'由基础断言推导衍生知识', badge:'',
+    permission: PERM.GENERATE_DERIVE },
+].filter(task => shell.can(task.permission)))
 /** 概览四数：只统计本次已加载的运行数据，缺失字段按 0 处理，不臆造。 */
 const todayRuns = computed(() => {
   const today = new Date().toISOString().slice(0, 10)

@@ -2,17 +2,17 @@
 <el-drawer :model-value="visible" size="min(1180px,97vw)" :with-header="false" @close="$emit('close')">
   <div class="min-h-full bg-ink-50 p-5 md:p-7">
     <header class="mb-5 flex items-start justify-between gap-4">
-      <div><div class="kb-eyebrow">QUERY OBSERVABILITY</div><h2 class="kb-title mt-1">检索链路 Trace</h2>
+      <div><div class="kb-eyebrow">查询链路观测</div><h2 class="kb-title mt-1">检索链路追踪</h2>
         <p class="kb-muted mt-1">{{ trace?.originalQuery || '正在加载查询链路…' }}</p></div>
       <span v-if="trace?.latencyMs" class="kb-badge">{{ trace.latencyMs }} ms</span>
     </header>
-    <div v-if="loading" class="kb-card p-12 text-center text-sm text-ink-400">正在装配 Query Trace...</div>
+    <div v-if="loading" class="kb-card p-12 text-center text-sm text-ink-400">正在装配检索链路追踪…</div>
     <template v-else-if="trace">
       <div class="mb-4 grid gap-3 md:grid-cols-4">
-        <div class="kb-metric"><span>Query ID</span><b class="truncate text-sm">{{ trace.queryId }}</b></div>
-        <div class="kb-metric"><span>Model</span><b class="text-sm">{{ trace.modelName || '—' }}</b></div>
-        <div class="kb-metric"><span>Latency</span><b>{{ trace.latencyMs || 0 }} ms</b></div>
-        <div class="kb-metric"><span>Status</span><b>{{ trace.errorCode || 'SUCCESS' }}</b></div>
+        <div class="kb-metric"><span>查询标识</span><b class="truncate text-sm">{{ trace.queryId }}</b></div>
+        <div class="kb-metric"><span>模型</span><b class="text-sm">{{ trace.modelName || '—' }}</b></div>
+        <div class="kb-metric"><span>耗时</span><b>{{ trace.latencyMs || 0 }} ms</b></div>
+        <div class="kb-metric"><span>状态</span><b>{{ trace.errorCode || '成功' }}</b></div>
       </div>
       <!-- 设计 §12.5：9 段时间轴优先取后端解析好的 stages，旧 Trace 回退解析 traceJson。 -->
       <TraceTimeline class="mb-4" :stages="stages"/>
@@ -26,7 +26,7 @@
       <AnswerQualificationPanel class="mb-4" :value="qualification"/>
       <RecallChannelExplorer class="mb-4" :channels="recallChannels" @open-candidate="$emit('open-candidate',$event)"/>
       <section class="kb-card mb-4 p-4">
-        <div class="kb-section-head"><div><small>CHANNEL RECALL</small><h3>多路召回分布</h3></div></div>
+        <div class="kb-section-head"><div><small>召回通道</small><h3>多路召回分布</h3></div></div>
         <div class="grid gap-2 sm:grid-cols-5">
           <div v-for="(count,name) in recallCounts" :key="name" class="rounded-lg border border-ink-100 bg-white p-3">
             <div class="text-[10px] font-semibold uppercase text-ink-400">{{ name }}</div>
@@ -35,21 +35,21 @@
         </div>
       </section>
       <el-collapse>
-        <el-collapse-item title="查看原始 Trace JSON">
+        <el-collapse-item title="查看原始链路报文">
           <div class="grid gap-4 lg:grid-cols-2">
-            <TraceStage title="Query Rewrite" :value="trace.rewrittenQueriesJson"/>
-            <TraceStage title="Router Decision" :value="trace.routerDecisionJson"/>
-            <TraceStage title="Multi Recall" :value="trace.retrievalJson"/>
-            <TraceStage title="Fusion / RRF" :value="trace.fusionJson"/>
+            <TraceStage title="查询改写" :value="trace.rewrittenQueriesJson"/>
+            <TraceStage title="路由决策" :value="trace.routerDecisionJson"/>
+            <TraceStage title="多路召回" :value="trace.retrievalJson"/>
+            <TraceStage title="融合排序 / RRF" :value="trace.fusionJson"/>
             <TraceStage title="Reranker" :value="trace.rerankJson"/>
-            <TraceStage title="Context Assembly" :value="trace.selectedContextJson"/>
+            <TraceStage title="上下文组装" :value="trace.selectedContextJson"/>
             <TraceStage title="Citations" :value="trace.citationsJson"/>
-            <TraceStage title="Token / Runtime" :value="trace.tokenUsageJson"/>
+            <TraceStage title="Token 消耗 / 运行时长" :value="trace.tokenUsageJson"/>
           </div>
         </el-collapse-item>
       </el-collapse>
       <section class="kb-card mt-4 p-5">
-        <div class="kb-section-head"><div><small>FINAL ANSWER</small><h3>最终回答</h3></div></div>
+        <div class="kb-section-head"><div><small>生成结果</small><h3>最终回答</h3></div></div>
         <div class="whitespace-pre-wrap text-sm leading-7 text-ink-700">{{ trace.answer || '—' }}</div>
       </section>
     </template>

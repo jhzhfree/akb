@@ -31,7 +31,7 @@
 <small>{{formatTime(event.createdTime)}}</small>
 </div>
     </div>
-    <div v-if="!detail" class="event-empty">选择一次运行查看 Source → Parse → Persist → Extract → Index 的全过程</div>
+    <div v-if="!detail" class="event-empty">选择一次运行查看 接入 → 解析 → 入库 → 抽取 → 建索引 的全过程</div>
   </div>
 </div>
 </template>

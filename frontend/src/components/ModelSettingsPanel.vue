@@ -1,7 +1,7 @@
 <template>
   <section class="kb-card p-4">
     <div class="kb-section-head">
-      <div><small>MODEL CONFIGURATION</small><h3>模型设置</h3></div>
+      <div><small>模型配置</small><h3>模型设置</h3></div>
       <div class="flex items-center gap-2">
         <span class="kb-badge bg-slate-100 text-ink-600">来源：{{ settings?.source==='file'?'配置文件':'环境变量' }}</span>
         <el-button size="small" @click="load">刷新</el-button>
@@ -19,7 +19,7 @@
           <el-button size="small" :loading="testing==='llm'" @click="test('llm')">测试连通</el-button>
         </div>
         <div class="grid gap-3 sm:grid-cols-2">
-          <label class="field"><span>Provider</span>
+          <label class="field"><span>服务提供方</span>
             <el-select v-model="settings.llm.provider" size="small" @change="onProvider('llm')">
               <el-option label="OpenAI 兼容（DeepSeek / 智谱 / Kimi …）" value="openai"/>
               <el-option label="本地 Ollama" value="ollama"/>
@@ -29,17 +29,17 @@
           <label class="field"><span>模型名称</span>
             <el-input v-model="settings.llm.model" size="small" placeholder="deepseek-flash / qwen2.5:7b"/>
           </label>
-          <label class="field"><span>Base URL</span>
+          <label class="field"><span>接口地址</span>
             <el-input v-model="settings.llm.base_url" size="small" placeholder="https://api.deepseek.com"/>
           </label>
-          <label class="field"><span>API Key</span>
+          <label class="field"><span>API 密钥</span>
             <el-input v-model="settings.llm.api_key" size="small" type="password" show-password
               :placeholder="settings.llm.api_key_set?'已配置（留空保持原值）':'sk-...'"/>
           </label>
-          <label class="field"><span>Temperature</span>
+          <label class="field"><span>采样温度</span>
             <el-input-number v-model="settings.llm.temperature" size="small" :min="0" :max="2" :step="0.1" class="!w-full"/>
           </label>
-          <label class="field"><span>Max Tokens</span>
+          <label class="field"><span>最大生成长度</span>
             <el-input-number v-model="settings.llm.max_tokens" size="small" :min="1" :max="32768" :step="256" class="!w-full"/>
           </label>
           <label class="field"><span>超时（秒）</span>
@@ -58,7 +58,7 @@
           启用外部向量模型（关闭后退化为本地哈希向量）
         </label>
         <div class="grid gap-3 sm:grid-cols-2">
-          <label class="field"><span>Provider</span>
+          <label class="field"><span>服务提供方</span>
             <el-select v-model="settings.embedding.provider" size="small" @change="onProvider('embedding')">
               <el-option label="OpenAI 兼容（智谱 embedding-3 …）" value="openai"/>
               <el-option label="本地 Ollama" value="ollama"/>
@@ -68,10 +68,10 @@
           <label class="field"><span>模型名称</span>
             <el-input v-model="settings.embedding.model" size="small" placeholder="embedding-3 / nomic-embed-text"/>
           </label>
-          <label class="field"><span>Base URL</span>
+          <label class="field"><span>接口地址</span>
             <el-input v-model="settings.embedding.base_url" size="small" placeholder="https://open.bigmodel.cn/api/paas/v4"/>
           </label>
-          <label class="field"><span>API Key</span>
+          <label class="field"><span>API 密钥</span>
             <el-input v-model="settings.embedding.api_key" size="small" type="password" show-password
               :placeholder="settings.embedding.api_key_set?'已配置（留空保持原值）':'sk-...'"/>
           </label>

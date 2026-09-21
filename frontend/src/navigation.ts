@@ -14,6 +14,8 @@
  * IA 中当前版本尚未实现的入口保留位置并标记 planned：不隐藏规划能力，
  * 但也不提供任何假数据页面，点击时给出明确提示。
  */
+import { PERM } from './permissions'
+
 export interface NavLeaf {
   /** 视图 key，同时作为本地存储的当前页面标识 */
   key: string
@@ -27,7 +29,9 @@ export interface NavLeaf {
   badge?: 'pendingReview' | 'openConflict'
   /** 调试类页面：配置区 + 结果区 + Trace 抽屉 */
   debug?: boolean
-  /** 仅系统管理员可见 */
+  /** 访问该入口所需的权限码，缺省表示登录即可见 */
+  permission?: string
+  /** 仅系统管理员可见（等价于 system:user 权限，保留以兼容旧判断） */
   adminOnly?: boolean
 }
 
@@ -48,65 +52,80 @@ export const NAV_SECTIONS: NavSection[] = [
     key: 'workbench', label: '知识工作台', icon: '▣', scoped: false,
     desc: '一个页面掌握企业知识资产、生命周期、治理状态与待办',
     tabs: [
-      { key: 'workbench', label: '工作台', icon: '▣' },
-      { key: 'workbench.assets', label: '资产浏览', icon: '🗃' },
-      { key: 'workbench.version', label: '版本', icon: '⧉' },
-      { key: 'workbench.quality', label: '质量', icon: '◎' },
+      { key: 'workbench', label: '工作台', icon: '▣', permission: PERM.WORKBENCH_VIEW },
+      { key: 'workbench.assets', label: '资产浏览', icon: '🗃', permission: PERM.WORKBENCH_ASSET },
+      { key: 'workbench.version', label: '版本', icon: '⧉', permission: PERM.WORKBENCH_VIEW },
+      { key: 'workbench.quality', label: '质量', icon: '◎', permission: PERM.WORKBENCH_VIEW },
     ],
   },
   {
     key: 'create', label: '知识生成', icon: '⚒', scoped: true,
     desc: '文档、连接器、生成任务、裁决与衍生集中在一个知识生成工作区',
     tabs: [
-      { key: 'create.overview', label: '生成概览', icon: '⚒' },
-      { key: 'create.import', label: '文档导入', icon: '📄', focus: 'documents' },
-      { key: 'create.connector', label: '连接器', icon: '⇪', focus: 'sources' },
-      { key: 'create.jobs', label: '生成任务', icon: '⏳', focus: 'ingestion' },
-      { key: 'create.judgment', label: '知识裁决', icon: '⚖', badge: 'openConflict', focus: 'judgment' },
-      { key: 'create.derive', label: '知识衍生', icon: '⑃', planned: true },
+      { key: 'create.overview', label: '生成概览', icon: '⚒', permission: PERM.GENERATE_IMPORT },
+      { key: 'create.import', label: '文档导入', icon: '📄', focus: 'documents', permission: PERM.GENERATE_IMPORT },
+      { key: 'create.connector', label: '连接器', icon: '⇪', focus: 'sources', permission: PERM.GENERATE_CONNECTOR },
+      { key: 'create.jobs', label: '生成任务', icon: '⏳', focus: 'ingestion', permission: PERM.GENERATE_IMPORT },
+      { key: 'create.judgment', label: '知识裁决', icon: '⚖', badge: 'openConflict', focus: 'judgment', permission: PERM.GENERATE_JUDGE },
+      { key: 'create.derive', label: '知识衍生', icon: '⑃', permission: PERM.GENERATE_DERIVE },
     ],
   },
   {
     key: 'search', label: '知识检索', icon: '⌕', scoped: true,
     desc: '统一完成知识搜索、知识图谱探索、检索调试、Trace 与质量评测',
     tabs: [
-      { key: 'search.query', label: '搜索', icon: '⌕' },
-      { key: 'search.test', label: '检索测试', icon: '🧪', debug: true },
-      { key: 'search.profile', label: '检索策略', icon: '⌗' },
-      { key: 'search.trace', label: 'Query Trace', icon: '🛰', debug: true },
-      { key: 'search.graph', label: '知识图谱', icon: '❖' },
-      { key: 'search.benchmark', label: 'Benchmark', icon: '📈' },
+      { key: 'search.query', label: '搜索', icon: '⌕', permission: PERM.SEARCH_QUERY },
+      { key: 'search.test', label: '检索测试', icon: '🧪', debug: true, permission: PERM.SEARCH_TEST },
+      { key: 'search.profile', label: '检索策略', icon: '⌗', permission: PERM.SEARCH_POLICY },
+      { key: 'search.trace', label: '检索链路追踪', icon: '🛰', debug: true, permission: PERM.SEARCH_TEST },
+      { key: 'search.graph', label: '知识图谱', icon: '❖', permission: PERM.SEARCH_GRAPH },
+      { key: 'search.benchmark', label: '检索评测', icon: '📈', permission: PERM.SEARCH_EVALUATE },
     ],
   },
   {
     key: 'integration', label: '知识集成', icon: '⇄', scoped: true,
     desc: '一个页面完成知识服务发布、协议配置、凭证管理和调用追踪',
     tabs: [
-      { key: 'integration.overview', label: '集成概览', icon: '⇄' },
-      { key: 'integration.services', label: '服务', icon: '🔌' },
-      { key: 'integration.api', label: 'API', icon: '⌁', debug: true },
-      { key: 'integration.mcp', label: 'MCP', icon: '🧩' },
-      { key: 'integration.sse', label: 'SSE', icon: '⇉' },
-      { key: 'integration.credentials', label: '凭证', icon: '🔑' },
-      { key: 'integration.logs', label: '调用日志', icon: '📜' },
+      { key: 'integration.overview', label: '集成概览', icon: '⇄', permission: PERM.INTEGRATION_VIEW },
+      { key: 'integration.services', label: '服务', icon: '🔌', permission: PERM.INTEGRATION_VIEW },
+      { key: 'integration.api', label: 'API', icon: '⌁', debug: true, permission: PERM.INTEGRATION_VIEW },
+      { key: 'integration.mcp', label: 'MCP', icon: '🧩', permission: PERM.INTEGRATION_VIEW },
+      { key: 'integration.sse', label: 'SSE', icon: '⇉', permission: PERM.INTEGRATION_VIEW },
+      { key: 'integration.credentials', label: '凭证', icon: '🔑', permission: PERM.INTEGRATION_VIEW },
+      { key: 'integration.logs', label: '调用日志', icon: '📜', permission: PERM.INTEGRATION_VIEW },
     ],
   },
   {
     key: 'system', label: '系统配置', icon: '⚙', scoped: false,
     desc: '低频平台配置集中管理，不占用业务导航',
     tabs: [
-      { key: 'system', label: '配置总览', icon: '⚙' },
-      { key: 'system.model', label: '模型配置', icon: '🧠' },
-      { key: 'system.users', label: '用户与组织', icon: '👤', adminOnly: true },
-      { key: 'system.acl', label: '角色与权限', icon: '⚿' },
-      { key: 'system.schema', label: '知识 Schema', icon: '🧬', planned: true },
-      { key: 'system.index', label: '存储与索引', icon: '🗲' },
-      { key: 'system.tasks', label: '任务与告警', icon: '⏳', planned: true },
-      { key: 'system.audit', label: '审计日志', icon: '📜' },
-      { key: 'system.space', label: '知识空间', icon: '◈' },
+      { key: 'system', label: '配置总览', icon: '⚙', permission: PERM.SYSTEM_VIEW },
+      { key: 'system.model', label: '模型配置', icon: '🧠', permission: PERM.SYSTEM_MODEL },
+      { key: 'system.users', label: '用户与组织', icon: '👤', adminOnly: true, permission: PERM.SYSTEM_USER },
+      { key: 'system.acl', label: '角色与权限', icon: '⚿', permission: PERM.SYSTEM_ACL },
+      { key: 'system.schema', label: '知识 Schema', icon: '🧬', permission: PERM.SYSTEM_SCHEMA },
+      { key: 'system.index', label: '存储与索引', icon: '🗲', permission: PERM.SYSTEM_INDEX },
+      { key: 'system.tasks', label: '任务与告警', icon: '⏳', permission: PERM.SYSTEM_TASK },
+      { key: 'system.audit', label: '审计日志', icon: '📜', permission: PERM.SYSTEM_AUDIT },
+      { key: 'system.space', label: '知识空间', icon: '◈', permission: PERM.SYSTEM_SPACE },
     ],
   },
 ]
+
+/** 权限判定的最小契约：外壳按登录人权限实现，页面按同一个函数裁剪入口。 */
+export type PermissionCheck = (code: string) => boolean
+
+/** 模块页内可见的 Tab：按登录人权限过滤，规划中入口另行保留提示。 */
+export function visibleLeaves(section: NavSection, can?: PermissionCheck): NavLeaf[] {
+  if (!can) return section.tabs
+  return section.tabs.filter(leaf => !leaf.permission || can(leaf.permission))
+}
+
+/** 一级入口可见：该模块下至少要有一个有权访问的 Tab。 */
+export function visibleSections(can?: PermissionCheck): NavSection[] {
+  if (!can) return NAV_SECTIONS
+  return NAV_SECTIONS.filter(section => visibleLeaves(section, can).length > 0)
+}
 
 export interface NavLocation { section: NavSection; leaf: NavLeaf }
 
@@ -120,8 +139,15 @@ export function locate(key: string): NavLocation | undefined {
 }
 
 /** 一级导航默认进入的页面：跳过规划中与无权访问的入口。 */
-export function defaultLeafOf(section: NavSection): NavLeaf {
-  return section.tabs.find(leaf => !leaf.planned) || section.tabs[0]
+export function defaultLeafOf(section: NavSection, can?: PermissionCheck): NavLeaf {
+  const leaves = visibleLeaves(section, can)
+  return leaves.find(leaf => !leaf.planned) || leaves[0] || section.tabs[0]
+}
+
+/** 按权限码取模块内的 Tab，供模块页面复用外壳的权限判定。 */
+export function leavesOfSection(key: string, can?: PermissionCheck): NavLeaf[] {
+  const section = NAV_SECTIONS.find(item => item.key === key)
+  return section ? visibleLeaves(section, can) : []
 }
 
 /**

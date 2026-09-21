@@ -1,5 +1,10 @@
 <template>
-<LoginView v-if="needLogin" :hint="loginHint" @success="onLogin"/>
+<!-- 认证探测未完成时不渲染业务页面：此时还不知道角色权限，
+     若按上次会话的页面直接渲染，无权账号会先发出被拒的请求（例如用户列表 403）。 -->
+<div v-if="!authReady" class="flex h-screen items-center justify-center text-[13px] text-slate-500">
+  正在进入工作台…
+</div>
+<LoginView v-else-if="needLogin" :hint="loginHint" @success="onLogin"/>
 <div v-else class="kos-shell">
 <header class="kos-topbar">
   <div class="kos-brand"><span class="kos-logo">◈</span>智能知识平台</div>
@@ -15,8 +20,8 @@
     <input v-model="globalKeyword" class="kos-search-input" placeholder="搜索知识…" aria-label="全局搜索" />
     <button type="submit" class="kos-search-btn" aria-label="执行搜索">⌕</button>
   </form>
-  <!-- 任务中心：异步任务统一入口，失败任务可直接进入详情。 -->
-  <button class="kos-task" :class="{alert:failedTaskCount>0}" @click="taskCenterVisible=true">
+  <!-- 任务中心：异步任务统一入口，失败任务可直接进入详情。只对有生成或运维权限的角色开放。 -->
+  <button v-if="canSeeTasks" class="kos-task" :class="{alert:failedTaskCount>0}" @click="taskCenterVisible=true">
     任务<em v-if="failedTaskCount">{{failedTaskCount}}</em>
   </button>
   <div class="kos-status"><i class="kos-dot" :class="{ok:capabilities}"></i>{{capabilities?'服务已连接':'服务状态未知'}}</div>
@@ -24,7 +29,7 @@
     <span class="kos-avatar">{{avatarText}}</span>
     <div class="kos-user-copy">
       <b>{{me?.user?.displayName||me?.user?.username||'未登录'}}</b>
-      <small>{{me?.user?userRoleLabel(me.user.role):'匿名访问'}}</small>
+      <small :title="roleBrief">{{me?.user?roleName:'匿名访问'}}</small>
     </div>
     <button v-if="me?.user" class="kos-logout" @click="doLogout">退出</button>
   </div>
@@ -85,7 +90,7 @@
     :uploading="uploading"
     :ingest-live="ingestLive" :ingest-stage="ingestStage" :ingest-message="ingestMessage"
     :preview="preview" :preview-loading="previewLoading" :preview-error="previewError" :preview-id="previewId"
-    :reset-token="uploadReset"
+    :reset-token="uploadReset" :batch-status="batchStatus" :batch-running="batchRunning"
     @select="selectKey"/>
 
   <SearchPage
@@ -126,6 +131,8 @@
     @open-evidence="openEvidence"/>
 <QueryTracePanel :visible="traceVisible" :trace="queryTrace" :loading="traceLoading"
   @close="traceVisible=false" @open-candidate="openCitation"/>
+<ApiCallTracePanel :visible="apiCallVisible" :detail="apiCallDetail" :loading="apiCallLoading"
+  @close="apiCallVisible=false"/>
 <EvidenceViewer :visible="evidenceVisible" :detail="evidenceDetail" :loading="evidenceLoading" @close="evidenceVisible=false"/>
 </div>
 </template>
@@ -141,6 +148,7 @@ import type {
   KnowledgeObjectDetail, AuthMe, AuthStatus, UserGroupRow,
   IndexState, OutboxStats, DriftResult,
   DashboardSummary, DashboardLifecycle, DashboardGovernance,
+  BatchIngestStatus, IntegrationCallDetail,
 } from './types'
 import type { AssetType } from './components/AssetBrowserPanel.vue'
 import TaskCenterDrawer from './components/TaskCenterDrawer.vue'
@@ -148,6 +156,7 @@ import SpaceContextBar from'./components/SpaceContextBar.vue';
 import KnowledgeBaseDialog from './components/KnowledgeBaseDialog.vue'
 import KnowledgeDetailWorkspace from './components/KnowledgeDetailWorkspace.vue'
 import QueryTracePanel from './components/QueryTracePanel.vue'
+import ApiCallTracePanel from './components/ApiCallTracePanel.vue'
 import EvidenceViewer from './components/EvidenceViewer.vue'
 import LoginView from './components/LoginView.vue'
 /** 五个一级模块页面：左侧导航不再挂二级菜单，模块内部自持 Tab（设计 §1）。 */
@@ -163,23 +172,32 @@ import {
   getClaims, getPendingReviews, getOpenConflicts, getCapabilities, getAssessments,
   getIngestionRuns, getIngestionRun,
   uploadDocument, queryKnowledge, runAdjudication, reviewKnowledge,
+  uploadDocuments, getBatchStatus, cancelBatch as cancelBatchRequest, retryBatch as retryBatchRequest,
+  listBatches,
   resolveKnowledgeConflict, getConflictTargets, adjudicateConflict,
   getAclSubjects, getAclRoles, getAclAudits, getAclChanges,
   changeResourceAcl, getKnowledgeObjectDetail, getEvidenceDetail,
-  getContentUnitDetail, getQueryHistory, getTrace, unwrap,
+  getContentUnitDetail, getQueryHistory, getTrace, getIntegrationCallDetail, unwrap,
   getSourcePreview, getEnvironment, getOutboxStats, getIndexDrift,
   getDashboardSummary, getDashboardLifecycle, getDashboardGovernance,
 } from './api/knowledge'
-import { NAV_SECTIONS, defaultLeafOf, locate, normalizeViewKey } from './navigation'
+import {
+  defaultLeafOf, leavesOfSection, locate, normalizeViewKey, visibleLeaves, visibleSections,
+} from './navigation'
 import type { NavLeaf, NavSection } from './navigation'
+import { PERM, ROLE_BRIEF, ROLE_HOME, hasPermission } from './permissions'
+import type { UserRoleValue } from './types'
 import {
   AUTH_EXPIRED_EVENT, getAuthStatus, getMe, getToken, listGroups, logout, setToken,
 } from './api/auth'
 import { userRoleLabel, visibilityLabel } from './types'
 import { errorMessage } from './utils/feedback'
-/** 当前视图：取 IA 二级入口 key（见 navigation.ts），旧的 tab 值会自动归一化。 */
-const active=ref<string>(normalizeViewKey(
-  localStorage.getItem('kos.activeView')||localStorage.getItem('llmkb.activeTab')))
+/**
+ * 当前视图：取 IA 二级入口 key（见 navigation.ts），旧的 tab 值会自动归一化。
+ * 初值留空——登录前拿不到角色权限，不能沿用上次会话的页面（可能是当前角色无权访问的页面），
+ * 真正取值在认证探测完成后的 resolveInitialView()。
+ */
+const active=ref<string>('')
 const knowledgeBaseId=ref(Number(localStorage.getItem('llmkb.kbId')||1));
 const showBases=ref(false);
 const bases=ref<KnowledgeBase[]>([])
@@ -206,6 +224,7 @@ const selectedConflictId=ref<number|null>(null),
     reviewDetail=ref<Record<string,unknown>|null>(null)
 const queryHistory=ref<QueryHistoryItem[]>([])
 const queryTrace=ref<QueryTrace|null>(null), traceVisible=ref(false), traceLoading=ref(false)
+const apiCallDetail=ref<IntegrationCallDetail|null>(null), apiCallVisible=ref(false), apiCallLoading=ref(false)
 const evidenceDetail=ref<EvidenceDetail|null>(null), evidenceVisible=ref(false), evidenceLoading=ref(false)
 const detailVisible=ref(false), detailLoading=ref(false), detailMode=ref<'CARD'|'CLAIM'|'CHUNK'>('CARD')
 const detailCode=ref(''), knowledgeDetail=ref<KnowledgeObjectDetail|null>(null)
@@ -259,6 +278,14 @@ const environmentLabel=computed(()=>{
   return version?`${env} · ${version}`:env
 })
 const indexState=ref<IndexState>({drift:0,pending:0,dead:0,loading:false})
+/**
+ * 批量接入状态：单文件上传是同步请求（等一次返回结果），
+ * 多文件走批次——后端异步执行，这里持有批次视图并轮询到终态，
+ * 期间批次卡片显示每个文件的成功/失败，避免「点了没反应」的黑盒。
+ */
+const batchStatus=ref<BatchIngestStatus|null>(null)
+let batchTimer:ReturnType<typeof setInterval>|undefined
+const batchRunning=computed(()=>batchStatus.value?.status==='RUNNING')
 const contextLoading=ref(false)
 const historyLoading=ref(false)
 async function loadEnvironment(){
@@ -298,8 +325,13 @@ const loginHint=computed(()=>{
 })
 const avatarText=computed(()=>
   String(me.value?.user?.displayName||activeBase.value?.name||'知识库').trim().slice(0,1)||'K')
+/**
+ * 权限判定：后端按角色下发权限码，未开启认证时 me 为空，此时按全权限处理，
+ * 与后端 PermissionInterceptor 对空 AuthContext 的放行保持一致。
+ */
+const can=(code:string)=>hasPermission(me.value?.permissions,code)
 /** 一级导航固定为 IA 的五个入口，二级入口全部下沉到模块页面内部的 Tab。 */
-const navSections=NAV_SECTIONS
+const navSections=computed(()=>visibleSections(can))
 const activeLocation=computed(()=>locate(active.value))
 const activeSection=computed(()=>activeLocation.value?.section.key||'workbench')
 /** 属于知识空间的页面才展示「空间 + 环境 + 索引状态」上下文条。 */
@@ -313,40 +345,74 @@ function sectionBadge(section:NavSection):string{
   }
   return total?String(total):''
 }
-/** 用户与用户组管理只对系统管理员开放，避免普通账号看到无权操作的入口。 */
+/** 模块页内 Tab：按权限裁剪，避免普通账号看到无权操作的入口。 */
 function leavesOf(section:NavSection){
-  return section.tabs.filter(leaf=>!leaf.adminOnly||me.value?.canManageUsers)
+  return visibleLeaves(section,can)
 }
 function enterSection(section:NavSection){
-  active.value=defaultLeafOf(section).key
+  active.value=defaultLeafOf(section,can).key
 }
-/** 模块页面回传的视图 key：规划中的入口不进入，避免落到未实现页面。 */
+/** 模块页面回传的视图 key：规划中与无权访问的入口不进入，避免落到未实现页面。 */
 function selectKey(key:string){
   const leaf=locate(key)?.leaf
   if(!leaf||leaf.planned)return
-  if(leaf.adminOnly&&!me.value?.canManageUsers)return
+  if(!canLeaf(leaf))return
   active.value=key
 }
+function canLeaf(leaf:NavLeaf){
+  return !leaf.permission||can(leaf.permission)
+}
+/** 页面内的快捷跳转（KPI 下钻、治理待办、质量页）先用它裁剪，无权的目标置灰而不是点了才报错。 */
+function canNavigate(key:string){
+  const leaf=locate(normalizeViewKey(key))?.leaf
+  return !leaf||canLeaf(leaf)
+}
+/** 顶栏任务入口：只有参与知识生产或平台运维的角色需要看任务。 */
+const canSeeTasks=computed(()=>
+  can(PERM.GENERATE_IMPORT)||can(PERM.GENERATE_DERIVE)||can(PERM.SYSTEM_TASK))
+/** 顶栏角色名：优先用后端下发的中文名，避免出现角色码。 */
+const roleName=computed(()=>
+  me.value?.roleLabel||me.value?.user?.roleLabel||userRoleLabel(me.value?.user?.role))
+const roleBrief=computed(()=>{
+  const role=String(me.value?.user?.role||'') as UserRoleValue
+  return ROLE_BRIEF[role]||''
+})
 /** 角标只用于需要人工介入的入口：待审核与未解决冲突。 */
 function leafBadge(leaf:NavLeaf):number|string{
   if(leaf.badge==='pendingReview')return pendingReviews.value.length||''
   if(leaf.badge==='openConflict')return conflicts.value.length||''
   return ''
 }
-const navigate=(tab:string)=>{active.value=normalizeViewKey(tab)}
+/**
+ * 统一跳转入口：所有改 active 的地方都走这里，无权访问的页面直接拦下并提示，
+ * 避免进入页面后每个数据接口都返回 403 刷屏。
+ */
+function goto(key:string,silent=false):boolean{
+  const target=normalizeViewKey(key)
+  const leaf=locate(target)?.leaf
+  if(leaf&&!canLeaf(leaf)){
+    if(!silent)ElMessage.warning(`当前角色（${roleName.value}）无权访问「${leaf.label}」`)
+    return false
+  }
+  active.value=target
+  return true
+}
+const navigate=(tab:string)=>{goto(tab)}
 /** 工作台 KPI 下钻：按对象类型进入资产浏览（设计 §3.1）。 */
-function openAssets(type:AssetType){assetType.value=type;
-active.value='workbench.assets'}
+function openAssets(type:AssetType){
+if(!goto('workbench.assets',true))return
+assetType.value=type}
 /** 任务中心 / 创建首页点击任务：选中该次运行并进入解析任务页。 */
-function openRun(runId:number){selectedRunId.value=runId;
-void selectRun(runId);
-active.value='create.jobs'}
+function openRun(runId:number){
+if(!goto('create.jobs',true))return
+selectedRunId.value=runId;
+void selectRun(runId)}
 /** 顶栏全局搜索：进入搜索页并直接执行一次检索，减少一次点击。 */
 async function globalSearch(){
   const keyword=globalKeyword.value.trim()
   if(!keyword)return
+  if(!goto('search.query',true))return
   q.value=keyword
-  active.value='search.query'
   await ask()
 }
 function pick(f:UploadFile){file.value=f.raw||null} function remove(){file.value=null}
@@ -389,7 +455,7 @@ async function changeAcl(p:{
     unwrap(await changeResourceAcl(
       knowledgeBaseId.value,p.resourceType,p.resourceCode,p.permissionTags,p.reason,
     ),{})
-    ElMessage.success('ACL 已保存并写入传播 Outbox')
+    ElMessage.success('ACL 已保存并写入传播队列')
     await loadAcl()
   }catch(e){err(e)}
 }
@@ -417,7 +483,21 @@ if(r[0].status==='fulfilled')sources.value=unwrap(r[0].value,
 if(r[1].status==='fulfilled')documents.value=unwrap(r[1].value,
     []);
 if(r[2].status==='fulfilled'){runs.value=unwrap(r[2].value,[]);
-if(runs.value.length&&!selectedRunId.value)await selectRun(runs.value[0].id)}}
+if(runs.value.length&&!selectedRunId.value)await selectRun(runs.value[0].id)}
+void resumeBatch()}
+/**
+ * 刷新后接续仍在跑的批次：批量会持续好几分钟，
+ * 重载页面后进度若凭空消失，用户大概率会再提交一次同一批文件。
+ */
+async function resumeBatch(){
+  if(batchStatus.value||batchTimer!==undefined)return
+  try{
+    const running=unwrap(await listBatches(knowledgeBaseId.value,5),[]).find(item=>item.status==='RUNNING')
+    if(!running)return
+    batchStatus.value=running
+    startBatchWatch()
+  }catch{/* 恢复监视只是增强：拿不到批次回归普通使用，不该弹错打扰 */}
+}
 async function selectRun(id:number){selectedRunId.value=id;
 try{runDetail.value=unwrap(await getIngestionRun(id),null)}catch(e){err(e)}}
 /** 文档重跑结束后：状态、Chunk revision 与运行日志都已变化，一并刷新。 */
@@ -504,6 +584,72 @@ if(selectedRunId.value)await selectRun(selectedRunId.value)}catch(e){err(e)}
 finally{await pollLiveRun().catch(()=>undefined);
 stopLive();
 uploading.value=false}}
+/**
+ * 批量上传：一次提交多个文件，后台按队列解析。
+ * 单文件仍走上面的同步路径——实时阶段跟踪依赖那一次运行的 runId，
+ * 只有多文件才需要批次（若干个文件一个个串行等待会超出请求超时）。
+ */
+async function uploadFiles(files:File[]){
+  const picked=(files||[]).filter(Boolean)
+  if(!picked.length)return ElMessage.warning('请先选择文件')
+  if(picked.length===1){file.value=picked[0];await upload();return}
+  uploading.value=true
+  failure.value=''
+  try{
+    batchStatus.value=unwrap(await uploadDocuments(knowledgeBaseId.value,picked,
+      authority.value,sourcePermissionTags.value.split(',').map(x=>x.trim()).filter(Boolean)),null)
+    ElMessage.success(`已提交 ${batchStatus.value?.fileCount||picked.length} 个文件，正在后台按队列解析`)
+    uploadReset.value++
+    startBatchWatch()
+  }catch(e){err(e)}
+  finally{uploading.value=false}
+}
+function startBatchWatch(){
+  stopBatchWatch()
+  if(!batchStatus.value)return
+  batchTimer=setInterval(()=>{void watchBatch()},2000)
+  void watchBatch()
+}
+function stopBatchWatch(){
+  if(batchTimer!==undefined){clearInterval(batchTimer);batchTimer=undefined}
+}
+/** 轮询批次状态：终态到达即停止，随后刷新来源/文档/统计。 */
+async function watchBatch(){
+  if(!batchStatus.value)return stopBatchWatch()
+  try{
+    const data=unwrap(await getBatchStatus(batchStatus.value.batchCode),null)
+    if(!data)return
+    batchStatus.value=data
+    if(data.status!=='RUNNING')await settleBatch(data)
+  }catch(e){stopBatchWatch();err(e,'批量进度查询失败')}
+}
+async function settleBatch(data:BatchIngestStatus){
+  stopBatchWatch()
+  // 列表刷新失败不该掩盖批量结果：进度轮询已给出结论，这里只补足列表展现。
+  await Promise.all([loadData(),loadOverview()]).catch(()=>undefined)
+  if(data.failedCount){
+    failure.value=`批量接入完成：成功 ${data.succeededCount} 个，失败 ${data.failedCount} 个`
+      + `${data.canceledCount?`，取消 ${data.canceledCount} 个`:''}；失败项可在批次卡片上一键重跑。`
+    ElMessage.warning(`批量完成，${data.failedCount} 个文件解析失败`)
+  }else{
+    ElMessage.success(`批量完成：${data.succeededCount||data.fileCount} 个文件已生成知识`)
+  }
+}
+/** 取消批次：排队的文件不再启动，已在解析的文件会跑完自己的事务。 */
+async function cancelBatch(code:string){
+  try{
+    await cancelBatchRequest(code)
+    batchStatus.value=unwrap(await getBatchStatus(code),batchStatus.value)
+  }catch(e){err(e,'取消批次失败')}
+}
+/** 重跑批次内的失败文件：成功文件的 Chunk 与引用保持原样。 */
+async function retryBatch(code:string){
+  try{
+    await retryBatchRequest(code)
+    batchStatus.value=unwrap(await getBatchStatus(code),batchStatus.value)
+    startBatchWatch()
+  }catch(e){err(e,'重跑失败文件失败')}
+}
 async function ask(){if(!q.value.trim())return;
 asking.value=true;
 try{result.value=unwrap(await queryKnowledge(knowledgeBaseId.value,q.value),null);await loadQueryHistory()}catch(e){err(e)}finally{asking.value=false}}
@@ -522,7 +668,7 @@ const type=String(citation.objectType||'').toUpperCase()
 const code=String(citation.objectCode||citation.objectId||'')
 if((type==='CARD'||type==='CLAIM'||type==='CHUNK')&&code){
   await openDetail(type as 'CARD'|'CLAIM'|'CHUNK',code);return}
-ElMessage.info('该引用暂未返回 Evidence/Object 定位标识')
+ElMessage.info('该引用暂未返回证据/对象定位标识')
 }
 async function loadQueryHistory(){
 historyLoading.value=true
@@ -535,6 +681,10 @@ function openDetailFromVersion(type:string,code:string){
 }
 async function openTrace(qid:string){traceVisible.value=true;traceLoading.value=true;try{
 queryTrace.value=unwrap(await getTrace(qid),null)}catch(e){err(e)}finally{traceLoading.value=false}}
+/** 调用日志的 traceId 由网关下发，落在调用审计里；它和问答链路的 queryId 是两套 id，
+ *  所以这里查的是集成侧的单次调用明细，而不是检索链路。 */
+async function openCallTrace(traceId:string){apiCallVisible.value=true;apiCallLoading.value=true;try{
+apiCallDetail.value=unwrap(await getIntegrationCallDetail(traceId),null)}catch(e){err(e)}finally{apiCallLoading.value=false}}
 async function openDetail(mode:'CARD'|'CLAIM'|'CHUNK',code:string){detailMode.value=mode;detailCode.value=code;
 detailVisible.value=true;detailLoading.value=true;try{
 knowledgeDetail.value=unwrap(await getKnowledgeObjectDetail(knowledgeBaseId.value,mode,code),null)
@@ -599,6 +749,8 @@ async function onLogin(){
   try{me.value=unwrap(await getMe(),null)}catch(e){err(e)}
   if(!me.value?.user)return
   await loadGroups()
+  // 拿到角色权限后再决定落地页，登录前不能沿用旧的会话位置。
+  resolveInitialView()
   await initialLoad()
 }
 async function doLogout(){
@@ -611,8 +763,12 @@ async function doLogout(){
  * 跳转详情、打开 Trace、执行裁决等跨模块能力不必在页面间层层透传。
  */
 const shell:KosShell={
-  navigate, openAssets, openGraph, openRun, openTrace, openDetail, openEvidence, openCitation,
+  navigate, openAssets, openGraph, openRun, openTrace, openCallTrace, openDetail, openEvidence, openCitation,
+  can, canNavigate, tabs:key=>leavesOfSection(key,can),
   upload, pick, remove,
+  uploadFiles:files=>{void uploadFiles(files)},
+  cancelBatch:code=>{void cancelBatch(code)},
+  retryBatch:code=>{void retryBatch(code)},
   selectRun:id=>{void selectRun(id)},
   refresh:()=>{void loadOverview()},
   reloadAfterRetry:()=>{void reloadAfterRetry()},
@@ -639,7 +795,8 @@ async function initialLoad(){
   void loadSpaceContext()}catch(e){err(e)}
 }
 watch(active,
-    v=>{localStorage.setItem('kos.activeView',v);
+    v=>{if(!v)return
+localStorage.setItem('kos.activeView',v);
 if(scopedView.value)void loadSpaceContext();
 void loadActive()});
 watch(knowledgeBaseId,
@@ -656,14 +813,26 @@ void loadSpaceContext();
 void loadActive()})
 onUnmounted(()=>{
   stopLive()
+  stopBatchWatch()
   window.removeEventListener(AUTH_EXPIRED_EVENT,onAuthExpired)
 })
+/**
+ * 决定登录后的第一个页面：沿用上次访问的位置，但它可能已无权访问（换账号或角色被调整），
+ * 这时回到该角色的默认工作区；没有历史位置时直接进角色落地页。
+ * 必须在拿到 /auth/me 的权限之后执行，否则会按「未知角色」渲染出无权页面。
+ */
+function resolveInitialView(){
+  const remembered=localStorage.getItem('kos.activeView')||localStorage.getItem('llmkb.activeTab')
+  const leaf=remembered?locate(normalizeViewKey(remembered))?.leaf:undefined
+  if(leaf&&canLeaf(leaf)){active.value=leaf.key;return}
+  const home=me.value?.homeView||'workbench'
+  active.value=locate(home)?.leaf?home:'workbench'
+}
 onMounted(async()=>{
   window.addEventListener(AUTH_EXPIRED_EVENT,onAuthExpired)
   try{await bootstrapAuth()}catch(e){authReady.value=true}
   if(needLogin.value)return
-  /** 非管理员不应停留在用户管理页：刷新前一次会话留下的 tab 可能已经无权访问。 */
-  if(active.value==='system.users'&&!me.value?.canManageUsers)active.value='workbench'
+  resolveInitialView()
   await initialLoad()
 })
 </script>

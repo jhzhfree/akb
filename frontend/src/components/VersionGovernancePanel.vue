@@ -2,7 +2,7 @@
   <section class="kb-card p-5">
     <div class="kb-section-head">
       <div>
-        <small>VERSION GOVERNANCE</small>
+        <small>版本治理</small>
         <h3>版本治理</h3>
         <p class="kb-muted mt-1">
           每次新建、裁决、复核、冲突检测都会留下不可变快照。这里回答四个问题：现在是什么、以前是什么、为什么变、原文在哪。
@@ -17,8 +17,8 @@
     <div class="mt-4 grid grid-cols-1 gap-2 md:grid-cols-[130px_160px_minmax(0,1fr)]">
       <select v-model="objectType" class="kb-input" @change="load">
         <option value="">全部对象</option>
-        <option value="CARD">Knowledge Card</option>
-        <option value="CLAIM">Assertion</option>
+        <option value="CARD">知识卡片</option>
+        <option value="CLAIM">断言</option>
       </select>
       <select v-model="changeType" class="kb-input" @change="load">
         <option value="">全部变更</option>

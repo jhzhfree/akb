@@ -10,9 +10,12 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+
+import java.util.Map;
 
 /**
  * Knowledge integration read model (detailed design §6 / §11).
@@ -48,6 +51,23 @@ public class IntegrationInsightController {
             @RequestParam(value = "limit", required = false) Integer limit) {
         requireManager();
         return ApiResponse.ok(service.callLogs(hours, protocol, status, limit));
+    }
+
+    /**
+     * One call in full.
+     *
+     * <p>The trace id a log row carries belongs to the gateway, not to a query — so this endpoint,
+     * not {@code /api/knowledge/trace}, is what the call log's trace view has to read.</p>
+     */
+    @GetMapping("/call-logs/{traceId}")
+    @Operation(summary = "单次接口调用详情：调用方、请求参数与返回数据")
+    public ApiResponse<Object> callDetail(@PathVariable String traceId) {
+        requireManager();
+        Map<String, Object> detail = service.callDetail(traceId);
+        if (detail == null) {
+            return ApiResponse.fail("没有找到该 traceId 对应的调用记录，可能已超出调用日志保留窗口");
+        }
+        return ApiResponse.ok(detail);
     }
 
     /** Integration surfaces are governed by administrators or knowledge-base administrators. */

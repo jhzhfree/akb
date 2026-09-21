@@ -1,10 +1,10 @@
 <template>
 <section class="kb-card p-4">
   <div class="kb-section-head">
-    <div><small>PIPELINE TIMELINE</small><h3>流水线时间轴</h3></div>
+    <div><small>流水线时序</small><h3>流水线时间轴</h3></div>
     <span class="kb-badge">{{ stages.length }} stages · {{ measured }} ms</span>
   </div>
-  <div v-if="!stages.length" class="p-6 text-center text-xs text-ink-400">当前 Trace 未记录分层耗时</div>
+  <div v-if="!stages.length" class="p-6 text-center text-xs text-ink-400">当前链路未记录分层耗时</div>
   <ol v-else class="mt-3 space-y-2">
     <li v-for="(stage,i) in stages" :key="`${stage.key}-${i}`">
       <div class="rounded-lg border border-ink-100 px-3 py-2" :class="errorCount(stage) ? 'border-rose-200 bg-rose-50/40' : ''">
@@ -51,7 +51,7 @@ const countText = (stage:PipelineStage) => {
   return `${inCount == null ? '—' : inCount} → ${out == null ? '—' : out}`
 }
 
-/** 只展示标量明细：模型名、策略开关、索引版本等；数组/对象留给原始 JSON 面板。 */
+/** 只展示标量明细：模型名、策略开关、索引版本等；数组/对象留给接口原始报文 面板。 */
 function detailEntries(stage:PipelineStage):[string,string][] {
   const detail = stage.detail || {}
   return Object.entries(detail)

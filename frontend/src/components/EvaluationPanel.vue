@@ -105,22 +105,22 @@
           </el-table-column>
           <el-table-column label="状态" width="80">
             <template #default="{ row }">
-              <span :class="row.status === 'SUCCESS' ? 'text-emerald-600' : 'text-rose-500'">{{ row.status }}</span>
+              <span :class="row.status === 'SUCCESS' ? 'text-emerald-600' : 'text-rose-500'">{{ statusLabel(row.status) }}</span>
             </template>
           </el-table-column>
-          <el-table-column label="Hit@1" width="70">
+          <el-table-column label="命中率@1" width="70">
             <template #default="{ row }">{{ flag(row.hitAt1) }}</template>
           </el-table-column>
-          <el-table-column label="Hit@5" width="70">
+          <el-table-column label="命中率@5" width="70">
             <template #default="{ row }">{{ flag(row.hitAt5) }}</template>
           </el-table-column>
           <el-table-column label="MRR" width="80">
             <template #default="{ row }">{{ fixed(row.reciprocalRank) }}</template>
           </el-table-column>
-          <el-table-column label="Recall@5" width="90">
+          <el-table-column label="召回率@5" width="90">
             <template #default="{ row }">{{ fixed(row.recallAt5) }}</template>
           </el-table-column>
-          <el-table-column label="NDCG@10" width="90">
+          <el-table-column label="排序质量@10" width="90">
             <template #default="{ row }">{{ fixed(row.ndcgAt10) }}</template>
           </el-table-column>
           <el-table-column label="延迟" width="80">
@@ -165,7 +165,7 @@
             <el-table-column label="模式" width="80">
               <template #default="{ row }">{{ row.mode === 'FULL' ? '含生成' : '仅检索' }}</template>
             </el-table-column>
-            <el-table-column label="Hit@1" width="80">
+            <el-table-column label="命中率@1" width="80">
               <template #default="{ row }">{{ percent(row.hitAt1Rate) }}</template>
             </el-table-column>
             <el-table-column label="MRR" width="80">
@@ -199,6 +199,7 @@ import {
   createEvaluationCase, createEvaluationDataset, deleteEvaluationCase, getEvaluationGaps,
   getEvaluationRun, listEvaluationCases, listEvaluationDatasets, listEvaluationRuns, runEvaluation,
 } from '../api/knowledge'
+import { statusLabel } from '../types'
 import type { EvaluationRun } from '../types'
 
 const props = defineProps<{ knowledgeBaseId:number }>()
@@ -264,9 +265,9 @@ const metricCards = computed(() => {
   const run = current.value
   if (!run) return []
   return [
-    { label:'Hit@1', value:percent(run.hitAt1Rate), delta:deltaOf('hitAt1Rate') },
+    { label:'命中率@1', value:percent(run.hitAt1Rate), delta:deltaOf('hitAt1Rate') },
     { label:'MRR', value:fixed(run.mrr), delta:deltaOf('mrr') },
-    { label:'Recall@5', value:percent(run.recallAt5), delta:deltaOf('recallAt5') },
+    { label:'召回率@5', value:percent(run.recallAt5), delta:deltaOf('recallAt5') },
     { label:'延迟 P50', value:run.latencyP50Ms == null ? '—' : `${run.latencyP50Ms} ms`, delta:deltaOf('latencyP50Ms') },
   ]
 })

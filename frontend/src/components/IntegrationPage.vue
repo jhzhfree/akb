@@ -5,7 +5,7 @@
   <IntegrationOverviewPanel
     v-if="active==='integration.overview'"
     :knowledge-base-id="knowledgeBaseId" :bases="bases"
-    @navigate="shell.navigate" @open-trace="shell.openTrace" />
+    @navigate="shell.navigate" @open-trace="shell.openCallTrace" />
 
   <!-- 服务与凭证同属外部服务面板，按 Tab 聚焦到协议区块或凭证区块。 -->
   <ExternalServicePanel
@@ -21,11 +21,11 @@
 
   <McpServicePanel v-else-if="active==='integration.mcp'" :knowledge-base-id="knowledgeBaseId" />
 
-  <CallLogPanel v-else :knowledge-base-id="knowledgeBaseId" @open-trace="shell.openTrace" />
+  <CallLogPanel v-else :knowledge-base-id="knowledgeBaseId" @open-trace="shell.openCallTrace" />
 </template>
 <script setup lang="ts">
+import { computed } from 'vue'
 import type { KnowledgeBase } from '../types'
-import { NAV_SECTIONS } from '../navigation'
 import { useShell } from '../shell'
 import ModuleTabs from './ModuleTabs.vue'
 import IntegrationOverviewPanel from './IntegrationOverviewPanel.vue'
@@ -38,5 +38,5 @@ defineProps<{ active: string; knowledgeBaseId: number; bases: KnowledgeBase[] }>
 defineEmits<{ select: [key: string] }>()
 
 const shell = useShell()
-const tabs = NAV_SECTIONS[3].tabs
+const tabs = computed(() => shell.tabs('integration'))
 </script>

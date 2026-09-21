@@ -2,7 +2,7 @@
   <section class="kb-page">
     <header class="kb-section-head">
       <div>
-        <div class="kb-eyebrow">KNOWLEDGE LIFECYCLE</div>
+        <div class="kb-eyebrow">知识生命周期</div>
         <h1 class="kb-title mt-1">知识生命周期治理</h1>
         <p class="kb-muted mt-1">
           知识会随时间衰减：到期失效、版本替代与来源撤销都必须可解释、可留痕。影响分析只计算不删除，是否退役由人决定。
@@ -38,12 +38,12 @@
 
     <div class="mt-4 grid grid-cols-1 gap-4 xl:grid-cols-2">
       <article class="kb-card">
-        <div class="kb-card-head"><b class="text-sm">治理操作</b><span class="kb-muted">Lifecycle Actions</span></div>
+        <div class="kb-card-head"><b class="text-sm">治理操作</b><span class="kb-muted">生命周期操作</span></div>
         <div class="space-y-3 p-4">
           <div class="rounded-lg bg-ink-50 p-3">
             <b class="text-xs">① 到期失效扫描</b>
             <p class="kb-muted mt-1">
-              扫描 <code>valid_to &lt; now</code> 且仍为生效状态的断言，置为 EXPIRED 并写入版本快照；重复执行幂等，不会重复快照。
+              扫描 <code>valid_to &lt; now</code> 且仍为生效状态的断言，置为「已过期」 并写入版本快照；重复执行幂等，不会重复快照。
             </p>
             <div class="mt-2 flex flex-wrap items-center gap-2">
               <el-tag :type="(summary?.dueNowCount ?? 0) > 0 ? 'warning' : 'success'" size="small" effect="plain">
@@ -65,7 +65,7 @@
 
           <div class="rounded-lg bg-ink-50 p-3">
             <b class="text-xs">② 版本替代</b>
-            <p class="kb-muted mt-1">用新版本替代旧对象：旧对象置 SUPERSEDED 并保留历史，不物理删除。</p>
+            <p class="kb-muted mt-1">用新版本替代旧对象：旧对象置为「已替代」并保留历史，不物理删除。</p>
             <div class="mt-2 flex flex-wrap items-center gap-2">
               <select v-model="supersedeType" class="kb-input w-28">
                 <option value="CARD">卡片</option>
@@ -263,7 +263,7 @@ async function runExpire() {
   const count = summary.value?.dueNowCount ?? 0
   try {
     await ElMessageBox.confirm(
-      `确认将 ${count} 条已过期的断言置为 EXPIRED？操作会写入版本快照与索引事件，但可通过版本历史追溯。`,
+      `确认将 ${count} 条已过期的断言置为「已过期」？操作会写入版本快照与索引事件，但可通过版本历史追溯。`,
       '执行到期失效扫描',
       { type:'warning', confirmButtonText:'确认执行', cancelButtonText:'取消' },
     )

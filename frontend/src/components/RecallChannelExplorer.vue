@@ -1,6 +1,6 @@
 <template>
 <section class="kb-card overflow-hidden">
-  <div class="kb-card-head"><div><b class="text-sm">召回通道 Top-N</b><div class="text-[10px] text-ink-400">CHANNEL LEVEL EXPLAINABILITY</div></div></div>
+  <div class="kb-card-head"><div><b class="text-sm">召回通道 Top-N</b><div class="text-[10px] text-ink-400">召回通道归因</div></div></div>
   <div class="grid gap-3 p-4 lg:grid-cols-2 xl:grid-cols-3">
     <article v-for="(items,channel) in channels" :key="channel" class="rounded-lg border border-ink-100 bg-white">
       <header class="flex items-center justify-between border-b border-ink-100 px-3 py-2">

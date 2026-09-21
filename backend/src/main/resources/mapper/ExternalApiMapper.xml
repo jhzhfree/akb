@@ -26,8 +26,8 @@
 
 <update id="touchApiKey">UPDATE t_api_key SET last_used_at=CURRENT_TIMESTAMP WHERE id=#{id}</update>
 
-<insert id="insertApiCallAudit" parameterType="com.jh.knowledgeos.domain.ApiCallAudit">INSERT INTO t_api_call_audit(key_id,key_code,channel,method,knowledge_base_id,status_code,duration_ms,trace_id,message)
-  VALUES(#{keyId},#{keyCode},#{channel},#{method},#{knowledgeBaseId},#{statusCode},#{durationMs},#{traceId},#{message})</insert>
+<insert id="insertApiCallAudit" parameterType="com.jh.knowledgeos.domain.ApiCallAudit">INSERT INTO t_api_call_audit(key_id,key_code,caller_name,channel,method,knowledge_base_id,request_params,status_code,response_data,duration_ms,trace_id,message)
+  VALUES(#{keyId},#{keyCode},#{callerName},#{channel},#{method},#{knowledgeBaseId},#{requestParams},#{statusCode},#{responseData},#{durationMs},#{traceId},#{message})</insert>
 
 <select id="listApiCallAudits" resultType="com.jh.knowledgeos.domain.ApiCallAudit">SELECT * FROM t_api_call_audit
   <where>
@@ -36,6 +36,9 @@
   ORDER BY created_time DESC, id DESC LIMIT #{limit}</select>
 
 <select id="listChannelAudits" resultType="com.jh.knowledgeos.domain.ApiCallAudit">SELECT * FROM t_api_call_audit WHERE channel=#{channel} ORDER BY created_time DESC,id DESC LIMIT #{limit}</select>
+<!-- The trace id is what a call-log row hands to the UI. LIMIT 1 because a caller may send its own
+     X-Trace-Id and reuse it: then several rows carry it, and the newest is the call in question. -->
+<select id="findApiCallAuditByTraceId" resultType="com.jh.knowledgeos.domain.ApiCallAudit">SELECT * FROM t_api_call_audit WHERE trace_id=#{traceId} ORDER BY id DESC LIMIT 1</select>
 
 <select id="listRecentApiCallAudits" resultType="com.jh.knowledgeos.domain.ApiCallAudit">SELECT * FROM t_api_call_audit
   ORDER BY created_time DESC, id DESC LIMIT #{limit}</select>

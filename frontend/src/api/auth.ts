@@ -1,6 +1,7 @@
 import axios, { type AxiosResponse } from 'axios'
 import type {
-  ApiEnvelope, AuthMe, AuthSessionResult, AuthStatus, UserAccount, UserGroupRow, UserRoleValue,
+  ApiEnvelope, AuthMe, AuthSessionResult, AuthStatus, RoleCatalog, UserAccount, UserGroupRow,
+  UserRoleValue,
 } from '../types'
 
 type ApiResponse<T> = AxiosResponse<ApiEnvelope<T>>
@@ -44,6 +45,8 @@ export const login = (
 export const logout = ():Promise<ApiResponse<boolean>> => axios.post('/api/auth/logout')
 export const getAuthStatus = ():Promise<ApiResponse<AuthStatus>> => axios.get('/api/auth/status')
 export const getMe = ():Promise<ApiResponse<AuthMe>> => axios.get('/api/auth/me')
+/** 角色字典：角色码、中文名、职责说明与自带权限码，供用户管理与权限说明使用。 */
+export const getRoleCatalog = ():Promise<ApiResponse<RoleCatalog>> => axios.get('/api/auth/roles')
 export const changeOwnPassword = (
   oldPassword:string, newPassword:string,
 ):Promise<ApiResponse<boolean>> =>

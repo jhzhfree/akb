@@ -1,7 +1,7 @@
 <template>
   <section class="kb-card p-4">
     <div class="kb-section-head">
-      <div><small>QUERY POLICY</small><h3>问答策略配置</h3></div>
+      <div><small>策略</small><h3>问答策略配置</h3></div>
       <div class="flex flex-wrap items-center gap-2">
         <span class="kb-badge bg-slate-100 text-ink-600">来源：{{ policy?.source==='file'?'配置文件':'内置默认' }}</span>
         <span class="kb-badge bg-slate-100 text-ink-600">{{ policy?.version || '-' }}</span>
@@ -181,11 +181,11 @@
       <!-- 4. 融合排序 -->
       <div class="rounded-lg border border-ink-100 p-4">
         <div class="mb-3">
-          <b class="text-xs text-ink-700">④ 融合排序（加权 RRF）</b>
+          <b class="text-xs text-ink-700">④ 融合排序</b>
           <p class="mt-1 text-[11px] leading-5 text-ink-500">把各通道的排序结果合成一份；质量信号会在融合分上叠加加权增益。</p>
         </div>
         <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-          <label class="field"><span>RRF k 常数（越大越平滑）</span>
+          <label class="field"><span>融合排序平滑常数 k（越大越平滑）</span>
             <el-input-number v-model="policy.fusion.rrfK" size="small" :min="1" :max="1000" class="!w-full"/>
           </label>
           <label class="field"><span>启用质量信号加权</span>
@@ -209,7 +209,7 @@
       <!-- 5. 重排 -->
       <div class="rounded-lg border border-ink-100 p-4">
         <div class="mb-3">
-          <b class="text-xs text-ink-700">⑤ 重排（Rerank）</b>
+          <b class="text-xs text-ink-700">⑤ 重排</b>
           <p class="mt-1 text-[11px] leading-5 text-ink-500">关闭后保持融合顺序；参与重排的候选数 0 表示对全部融合候选重排。</p>
         </div>
         <div class="grid gap-3 sm:grid-cols-3">

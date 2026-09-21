@@ -284,9 +284,9 @@ export const documentStatusTag = (status?:string):'success'|'danger'|'warning'|'
 }
 
 /**
- * 界面枚举值统一展示为「中文（英文原值）」：中文保证可读，括号内的原值保证
- * 能与接口返回、日志和 SQL 里的枚举直接对齐。卡片、断言、实体共用同一套叫法，
- * 跨模块对照时语义一致；未收录的值按原值透传，新增枚举不会退化成空白。
+ * 界面枚举值统一展示为中文：卡片、断言、实体共用同一套叫法，跨模块对照时语义一致；
+ * 英文取值只出现在接口报文、日志与 SQL 里，界面不再混排，避免同一状态出现两种写法。
+ * 未收录的值按原值透传，新增枚举不会退化成空白。
  */
 const STATUS_LABELS:Record<string,string> = {
   DRAFT:'草稿', PENDING:'处理中', PENDING_REVIEW:'待评审', UNCERTAIN:'待确认',
@@ -294,7 +294,9 @@ const STATUS_LABELS:Record<string,string> = {
   SUPPORTED:'证据支持', PARTIALLY_SUPPORTED:'部分支持',
   SUPERSEDED:'已替代', EXPIRED:'已过期', INVALID:'已作废',
   ACTIVE:'有效', MERGED:'已合并', ARCHIVED:'已归档', RESOLVED:'已处理', UNKNOWN:'未知',
-  DISABLED:'已停用',
+  DISABLED:'已停用', DEPRECATED:'已弃用', INACTIVE:'未启用', RUNNING:'执行中',
+  SUCCESS:'成功', FAILED:'失败', PUBLISHED:'已发布', PROCESSED:'已处理', DEAD:'已进入死信',
+  REVOKED:'已吊销', RETRYING:'重试中', ENABLED:'已启用',
 }
 /** 知识卡片类型：取值来自 ai-service 抽取词表 FACT|PROCEDURE|RULE|PROBLEM_SOLUTION|CONCEPT。 */
 const CARD_TYPE_LABELS:Record<string,string> = {
@@ -317,15 +319,19 @@ const OBJECT_TYPE_LABELS:Record<string,string> = {
 function labeled(labels:Record<string,string>, value?:unknown):string {
   const raw = String(value ?? '').trim()
   if (!raw) return '—'
-  const label = labels[raw.toUpperCase()]
-  return label ? `${label}（${raw}）` : raw
+  return labels[raw.toUpperCase()] || raw
 }
 
 export const statusLabel = (status?:unknown):string => labeled(STATUS_LABELS, status)
+/** 索引快照完整性：取值来自后端校验结果 VERIFIED / COUNT_MISMATCH / SOURCE_CHANGED。 */
+export const integrityLabel = (state?:unknown):string =>
+  labeled({ VERIFIED:'完全一致', COUNT_MISMATCH:'数量不一致', SOURCE_CHANGED:'来源已变更' }, state)
 
-/** 平台角色：决定能否管理用户、治理知识库与写入知识。 */
+/** 平台角色：决定可见的一级模块、页内 Tab 与可执行的操作。 */
 const USER_ROLE_LABELS:Record<string,string> = {
-  ADMIN:'系统管理员', KNOWLEDGE_ADMIN:'知识库管理员', EDITOR:'编辑者', VIEWER:'浏览者',
+  ADMIN:'系统管理员', KNOWLEDGE_ADMIN:'知识系统管理员',
+  KNOWLEDGE_OPERATOR:'知识运营员', KNOWLEDGE_AUDITOR:'知识审核员', KNOWLEDGE_VIEWER:'知识浏览员',
+  EDITOR:'知识运营员', VIEWER:'知识浏览员',
 }
 /** 知识库可见范围。 */
 const VISIBILITY_LABELS:Record<string,string> = {
@@ -505,10 +511,11 @@ export interface QueryPolicySchema {
 
 /* ---- 用户、用户组与登录会话 ---- */
 
-export type UserRoleValue = 'ADMIN'|'KNOWLEDGE_ADMIN'|'EDITOR'|'VIEWER'
+export type UserRoleValue =
+  |'ADMIN'|'KNOWLEDGE_ADMIN'|'KNOWLEDGE_OPERATOR'|'KNOWLEDGE_AUDITOR'|'KNOWLEDGE_VIEWER'
 export interface UserAccount {
   id:number; userCode:string; username:string; displayName:string; email:string
-  role:UserRoleValue|string; status:string; lastLoginTime?:string|null
+  role:UserRoleValue|string; roleLabel?:string; status:string; lastLoginTime?:string|null
   groupIds:number[]; groupNames:string[]
 }
 export interface UserGroupRow {
@@ -520,7 +527,18 @@ export interface AuthSessionResult { token:string; expiresAt:string; user:UserAc
 export interface AuthStatus { enabled:boolean; allowAnonymous:boolean; initialized:boolean }
 export interface AuthMe extends AuthStatus {
   user:UserAccount|null; canManageUsers:boolean; canWriteKnowledge:boolean
+  /** 角色自带的权限码：前端据此裁剪菜单与操作，后端按同一套码校验接口。 */
+  permissions:string[]
+  /** 角色中文名，避免前端再维护一份映射。 */
+  roleLabel:string
+  /** 该角色登录后默认进入的视图 key。 */
+  homeView:string
 }
+/** 角色字典：角色码、中文名、职责说明与自带权限码。 */
+export interface RoleCatalogItem {
+  code:string; label:string; homeView:string; description:string; permissions:string[]
+}
+export interface RoleCatalog { roles:RoleCatalogItem[]; permissions:Record<string,string> }
 
 /* ---- 对外接口服务：RESTful / MCP Server / SSE ---- */
 
@@ -550,6 +568,7 @@ export interface ExternalAuditRow {
   id:number; keyId:number|null; keyCode:string|null; channel:string; method:string
   knowledgeBaseId:number|null; statusCode:number; durationMs:number
   traceId:string|null; message:string|null; createdTime:string
+  callerName?:string|null; requestParams?:string|null; responseData?:string|null
 }
 
 /* ---- 评测中心（设计 §14）：数据集 / 用例 / 运行 / 知识缺口 ---- */
@@ -708,6 +727,16 @@ export interface IntegrationHealthRow { name:string; status:string; errorRate:nu
 export interface IntegrationCallRow {
   time?:string; client?:string|null; protocol?:string; method?:string
   status?:number|null; latencyMs?:number|null; traceId?:string|null; message?:string|null
+  /** 调用方名称：凭证自命名的接入方，便于人工辨认。 */
+  caller?:string|null
+  /** 脱敏后的传入参数 JSON 文本。 */
+  requestParams?:string|null
+  /** 脱敏后的返回数据 JSON 文本；流式通道不采集。 */
+  responseData?:string|null
+}
+/** 单次调用的全部属性：调用日志点「查看 Trace」后展示的完整明细。 */
+export interface IntegrationCallDetail extends IntegrationCallRow {
+  id?:number; keyId?:number|null; knowledgeBaseId?:number|null
 }
 export interface IntegrationOverview {
   windowHours:number
@@ -718,4 +747,131 @@ export interface IntegrationOverview {
   protocolDistribution:ProtocolStat[]
   health:IntegrationHealthRow[]
   recentCalls:IntegrationCallRow[]
+}
+
+/* ---- 任务中心与告警（设计 §7） ---- */
+
+/** 任务状态：排队 → 运行中 → 成功 / 失败 / 已取消 / 死信。 */
+export type TaskStatus = 'QUEUED'|'RUNNING'|'SUCCEEDED'|'FAILED'|'CANCELED'|'DEAD'|string
+export interface TaskRun {
+  taskCode:string; knowledgeBaseId?:number; taskType?:string; taskName?:string
+  targetType?:string; targetCode?:string; status?:TaskStatus; stage?:string; progress?:number
+  triggerType?:'MANUAL'|'SCHEDULED'|'EVENT'|'RETRY'|string
+  triggeredBy?:string; retryCount?:number; maxAttempts?:number
+  errorMessage?:string; payloadJson?:string|null; resultJson?:string|null
+  startedTime?:string|null; finishedTime?:string|null; createdTime?:string|null
+}
+export interface TaskStats { total?:number; queued?:number; running?:number; succeeded?:number
+  failed?:number; dead?:number; canceled?:number; failure?:number
+  deadLetter?:number; documentFailed?:number }
+export interface AlertStats { open?:number; acked?:number; critical?:number; unresolved?:number }
+export interface AlertRule {
+  ruleCode:string; knowledgeBaseId?:number|null; name?:string; metric?:string; metricLabel?:string
+  severity?:'INFO'|'WARNING'|'CRITICAL'|string; threshold?:number; windowMinutes?:number
+  enabled?:boolean; channels?:string
+}
+export interface AlertEvent {
+  alertCode:string; ruleCode?:string; knowledgeBaseId?:number|null
+  severity?:'INFO'|'WARNING'|'CRITICAL'|string
+  status?:'OPEN'|'ACKED'|'RESOLVED'|string
+  title?:string; detailJson?:string|null; metricValue?:number; occurCount?:number
+  firstSeen?:string|null; lastSeen?:string|null; ackedBy?:string|null; createdTime?:string|null
+}
+export interface TaskOverview {
+  tasks:TaskRun[]; stats:TaskStats; taskTypes:string[]
+  alerts:AlertEvent[]; alertStats:AlertStats; rules:AlertRule[]
+}
+export interface TaskStatsPair { tasks:TaskStats; alerts:AlertStats }
+export interface TaskDictionaries {
+  taskTypes:string[]
+  alert:{ metrics:string[]; metricLabels:Record<string,string>; severities:string[]; statuses:string[] }
+}
+export interface AlertList { events:AlertEvent[]; stats:AlertStats }
+
+/* ---- 知识衍生（设计 §4.5） ---- */
+
+export interface DerivationRule {
+  ruleCode:string; knowledgeBaseId?:number; name?:string
+  derivationType?:'GRAPH_PATH'|'TEMPLATE'|'AI'|string
+  enabled?:boolean; scheduleType?:'MANUAL'|'SCHEDULED'|string
+  cronExpr?:string|null; nextFireAt?:string|null; lastFireAt?:string|null
+  scheduleText?:string; definitionJson?:string|null; algorithmVersion?:string
+  status?:string; lastError?:string|null; candidateCount?:number; staleCount?:number
+}
+export interface DerivedCandidate {
+  candidateCode:string; knowledgeBaseId?:number; ruleCode?:string
+  derivationType?:string; algorithmVersion?:string; title?:string; confidence?:number
+  status?:'DRAFT'|'PENDING'|'APPROVED'|'REJECTED'|'STALE'|string
+  baseCount?:number; staleReason?:string|null
+  createdTime?:string|null; updatedTime?:string|null
+}
+export interface DerivedCandidateDetail extends DerivedCandidate {
+  content?:string; baseAssertionCodes?:string[]; graphPath?:unknown
+  evidenceJson?:string|null; derivedFromJson?:string|null
+  permissionTags?:string[]|null; authorityScore?:number
+}
+export interface DerivationRun {
+  runCode:string; knowledgeBaseId?:number; ruleCode?:string
+  triggerType?:'MANUAL'|'SCHEDULED'|string; status?:string
+  scannedCount?:number; candidateCount?:number; staleCount?:number
+  errorMessage?:string|null; startedTime?:string|null; finishedTime?:string|null
+}
+export interface DerivationRunResult {
+  runCode:string; ruleCode?:string; triggerType?:string
+  scanned?:number; candidates?:number; errorMessage?:string
+}
+export interface DerivationOverview {
+  rules:DerivationRule[]; candidates:DerivedCandidate[]; runs:DerivationRun[]
+  stats:Record<string,number>
+  schema:{
+    derivationTypes:string[]; schedules:string[]; statuses:string[]
+    algorithmVersion:string; cronHint:string
+    definitionDefaults:Record<string,Record<string,unknown>>
+  }
+}
+
+/* ---- 知识 Schema（设计 §7） ---- */
+
+export interface SchemaType {
+  knowledgeBaseId?:number; kind?:'KNOWLEDGE_TYPE'|'ENTITY_TYPE'|'RELATION_TYPE'|string
+  typeCode:string; label?:string; description?:string
+  propertiesJson?:string|null; status?:'ACTIVE'|'DEPRECATED'|string
+  builtIn?:number; version?:number; updatedBy?:string|null; updatedTime?:string|null
+}
+export interface SchemaRelease {
+  releaseCode:string; knowledgeBaseId?:number; version?:string
+  state?:'DRAFT'|'PUBLISHED'|'ARCHIVED'|string
+  definitionJson?:string|null; validationJson?:string|null; checksum?:string
+  publishedBy?:string|null; publishedTime?:string|null; createdTime?:string|null
+  published?:boolean; delivery?:{ delivered?:boolean; error?:string|null }
+}
+export interface SchemaValidation {
+  valid:boolean; errors:string[]; warnings:string[]
+  violations:{ kind?:string; typeCode?:string; useCount?:number }[]
+  violationCount?:number; typeCount?:number; validatedAt?:string
+}
+export interface SchemaOverview {
+  types:SchemaType[]; published:SchemaRelease; releases:SchemaRelease[]
+  validation:SchemaValidation
+  meta:{ kinds:string[]; propertyTypes:string[]; statuses:string[]; codePattern:string; states:string[] }
+}
+
+/* ---- 批量接入（一次提交多个文件，后端异步执行） ---- */
+
+/** 批次内单个文件的处理结果：成功/失败逐文件独立，一个文件失败不影响其它文件。 */
+export interface BatchIngestItem {
+  index:number; filename:string; size:number
+  status:'RUNNING'|'SUCCEEDED'|'FAILED'|'CANCELED'|string; error:string|null; attempts:number
+  documentId:number|null; runId:number|null; runCode:string|null
+  chunkCount:number; cardCount:number; claimCount:number
+  startedAt:number|null; finishedAt:number|null
+}
+/** 批次整体视图：总进度 + 成功/失败计数 + 每个文件的明细，用于轮询展示。 */
+export interface BatchIngestStatus {
+  batchCode:string; taskCode:string|null; knowledgeBaseId:number
+  status:'RUNNING'|'SUCCEEDED'|'PARTIAL'|'FAILED'|'CANCELED'|string
+  fileCount:number; finishedCount:number; progress:number
+  succeededCount:number; failedCount:number; canceledCount:number
+  createdAt:number; finishedAt:number|null
+  items:BatchIngestItem[]
 }

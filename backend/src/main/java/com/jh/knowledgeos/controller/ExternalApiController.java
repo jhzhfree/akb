@@ -25,6 +25,7 @@ import org.springframework.web.bind.annotation.RestController;
 import javax.servlet.http.HttpServletRequest;
 import javax.validation.Valid;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Versioned RESTful surface for external business systems.
@@ -166,6 +167,10 @@ public class ExternalApiController {
             HttpServletRequest request, String method, Long requestedKb, ExternalCall body) throws Exception {
         long start = System.currentTimeMillis();
         ApiKey key = null;
+        // Read once, then hand it to every outcome below. Messages that "缺少 knowledgeBaseId" are
+        // only actionable next to the parameters the caller actually sent, so failures carry the
+        // same payload successes do.
+        Map<String, Object> params = auditService.requestParamsOf(request);
         try {
             if (!properties.isEnabled()) {
                 throw new SecurityException("对外接口服务已关闭");
@@ -174,28 +179,28 @@ public class ExternalApiController {
             Long kb = requestedKb == null ? null : accessService.resolveKnowledgeBase(key, requestedKb);
             Object data = body.run(key, kb);
             auditService.record(key, ApiCallAudit.CHANNEL_REST, method, kb, 200,
-                    System.currentTimeMillis() - start, null);
+                    System.currentTimeMillis() - start, null, params, data);
             return ApiResponse.ok(data);
         } catch (UnauthorizedException e) {
             auditService.record(key, ApiCallAudit.CHANNEL_REST, method, requestedKb, 401,
-                    System.currentTimeMillis() - start, e.getMessage());
+                    System.currentTimeMillis() - start, e.getMessage(), params, null);
             throw e;
         } catch (SecurityException e) {
             auditService.record(key, ApiCallAudit.CHANNEL_REST, method, requestedKb, 403,
-                    System.currentTimeMillis() - start, e.getMessage());
+                    System.currentTimeMillis() - start, e.getMessage(), params, null);
             throw e;
         } catch (RateLimitException e) {
             auditService.record(key, ApiCallAudit.CHANNEL_REST, method, requestedKb, 429,
-                    System.currentTimeMillis() - start, e.getMessage());
+                    System.currentTimeMillis() - start, e.getMessage(), params, null);
             throw e;
         } catch (IllegalArgumentException e) {
             // 调用方漏传 knowledgeBaseId 或参数非法属于 400，不应记成服务端故障。
             auditService.record(key, ApiCallAudit.CHANNEL_REST, method, requestedKb, 400,
-                    System.currentTimeMillis() - start, e.getMessage());
+                    System.currentTimeMillis() - start, e.getMessage(), params, null);
             throw e;
         } catch (Exception e) {
             auditService.record(key, ApiCallAudit.CHANNEL_REST, method, requestedKb, 500,
-                    System.currentTimeMillis() - start, e.getMessage());
+                    System.currentTimeMillis() - start, e.getMessage(), params, null);
             throw e;
         }
     }

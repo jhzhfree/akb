@@ -28,5 +28,45 @@ POST http://localhost:8080/api/knowledge/index/outbox/events/{{eventId}}/replay
 ### Skip a dead event (operator compensation)
 POST http://localhost:8080/api/knowledge/index/outbox/events/{{eventId}}/skip
 
+### 批量导入（多文件一次提交，返回批次号后台异步执行）
+POST http://localhost:8080/api/knowledge/documents/batch-upload
+Content-Type: multipart/form-data; boundary=WebAppBoundary
+
+--WebAppBoundary
+Content-Disposition: form-data; name="knowledgeBaseId"
+
+1
+--WebAppBoundary
+Content-Disposition: form-data; name="authorityScore"
+
+0.9
+--WebAppBoundary
+Content-Disposition: form-data; name="permissionTags"
+
+["team-a"]
+--WebAppBoundary
+Content-Disposition: form-data; name="files"; filename="01.md"
+Content-Type: text/markdown
+
+< ./dataset/bastion-audit/01-堡垒主机账号与授权管理规范.md
+--WebAppBoundary
+Content-Disposition: form-data; name="files"; filename="02.md"
+Content-Type: text/markdown
+
+< ./dataset/bastion-audit/02-堡垒主机高危命令清单与处置规范.md
+--WebAppBoundary--
+
+### 批量进度（轮询到状态不再是 RUNNING）
+GET http://localhost:8080/api/knowledge/documents/batch/{{batchCode}}
+
+### 批量批次列表
+GET http://localhost:8080/api/knowledge/documents/batches/1?limit=10
+
+### 取消剩余文件
+POST http://localhost:8080/api/knowledge/documents/batch/{{batchCode}}/cancel
+
+### 重跑失败文件
+POST http://localhost:8080/api/knowledge/documents/batch/{{batchCode}}/retry
+
 ### Check index count drift
 GET http://localhost:8080/api/knowledge/index/drift/1

@@ -70,7 +70,12 @@ public class KnowledgeExtractionService {
         // Source authority is read once and stamped onto every extracted object: retrieval uses it
         // as a ranking signal (design V1.1 §8.3) instead of re-reading rows per object.
         Double authorityScore = loadAuthorityScore(documentId);
-        PersistedKnowledge persisted = transactionRunner.required(() -> {
+        // Retried on deadlock for the same reason batch ingestion is: cards, claims and entities all
+        // upsert here, and a worker importing another document at the same time asks for the same
+        // entity rows in a different order — MySQL then rolls this transaction back whole and asks
+        // it to restart. Every statement inside is an idempotent upsert and the AI call above sits
+        // outside the transaction, so redoing it neither duplicates rows nor pays for the model twice.
+        PersistedKnowledge persisted = transactionRunner.retryingOnDeadlock(() -> {
             List<Map<String, Object>> cards = persistCards(
                     knowledgeBaseId, documentId, response.get("cards"), permissionTags, authorityScore);
             List<Map<String, Object>> claims = persistClaims(

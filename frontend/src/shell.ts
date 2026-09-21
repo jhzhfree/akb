@@ -10,18 +10,27 @@ import { inject, type InjectionKey } from 'vue'
 import type { UploadFile } from 'element-plus'
 import type { AssetType } from './components/AssetBrowserPanel.vue'
 import type { ConflictRow, QueryCitation, ReviewRow } from './types'
+import type { NavLeaf } from './navigation'
 
 export interface KosShell {
   /** 切换视图：接受 IA 视图 key，旧 key 由 navigation 归一化。 */
   navigate: (key: string) => void
+  /** 权限判定：按登录人角色下发的权限码判断，未开启认证时恒为 true。 */
+  can: (code: string) => boolean
+  /** 视图 key 是否可达：页面内的快捷入口先用它置灰，避免点了才提示无权访问。 */
+  canNavigate: (key: string) => boolean
+  /** 模块内当前角色可见的 Tab，页面直接用它渲染 ModuleTabs。 */
+  tabs: (sectionKey: string) => NavLeaf[]
   /** 工作台 KPI 下钻：按对象类型进入资产浏览（设计 §3.1）。 */
   openAssets: (type: AssetType) => void
   /** 打开知识图谱并定位到指定实体。 */
   openGraph: (code: string) => void
   /** 任务中心 / 生成页点击任务：选中该次运行并进入生成任务页。 */
   openRun: (runId: number) => void
-  /** 打开 Query Trace 抽屉。 */
+  /** 打开 检索链路追踪 抽屉。 */
   openTrace: (qid: string) => void
+  /** 打开集成调用 Trace 抽屉：入口是对外接口的 traceId，不是问答 queryId。 */
+  openCallTrace: (traceId: string) => void
   /** 打开统一对象详情抽屉。 */
   /** Chunk 也能打开：核对引用落点时需要看到原文与切分边界。 */
   openDetail: (mode: 'CARD' | 'CLAIM' | 'CHUNK', code: string) => void
@@ -33,6 +42,12 @@ export interface KosShell {
   upload: () => void
   pick: (file: UploadFile) => void
   remove: () => void
+  /** 批量上传：多个文件一次提交，外壳持有批次状态并轮询进度。 */
+  uploadFiles: (files: File[]) => void
+  /** 取消进行中的批次：排队的文件不再启动。 */
+  cancelBatch: (batchCode: string) => void
+  /** 重跑批次内的失败文件。 */
+  retryBatch: (batchCode: string) => void
   /** 选中一次摄入运行并加载其事件。 */
   selectRun: (id: number) => void
   /** 刷新知识库概览与统计。 */

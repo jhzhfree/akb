@@ -35,5 +35,9 @@ public final class AiApiPaths {
     public static final String QUERY_POLICY_PROFILE_PREFIX = "/ai/settings/query-policy/profiles/";
     /** Chunking vocabulary and defaults exposed by the AI service parser. */
     public static final String CHUNK_POLICY = "/ai/settings/chunk-policy";
+    /** Model backed knowledge derivation: propose candidates, never write knowledge directly. */
+    public static final String DERIVE = "/ai/derive";
+    /** Publish the knowledge schema vocabulary to the extraction side. */
+    public static final String SCHEMA_APPLY = "/ai/schema/apply";
     private AiApiPaths() {}
 }

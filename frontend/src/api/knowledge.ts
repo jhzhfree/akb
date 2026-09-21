@@ -114,6 +114,37 @@ export function uploadDocument(
   return axios.post('/api/knowledge/documents/upload', form, { timeout:LONG_TIMEOUT_MS })
 }
 
+/* ---- 批量接入（多个文件一次提交，后端异步解析并生成知识） ---- */
+
+/** 批量上传：立即返回批次号，实际解析在后台队列执行，前端轮询 batch 状态。 */
+export function uploadDocuments(
+  kb:number, files:File[], authorityScore:number, permissionTags:string[]=[],
+):Promise<ApiResponse<import('../types').BatchIngestStatus>> {
+  const form = new FormData()
+  form.append('knowledgeBaseId', String(kb))
+  form.append('authorityScore', String(authorityScore))
+  form.append('permissionTags', JSON.stringify(permissionTags))
+  files.forEach(file => form.append('files', file))
+  return axios.post('/api/knowledge/documents/batch-upload', form, { timeout:LONG_TIMEOUT_MS })
+}
+/** 批次状态：总进度与每个文件的成功/失败明细。 */
+export const getBatchStatus = (
+  batchCode:string,
+):Promise<ApiResponse<import('../types').BatchIngestStatus>> =>
+  axios.get(`/api/knowledge/documents/batch/${encodeURIComponent(batchCode)}`)
+/** 最近批次列表：回到接入页时仍能接着监视上次未结束的批量。 */
+export const listBatches = (
+  kb:number, limit=10,
+):Promise<ApiResponse<import('../types').BatchIngestStatus[]>> =>
+  axios.get(`/api/knowledge/documents/batches/${kb}?limit=${limit}`)
+/** 取消批次：排队中的文件不再启动，已在解析的文件跑完即停。 */
+export const cancelBatch = (batchCode:string):Promise<ApiResponse<Record<string,unknown>>> =>
+  axios.post(`/api/knowledge/documents/batch/${encodeURIComponent(batchCode)}/cancel`)
+/** 重跑批次内的失败文件，成功文件保持原样。 */
+export const retryBatch = (batchCode:string):Promise<ApiResponse<Record<string,unknown>>> =>
+  axios.post(`/api/knowledge/documents/batch/${encodeURIComponent(batchCode)}/retry`,
+    {}, { timeout:LONG_TIMEOUT_MS })
+
 export const queryKnowledge = (
   kb:number, query:string, permissionTags:string[]=[],
 ):Promise<ApiResponse<QueryResult>> =>
@@ -414,11 +445,16 @@ export const getIntegrationOverview = (
   hours=24,
 ):Promise<ApiResponse<import('../types').IntegrationOverview>> =>
   axios.get('/api/integration/overview', { params:{ hours } })
-/** 调用日志：traceId 可回到 Query Trace，形成外部调用 → 检索 → 证据的追溯链。 */
+/** 调用日志：traceId 可回到 检索链路追踪，形成外部调用 → 检索 → 证据的追溯链。 */
 export const getIntegrationCallLogs = (
   params:{ hours?:number; protocol?:string; status?:string; limit?:number } = {},
 ):Promise<ApiResponse<import('../types').IntegrationCallRow[]>> =>
   axios.get('/api/integration/call-logs', { params })
+/** 单次调用的全部属性（调用方、入参、返回）：给调用日志的 Trace 视图用。 */
+export const getIntegrationCallDetail = (
+  traceId:string,
+):Promise<ApiResponse<import('../types').IntegrationCallDetail|null>> =>
+  axios.get(`/api/integration/call-logs/${encodeURIComponent(traceId)}`)
 
 /* ---- 治理洞察：版本治理与知识质量（设计 §5.1 / §9.4） ---- */
 
@@ -434,3 +470,125 @@ export const getQualityOverview = (
   kb:number, withinDays=30,
 ):Promise<ApiResponse<import('../types').QualityOverview>> =>
   axios.get(`/api/knowledge/governance/quality/${kb}`, { params:{ withinDays } })
+
+/* ---- 任务中心与告警（设计 §7：任务 / DLQ / 告警规则） ---- */
+
+export const getTaskOverview = (
+  params:{ kb?:number; status?:string; taskType?:string; triggerType?:string; limit?:number } = {},
+):Promise<ApiResponse<import('../types').TaskOverview>> =>
+  axios.get('/api/knowledge/tasks', { params })
+export const getTaskStats = (kb?:number):Promise<ApiResponse<import('../types').TaskStatsPair>> =>
+  axios.get('/api/knowledge/tasks/stats', { params:{ kb } })
+export const getTaskDictionaries = ():Promise<ApiResponse<import('../types').TaskDictionaries>> =>
+  axios.get('/api/knowledge/tasks/types')
+export const getTaskDetail = (taskCode:string):Promise<ApiResponse<Record<string, unknown>>> =>
+  axios.get(`/api/knowledge/tasks/${taskCode}`)
+/** 重试：失败与死信任务重新入队，接入类任务同时重新执行。 */
+export const retryTask = (taskCode:string, kb?:number):Promise<ApiResponse<Record<string, unknown>>> =>
+  axios.post(`/api/knowledge/tasks/${taskCode}/retry`, null, { params:{ kb } })
+export const cancelTask = (taskCode:string):Promise<ApiResponse<Record<string, unknown>>> =>
+  axios.post(`/api/knowledge/tasks/${taskCode}/cancel`)
+export const getAlerts = (
+  params:{ kb?:number; status?:string; severity?:string; limit?:number } = {},
+):Promise<ApiResponse<import('../types').AlertList>> =>
+  axios.get('/api/knowledge/tasks/alerts', { params })
+/** 立即评估告警规则，不等待下一次调度。 */
+export const evaluateAlerts = (kb?:number):Promise<ApiResponse<Record<string, unknown>>> =>
+  axios.post('/api/knowledge/tasks/alerts/evaluate', null, { params:{ kb } })
+export const ackAlert = (alertCode:string, note?:string):Promise<ApiResponse<Record<string, unknown>>> =>
+  axios.post(`/api/knowledge/tasks/alerts/${alertCode}/ack`, { note })
+export const resolveAlert = (alertCode:string, note?:string):Promise<ApiResponse<Record<string, unknown>>> =>
+  axios.post(`/api/knowledge/tasks/alerts/${alertCode}/resolve`, { note })
+export const reopenAlert = (alertCode:string, note?:string):Promise<ApiResponse<Record<string, unknown>>> =>
+  axios.post(`/api/knowledge/tasks/alerts/${alertCode}/reopen`, { note })
+export const createAlertRule = (
+  kb:number|undefined, payload:Record<string, unknown>,
+):Promise<ApiResponse<import('../types').AlertRule>> =>
+  axios.post('/api/knowledge/tasks/alerts/rules', payload, { params:{ kb } })
+export const updateAlertRule = (
+  ruleCode:string, payload:Record<string, unknown>,
+):Promise<ApiResponse<import('../types').AlertRule>> =>
+  axios.put(`/api/knowledge/tasks/alerts/rules/${ruleCode}`, payload)
+export const deleteAlertRule = (ruleCode:string):Promise<ApiResponse<string>> =>
+  axios.delete(`/api/knowledge/tasks/alerts/rules/${ruleCode}`)
+
+/* ---- 知识衍生：手动衍生与计划衍生（设计 §4.5 / PRD §5.5） ---- */
+
+export const getDerivationOverview = (
+  params:{ kb?:number; status?:string; ruleCode?:string; limit?:number } = {},
+):Promise<ApiResponse<import('../types').DerivationOverview>> =>
+  axios.get('/api/knowledge/derivations', { params })
+export const createDerivationRule = (
+  kb:number|undefined, payload:Record<string, unknown>,
+):Promise<ApiResponse<import('../types').DerivationRule>> =>
+  axios.post('/api/knowledge/derivations/rules', payload, { params:{ kb } })
+export const updateDerivationRule = (
+  ruleCode:string, payload:Record<string, unknown>,
+):Promise<ApiResponse<import('../types').DerivationRule>> =>
+  axios.put(`/api/knowledge/derivations/rules/${ruleCode}`, payload)
+export const deleteDerivationRule = (ruleCode:string):Promise<ApiResponse<string>> =>
+  axios.delete(`/api/knowledge/derivations/rules/${ruleCode}`)
+/** 手动衍生：立即执行一次规则。 */
+export const runDerivationRule = (
+  ruleCode:string, kb?:number,
+):Promise<ApiResponse<import('../types').DerivationRunResult>> =>
+  axios.post(`/api/knowledge/derivations/rules/${ruleCode}/run`, null, { params:{ kb } })
+/** 计划衍生：给定 cron 改为计划执行，cron 为空改回手动。 */
+export const planDerivationRule = (
+  ruleCode:string, cronExpr:string,
+):Promise<ApiResponse<import('../types').DerivationRule>> =>
+  axios.post(`/api/knowledge/derivations/rules/${ruleCode}/plan`, { cronExpr })
+export const getDerivedCandidates = (
+  params:{ kb?:number; status?:string; ruleCode?:string; limit?:number } = {},
+):Promise<ApiResponse<import('../types').DerivedCandidate[]>> =>
+  axios.get('/api/knowledge/derivations/candidates', { params })
+export const getDerivedCandidate = (
+  candidateCode:string,
+):Promise<ApiResponse<import('../types').DerivedCandidateDetail>> =>
+  axios.get(`/api/knowledge/derivations/candidates/${candidateCode}`)
+export const reviewDerivedCandidate = (
+  candidateCode:string, decision:'APPROVED'|'REJECTED'|string, reason?:string,
+):Promise<ApiResponse<import('../types').DerivedCandidateDetail>> =>
+  axios.post(`/api/knowledge/derivations/candidates/${candidateCode}/review`, { decision, reason })
+/** 基础断言变更后标记衍生候选失效。 */
+export const markDerivedStale = (
+  kb:number|undefined, assertionCodes:string[],
+):Promise<ApiResponse<Record<string, unknown>>> =>
+  axios.post('/api/knowledge/derivations/stale', { assertionCodes }, { params:{ kb } })
+export const getDerivationRuns = (
+  params:{ kb?:number; ruleCode?:string; limit?:number } = {},
+):Promise<ApiResponse<import('../types').DerivationRun[]>> =>
+  axios.get('/api/knowledge/derivations/runs', { params })
+
+/* ---- 知识 Schema：类型字典、校验与发布（设计 §7） ---- */
+
+export const getSchemaOverview = (
+  params:{ kb?:number; kind?:string } = {},
+):Promise<ApiResponse<import('../types').SchemaOverview>> =>
+  axios.get('/api/knowledge/schema', { params })
+export const getSchemaTypes = (
+  kb?:number, kind?:string,
+):Promise<ApiResponse<import('../types').SchemaType[]>> =>
+  axios.get('/api/knowledge/schema/types', { params:{ kb, kind } })
+export const upsertSchemaType = (
+  kb:number|undefined, payload:Record<string, unknown>,
+):Promise<ApiResponse<import('../types').SchemaType>> =>
+  axios.post('/api/knowledge/schema/types', payload, { params:{ kb } })
+export const deprecateSchemaType = (
+  kb:number|undefined, kind:string, typeCode:string,
+):Promise<ApiResponse<import('../types').SchemaType>> =>
+  axios.post('/api/knowledge/schema/types/deprecate', { kind, typeCode }, { params:{ kb } })
+export const deleteSchemaType = (
+  kb:number|undefined, kind:string, typeCode:string,
+):Promise<ApiResponse<string>> =>
+  axios.delete('/api/knowledge/schema/types', { params:{ kb, kind, typeCode } })
+export const validateSchema = (
+  kb?:number,
+):Promise<ApiResponse<import('../types').SchemaValidation>> =>
+  axios.get('/api/knowledge/schema/validate', { params:{ kb } })
+export const publishSchema = (kb?:number):Promise<ApiResponse<import('../types').SchemaRelease>> =>
+  axios.post('/api/knowledge/schema/publish', null, { params:{ kb } })
+export const getSchemaReleases = (
+  kb?:number,
+):Promise<ApiResponse<import('../types').SchemaRelease[]>> =>
+  axios.get('/api/knowledge/schema/releases', { params:{ kb } })

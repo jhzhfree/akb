@@ -9,15 +9,20 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 public class WebMvcSecurityConfig implements WebMvcConfigurer {
     private final AuthInterceptor authInterceptor;
     private final KnowledgeBaseAccessInterceptor accessInterceptor;
+    private final PermissionInterceptor permissionInterceptor;
 
-    public WebMvcSecurityConfig(AuthInterceptor authInterceptor, KnowledgeBaseAccessInterceptor accessInterceptor) {
+    public WebMvcSecurityConfig(AuthInterceptor authInterceptor,
+            KnowledgeBaseAccessInterceptor accessInterceptor,
+            PermissionInterceptor permissionInterceptor) {
         this.authInterceptor = authInterceptor;
         this.accessInterceptor = accessInterceptor;
+        this.permissionInterceptor = permissionInterceptor;
     }
 
     @Override
     public void addInterceptors(InterceptorRegistry registry) {
         registry.addInterceptor(authInterceptor).addPathPatterns("/api/**").order(1);
         registry.addInterceptor(accessInterceptor).addPathPatterns("/api/knowledge/**").order(2);
+        registry.addInterceptor(permissionInterceptor).addPathPatterns("/api/**").order(3);
     }
 }

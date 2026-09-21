@@ -90,7 +90,10 @@ public class EntityResolutionService {
         List<Map<String, Object>> merges = asMaps(mergesObject);
         List<Map<String, Object>> aliases = asMaps(aliasesObject);
 
-        transactionRunner.required(() -> {
+        // Retried on deadlock: several documents of a batch merge entities against the same
+        // knowledge base at once, and the merge is idempotent — re-pointing links that already
+        // moved affects nothing, so losing to a deadlock costs time, never correctness.
+        transactionRunner.retryingOnDeadlock(() -> {
             for (Map<String, Object> merge : merges) {
                 String from = stringValue(merge.get("from"));
                 String to = stringValue(merge.get("to"));
@@ -98,8 +101,8 @@ public class EntityResolutionService {
                     continue;
                 }
                 // Re-point every object link first, then retire the duplicate node.
-                mapper.mergeEntityLinks(knowledgeBaseId, from, to);
-                mapper.mergeClaimEntityLinks(knowledgeBaseId, from, to);
+                mapper.reassignCardEntityLinks(knowledgeBaseId, from, to);
+                mapper.reassignClaimEntityLinks(knowledgeBaseId, from, to);
                 mapper.updateEntityStatus(knowledgeBaseId, from, "MERGED");
             }
             for (Map<String, Object> alias : aliases) {

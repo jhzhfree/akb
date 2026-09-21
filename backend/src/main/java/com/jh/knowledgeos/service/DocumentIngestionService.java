@@ -7,11 +7,13 @@ import com.jh.knowledgeos.common.PlatformEventTypes;
 import com.jh.knowledgeos.domain.KnowledgeDocument;
 import com.jh.knowledgeos.domain.KnowledgeSource;
 import com.jh.knowledgeos.mapper.KnowledgeMapper;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.concurrent.Callable;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -36,6 +38,7 @@ public class DocumentIngestionService {
     private final SourceFileStorageService sourceFileStorage;
     private final PlatformEventPublisher publisher;
     private final ChunkPolicyService chunkPolicyService;
+    private final TaskCenterService taskCenterService;
 
     public DocumentIngestionService(
             KnowledgeMapper mapper,
@@ -48,7 +51,8 @@ public class DocumentIngestionService {
             IngestionObservabilityService observabilityService,
             SourceFileStorageService sourceFileStorage,
             PlatformEventPublisher publisher,
-            ChunkPolicyService chunkPolicyService) {
+            ChunkPolicyService chunkPolicyService,
+            @Lazy TaskCenterService taskCenterService) {
         this.mapper = mapper;
         this.aiClient = aiClient;
         this.extractionService = extractionService;
@@ -60,6 +64,7 @@ public class DocumentIngestionService {
         this.sourceFileStorage = sourceFileStorage;
         this.publisher = publisher;
         this.chunkPolicyService = chunkPolicyService;
+        this.taskCenterService = taskCenterService;
     }
 
     /**
@@ -68,7 +73,33 @@ public class DocumentIngestionService {
      */
     public Map<String, Object> upload(Long knowledgeBaseId, MultipartFile file, Double authorityScore, String permissionTags)
             throws Exception {
-        return ingest(knowledgeBaseId, file, authorityScore, permissionTags, null);
+        String name = file == null ? "" : String.valueOf(file.getOriginalFilename());
+        // Ingestion is the longest job on the platform and the one operators are asked about
+        // most, so it is registered in the task centre before a single byte is parsed: a crash
+        // mid-way leaves a failed task instead of a silent hole.
+        return tracked(knowledgeBaseId, "文档接入：" + name, null,
+                () -> ingest(knowledgeBaseId, file, authorityScore, permissionTags, null));
+    }
+
+    /** Runs work as a tracked task: the ledger is updated whatever the outcome. */
+    private Map<String, Object> tracked(Long knowledgeBaseId, String taskName, String targetCode,
+            Callable<Map<String, Object>> work) throws Exception {
+        Map<String, Object> payload = new LinkedHashMap<String, Object>();
+        payload.put("knowledgeBaseId", knowledgeBaseId);
+        payload.put("documentId", targetCode);
+        Map<String, Object> task = taskCenterService.enqueue(knowledgeBaseId,
+                TaskCenterService.TYPE_INGESTION, taskName, "DOCUMENT", targetCode,
+                TaskCenterService.TRIGGER_MANUAL, payload);
+        String taskCode = String.valueOf(task.get("taskCode"));
+        taskCenterService.start(taskCode, "PARSE");
+        try {
+            Map<String, Object> result = work.call();
+            taskCenterService.succeed(taskCode, result);
+            return result;
+        } catch (Exception e) {
+            taskCenterService.fail(taskCode, e.getMessage());
+            throw e;
+        }
     }
 
     /**
@@ -90,16 +121,18 @@ public class DocumentIngestionService {
             mapper.updateDocumentState(documentId, "FAILED", "RETRY", "原始文件缺失，无法重跑", retries);
             throw new IllegalStateException("原始文件缺失，无法重跑该文档");
         }
-        InMemoryMultipartFile file = InMemoryMultipartFile.of(
+        final InMemoryMultipartFile file = InMemoryMultipartFile.of(
                 stored,
                 String.valueOf(context.get("sourceName")),
                 mimeFromExtension(String.valueOf(context.get("sourceName"))));
-        return ingest(
-                toLong(context.get("knowledgeBaseId")),
-                file,
-                toDouble(context.get("authorityScore")),
-                String.valueOf(context.get("permissionTags")),
-                context);
+        final Long knowledgeBaseId = toLong(context.get("knowledgeBaseId"));
+        return tracked(knowledgeBaseId, "文档重跑：" + documentId, String.valueOf(documentId),
+                () -> ingest(
+                        knowledgeBaseId,
+                        file,
+                        toDouble(context.get("authorityScore")),
+                        String.valueOf(context.get("permissionTags")),
+                        context));
     }
 
     @SuppressWarnings("unchecked")
@@ -146,7 +179,11 @@ public class DocumentIngestionService {
 
             observabilityService.event(run.getId(), "PERSIST_STARTED", "PERSIST", "RUNNING",
                     "写入权威知识数据", null);
-            IngestionState state = transactionRunner.required(() -> {
+            // Retried on deadlock: a batch runs several documents through this write set at once,
+            // and every INSERT here is rolled back cleanly by the database, so redoing the whole
+            // transaction is a no-op rather than a duplicate. The expensive AI calls sit outside
+            // it precisely so that a retry never pays for them twice.
+            IngestionState state = transactionRunner.retryingOnDeadlock(() -> {
                 try {
                     KnowledgeSource source;
                     KnowledgeDocument document;
@@ -210,7 +247,8 @@ public class DocumentIngestionService {
             int cardCount = resultCount(knowledgeResult, "cards");
             int claimCount = resultCount(knowledgeResult, "claims");
             observabilityService.event(run.getId(), "EXTRACTION_COMPLETED", "EXTRACT", "SUCCESS",
-                    "候选知识抽取完成", knowledgeResult);
+                    "候选知识抽取完成",
+                    extractionEventDetail(state.document.getId(), knowledgeResult));
             observabilityService.complete(run.getId(), state.indexChunks.size(), cardCount, claimCount);
 
             Map<String, Object> result = new LinkedHashMap<String, Object>();
@@ -305,6 +343,53 @@ public class DocumentIngestionService {
         if (value instanceof Number) return ((Number) value).intValue();
         Object count = result.get(key + "Count");
         return count instanceof Number ? ((Number) count).intValue() : 0;
+    }
+
+    /**
+     * What the EXTRACTION_COMPLETED event gets to keep about an extraction.
+     *
+     * <p>The extractor returns the whole reasoned output of a document — every card body, every
+     * claim, the entities and relations. Handing that to the event copies the document into
+     * observability storage: past a modest file it overflows the detail column, and in strict mode
+     * MySQL answers with {@code Data truncation}, which would fail a document that had in fact
+     * extracted everything correctly. The objects are durable in their own tables; an event only
+     * needs to say how many there were and which ones.</p>
+     */
+    private Map<String, Object> extractionEventDetail(Long documentId, Map<String, Object> knowledge) {
+        Map<String, Object> detail = new LinkedHashMap<String, Object>();
+        detail.put("documentId", documentId);
+        detail.put("cardCount", sizeOf(knowledge.get("cards")));
+        detail.put("claimCount", sizeOf(knowledge.get("claims")));
+        detail.put("entityCount", sizeOf(knowledge.get("entities")));
+        detail.put("relationCount", sizeOf(knowledge.get("relations")));
+        detail.put("conflictCount", sizeOf(knowledge.get("conflicts")));
+        detail.put("cardCodes", codesOf(knowledge.get("cards"), "knowledge_code", 20));
+        detail.put("claimCodes", codesOf(knowledge.get("claims"), "claim_code", 20));
+        Object resolution = knowledge.get("entityResolution");
+        if (resolution instanceof Map) {
+            Map<?, ?> resolved = (Map<?, ?>) resolution;
+            detail.put("entityMerged", resolved.get("merged"));
+            detail.put("entityAliases", resolved.get("aliases"));
+            detail.put("entityResolutionDegraded", resolved.get("degraded"));
+        }
+        return detail;
+    }
+
+    private int sizeOf(Object value) {
+        return value instanceof List ? ((List<?>) value).size() : 0;
+    }
+
+    private List<String> codesOf(Object items, String key, int limit) {
+        List<String> codes = new ArrayList<String>();
+        if (!(items instanceof List)) return codes;
+        for (Object item : (List<?>) items) {
+            if (codes.size() >= limit) break;
+            if (item instanceof Map) {
+                Object code = ((Map<?, ?>) item).get(key);
+                if (code != null) codes.add(String.valueOf(code));
+            }
+        }
+        return codes;
     }
 
     private KnowledgeSource createSource(

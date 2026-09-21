@@ -2,7 +2,7 @@
   <section class="kb-page">
     <header class="kb-section-head">
       <div>
-        <div class="kb-eyebrow">EXTERNAL SERVICE LAB</div>
+        <div class="kb-eyebrow">外部服务联调</div>
         <h1 class="kb-title mt-1">外部服务联调台</h1>
         <p class="kb-muted mt-1">
           用真实的 API Key 直接调用 RESTful / MCP / SSE 三个通道，逐条比对返回结构并给出判定：
@@ -25,7 +25,7 @@
           <input v-model="cfg.baseUrl" class="kb-input mt-1" placeholder="/api" />
         </label>
         <label class="block md:col-span-2">
-          <span class="kb-field-label">API Key 明文</span>
+          <span class="kb-field-label">API 密钥明文</span>
           <div class="mt-1 flex items-center gap-2">
             <input v-model="cfg.apiKey" :type="showKey ? 'text' : 'password'" class="kb-input" placeholder="kos_ak_..." />
             <button class="kb-btn-outline shrink-0" @click="showKey = !showKey">{{ showKey ? '隐藏' : '显示' }}</button>
@@ -61,7 +61,7 @@
         </label>
       </div>
       <p v-if="!cfg.apiKey.trim()" class="border-t border-[#eef2f7] px-4 py-2 text-[11px] text-amber-600">
-        尚未填写 API Key：可点击右上角「签发临时测试凭证」自动生成一枚 READ 凭证，或粘贴已有明文密钥。
+        尚未填写 API 密钥：可点击右上角「签发临时测试凭证」自动生成一枚 READ 凭证，或粘贴已有明文密钥。
       </p>
     </article>
 
@@ -136,7 +136,7 @@
                   class="mt-1 overflow-auto whitespace-pre-wrap break-words rounded-lg bg-ink-50 p-2 text-[11px] leading-5 text-ink-700">{{ prettyBody(log.body) }}</pre>
                 <div class="mt-1 flex items-center gap-2">
                   <span class="truncate text-[11px] text-ink-400">{{ log.url }}</span>
-                  <button class="kb-btn-ghost shrink-0 text-[11px]" @click="copy(log.curl)">复制 cURL</button>
+                  <button class="kb-btn-ghost shrink-0 text-[11px]" @click="copy(log.curl)">复制请求命令</button>
                 </div>
               </div>
             </div>
@@ -1249,7 +1249,7 @@ const sseVerdict = computed(() => {
       { label:'delta 增量推送', pass:names.includes('delta'), detail:`${names.filter(n => n === 'delta').length} 片` },
       { label:'citation 引用', pass:names.includes('citation'), detail:names.includes('citation') ? '已推送' : '未收到' },
       { label:'done 结束事件', pass:names.includes('done'), detail:names.includes('done') ? '已推送' : '未收到' },
-      { label:'无 error 事件', pass:!names.includes('error'), detail:names.includes('error') ? '有 error' : '无' },
+      { label:'无异常事件', pass:!names.includes('error'), detail:names.includes('error') ? '有 error' : '无' },
     ]
     return { pass:items.every(item => item.pass), items }
   }
@@ -1287,7 +1287,7 @@ async function issueLabKey() {
     }
     cfg.apiKey = secret
     showKey.value = true
-    ElMessage.success('临时凭证已签发并填入（READ / 60 次每分钟），验证完请到外部服务页吊销')
+    ElMessage.success('临时凭证已签发并填入（只读 / 每分钟 60 次），验证完请到外部服务页吊销')
   } catch (e) {
     ElMessage.error(message(e))
   }

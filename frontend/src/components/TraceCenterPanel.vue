@@ -2,8 +2,8 @@
   <section class="kb-page">
     <header class="kb-section-head">
       <div>
-        <div class="kb-eyebrow">QUERY OBSERVABILITY</div>
-        <h1 class="kb-title mt-1">Query Trace</h1>
+        <div class="kb-eyebrow">查询链路观测</div>
+        <h1 class="kb-title mt-1">检索链路追踪</h1>
         <p class="kb-muted mt-1">
           每次问答都会落一条 trace：查询改写、路由决策、多路召回、RRF 融合、Rerank 与上下文装配逐段可回放。
         </p>
@@ -16,7 +16,7 @@
     <article class="kb-card">
       <div class="kb-card-head">
         <b class="text-sm">最近查询</b>
-        <span class="kb-muted">点击「查看 Trace」打开链路抽屉</span>
+        <span class="kb-muted">点击「查看链路」打开链路抽屉</span>
       </div>
       <div class="p-3">
         <PanelState
@@ -27,7 +27,7 @@
           retryable
           @retry="emit('refresh')">
           <el-table :data="history" border size="small" max-height="520">
-            <el-table-column prop="queryId" label="Query ID" min-width="150" show-overflow-tooltip />
+            <el-table-column prop="queryId" label="查询标识" min-width="150" show-overflow-tooltip />
             <el-table-column prop="originalQuery" label="问题" min-width="240" show-overflow-tooltip />
             <el-table-column prop="modelName" label="模型" width="140" />
             <el-table-column label="耗时" width="90">

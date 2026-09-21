@@ -83,7 +83,7 @@ async def inspect_okf_bundle(file: UploadFile = File(...)):
 @router.post("/ai/extract")
 async def extract(r: ExtractRequest):
     """Extract structured knowledge candidates from normalized document evidence."""
-    return await extractor.extract(r.text, r.chunks, r.units)
+    return await extractor.extract(r.text, r.chunks, r.units, r.knowledgeBaseId)
 
 
 @router.post("/ai/standard/index")

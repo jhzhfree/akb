@@ -17,6 +17,7 @@ import com.jh.knowledgeos.dto.KnowledgeBaseRequest;
 import com.jh.knowledgeos.service.AclContextResolver;
 import com.jh.knowledgeos.service.AclAuditService;
 import com.jh.knowledgeos.service.AclRebuildOrchestrator;
+import com.jh.knowledgeos.service.BatchIngestionService;
 import com.jh.knowledgeos.service.EntityGovernanceService;
 import com.jh.knowledgeos.service.KnowledgeBaseService;
 import com.jh.knowledgeos.service.KnowledgeBasePurgeService;
@@ -75,6 +76,7 @@ public class KnowledgeController {
     private final KnowledgeBasePurgeService purgeService;
     private final KnowledgeBaseAccessService accessService;
     private final ChunkPolicyService chunkPolicyService;
+    private final BatchIngestionService batchIngestionService;
 
     public KnowledgeController(
             KnowledgeService service,
@@ -91,7 +93,8 @@ public class KnowledgeController {
             EntityGovernanceService entityGovernanceService,
             KnowledgeBasePurgeService purgeService,
             KnowledgeBaseAccessService accessService,
-            ChunkPolicyService chunkPolicyService) {
+            ChunkPolicyService chunkPolicyService,
+            BatchIngestionService batchIngestionService) {
         this.service = service;
         this.objectMapper = objectMapper;
         this.aclContextResolver = aclContextResolver;
@@ -107,6 +110,7 @@ public class KnowledgeController {
         this.purgeService = purgeService;
         this.accessService = accessService;
         this.chunkPolicyService = chunkPolicyService;
+        this.batchIngestionService = batchIngestionService;
     }
 
     @GetMapping("/settings/chunk-policy")
@@ -299,6 +303,49 @@ public class KnowledgeController {
             @RequestParam(value = "permissionTags", required = false) String permissionTags)
             throws Exception {
         return ApiResponse.ok(service.upload(knowledgeBaseId, file, authorityScore, permissionTags));
+    }
+
+    /**
+     * Batch ingestion: many files, one batch code, one task entry. Returns immediately so no HTTP
+     * client has to stay open for the minutes several documents take; the caller polls the batch
+     * status below, and each file still gets its own task, events and evidence.
+     */
+    @PostMapping(value = "/documents/batch-upload", consumes = "multipart/form-data")
+    @Operation(summary = "批量上传多个知识源文档：返回批次号异步执行，逐文件记录成功/失败（设计 §6.2）")
+    public ApiResponse<Object> batchUpload(
+            @RequestParam("knowledgeBaseId") Long knowledgeBaseId,
+            @RequestParam("files") List<MultipartFile> files,
+            @RequestParam(value = "authorityScore", required = false) Double authorityScore,
+            @RequestParam(value = "permissionTags", required = false) String permissionTags)
+            throws Exception {
+        return ApiResponse.ok(
+                batchIngestionService.submit(knowledgeBaseId, files, authorityScore, permissionTags));
+    }
+
+    @GetMapping("/documents/batches/{kb}")
+    @Operation(summary = "批量接入批次列表（按创建时间倒序）")
+    public ApiResponse<Object> batchList(
+            @PathVariable Long kb, @RequestParam(value = "limit", required = false) Integer limit) {
+        return ApiResponse.ok(batchIngestionService.list(kb, limit));
+    }
+
+    @GetMapping("/documents/batch/{batchCode}")
+    @Operation(summary = "批量接入批次状态：总进度与每个文件的文档/运行/失败原因")
+    public ApiResponse<Object> batchStatus(@PathVariable String batchCode) {
+        return ApiResponse.ok(batchIngestionService.status(batchCode));
+    }
+
+    @PostMapping("/documents/batch/{batchCode}/cancel")
+    @Operation(summary = "取消批次：排队中的文件不再启动，已在解析的文件跑完后即停")
+    public ApiResponse<Object> batchCancel(@PathVariable String batchCode) {
+        return ApiResponse.ok(batchIngestionService.cancel(batchCode));
+    }
+
+    /** Re-runs only the failed files of a finished batch: the successful ones keep their chunks. */
+    @PostMapping("/documents/batch/{batchCode}/retry")
+    @Operation(summary = "重跑批次内的失败文件，成功文件不受影响")
+    public ApiResponse<Object> batchRetry(@PathVariable String batchCode) {
+        return ApiResponse.ok(batchIngestionService.retryFailed(batchCode));
     }
 
     @GetMapping("/sources/{kb}/{sourceId}/preview")

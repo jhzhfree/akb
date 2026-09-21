@@ -2,7 +2,7 @@
   <section class="kb-page">
     <header class="kb-section-head">
       <div>
-        <div class="kb-eyebrow">KNOWLEDGE INTEGRATION</div>
+        <div class="kb-eyebrow">知识集成</div>
         <h1 class="kb-title mt-1">集成概览</h1>
         <p class="kb-muted mt-1">
           接知识：把平台的可信知识能力通过 REST API / MCP / SSE 与凭证接入业务系统、AI 应用与 Agent。

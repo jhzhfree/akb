@@ -2,7 +2,7 @@
   <section class="kb-page">
     <header class="kb-section-head">
       <div>
-        <div class="kb-eyebrow">MCP SERVER</div>
+        <div class="kb-eyebrow">MCP 服务</div>
         <h1 class="kb-title mt-1">MCP 服务</h1>
         <p class="kb-muted mt-1">
           把知识能力以 Tools / Resources 的形式交给外部智能体：一个 URL 加一个 API Key 即可接入。
@@ -31,7 +31,7 @@
     <div class="mt-4 grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_380px]">
       <article class="kb-card">
         <div class="kb-card-head">
-          <b>Tools</b>
+          <b>工具</b>
           <span class="kb-muted">点开查看入参与示例请求</span>
         </div>
         <PanelState :loading="loading" :error="error" :empty="!tools.length" empty-text="没有可用工具" retryable @retry="loadAll">
@@ -56,7 +56,7 @@
                   </li>
                   <li v-if="!Object.keys(tool.inputSchema?.properties || {}).length" class="text-xs text-ink-400">无入参</li>
                 </ul>
-                <b class="mt-3 block text-[11px] text-ink-600">tools/call 示例</b>
+                <b class="mt-3 block text-[11px] text-ink-600">tools/call 调用示例</b>
                 <pre class="mt-1 overflow-x-auto rounded-lg bg-white p-2 text-[11px] leading-5 text-ink-700">{{ callSample(tool) }}</pre>
               </div>
             </li>
@@ -69,17 +69,17 @@
           <div class="kb-card-head"><b>接入信息</b></div>
           <dl class="space-y-2 px-4 py-3 text-xs">
             <div class="flex items-center justify-between gap-3">
-              <dt class="text-ink-500">Endpoint</dt><dd class="font-mono">{{ manifest?.endpoint || '—' }}</dd>
+              <dt class="text-ink-500">接入地址</dt><dd class="font-mono">{{ manifest?.endpoint || '—' }}</dd>
             </div>
             <div class="flex items-center justify-between gap-3">
-              <dt class="text-ink-500">Server</dt><dd>{{ manifest?.serverName || '—' }} {{ manifest?.serverVersion || '' }}</dd>
+              <dt class="text-ink-500">服务端</dt><dd>{{ manifest?.serverName || '—' }} {{ manifest?.serverVersion || '' }}</dd>
             </div>
             <div class="flex items-center justify-between gap-3">
               <dt class="text-ink-500">鉴权</dt><dd>{{ manifest?.auth || '—' }}</dd>
             </div>
           </dl>
           <div class="border-t border-ink-100 px-4 py-3">
-            <b class="text-[11px] text-ink-600">initialize 响应</b>
+            <b class="text-[11px] text-ink-600">initialize 握手响应</b>
             <pre class="mt-1 max-h-48 overflow-auto rounded-lg bg-ink-50 p-2 text-[11px] leading-5 text-ink-700">{{ initSample }}</pre>
           </div>
         </article>

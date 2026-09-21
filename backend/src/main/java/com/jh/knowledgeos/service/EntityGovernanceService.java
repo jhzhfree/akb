@@ -115,9 +115,11 @@ public class EntityGovernanceService {
             }
         }
 
-        transactionRunner.required(() -> {
-            mapper.mergeEntityLinks(knowledgeBaseId, fromCode, toCode);
-            mapper.mergeClaimEntityLinks(knowledgeBaseId, fromCode, toCode);
+        // Retried on deadlock for the same reason resolution is: the steps are idempotent and a
+        // manual merge can race a batch that is retiring entities in the same knowledge base.
+        transactionRunner.retryingOnDeadlock(() -> {
+            mapper.reassignCardEntityLinks(knowledgeBaseId, fromCode, toCode);
+            mapper.reassignClaimEntityLinks(knowledgeBaseId, fromCode, toCode);
             mapper.deleteConflictingAliases(knowledgeBaseId, fromCode, toCode);
             mapper.moveEntityAliases(knowledgeBaseId, fromCode, toCode);
             mapper.updateEntityStatus(knowledgeBaseId, fromCode, "MERGED");

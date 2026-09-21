@@ -2,8 +2,8 @@
   <section class="kb-page">
     <header class="kb-section-head">
       <div>
-        <div class="kb-eyebrow">CHUNK WORKBENCH</div>
-        <h1 class="kb-title mt-1">Chunk</h1>
+        <div class="kb-eyebrow">文本分块</div>
+        <h1 class="kb-title mt-1">文本分块</h1>
         <p class="kb-muted mt-1">
           按文档核对切分结果：切分策略、页码 / 字符区间、token 与 revision，重跑后旧版本保留为 SUPERSEDED。
         </p>
@@ -82,11 +82,11 @@
     <!-- 切分结果画像：一眼看出这段文档被切成了什么样 -->
     <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
       <div class="kb-card p-3">
-        <span class="block text-[11px] text-ink-500">Chunk 总数</span>
+        <span class="block text-[11px] text-ink-500">分块总数</span>
         <b class="text-xl text-ink-900">{{ filtered.length }}</b>
       </div>
       <div class="kb-card p-3">
-        <span class="block text-[11px] text-ink-500">平均 Token</span>
+        <span class="block text-[11px] text-ink-500">平均 Token 数</span>
         <b class="text-xl text-ink-900">{{ avgToken }}</b>
       </div>
       <div class="kb-card p-3">
@@ -103,14 +103,14 @@
         </div>
       </div>
       <div class="kb-card p-3">
-        <span class="block text-[11px] text-ink-500">最新 revision</span>
+        <span class="block text-[11px] text-ink-500">最新版本号</span>
         <b class="text-xl text-ink-900">{{ maxRevision }}</b>
       </div>
     </div>
 
     <article class="kb-card">
       <div class="kb-card-head">
-        <b class="text-sm">Chunk 清单</b>
+        <b class="text-sm">分块清单</b>
         <div class="flex flex-wrap items-center gap-2">
           <select v-model="typeFilter" class="kb-input w-32">
             <option value="">全部类型</option>
@@ -119,7 +119,7 @@
           <input v-model="keyword" class="kb-input w-48" placeholder="搜索路径 / 编码 / 正文" />
           <el-radio-group v-model="view" size="small">
             <el-radio-button value="table">表格</el-radio-button>
-            <el-radio-button value="json">原生 JSON</el-radio-button>
+            <el-radio-button value="json">接口原生报文</el-radio-button>
           </el-radio-group>
         </div>
       </div>
@@ -128,7 +128,7 @@
           :loading="loading"
           :error="error"
           :empty="!filtered.length && !loading && !error"
-          :empty-text="selectedId ? (keyword || typeFilter ? '没有匹配的 Chunk' : '该文档暂无 Chunk') : '请先选择文档'"
+          :empty-text="selectedId ? (keyword || typeFilter ? '没有匹配的文本分块' : '该文档暂无文本分块') : '请先选择文档'"
           empty-hint="文档可能仍在解析中，或摄入在切分之前失败"
           retryable
           @retry="load">
@@ -153,7 +153,7 @@
               <template #default="{ row }">
                 <span>rev {{ row.revision ?? 1 }}</span>
                 <el-tag size="small" :type="row.status === 'ACTIVE' ? 'success' : 'info'" effect="plain">
-                  {{ row.status || '—' }}
+                  {{ statusLabel(row.status) }}
                 </el-tag>
               </template>
             </el-table-column>
@@ -181,6 +181,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
+import { statusLabel } from '../types'
 import type { ChunkPolicy, ChunkPolicyState, DocumentChunk, KnowledgeDocument } from '../types'
 import {
   getChunkPolicy, getDocumentChunks, resetChunkPolicy, saveChunkPolicy, unwrap,

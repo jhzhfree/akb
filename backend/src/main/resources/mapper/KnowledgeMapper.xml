@@ -537,9 +537,13 @@ ORDER BY facetCode,evidenceCode
 <!-- Entity resolution (design V1.1 §5.4): canonical entities and their surface forms. -->
 <select id="listEntityNames" resultType="map">SELECT entity_code entityCode,canonical_name canonicalName,entity_type entityType FROM t_entity WHERE knowledge_base_id=#{kb} AND (status IS NULL OR status IN ('APPROVED','EFFECTIVE','ACTIVE'))</select>
 <insert id="upsertEntityAlias">INSERT INTO t_entity_alias(knowledge_base_id,entity_code,alias,alias_type,confidence) VALUES(#{kb},#{entityCode},#{alias},#{aliasType},#{confidence}) ON DUPLICATE KEY UPDATE alias_type=VALUES(alias_type),confidence=VALUES(confidence)</insert>
-<!-- IGNORE keeps the merge idempotent: the target link may already exist via the unique key. -->
-<update id="mergeEntityLinks">UPDATE IGNORE t_card_entity ce JOIN t_knowledge_card c ON c.knowledge_code=ce.knowledge_code SET ce.entity_code=#{toCode} WHERE c.knowledge_base_id=#{kb} AND ce.entity_code=#{fromCode}</update>
-<update id="mergeClaimEntityLinks">UPDATE IGNORE t_claim_entity SET entity_code=#{toCode} WHERE entity_code=#{fromCode} AND claim_code IN (SELECT c.claim_code FROM t_claim c WHERE c.knowledge_base_id=#{kb})</update>
+<!-- IGNORE keeps the merge idempotent: the target link may already exist via the unique key.
+     The ids are resolved first (see selectCardEntityLinkIds) so every merge locks rows in the
+     same primary-key order instead of whatever order the join takes. -->
+<select id="selectCardEntityLinkIds" resultType="long">SELECT ce.id FROM t_card_entity ce JOIN t_knowledge_card c ON c.knowledge_code=ce.knowledge_code WHERE c.knowledge_base_id=#{kb} AND ce.entity_code=#{fromCode} ORDER BY ce.id</select>
+<update id="updateCardEntityLinkTargets">UPDATE IGNORE t_card_entity SET entity_code=#{toCode} WHERE entity_code=#{fromCode} AND id IN <foreach collection="ids" item="id" open="(" separator="," close=")">#{id}</foreach></update>
+<select id="selectClaimEntityLinkIds" resultType="long">SELECT ce.id FROM t_claim_entity ce JOIN t_claim c ON c.claim_code=ce.claim_code WHERE c.knowledge_base_id=#{kb} AND ce.entity_code=#{fromCode} ORDER BY ce.id</select>
+<update id="updateClaimEntityLinkTargets">UPDATE IGNORE t_claim_entity SET entity_code=#{toCode} WHERE entity_code=#{fromCode} AND id IN <foreach collection="ids" item="id" open="(" separator="," close=")">#{id}</foreach></update>
 <update id="updateEntityStatus">UPDATE t_entity SET status=#{status} WHERE knowledge_base_id=#{kb} AND entity_code=#{code}</update>
 <!-- Entity governance screen (V1.0): inspection of canonical nodes, aliases and manual correction. -->
 <select id="listEntitiesWithUsage" resultType="map">
@@ -805,5 +809,299 @@ FROM t_content_unit WHERE document_id=#{documentId} AND id&lt;#{id} ORDER BY id 
 UNION ALL (SELECT unit_code unitCode,'NEXT' pos,
   heading_path headingPath,page_no pageNo,chunk_type chunkType,LEFT(content,180) excerpt
 FROM t_content_unit WHERE document_id=#{documentId} AND id&gt;#{id} ORDER BY id ASC LIMIT 1)</select>
+
+<!-- ===================== task centre ===================== -->
+<insert id="insertTaskRun">INSERT INTO t_task_run(task_code,knowledge_base_id,task_type,task_name,
+  target_type,target_code,status,stage,progress,trigger_type,triggered_by,max_attempts,payload_json)
+VALUES(#{taskCode},#{kb},#{taskType},#{taskName},#{targetType},#{targetCode},'QUEUED','QUEUED',0,
+  #{triggerType},#{triggeredBy},#{maxAttempts},CAST(#{payloadJson} AS JSON))</insert>
+
+<update id="updateTaskRun">UPDATE t_task_run SET status=#{status},
+  stage=IFNULL(#{stage},stage),progress=#{progress},
+  started_time=IF(started_time IS NULL AND #{status}!='QUEUED',CURRENT_TIMESTAMP,started_time),
+  finished_time=IF(#{status} IN ('SUCCEEDED','FAILED','CANCELED','DEAD'),CURRENT_TIMESTAMP,finished_time),
+  error_message=#{errorMessage},
+  result_json=IF(#{resultJson} IS NULL,result_json,CAST(#{resultJson} AS JSON)),
+  retry_count=IF(#{status}='FAILED',retry_count+1,retry_count)
+WHERE task_code=#{taskCode}</update>
+
+<select id="getTaskRun" resultType="map">SELECT task_code taskCode,knowledge_base_id knowledgeBaseId,
+  task_type taskType,task_name taskName,target_type targetType,target_code targetCode,status,stage,progress,
+  trigger_type triggerType,triggered_by triggeredBy,retry_count retryCount,max_attempts maxAttempts,
+  payload_json payloadJson,result_json resultJson,error_message errorMessage,next_attempt_at nextAttemptAt,
+  started_time startedTime,finished_time finishedTime,created_time createdTime,updated_time updatedTime
+FROM t_task_run WHERE task_code=#{taskCode}</select>
+
+<select id="listTaskRuns" resultType="map">SELECT task_code taskCode,knowledge_base_id knowledgeBaseId,
+  task_type taskType,task_name taskName,target_type targetType,target_code targetCode,status,stage,progress,
+  trigger_type triggerType,triggered_by triggeredBy,retry_count retryCount,max_attempts maxAttempts,
+  error_message errorMessage,started_time startedTime,finished_time finishedTime,created_time createdTime
+FROM t_task_run
+WHERE (knowledge_base_id=#{kb} OR #{kb} IS NULL)
+<if test="status != null and status != ''">AND status=#{status}</if>
+<if test="taskType != null and taskType != ''">AND task_type=#{taskType}</if>
+<if test="triggerType != null and triggerType != ''">AND trigger_type=#{triggerType}</if>
+ORDER BY created_time DESC,id DESC LIMIT #{limit}</select>
+
+<select id="taskStats" resultType="map">SELECT status,COUNT(*) total FROM t_task_run
+WHERE (knowledge_base_id=#{kb} OR #{kb} IS NULL) AND created_time&gt;=DATE_SUB(NOW(),INTERVAL 7 DAY)
+GROUP BY status</select>
+
+<select id="countTaskOutcome" resultType="int">SELECT COUNT(*) FROM t_task_run
+WHERE (knowledge_base_id=#{kb} OR #{kb} IS NULL) AND created_time&gt;=#{since} AND status IN
+<foreach item="status" collection="statuses" open="(" separator="," close=")">#{status}</foreach></select>
+
+<select id="countDocumentFailed" resultType="int">SELECT COUNT(*) FROM t_document
+WHERE source_version_id IN (SELECT sv.id FROM t_source_version sv JOIN t_source s ON s.id=sv.source_id
+  WHERE s.knowledge_base_id=#{kb}) AND status='FAILED'</select>
+
+<select id="countOutboxDead" resultType="int">SELECT COUNT(*) FROM t_index_outbox
+WHERE (knowledge_base_id=#{kb} OR #{kb} IS NULL) AND status='DEAD'</select>
+
+<!-- ===================== alerting ===================== -->
+<insert id="insertAlertRule">INSERT INTO t_alert_rule(rule_code,knowledge_base_id,name,metric,severity,
+  threshold,window_minutes,channels,created_by)
+VALUES(#{ruleCode},#{kb},#{name},#{metric},#{severity},#{threshold},#{windowMinutes},#{channels},#{createdBy})</insert>
+
+<update id="updateAlertRule">UPDATE t_alert_rule SET name=#{name},metric=#{metric},severity=#{severity},
+  threshold=#{threshold},window_minutes=#{windowMinutes},channels=#{channels},enabled=#{enabled}
+WHERE rule_code=#{ruleCode}</update>
+
+<delete id="deleteAlertRule">DELETE FROM t_alert_rule WHERE rule_code=#{ruleCode}</delete>
+
+<select id="getAlertRule" resultType="map">SELECT rule_code ruleCode,knowledge_base_id knowledgeBaseId,name,
+  metric,severity,threshold,window_minutes windowMinutes,enabled,channels,created_by createdBy,
+  created_time createdTime,updated_time updatedTime
+FROM t_alert_rule WHERE rule_code=#{ruleCode}</select>
+
+<select id="listAlertRules" resultType="map">SELECT rule_code ruleCode,knowledge_base_id knowledgeBaseId,name,
+  metric,severity,threshold,window_minutes windowMinutes,enabled,channels,created_by createdBy,
+  updated_time updatedTime
+FROM t_alert_rule WHERE knowledge_base_id IS NULL OR knowledge_base_id=#{kb}
+ORDER BY knowledge_base_id IS NULL DESC,id</select>
+
+<insert id="upsertAlertEvent">INSERT INTO t_alert_event(alert_code,rule_code,knowledge_base_id,severity,status,
+  title,detail_json,metric_value,dedup_key,first_seen,last_seen)
+VALUES(#{alertCode},#{ruleCode},#{kb},#{severity},'OPEN',#{title},CAST(#{detailJson} AS JSON),#{metricValue},
+  #{dedupKey},CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)
+ON DUPLICATE KEY UPDATE occur_count=occur_count+1,last_seen=CURRENT_TIMESTAMP,metric_value=VALUES(metric_value),
+  severity=VALUES(severity),title=VALUES(title),detail_json=VALUES(detail_json),
+  status=IF(status='RESOLVED','OPEN',status)</insert>
+
+<select id="getAlertEvent" resultType="map">SELECT alert_code alertCode,rule_code ruleCode,
+  knowledge_base_id knowledgeBaseId,severity,status,title,detail_json detailJson,metric_value metricValue,
+  dedup_key dedupKey,occur_count occurCount,first_seen firstSeen,last_seen lastSeen,acked_by ackedBy,
+  acked_time ackedTime,resolved_by resolvedBy,resolved_time resolvedTime,resolve_note resolveNote,
+  created_time createdTime
+FROM t_alert_event WHERE alert_code=#{alertCode}</select>
+
+<select id="getAlertEventByDedup" resultType="map">SELECT alert_code alertCode,status FROM t_alert_event
+WHERE dedup_key=#{dedupKey}</select>
+
+<select id="listAlertEvents" resultType="map">SELECT alert_code alertCode,rule_code ruleCode,
+  knowledge_base_id knowledgeBaseId,severity,status,title,detail_json detailJson,metric_value metricValue,
+  dedup_key dedupKey,occur_count occurCount,first_seen firstSeen,last_seen lastSeen,acked_by ackedBy,
+  created_time createdTime
+FROM t_alert_event
+WHERE (knowledge_base_id=#{kb} OR knowledge_base_id IS NULL OR #{kb} IS NULL)
+<if test="status != null and status != ''">AND status=#{status}</if>
+<if test="severity != null and severity != ''">AND severity=#{severity}</if>
+ORDER BY FIELD(status,'OPEN','ACKED','RESOLVED'),last_seen DESC LIMIT #{limit}</select>
+
+<select id="alertStats" resultType="map">SELECT status,severity,COUNT(*) total FROM t_alert_event
+WHERE (knowledge_base_id=#{kb} OR knowledge_base_id IS NULL OR #{kb} IS NULL)
+GROUP BY status,severity</select>
+
+<update id="updateAlertStatus">UPDATE t_alert_event SET status=#{status},
+  acked_by=IF(#{status}='ACKED',#{operator},acked_by),acked_time=IF(#{status}='ACKED',CURRENT_TIMESTAMP,acked_time),
+  resolved_by=IF(#{status}='RESOLVED',#{operator},resolved_by),
+  resolved_time=IF(#{status}='RESOLVED',CURRENT_TIMESTAMP,resolved_time),
+  resolve_note=IF(#{status}='RESOLVED',#{note},resolve_note)
+WHERE alert_code=#{alertCode}</update>
+
+<update id="resolveAlertByDedup">UPDATE t_alert_event SET status='RESOLVED',resolved_by='system',
+  resolved_time=CURRENT_TIMESTAMP,resolve_note=#{note}
+WHERE dedup_key=#{dedupKey} AND status!='RESOLVED'</update>
+
+<select id="countOpenAlerts" resultType="int">SELECT COUNT(*) FROM t_alert_event
+WHERE (knowledge_base_id=#{kb} OR knowledge_base_id IS NULL OR #{kb} IS NULL)
+  AND status IN ('OPEN','ACKED')</select>
+
+<!-- ===================== derivation ===================== -->
+<insert id="insertDerivationRule">INSERT INTO t_derivation_rule(rule_code,knowledge_base_id,name,
+  derivation_type,schedule_type,cron_expr,next_fire_at,source_scope_json,definition_json,algorithm_version,created_by)
+VALUES(#{ruleCode},#{kb},#{name},#{derivationType},#{scheduleType},#{cronExpr},#{nextFireAt},
+  CAST(#{sourceScopeJson} AS JSON),CAST(#{definitionJson} AS JSON),#{algorithmVersion},#{createdBy})</insert>
+
+<update id="updateDerivationRule">UPDATE t_derivation_rule SET name=#{name},derivation_type=#{derivationType},
+  schedule_type=#{scheduleType},cron_expr=#{cronExpr},next_fire_at=#{nextFireAt},
+  source_scope_json=CAST(#{sourceScopeJson} AS JSON),definition_json=CAST(#{definitionJson} AS JSON),
+  algorithm_version=#{algorithmVersion},enabled=#{enabled}
+WHERE rule_code=#{ruleCode}</update>
+
+<update id="updateDerivationRuleState">UPDATE t_derivation_rule SET status=#{status},
+  last_fire_at=#{lastFireAt},next_fire_at=#{nextFireAt},last_error=#{lastError}
+WHERE rule_code=#{ruleCode}</update>
+
+<delete id="deleteDerivationRule">DELETE FROM t_derivation_rule WHERE rule_code=#{ruleCode}</delete>
+
+<select id="getDerivationRule" resultType="map">SELECT rule_code ruleCode,knowledge_base_id knowledgeBaseId,
+  name,derivation_type derivationType,enabled,schedule_type scheduleType,cron_expr cronExpr,
+  next_fire_at nextFireAt,last_fire_at lastFireAt,source_scope_json sourceScopeJson,
+  definition_json definitionJson,algorithm_version algorithmVersion,status,last_error lastError,
+  created_by createdBy,created_time createdTime,updated_time updatedTime
+FROM t_derivation_rule WHERE rule_code=#{ruleCode}</select>
+
+<select id="listDerivationRules" resultType="map">SELECT rule_code ruleCode,knowledge_base_id knowledgeBaseId,
+  name,derivation_type derivationType,enabled,schedule_type scheduleType,cron_expr cronExpr,
+  next_fire_at nextFireAt,last_fire_at lastFireAt,source_scope_json sourceScopeJson,
+  definition_json definitionJson,algorithm_version algorithmVersion,status,last_error lastError,
+  created_by createdBy,created_time createdTime,updated_time updatedTime,
+  (SELECT COUNT(*) FROM t_derived_candidate c WHERE c.rule_code=r.rule_code) candidateCount,
+  (SELECT COUNT(*) FROM t_derived_candidate c WHERE c.rule_code=r.rule_code AND c.status='STALE') staleCount
+FROM t_derivation_rule r WHERE (knowledge_base_id=#{kb} OR #{kb} IS NULL)
+ORDER BY enabled DESC,created_time DESC</select>
+
+<select id="listDueDerivationRules" resultType="map">SELECT rule_code ruleCode,knowledge_base_id knowledgeBaseId,
+  name,derivation_type derivationType,schedule_type scheduleType,cron_expr cronExpr,
+  source_scope_json sourceScopeJson,definition_json definitionJson,algorithm_version algorithmVersion
+FROM t_derivation_rule WHERE enabled=1 AND schedule_type='SCHEDULED'
+  AND next_fire_at IS NOT NULL AND next_fire_at&lt;=#{now} AND (status IS NULL OR status!='RUNNING')
+ORDER BY next_fire_at LIMIT 5</select>
+
+<insert id="insertDerivedCandidate">INSERT INTO t_derived_candidate(candidate_code,knowledge_base_id,rule_code,
+  derivation_type,algorithm_version,title,content,confidence,status,base_assertion_codes,graph_path,
+  evidence_json,derived_from_json,permission_tags,authority_score,content_hash,created_by)
+VALUES(#{candidateCode},#{kb},#{ruleCode},#{derivationType},#{algorithmVersion},#{title},#{content},#{confidence},
+  'DRAFT',CAST(#{baseAssertionCodes} AS JSON),CAST(#{graphPath} AS JSON),CAST(#{evidenceJson} AS JSON),
+  CAST(#{derivedFromJson} AS JSON),CAST(#{permissionTags} AS JSON),#{authorityScore},#{contentHash},#{createdBy})</insert>
+
+<update id="touchDerivedCandidate">UPDATE t_derived_candidate SET confidence=#{confidence},
+  status=#{status},stale_reason=NULL WHERE rule_code=#{ruleCode} AND content_hash=#{contentHash}</update>
+
+<select id="getDerivedCandidate" resultType="map">SELECT candidate_code candidateCode,
+  knowledge_base_id knowledgeBaseId,rule_code ruleCode,derivation_type derivationType,
+  algorithm_version algorithmVersion,title,content,confidence,status,
+  base_assertion_codes baseAssertionCodes,graph_path graphPath,evidence_json evidenceJson,
+  derived_from_json derivedFromJson,permission_tags permissionTags,authority_score authorityScore,
+  stale_reason staleReason,created_by createdBy,created_time createdTime,updated_time updatedTime
+FROM t_derived_candidate WHERE candidate_code=#{candidateCode}</select>
+
+<select id="getDerivedCandidateByHash" resultType="map">SELECT candidate_code candidateCode,status
+FROM t_derived_candidate WHERE rule_code=#{ruleCode} AND content_hash=#{contentHash}</select>
+
+<select id="listDerivedCandidates" resultType="map">SELECT candidate_code candidateCode,
+  knowledge_base_id knowledgeBaseId,rule_code ruleCode,derivation_type derivationType,
+  algorithm_version algorithmVersion,title,confidence,status,base_assertion_codes baseAssertionCodes,
+  stale_reason staleReason,created_time createdTime,updated_time updatedTime,
+  JSON_LENGTH(base_assertion_codes) baseCount
+FROM t_derived_candidate
+WHERE (knowledge_base_id=#{kb} OR #{kb} IS NULL)
+<if test="status != null and status != ''">AND status=#{status}</if>
+<if test="ruleCode != null and ruleCode != ''">AND rule_code=#{ruleCode}</if>
+ORDER BY FIELD(status,'DRAFT','STALE','PENDING','APPROVED','REJECTED'),confidence DESC,created_time DESC
+LIMIT #{limit}</select>
+
+<select id="derivedCandidateStats" resultType="map">SELECT status,COUNT(*) total FROM t_derived_candidate
+WHERE (knowledge_base_id=#{kb} OR #{kb} IS NULL) GROUP BY status</select>
+
+<update id="updateDerivedCandidateStatus">UPDATE t_derived_candidate SET status=#{status},
+  stale_reason=#{staleReason} WHERE candidate_code=#{candidateCode}</update>
+
+<select id="listCandidatesByBaseAssertion" resultType="map">SELECT candidate_code candidateCode,status
+FROM t_derived_candidate WHERE knowledge_base_id=#{kb} AND status IN ('DRAFT','PENDING','APPROVED')
+<foreach item="code" collection="codes" open="AND (" separator=" OR " close=")">
+  JSON_CONTAINS(base_assertion_codes,CONCAT('"',#{code},'"'))</foreach></select>
+
+<insert id="insertDerivationRun">INSERT INTO t_derivation_run(run_code,knowledge_base_id,rule_code,
+  trigger_type,status,started_time)
+VALUES(#{runCode},#{kb},#{ruleCode},#{triggerType},'RUNNING',CURRENT_TIMESTAMP)</insert>
+
+<update id="updateDerivationRun">UPDATE t_derivation_run SET status=#{status},scanned_count=#{scannedCount},
+  candidate_count=#{candidateCount},stale_count=#{staleCount},error_message=#{errorMessage},
+  finished_time=#{finishedTime} WHERE run_code=#{runCode}</update>
+
+<select id="listDerivationRuns" resultType="map">SELECT run_code runCode,knowledge_base_id knowledgeBaseId,
+  rule_code ruleCode,trigger_type triggerType,status,scanned_count scannedCount,candidate_count candidateCount,
+  stale_count staleCount,error_message errorMessage,started_time startedTime,finished_time finishedTime
+FROM t_derivation_run WHERE (knowledge_base_id=#{kb} OR #{kb} IS NULL)
+<if test="ruleCode != null and ruleCode != ''">AND rule_code=#{ruleCode}</if>
+ORDER BY started_time DESC,id DESC LIMIT #{limit}</select>
+
+<!-- Two facts joined by two relations: A -r1-> B -r2-> C implies A r1r2 C. -->
+<select id="listGraphPathPairs" resultType="map">SELECT a.entity_code headCode,a.canonical_name headName,
+  b.entity_code midCode,b.canonical_name midName,c.entity_code tailCode,c.canonical_name tailName,
+  r1.relation_type firstType,r2.relation_type secondType,r1.relation_code firstRelationCode,
+  r2.relation_code secondRelationCode,r1.confidence firstConfidence,r2.confidence secondConfidence
+FROM t_relation r1 JOIN t_relation r2 ON r2.source_entity_id=r1.target_entity_id
+JOIN t_entity a ON a.id=r1.source_entity_id
+JOIN t_entity b ON b.id=r1.target_entity_id
+JOIN t_entity c ON c.id=r2.target_entity_id
+WHERE r1.knowledge_base_id=#{kb} AND r2.knowledge_base_id=#{kb}
+  AND (#{firstType} IS NULL OR r1.relation_type=#{firstType})
+  AND (#{secondType} IS NULL OR r2.relation_type=#{secondType})
+  AND IFNULL(r1.confidence,0)&gt;=#{minConfidence} AND IFNULL(r2.confidence,0)&gt;=#{minConfidence}
+  AND IFNULL(r1.status,'ACTIVE')='ACTIVE' AND IFNULL(r2.status,'ACTIVE')='ACTIVE'
+  AND a.id&lt;&gt;c.id
+LIMIT #{limit}</select>
+
+<select id="listDerivationSourceClaims" resultType="map">SELECT claim_code claimCode,subject,predicate,
+  object_value objectValue,confidence,status,permission_tags permissionTags,version
+-- Deriving from a conflicting or uncertain assertion would launder doubt into a
+-- conclusion; pending review is still a statement the source stands behind.
+FROM t_claim WHERE knowledge_base_id=#{kb} AND IFNULL(confidence,0)&gt;=#{minConfidence}
+  AND IFNULL(status,'PENDING_REVIEW') IN ('APPROVED','EFFECTIVE','ACTIVE','PENDING_REVIEW')
+ORDER BY confidence DESC,id DESC LIMIT #{limit}</select>
+
+<!-- ===================== knowledge schema ===================== -->
+<insert id="upsertSchemaType">INSERT INTO t_schema_type(knowledge_base_id,kind,type_code,label,description,
+  properties_json,status,updated_by)
+VALUES(#{kb},#{kind},#{typeCode},#{label},#{description},CAST(#{propertiesJson} AS JSON),#{status},#{updatedBy})
+ON DUPLICATE KEY UPDATE label=VALUES(label),description=VALUES(description),
+  properties_json=VALUES(properties_json),status=VALUES(status),updated_by=VALUES(updated_by),
+  version=version+1</insert>
+
+<delete id="deleteSchemaType">DELETE FROM t_schema_type
+WHERE knowledge_base_id=#{kb} AND kind=#{kind} AND type_code=#{typeCode} AND built_in=0</delete>
+
+<select id="getSchemaType" resultType="map">SELECT knowledge_base_id knowledgeBaseId,kind,type_code typeCode,
+  label,description,properties_json propertiesJson,status,built_in builtIn,version,updated_by updatedBy,
+  updated_time updatedTime
+FROM t_schema_type WHERE knowledge_base_id=#{kb} AND kind=#{kind} AND type_code=#{typeCode}</select>
+
+<select id="listSchemaTypes" resultType="map">SELECT knowledge_base_id knowledgeBaseId,kind,type_code typeCode,
+  label,description,properties_json propertiesJson,status,built_in builtIn,version,updated_by updatedBy,
+  updated_time updatedTime
+FROM t_schema_type WHERE (knowledge_base_id=#{kb} OR knowledge_base_id=0)
+<if test="kind != null and kind != ''">AND kind=#{kind}</if>
+ORDER BY kind,built_in DESC,type_code</select>
+
+<insert id="insertSchemaRelease">INSERT INTO t_schema_release(release_code,knowledge_base_id,version,state,
+  definition_json,validation_json,checksum,published_by,published_time)
+VALUES(#{releaseCode},#{kb},#{version},#{state},CAST(#{definitionJson} AS JSON),
+  CAST(#{validationJson} AS JSON),#{checksum},#{publishedBy},
+  IF(#{state}='PUBLISHED',CURRENT_TIMESTAMP,NULL))</insert>
+
+<select id="listSchemaReleases" resultType="map">SELECT release_code releaseCode,knowledge_base_id knowledgeBaseId,
+  version,state,definition_json definitionJson,validation_json validationJson,checksum,
+  published_by publishedBy,published_time publishedTime,created_time createdTime
+FROM t_schema_release WHERE knowledge_base_id=#{kb} ORDER BY id DESC LIMIT 20</select>
+
+<select id="getPublishedSchemaRelease" resultType="map">SELECT release_code releaseCode,
+  knowledge_base_id knowledgeBaseId,version,state,definition_json definitionJson,
+  validation_json validationJson,checksum,published_by publishedBy,published_time publishedTime
+FROM t_schema_release WHERE knowledge_base_id=#{kb} AND state='PUBLISHED' ORDER BY id DESC LIMIT 1</select>
+
+<update id="retireSchemaReleases">UPDATE t_schema_release SET state='ARCHIVED'
+WHERE knowledge_base_id=#{kb} AND state='PUBLISHED'</update>
+
+<select id="listEntityTypeUsage" resultType="map">SELECT entity_type typeCode,COUNT(*) useCount
+FROM t_entity WHERE knowledge_base_id=#{kb} GROUP BY entity_type</select>
+
+<select id="listRelationTypeUsage" resultType="map">SELECT relation_type typeCode,COUNT(*) useCount
+FROM t_relation WHERE knowledge_base_id=#{kb} GROUP BY relation_type</select>
+
+<select id="listKnowledgeTypeUsage" resultType="map">SELECT type typeCode,COUNT(*) useCount
+FROM t_knowledge_card WHERE knowledge_base_id=#{kb} GROUP BY type</select>
 
 </mapper>

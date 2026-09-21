@@ -2,7 +2,7 @@
   <section class="kb-page">
     <header class="kb-section-head">
       <div>
-        <div class="kb-eyebrow">KNOWLEDGE WORKBENCH</div>
+        <div class="kb-eyebrow">知识工作台</div>
         <h1 class="kb-title mt-1">知识工作台</h1>
         <p class="kb-muted mt-1">
           看知识：资产规模、生命周期进度与需要人工介入的治理项，一处发现、三处闭环。
@@ -13,7 +13,7 @@
           <div class="text-[11px] text-ink-500">知识健康度</div>
           <div class="text-xl font-semibold" :class="healthClass">{{ healthScore }}%</div>
         </div>
-        <button class="kb-btn-primary" @click="$emit('navigate','create.overview')">＋ 生成知识</button>
+        <button v-if="canGenerate" class="kb-btn-primary" @click="$emit('navigate','create.overview')">＋ 生成知识</button>
         <button class="kb-btn-outline" @click="$emit('navigate','search.query')">知识搜索</button>
         <div class="flex flex-col items-start gap-0.5">
           <button class="text-xs font-medium text-indigo-600 hover:text-indigo-700" @click="$emit('navigate','workbench.version')">版本 →</button>
@@ -73,7 +73,9 @@
           <button
             v-for="item in governanceItems"
             :key="item.key"
-            class="flex w-full items-center justify-between py-3 text-sm transition hover:bg-ink-50/60"
+            class="flex w-full items-center justify-between py-3 text-sm transition hover:bg-ink-50/60 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent"
+            :disabled="!canTarget(item.target)"
+            :title="canTarget(item.target) ? '' : '当前角色无权访问该页面'"
             @click="$emit('navigate',item.target)">
             <span class="flex items-center gap-2 text-ink-600">
               <i class="h-2 w-2 rounded-full" :class="levelDot(item.level)"></i>{{ item.label }}
@@ -88,7 +90,7 @@
 
       <!-- 知识资产分布：来源类型 / 文档类型 -->
       <article class="kb-card">
-        <div class="kb-card-head"><b class="text-sm">知识资产分布</b><span class="kb-muted">Distribution</span></div>
+        <div class="kb-card-head"><b class="text-sm">知识资产分布</b><span class="kb-muted">分布</span></div>
         <div class="space-y-3 p-4">
           <div>
             <div class="mb-1 text-[12px] text-ink-500">来源类型</div>
@@ -138,14 +140,14 @@
               <span class="truncate text-[13px] text-ink-800">{{ row.displayTitle || row.objectCode }}</span>
             </div>
             <div class="mt-1 flex items-center gap-2 text-[11px] text-ink-400">
-              <span>{{ row.status || '—' }}</span>
+              <span>{{ statusLabel(row.status) }}</span>
               <span v-if="row.confidence != null">置信 {{ Number(row.confidence).toFixed(2) }}</span>
               <span>{{ row.updatedTime ? String(row.updatedTime).slice(0,16) : '' }}</span>
             </div>
           </button>
           <div v-if="!recent.length" class="px-4 py-6 text-center text-[12px] text-ink-400">
             <p>该空间还没有知识对象</p>
-            <button class="kb-btn-outline mt-2" @click="$emit('navigate','create.import')">导入文档</button>
+            <button v-if="canTarget('create.import')" class="kb-btn-outline mt-2" @click="$emit('navigate','create.import')">导入文档</button>
           </div>
         </div>
       </article>
@@ -180,7 +182,7 @@
         </div>
         <div v-if="quality" class="grid grid-cols-2 gap-3 p-4 text-[12px]">
           <div class="rounded-lg bg-ink-50 p-3">
-            <div class="text-[11px] text-ink-500">Hit@1 / Hit@5</div>
+            <div class="text-[11px] text-ink-500">命中率@1 / 命中率@5</div>
             <b class="text-base">{{ pct(quality.retrieval?.hitAt1Rate) }} / {{ pct(quality.retrieval?.hitAt5Rate) }}</b>
           </div>
           <div class="rounded-lg bg-ink-50 p-3">
@@ -205,10 +207,14 @@
 </template>
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
+import { statusLabel } from '../types'
 import type { Capabilities, DashboardGovernance, DashboardLifecycle, DashboardSummary, GovernanceItem, KnowledgeDocument, KnowledgeSource, Overview, QualityOverview, RecentObject } from '../types'
 import type { AssetType } from './AssetBrowserPanel.vue'
 import { getDashboardGovernance, getDashboardLifecycle, getDocuments, getQualityOverview, getSources, unwrap } from '../api/knowledge'
+import { useShell } from '../shell'
+import { PERM } from '../permissions'
 
+const shell = useShell()
 const props = defineProps<{
   knowledgeBaseId:number
   overview:Overview
@@ -241,6 +247,13 @@ const healthClass = computed(() => {
   return 'text-rose-600'
 })
 
+/** 生成入口只对有知识生成权限的角色开放；浏览员与无生成权限的角色看不到该按钮。 */
+const canGenerate = computed(() => shell.can(PERM.GENERATE_IMPORT))
+/**
+ * 概览里的下钻目标可能超出当前角色（例如浏览员点「知识裁决」）。
+ * 无权时把入口置灰，而不是等点了才提示或撞上 403。
+ */
+const canTarget = (key:string) => shell.canNavigate(key)
 /** 生命周期阶段：后端未返回时退化为静态阶段，避免页面出现空洞。 */
 const stages = computed(() => {
   if (props.lifecycle?.stages?.length) return props.lifecycle.stages

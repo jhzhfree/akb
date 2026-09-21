@@ -41,5 +41,8 @@ public interface ExternalApiMapper {
 
     List<ApiCallAudit> listChannelAudits(@Param("channel") String channel, @Param("limit") int limit);
 
+    /** One call addressed by the trace id the log row shows; null when nothing was recorded under it. */
+    ApiCallAudit findApiCallAuditByTraceId(@Param("traceId") String traceId);
+
     int countActiveApiKeys();
 }

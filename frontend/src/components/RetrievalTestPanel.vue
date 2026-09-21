@@ -3,7 +3,7 @@
     eyebrow="RETRIEVAL TEST"
     title="检索测试"
     hint="只跑检索链不生成答案：查询改写 → 路由 → 多路召回 → RRF 融合 → Rerank，结果逐条可比，链路可回放。"
-    config-hint="Query Rewrite / Hybrid / RRF / Rerank"
+    config-hint="查询改写 / Hybrid / RRF / Rerank"
     result-hint="排序候选与链路摘要">
     <template #config>
       <div class="grid grid-cols-1 gap-3 md:grid-cols-[minmax(0,1fr)_120px_auto]">
@@ -67,7 +67,7 @@
     <template #side>
       <article class="kb-card">
         <div class="kb-card-head">
-          <div><b class="text-sm">链路回放</b><div class="text-[10px] text-ink-400">TRACE DRAWER</div></div>
+          <div><b class="text-sm">链路回放</b><div class="text-[10px] text-ink-400">链路回放</div></div>
         </div>
         <div class="p-3">
           <p class="kb-muted">

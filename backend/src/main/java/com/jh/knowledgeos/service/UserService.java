@@ -10,6 +10,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 /**
@@ -20,6 +21,10 @@ import java.util.Map;
  */
 @Service
 public class UserService {
+    /** 旧角色名：升级后仍允许出现在历史数据里，但不再作为可分配角色。 */
+    private static final String LEGACY_EDITOR = "EDITOR";
+    private static final String LEGACY_VIEWER = "VIEWER";
+
     private final AuthMapper mapper;
     private final PasswordHasher hasher;
     private final IdGenerator ids;
@@ -42,6 +47,31 @@ public class UserService {
 
     public Map<String, Object> profile(User user) {
         return profile(user, groupIdsOf(user.getId()), groupNamesOf(user.getId()));
+    }
+
+    /** 角色字典：角色码、中文名、职责说明与自带权限码，供用户管理与权限说明使用。 */
+    public List<Map<String, Object>> roles() {
+        List<Map<String, Object>> out = new ArrayList<Map<String, Object>>();
+        for (UserRole role : UserRole.values()) {
+            Map<String, Object> row = new LinkedHashMap<String, Object>();
+            row.put("code", role.name());
+            row.put("label", role.label());
+            row.put("homeView", role.homeView());
+            row.put("description", ROLE_DESCRIPTIONS.get(role.name()));
+            row.put("permissions", new ArrayList<String>(role.permissions()));
+            out.add(row);
+        }
+        return out;
+    }
+
+    private static final Map<String, String> ROLE_DESCRIPTIONS = new LinkedHashMap<String, String>();
+
+    static {
+        ROLE_DESCRIPTIONS.put(UserRole.ADMIN.name(), "平台级配置：用户与组织、角色权限、模型、索引、任务告警、审计、Schema 与知识空间");
+        ROLE_DESCRIPTIONS.put(UserRole.KNOWLEDGE_ADMIN.name(), "知识域全功能：知识工作台、知识生成（含裁决与衍生）、知识检索（含策略与评测）");
+        ROLE_DESCRIPTIONS.put(UserRole.KNOWLEDGE_OPERATOR.name(), "简化知识生成：上传文件、生成知识数据、查看知识对象；可检索，但不能裁决、不能衍生、不能配置策略与测评");
+        ROLE_DESCRIPTIONS.put(UserRole.KNOWLEDGE_AUDITOR.name(), "知识运营员 + 知识裁决 + 知识测评");
+        ROLE_DESCRIPTIONS.put(UserRole.KNOWLEDGE_VIEWER.name(), "可查看知识工作台（总览 / 资产浏览 / 版本 / 质量）与知识检索，不能改动知识");
     }
 
     public Map<String, Object> create(
@@ -167,12 +197,13 @@ public class UserService {
     }
 
     private UserRole resolveRole(String role) {
-        if (role == null || role.trim().isEmpty()) return UserRole.VIEWER;
-        UserRole resolved = UserRole.of(role);
-        if (resolved == UserRole.VIEWER && !"VIEWER".equalsIgnoreCase(role.trim())) {
+        if (role == null || role.trim().isEmpty()) return UserRole.KNOWLEDGE_VIEWER;
+        String raw = role.trim();
+        if (!UserRole.assignable().contains(raw.toUpperCase(Locale.ROOT))
+                && !LEGACY_EDITOR.equalsIgnoreCase(raw) && !LEGACY_VIEWER.equalsIgnoreCase(raw)) {
             throw new IllegalArgumentException("未知角色：" + role);
         }
-        return resolved;
+        return UserRole.of(raw);
     }
 
     private Map<String, Object> profile(User user, List<Long> groupIds, List<String> groupNames) {
@@ -183,6 +214,7 @@ public class UserService {
         out.put("displayName", user.getDisplayName());
         out.put("email", user.getEmail());
         out.put("role", user.getRole());
+        out.put("roleLabel", UserRole.of(user.getRole()).label());
         out.put("status", user.getStatus());
         out.put("lastLoginTime", user.getLastLoginTime() == null ? null : String.valueOf(user.getLastLoginTime()));
         out.put("groupIds", groupIds == null ? Collections.emptyList() : groupIds);

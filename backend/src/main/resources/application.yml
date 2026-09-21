@@ -31,7 +31,9 @@ spring:
   servlet:
     multipart:
       max-file-size: ${MAX_FILE_SIZE:100MB}
-      max-request-size: ${MAX_REQUEST_SIZE:100MB}
+      # 批量接入一次提交多个文件：请求体上限必须大于「文件数 × 单文件上限」，
+      # 否则多文件的批次会在网关层就被拒掉，而每个文件本身并未超限。
+      max-request-size: ${MAX_REQUEST_SIZE:2048MB}
 mybatis:
   mapper-locations: classpath:/mapper/*.xml
   configuration:
@@ -51,6 +53,14 @@ knowledge:
   ai-service-base-url: ${AI_SERVICE_BASE_URL:http://127.0.0.1:12000}
   # 摄入原件保存目录，供资料与摄入页面预览源文件
   source-storage-dir: ${SOURCE_STORAGE_DIR:data/source-files}
+  # 批量接入：一次提交多个文件后台解析，并发度与上限按机器与 AI 服务承载调整
+  batch:
+    concurrency: ${KNOWLEDGE_BATCH_CONCURRENCY:3}
+    queue-capacity: ${KNOWLEDGE_BATCH_QUEUE_CAPACITY:200}
+    max-files: ${KNOWLEDGE_BATCH_MAX_FILES:50}
+    max-file-mb: ${KNOWLEDGE_BATCH_MAX_FILE_MB:20}
+    # 内存里保留的批次明细数：已结束的批次按时间淘汰，运行中的批次永不淘汰
+    max-tracked: ${KNOWLEDGE_BATCH_MAX_TRACKED:200}
   ai-connect-timeout-ms: ${AI_CONNECT_TIMEOUT_MS:10000}
   ai-read-timeout-ms: ${AI_READ_TIMEOUT_MS:180000}
   startup-fail-fast: ${STARTUP_FAIL_FAST:false}

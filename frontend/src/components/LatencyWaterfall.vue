@@ -1,6 +1,6 @@
 <template>
 <section class="kb-card p-4">
-  <div class="kb-section-head"><div><small>LATENCY WATERFALL</small><h3>阶段耗时</h3></div><b class="text-sm">{{ total }} ms</b></div>
+  <div class="kb-section-head"><div><small>链路耗时分布</small><h3>阶段耗时</h3></div><b class="text-sm">{{ total }} ms</b></div>
   <div class="space-y-3">
     <div v-for="row in rows" :key="row.name" class="grid grid-cols-[100px_1fr_70px] items-center gap-3 text-xs">
       <span class="font-medium text-ink-600">{{ row.name }}</span>
@@ -9,7 +9,7 @@
     </div>
   </div>
   <div v-if="Object.keys(channelLatency).length" class="mt-4 border-t border-ink-100 pt-3">
-    <div class="mb-2 text-[10px] font-semibold uppercase text-ink-400">Recall Channel Breakdown</div>
+    <div class="mb-2 text-[10px] font-semibold uppercase text-ink-400">召回通道耗时分解</div>
     <div class="flex flex-wrap gap-2"><span v-for="(ms,name) in channelLatency" :key="name" class="kb-badge">{{ name }} {{ ms }}ms</span></div>
   </div>
 </section>
@@ -18,7 +18,7 @@
 import { computed } from 'vue'
 const props=defineProps<{ timings:Record<string,number>; channelLatency:Record<string,number> }>()
 const rows=computed(()=>[
-  {name:'Retrieval',ms:Number(props.timings.retrievalLatencyMs)||0},{name:'Fusion / RRF',ms:Number(props.timings.fusionLatencyMs)||0},
+  {name:'Retrieval',ms:Number(props.timings.retrievalLatencyMs)||0},{name:'融合排序 / RRF',ms:Number(props.timings.fusionLatencyMs)||0},
   {name:'Rerank',ms:Number(props.timings.rerankLatencyMs)||0},{name:'LLM',ms:Number(props.timings.llmLatencyMs)||0},
 ])
 const total=computed(()=>Number(props.timings.totalLatencyMs)||rows.value.reduce((a,b)=>a+b.ms,0))

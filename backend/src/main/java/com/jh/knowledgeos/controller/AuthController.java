@@ -1,6 +1,7 @@
 package com.jh.knowledgeos.controller;
 
 import com.jh.knowledgeos.common.ApiResponse;
+import com.jh.knowledgeos.common.Permissions;
 import com.jh.knowledgeos.common.UserRole;
 import com.jh.knowledgeos.config.AuthInterceptor;
 import com.jh.knowledgeos.config.KnowledgeProperties;
@@ -62,15 +63,29 @@ public class AuthController {
     }
 
     @GetMapping("/me")
-    @Operation(summary = "当前登录账号与角色")
+    @Operation(summary = "当前登录账号、角色与权限码")
     public ApiResponse<Object> me() {
         User user = AuthContext.get();
+        UserRole role = user == null ? null : UserRole.of(user.getRole());
         Map<String, Object> out = new LinkedHashMap<String, Object>();
         out.put("enabled", properties.isEnabled());
         out.put("allowAnonymous", properties.isAllowAnonymous());
         out.put("user", user == null ? null : users.profile(user));
-        out.put("canManageUsers", user != null && UserRole.of(user.getRole()).canManageUsers());
-        out.put("canWriteKnowledge", user != null && UserRole.of(user.getRole()).canWriteKnowledge());
+        out.put("canManageUsers", role != null && role.canManageUsers());
+        out.put("canWriteKnowledge", role != null && role.canWriteKnowledge());
+        // 未开启认证时授予全部权限，前端据此裁剪菜单；开启后按角色下发权限码。
+        out.put("permissions", new java.util.ArrayList<String>(Permissions.granted()));
+        out.put("roleLabel", role == null ? "" : role.label());
+        out.put("homeView", role == null ? "workbench" : role.homeView());
+        return ApiResponse.ok(out);
+    }
+
+    @GetMapping("/roles")
+    @Operation(summary = "角色字典：角色码、中文名、职责说明与自带权限码")
+    public ApiResponse<Object> roles() {
+        Map<String, Object> out = new LinkedHashMap<String, Object>();
+        out.put("roles", users.roles());
+        out.put("permissions", Permissions.labels());
         return ApiResponse.ok(out);
     }
 

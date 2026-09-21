@@ -1,7 +1,7 @@
 <template>
 <section class="kb-card overflow-hidden">
   <div class="kb-card-head">
-    <div><b class="text-sm">检索候选流水线</b><div class="text-[10px] text-ink-400">RECALL → RRF → RERANK → CONTEXT</div></div>
+    <div><b class="text-sm">检索候选流水线</b><div class="text-[10px] text-ink-400">召回 → 融合排序 → 重排 → 上下文组装</div></div>
     <span class="kb-badge">{{ candidates.length }} candidates</span>
   </div>
   <div class="border-b border-ink-100 px-4 py-3">
@@ -18,7 +18,7 @@
   <div class="overflow-x-auto">
     <table class="w-full min-w-[760px] text-left text-xs">
       <thead class="bg-ink-50 text-[10px] uppercase tracking-wide text-ink-400">
-        <tr><th class="px-4 py-2">最终</th><th>候选知识</th><th>通道</th><th>RRF</th><th>Rerank</th><th>排名变化</th><th class="pr-4">得分轨迹</th></tr>
+        <tr><th class="px-4 py-2">最终</th><th>候选知识</th><th>通道</th><th>融合排序</th><th>重排</th><th>排名变化</th><th class="pr-4">得分轨迹</th></tr>
       </thead>
       <tbody class="divide-y divide-ink-100">
         <tr v-for="(c,i) in candidates" :key="`${c.id}-${i}`" class="cursor-pointer hover:bg-indigo-50/40" @click="open(c)">
@@ -37,7 +37,7 @@
       </tbody>
     </table>
   </div>
-  <div v-if="!candidates.length" class="p-8 text-center text-xs text-ink-400">Trace 中暂无结构化候选数据</div>
+  <div v-if="!candidates.length" class="p-8 text-center text-xs text-ink-400">链路中暂无结构化候选数据</div>
 </section>
 </template>
 <script setup lang="ts">

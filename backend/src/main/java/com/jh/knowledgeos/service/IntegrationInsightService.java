@@ -79,17 +79,49 @@ public class IntegrationInsightService {
             Map<String, Object> row = new LinkedHashMap<String, Object>();
             row.put("time", audit.getCreatedTime());
             row.put("protocol", audit.getChannel());
+            row.put("caller", audit.getCallerName());
             row.put("client", audit.getKeyCode());
             row.put("method", audit.getMethod());
             row.put("status", audit.getStatusCode());
             row.put("latencyMs", audit.getDurationMs());
             row.put("traceId", audit.getTraceId());
             row.put("message", audit.getMessage());
+            row.put("requestParams", audit.getRequestParams());
+            row.put("responseData", audit.getResponseData());
             rows.add(row);
             if (rows.size() >= max) break;
-        }
-        return rows;
-    }
+            }
+            return rows;
+            }
+
+            /**
+            * One call in full — what the trace view opens.
+            *
+            * <p>The list row stays thin on purpose: an operator scans hundreds of them. This answers the
+            * follow-up question locally, which is the whole point of storing the payloads: what exactly did
+            * this caller send, and what did we hand back. Both reach the caller already sanitised and
+            * bounded by the recorder, so nothing here has to reconstruct or trim them.</p>
+            */
+            public Map<String, Object> callDetail(String traceId) {
+            if (traceId == null || traceId.trim().isEmpty()) return null;
+            ApiCallAudit audit = mapper.findApiCallAuditByTraceId(traceId.trim());
+            if (audit == null) return null;
+            Map<String, Object> row = new LinkedHashMap<String, Object>();
+            row.put("id", audit.getId());
+            row.put("time", audit.getCreatedTime());
+            row.put("traceId", audit.getTraceId());
+            row.put("caller", audit.getCallerName());
+            row.put("client", audit.getKeyCode());
+            row.put("protocol", audit.getChannel());
+            row.put("method", audit.getMethod());
+            row.put("knowledgeBaseId", audit.getKnowledgeBaseId());
+            row.put("status", audit.getStatusCode());
+            row.put("latencyMs", audit.getDurationMs());
+            row.put("message", audit.getMessage());
+            row.put("requestParams", audit.getRequestParams());
+            row.put("responseData", audit.getResponseData());
+            return row;
+            }
 
     /** 四类集成服务：Search / Retrieve / Answer / Knowledge Object（设计 §6.3）。 */
     private List<Map<String, Object>> services() {
@@ -155,6 +187,7 @@ public class IntegrationInsightService {
         for (ApiCallAudit audit : mapper.listRecentApiCallAudits(limit)) {
             Map<String, Object> row = new LinkedHashMap<String, Object>();
             row.put("time", audit.getCreatedTime());
+            row.put("caller", audit.getCallerName());
             row.put("client", audit.getKeyCode());
             row.put("protocol", audit.getChannel());
             row.put("method", audit.getMethod());

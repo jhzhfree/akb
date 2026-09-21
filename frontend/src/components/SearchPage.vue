@@ -29,8 +29,8 @@
   <EvaluationPanel v-else :knowledge-base-id="knowledgeBaseId" />
 </template>
 <script setup lang="ts">
+import { computed } from 'vue'
 import type { QueryHistoryItem, QueryResult } from '../types'
-import { NAV_SECTIONS } from '../navigation'
 import { useShell } from '../shell'
 import ModuleTabs from './ModuleTabs.vue'
 import QueryPanel from './QueryPanel.vue'
@@ -59,5 +59,5 @@ defineEmits<{
 }>()
 
 const shell = useShell()
-const tabs = NAV_SECTIONS[2].tabs
+const tabs = computed(() => shell.tabs('search'))
 </script>

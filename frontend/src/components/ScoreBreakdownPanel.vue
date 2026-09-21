@@ -1,7 +1,7 @@
 <template>
 <section class="kb-card p-4">
   <div class="kb-section-head">
-    <div><small>SCORE BREAKDOWN</small><h3>分数构成</h3></div>
+    <div><small>评分拆解</small><h3>分数构成</h3></div>
     <span class="kb-badge">{{ rows.length }} candidates</span>
   </div>
   <!-- 没有明细数据时说明后端未产出 breakdown，保留表格其余列而不是渲染空面板。 -->
@@ -22,7 +22,7 @@
       </header>
       <div class="grid gap-3 p-3 sm:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)]">
         <div>
-          <div class="text-[10px] font-semibold uppercase text-ink-400">Score Chain</div>
+          <div class="text-[10px] font-semibold uppercase text-ink-400">得分链路</div>
           <div class="mt-2 space-y-1.5 text-[11px]">
             <div v-for="step in row.chain" :key="step.label" class="flex items-center justify-between gap-3">
               <span class="text-ink-500">{{ step.label }}</span>
@@ -34,13 +34,13 @@
           </div>
         </div>
         <div>
-          <div class="text-[10px] font-semibold uppercase text-ink-400">Why Matched</div>
+          <div class="text-[10px] font-semibold uppercase text-ink-400">命中原因</div>
           <ul class="mt-2 space-y-1 text-[11px] text-ink-600">
             <li v-for="(reason,i) in row.whyMatched" :key="`w-${i}`">· {{ reason }}</li>
             <li v-if="!row.whyMatched.length" class="text-ink-400">· 融合后进入候选（无通道明细）</li>
           </ul>
           <div v-if="row.filteredBy.length" class="mt-2">
-            <div class="text-[10px] font-semibold uppercase text-rose-500">Filtered By</div>
+            <div class="text-[10px] font-semibold uppercase text-rose-500">过滤原因</div>
             <div class="mt-1 flex flex-wrap gap-1">
               <span v-for="reason in row.filteredBy" :key="reason" class="kb-badge !text-rose-600">{{ filterReasonLabel(reason) }}</span>
             </div>

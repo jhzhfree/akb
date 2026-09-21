@@ -11,7 +11,7 @@
       <span class="kb-ctx-sep">/</span>
       <span class="kb-ctx-item">环境 <b>{{ environment || '—' }}</b></span>
       <span class="kb-ctx-sep">/</span>
-      <span class="kb-ctx-item">ID <b>{{ base?.id ?? '—' }}</b></span>
+      <span class="kb-ctx-item">编号 <b>{{ base?.id ?? '—' }}</b></span>
     </div>
 
     <div class="flex shrink-0 items-center gap-2">

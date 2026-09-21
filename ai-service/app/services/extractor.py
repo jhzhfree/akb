@@ -34,6 +34,7 @@ RELATION_VOCABULARY = (
     "BELONGS_TO", "LOCATED_IN", "DESCRIBES", "CONTAINS", "MANAGES",
 )
 
+from app.core.knowledge_schema import relation_vocabulary
 from app.services.llm_provider import get_llm_provider
 from app.services.standard_document import clean_inline, has_content
 
@@ -48,6 +49,7 @@ class KnowledgeExtractor:
         text: str,
         chunks: Optional[list] = None,
         units: Optional[list] = None,
+        knowledge_base_id: Optional[int] = None,
     ) -> Dict[str, Any]:
         """Prefer structured LLM extraction and degrade to deterministic rules."""
         text = (text or "").strip()
@@ -58,11 +60,14 @@ class KnowledgeExtractor:
             text = "\n\n".join(chunk.get("content", "") for chunk in chunks)
 
         llm = get_llm_provider()
+        # Relation labels come from the published schema of this knowledge base, so a
+        # customised vocabulary is honoured without redeploying the extractor.
+        vocabulary = relation_vocabulary(knowledge_base_id)
         if llm.name != "mock" and text:
             try:
-                result = await llm.extract_json(self._prompt(text[:14000], material))
+                result = await llm.extract_json(self._prompt(text[:14000], material, vocabulary))
                 if isinstance(result, dict):
-                    return self._normalize(result, material)
+                    return self._normalize(result, material, vocabulary)
             except Exception as exc:
                 # Extraction must remain usable offline. Log why fallback was
                 # selected instead of silently swallowing the model failure.
@@ -102,7 +107,9 @@ class KnowledgeExtractor:
         return material
 
     @staticmethod
-    def _prompt(text: str, material: List[Dict[str, Any]]) -> str:
+    def _prompt(
+        text: str, material: List[Dict[str, Any]], vocabulary: Optional[tuple] = None
+    ) -> str:
         catalog = [
             {
                 "evidence_id": item.get("evidence_code"),
@@ -127,7 +134,7 @@ class KnowledgeExtractor:
             "valid_from/valid_to 表示该结论的适用期限，无法确定时留空。\n"
             "关系要求：relations 描述实体之间的关联，source/target 必须是同一个 "
             "entities 数组里出现过的实体名称，relation_type 只能取 "
-            + "|".join(RELATION_VOCABULARY)
+            + "|".join(vocabulary or RELATION_VOCABULARY)
             + "，不要输出自环，最多 30 条有把握的关系。\n"
             "挂载要求：cards/claims 的 entity_codes 填写该条知识涉及的实体名称，"
             "没有则留空数组。\n"
@@ -136,7 +143,12 @@ class KnowledgeExtractor:
             + text
         )
 
-    def _normalize(self, result: Dict[str, Any], material: List[Dict[str, Any]]) -> Dict[str, Any]:
+    def _normalize(
+        self,
+        result: Dict[str, Any],
+        material: List[Dict[str, Any]],
+        vocabulary: Optional[tuple] = None,
+    ) -> Dict[str, Any]:
         """Keep only candidates that carry meaning after cleaning.
 
         A model occasionally echoes layout back into a title; dropping those rows here
@@ -174,12 +186,12 @@ class KnowledgeExtractor:
             entity["type"] = str(entity.get("type") or "TERM").upper()[:32]
             entities.append(entity)
         index = self._entity_index(entities)
-        relations = self._clean_relations(result.get("relations", []), index)
+        relations = self._clean_relations(result.get("relations", []), index, vocabulary)
         self._link_entities(cards, claims, index)
         if not relations:
             relations = self._cooccurrence_relations(material, index)
         relations = self._dedupe_relations(
-            self._claim_relations(claims, index) + relations)
+            self._claim_relations(claims, index, vocabulary) + relations)
         return {
             "cards": cards,
             "claims": claims,
@@ -235,7 +247,9 @@ class KnowledgeExtractor:
                             for field in ("subject", "object", "object_value"))
             claim["entity_codes"] = cls._codes_in(text, index)
 
-    def _clean_relations(self, raw: Any, index: Dict[str, str]) -> List[Dict[str, Any]]:
+    def _clean_relations(
+        self, raw: Any, index: Dict[str, str], vocabulary: Optional[tuple] = None
+    ) -> List[Dict[str, Any]]:
         """Resolve model relations onto batch entities, dropping dangling or self edges."""
         relations = []
         for item in raw or []:
@@ -265,13 +279,13 @@ class KnowledgeExtractor:
         return cls._match_entity(raw, index) or raw
 
     @staticmethod
-    def _relation_type(value: Any) -> str:
+    def _relation_type(value: Any, vocabulary: Optional[tuple] = None) -> str:
         """Whitelist the relation type so graph labels stay stable and injection-free."""
         text = re.sub(r"[^A-Za-z0-9_]", "_", str(value or "").strip().upper())
         text = re.sub(r"_+", "_", text).strip("_")
         if not text:
             return "RELATED_TO"
-        if text not in RELATION_VOCABULARY:
+        if text not in (vocabulary or RELATION_VOCABULARY):
             return "RELATED_TO"
         return text[:40]
 
@@ -284,7 +298,12 @@ class KnowledgeExtractor:
         return round(min(0.95, max(0.05, score)), 2)
 
     @classmethod
-    def _claim_relations(cls, claims: List[Dict[str, Any]], index: Dict[str, str]) -> List[Dict[str, Any]]:
+    def _claim_relations(
+        cls,
+        claims: List[Dict[str, Any]],
+        index: Dict[str, str],
+        vocabulary: Optional[tuple] = None,
+    ) -> List[Dict[str, Any]]:
         """Turn subject/predicate/object claims into typed entity relations."""
         relations = []
         for claim in claims:
@@ -296,7 +315,9 @@ class KnowledgeExtractor:
             relations.append({
                 "source": source,
                 "target": target,
-                "relation_type": cls._relation_type(claim.get("predicate") or "DESCRIBES"),
+                "relation_type": cls._relation_type(
+                    claim.get("predicate") or "DESCRIBES", vocabulary
+                ),
                 "confidence": cls._confidence(claim.get("confidence"), 0.6),
             })
         return relations

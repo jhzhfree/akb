@@ -21,6 +21,7 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 import javax.servlet.http.HttpServletRequest;
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.Map;
 import java.util.Set;
 
 /**
@@ -128,8 +129,11 @@ public class ExternalStreamController {
         }
         long start = System.currentTimeMillis();
         ApiKey key = accessService.authenticate(request);
+        // The stream itself is not captured — it never ends and would outgrow any column — but the
+        // subscription parameters say which events the caller asked to follow.
+        Map<String, Object> params = auditService.requestParamsOf(request);
         auditService.record(key, ApiCallAudit.CHANNEL_SSE, method, knowledgeBaseId, 200,
-                System.currentTimeMillis() - start, "stream opened");
+                System.currentTimeMillis() - start, "stream opened", params, null);
         return key;
     }
 }

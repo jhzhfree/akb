@@ -87,8 +87,12 @@
       </el-form-item>
       <el-form-item label="角色">
         <el-select v-model="userForm.role" class="w-full">
-          <el-option v-for="role in ROLES" :key="role" :value="role" :label="userRoleLabel(role)"/>
+          <el-option v-for="role in ROLES" :key="role.code" :value="role.code" :label="role.label">
+            <span>{{ role.label }}</span>
+            <span class="ml-2 text-[11px] text-slate-400">{{ role.brief }}</span>
+          </el-option>
         </el-select>
+        <p class="mt-1 text-[11px] leading-4 text-slate-400">{{ roleBrief(userForm.role) }}</p>
       </el-form-item>
       <el-form-item label="用户组">
         <el-select v-model="userForm.groupIds" multiple class="w-full" placeholder="可加入多个用户组">
@@ -142,15 +146,39 @@
 import { onMounted, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
-  createGroup, createUser, listGroups, listUsers, resetUserPassword,
+  createGroup, createUser, getRoleCatalog, listGroups, listUsers, resetUserPassword,
   setGroupMembers, setGroupStatus, setUserStatus, updateGroup, updateUser,
 } from '../api/auth'
 import { unwrap } from '../api/knowledge'
 import type { UserAccount, UserGroupRow, UserRoleValue } from '../types'
 import { statusLabel, userRoleLabel } from '../types'
 import { errorMessage as message } from '../utils/feedback'
+import { PERM, ROLE_BRIEF } from '../permissions'
+import { useShell } from '../shell'
 
-const ROLES:UserRoleValue[] = ['ADMIN', 'KNOWLEDGE_ADMIN', 'EDITOR', 'VIEWER']
+/**
+ * 可分配角色：五个角色按职责边界划分，选项上直接给出职责说明，避免选错角色。
+ * 优先用后端下发的角色字典；接口不可用时退回前端内置说明。
+ */
+const ROLES = ref<{ code:UserRoleValue; label:string; brief:string }[]>([
+  { code:'ADMIN', label:'系统管理员', brief:ROLE_BRIEF.ADMIN },
+  { code:'KNOWLEDGE_ADMIN', label:'知识系统管理员', brief:ROLE_BRIEF.KNOWLEDGE_ADMIN },
+  { code:'KNOWLEDGE_OPERATOR', label:'知识运营员', brief:ROLE_BRIEF.KNOWLEDGE_OPERATOR },
+  { code:'KNOWLEDGE_AUDITOR', label:'知识审核员', brief:ROLE_BRIEF.KNOWLEDGE_AUDITOR },
+  { code:'KNOWLEDGE_VIEWER', label:'知识浏览员', brief:ROLE_BRIEF.KNOWLEDGE_VIEWER },
+])
+async function loadRoles(){
+  try{
+    const catalog = unwrap(await getRoleCatalog(), null)
+    const rows = catalog?.roles || []
+    if(!rows.length)return
+    ROLES.value = rows.map(row => ({
+      code:row.code as UserRoleValue, label:row.label, brief:row.description,
+    }))
+  }catch{ /* 字典拉取失败不影响建号，沿用前端内置说明 */ }
+}
+const roleBrief = (role:UserRoleValue|string):string =>
+  (ROLES.value.find(row => row.code === role)?.brief) || ROLE_BRIEF[role as UserRoleValue] || ''
 
 const users = ref<UserAccount[]>([])
 const groups = ref<UserGroupRow[]>([])
@@ -162,7 +190,7 @@ const editingUser = ref<UserAccount | null>(null)
 const userForm = ref<{
   username:string; password:string; displayName:string; email:string
   role:UserRoleValue; groupIds:number[]
-}>({ username:'', password:'', displayName:'', email:'', role:'VIEWER', groupIds:[] })
+}>({ username:'', password:'', displayName:'', email:'', role:'KNOWLEDGE_VIEWER', groupIds:[] })
 
 const passwordDialog = ref(false)
 const passwordUser = ref<UserAccount | null>(null)
@@ -176,7 +204,16 @@ const memberDialog = ref(false)
 const memberGroup = ref<UserGroupRow | null>(null)
 const memberIds = ref<number[]>([])
 
+const shell = useShell()
+/**
+ * 用户列表只有系统管理员能读（后端 /api/users 校验 ADMIN）。
+ * 面板本身已按权限裁剪掉入口，这里再兜一层：无权时不发请求，
+ * 避免残留的会话状态把越权请求发出去、弹出「仅系统管理员可执行该操作」。
+ */
+const canManage = () => shell.can(PERM.SYSTEM_USER)
+
 async function load() {
+  if (!canManage()) { users.value = []; groups.value = []; return }
   loading.value = true
   try {
     const [u, g] = await Promise.all([listUsers(), listGroups()])
@@ -199,7 +236,7 @@ function memberNames(group:UserGroupRow):string {
 function openCreateUser() {
   editingUser.value = null
   userForm.value = {
-    username:'', password:'', displayName:'', email:'', role:'VIEWER', groupIds:[],
+    username:'', password:'', displayName:'', email:'', role:'KNOWLEDGE_VIEWER', groupIds:[],
   }
   userDialog.value = true
 }
@@ -344,7 +381,7 @@ async function saveMembers() {
   }
 }
 
-onMounted(load)
+onMounted(() => { load(); void loadRoles() })
 defineExpose({ load })
 </script>
 <style scoped>
