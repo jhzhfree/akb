@@ -1,6 +1,6 @@
 <!doctype html>
 <html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>企业级智能知识库平台｜五大一级菜单交互原型 V2.2</title>
+<title>企业级智能知识库平台｜五大一级菜单交互原型 V2.2（用户视图 / 管理视图 · 接口服务）</title>
 <style>
 *{box-sizing:border-box}body{margin:0;background:#f6f8fb;color:#17233d;font:14px/1.55 "Microsoft YaHei","PingFang SC",Arial}
 button,input,select,textarea{font:inherit}button{cursor:pointer}
@@ -96,19 +96,28 @@ pre{background:var(--code-bg);color:var(--code-fg)}
 .donut:after{background:var(--surface);color:var(--text)}
 #toast{background:var(--surface-2);color:var(--text);border:1px solid var(--line)}
 .themebtn{border:1px solid var(--line-soft);background:var(--surface);color:var(--text-2);border-radius:7px;padding:7px 11px}
+/* 顶栏视图切换：用户视图 / 管理视图 */
+.viewswitch{display:flex;gap:2px;padding:2px;border:1px solid var(--line);border-radius:9px;background:var(--surface-2)}
+.vsbtn{border:0;border-radius:7px;padding:6px 10px;background:transparent;color:var(--text-3);font-size:13px}
+.vsbtn:hover{color:var(--text)}
+.vsbtn.active{background:var(--surface);color:var(--accent);font-weight:700;border:1px solid var(--line-soft)}
+/* 主内容底部页脚：版本与授权信息统一显示区 */
+.appfooter{grid-column:1/3;border-top:1px solid var(--line);padding:12px 20px;display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;background:var(--surface);color:var(--text-3);font-size:12px}
 </style></head>
 <body><div class="app">
-<header><div class="brand">▣ 智能知识平台</div><select class="space"><option>产品知识中心</option><option>制度知识中心</option><option>项目知识中心</option></select><input class="global" placeholder="全局搜索知识、文档、卡片、断言、实体…"><span>任务 3</span><span>帮助</span><button class="themebtn" id="themeBtn" onclick="toggleTheme()">◐ 深色</button><div class="avatar">张</div><span>张三</span></header>
+<header><div class="brand">▣ 智能知识平台</div>
+<div class="viewswitch" title="管理视图含运维与配置入口；用户视图只保留日常使用入口"><button class="vsbtn" id="viewUser" onclick="setViewMode('user')">用户视图</button><button class="vsbtn active" id="viewAdmin" onclick="setViewMode('admin')">管理视图</button></div>
+<select class="space"><option>产品知识中心</option><option>制度知识中心</option><option>项目知识中心</option></select><input class="global" placeholder="全局搜索知识、文档、卡片、断言、实体…"><button class="themebtn" id="themeBtn" onclick="toggleTheme()">◐ 深色</button><div class="avatar">张</div><span>张三</span></header>
 <aside>
-<button class="nav active" onclick="go('workbench')" data-page="workbench">▣　知识工作台</button>
+<button class="nav active" onclick="go('workbench')" data-page="workbench">▣　知识概览</button>
 <button class="nav" onclick="go('create')" data-page="create">＋　知识生成</button>
 <button class="nav" onclick="go('search')" data-page="search">⌕　知识检索</button>
-<button class="nav" onclick="go('integration')" data-page="integration">⌘　知识集成</button>
+<button class="nav" onclick="go('integration')" data-page="integration">⌘　接口服务</button>
 <button class="nav" onclick="go('system')" data-page="system">⚙　系统配置</button>
 </aside><main>
 
 <section id="workbench" class="page active">
-<div class="head"><div><h1>知识工作台</h1><p>一个页面掌握企业知识资产、生命周期、治理状态与待办</p></div><div><button class="btn" onclick="go('search')">知识搜索</button> <button class="btn primary" onclick="go('create')">＋ 生成知识</button></div></div>
+<div class="head"><div><h1>知识概览</h1><p>一个页面掌握企业知识资产、生命周期、治理状态与待办（两种视图一致）</p></div><div><button class="btn" onclick="go('search')">知识搜索</button> <button class="btn primary" onclick="go('create')">＋ 生成知识</button></div></div>
 <div class="tabs"><div class="tab active" data-wtab="home" onclick="setWorkbenchTab('home')">工作台</div><div class="tab" data-wtab="assets" onclick="setWorkbenchTab('assets')">资产浏览</div><div class="tab" data-wtab="version" onclick="setWorkbenchTab('version')">版本</div><div class="tab" data-wtab="quality" onclick="setWorkbenchTab('quality')">质量</div></div>
 <div class="tabpane active" data-wpane="home">
 <div class="kpis">
@@ -139,8 +148,8 @@ pre{background:var(--code-bg);color:var(--code-fg)}
 
 <section id="create" class="page">
 <div class="head"><div><h1>知识生成</h1><p>文档、连接器、生成任务、裁决与衍生集中在一个知识生成工作区</p></div><button class="btn primary" onclick="openModal('快速生成知识')">＋ 生成知识</button></div>
-<div class="heroactions"><div class="action" onclick="setCreateTab('import')"><b>导入文档</b><small>文件 / URL / 文本</small></div><div class="action" onclick="setCreateTab('connector')"><b>连接数据源</b><small>数据库 / API / 对象存储 / SaaS</small></div><div class="action" onclick="setCreateTab('judgment')"><b>知识裁决</b><small>待审核 / 冲突 / Evidence</small></div><div class="action" onclick="setCreateTab('derive')"><b>知识衍生</b><small>规则 / 计算 / Graph / AI</small></div></div>
-<div class="panel section"><div class="tabs"><div class="tab active" data-ctab="overview" onclick="setCreateTab('overview')">生成概览</div><div class="tab" data-ctab="import" onclick="setCreateTab('import')">文档导入</div><div class="tab" data-ctab="connector" onclick="setCreateTab('connector')">连接器</div><div class="tab" data-ctab="tasks" onclick="setCreateTab('tasks')">生成任务</div><div class="tab" data-ctab="judgment" onclick="setCreateTab('judgment')">知识裁决</div><div class="tab" data-ctab="derive" onclick="setCreateTab('derive')">知识衍生</div></div>
+<div class="heroactions"><div class="action" onclick="setCreateTab('import')"><b>导入文档</b><small>文件 / URL / 文本</small></div><div class="action" data-admin="1" onclick="setCreateTab('connector')"><b>连接数据源</b><small>数据库 / API / 对象存储 / SaaS</small></div><div class="action" onclick="setCreateTab('judgment')"><b>知识裁决</b><small>待审核 / 冲突 / Evidence</small></div><div class="action" onclick="setCreateTab('derive')"><b>知识衍生</b><small>规则 / 计算 / Graph / AI</small></div></div>
+<div class="panel section"><div class="tabs"><div class="tab active" data-ctab="overview" data-admin="1" onclick="setCreateTab('overview')">生成概览</div><div class="tab" data-ctab="import" onclick="setCreateTab('import')">文档导入</div><div class="tab" data-ctab="connector" data-admin="1" onclick="setCreateTab('connector')">连接器</div><div class="tab" data-ctab="tasks" data-admin="1" onclick="setCreateTab('tasks')">生成任务</div><div class="tab" data-ctab="judgment" onclick="setCreateTab('judgment')">知识裁决</div><div class="tab" data-ctab="derive" onclick="setCreateTab('derive')">知识衍生</div></div>
 <div class="tabpane active" data-cpane="overview"><div class="pipeline"><span class="on">接入</span><span class="on">解析</span><span class="on">Chunk</span><span class="on">抽取</span><span>Evidence</span><span>衍生</span><span>裁决</span><span>发布</span></div><div class="cards section"><div class="card"><b>今日导入</b><h2>186</h2><span class="tag">成功 178</span></div><div class="card"><b>运行任务</b><h2>12</h2><span class="tag warn">3 需关注</span></div><div class="card"><b>待裁决</b><h2>21</h2><button class="btn ghost" onclick="setCreateTab('judgment')">处理</button></div><div class="card"><b>候选衍生</b><h2>8</h2><button class="btn ghost" onclick="setCreateTab('derive')">查看</button></div></div></div>
 <div class="tabpane" data-cpane="import"><div class="form"><label>导入方式</label><select><option>本地文件</option><option>Web URL</option><option>手工文本</option></select><label>文件</label><input type="file" multiple><label>知识类型</label><select><option>产品知识</option><option>技术知识</option><option>制度规范</option></select><label>权限</label><select><option>继承当前空间</option><option>指定用户/部门</option></select><label>处理模式</label><select><option>标准模式（推荐）</option><option>高质量模式</option><option>自定义高级模式</option></select></div><p><button class="btn">保存草稿</button> <button class="btn primary" onclick="setCreateTab('tasks')">开始知识生成</button></p></div>
 <div class="tabpane" data-cpane="connector"><div class="cards"><div class="card"><b>数据库</b><p>MySQL / PostgreSQL</p><span class="tag">3 已连接</span></div><div class="card"><b>REST API</b><p>企业业务接口</p><span class="tag">5 已连接</span></div><div class="card"><b>对象存储</b><p>S3 / OSS / MinIO</p><span class="tag">2 已连接</span></div><div class="card"><b>企业协作</b><p>Wiki / SharePoint</p><button class="btn">＋连接</button></div></div></div>
@@ -211,11 +220,12 @@ TOTAL                                          784ms</pre></div>
 </div></section>
 
 <section id="integration" class="page">
-<div class="head"><div><h1>知识集成</h1><p>一个页面完成知识服务发布、协议配置、凭证管理和调用追踪</p></div><button class="btn primary" onclick="openModal('创建集成服务')">＋ 创建集成服务</button></div>
+<div class="head"><div><h1>接口服务</h1><p>一个页面完成接口服务发布、协议配置、凭证管理和调用追踪（用户视图只展示「服务」）</p></div><button class="btn primary" onclick="openModal('创建集成服务')">＋ 创建集成服务</button></div>
 <div class="kpis"><div class="panel kpi"><span>集成服务</span><b>12</b></div><div class="panel kpi"><span>今日调用</span><b>18.6K</b></div><div class="panel kpi"><span>成功率</span><b>99.7%</b></div><div class="panel kpi"><span>P95</span><b>820ms</b></div><div class="panel kpi"><span>MCP 调用</span><b>4.2K</b></div><div class="panel kpi"><span>异常</span><b>18</b></div></div>
-<div class="panel section"><div class="tabs"><div class="tab active" data-itab="overview" onclick="setIntegrationTab('overview')">集成概览</div><div class="tab" data-itab="services" onclick="setIntegrationTab('services')">服务</div><div class="tab" data-itab="api" onclick="setIntegrationTab('api')">API</div><div class="tab" data-itab="mcp" onclick="setIntegrationTab('mcp')">MCP</div><div class="tab" data-itab="sse" onclick="setIntegrationTab('sse')">SSE</div><div class="tab" data-itab="credential" onclick="setIntegrationTab('credential')">凭证</div><div class="tab" data-itab="logs" onclick="setIntegrationTab('logs')">调用日志</div></div>
+<div class="panel section"><div class="tabs"><div class="tab active" data-itab="overview" data-admin="1" onclick="setIntegrationTab('overview')">接口概览</div><div class="tab" data-itab="services" onclick="setIntegrationTab('services')">服务</div><div class="tab" data-itab="api" data-admin="1" onclick="setIntegrationTab('api')">API</div><div class="tab" data-itab="mcp" data-admin="1" onclick="setIntegrationTab('mcp')">MCP</div><div class="tab" data-itab="sse" data-admin="1" onclick="setIntegrationTab('sse')">SSE</div><div class="tab" data-itab="credential" data-admin="1" onclick="setIntegrationTab('credential')">凭证</div><div class="tab" data-itab="logs" data-admin="1" onclick="setIntegrationTab('logs')">调用日志</div></div>
 <div class="tabpane active" data-ipane="overview"><div class="cols"><div><h3>协议分布</h3><table><tr><th>协议</th><th>今日调用</th><th>占比</th><th>状态</th></tr><tr><td>REST</td><td>9.8K</td><td>53%</td><td><span class="tag">正常</span></td></tr><tr><td>MCP</td><td>4.2K</td><td>23%</td><td><span class="tag">正常</span></td></tr><tr><td>SSE</td><td>4.6K</td><td>24%</td><td><span class="tag warn">限流中</span></td></tr></table></div><div><h3>最近调用</h3><table><tr><th>客户端</th><th>服务</th><th>状态</th><th>延迟</th></tr><tr><td>项目助手</td><td>企业知识问答</td><td><span class="tag">成功</span></td><td>820ms</td></tr><tr><td>OA 流程</td><td>产品知识搜索</td><td><span class="tag bad">凭证过期</span></td><td>—</td></tr></table></div></div></div>
-<div class="tabpane" data-ipane="services"><div class="cards"><div class="card service"><span class="tag status">正常</span><b>产品知识搜索</b><p>Search Service</p><small>REST / MCP · 产品知识中心</small></div><div class="card service"><span class="tag status">正常</span><b>项目助手上下文</b><p>Retrieve Service</p><small>MCP · 项目知识中心</small></div><div class="card service"><span class="tag status">正常</span><b>企业知识问答</b><p>Answer Service</p><small>REST / SSE</small></div><div class="card service"><span class="tag warn status">测试</span><b>知识对象服务</b><p>Knowledge Object Service</p><small>REST</small></div></div></div>
+<div class="tabpane" data-ipane="services"><div class="cards">
+<div class="panel" style="margin-bottom:12px"><h3>服务与接入</h3><p class="muted">用户视图下只展示服务与接入方式；凭证（API Key 签发 / 吊销 / 调用审计）仅在管理视图的「凭证」Tab 提供。</p></div><div class="card service"><span class="tag status">正常</span><b>产品知识搜索</b><p>Search Service</p><small>REST / MCP · 产品知识中心</small></div><div class="card service"><span class="tag status">正常</span><b>项目助手上下文</b><p>Retrieve Service</p><small>MCP · 项目知识中心</small></div><div class="card service"><span class="tag status">正常</span><b>企业知识问答</b><p>Answer Service</p><small>REST / SSE</small></div><div class="card service"><span class="tag warn status">测试</span><b>知识对象服务</b><p>Knowledge Object Service</p><small>REST</small></div></div></div>
 <div class="tabpane" data-ipane="api"><div class="cols"><div><h3>REST API</h3><p><b>POST /v1/search</b>　搜索知识对象</p><p><b>POST /v1/retrieve</b>　返回 Evidence Context</p><p><b>POST /v1/answer</b>　检索 + Answer + Citation</p><p><b>GET /v1/knowledge/{type}/{id}</b>　读取知识对象</p></div><div><h3>在线测试</h3><pre>POST /v1/retrieve
 {"query":"ZT5000 并发能力"}</pre><button class="btn primary" onclick="toast('模拟 API 请求已发送')">发送</button></div></div></div>
 <div class="tabpane" data-ipane="mcp"><table><tr><th>Tool</th><th>说明</th><th>状态</th></tr><tr><td>search_knowledge</td><td>搜索授权知识</td><td><span class="tag">启用</span></td></tr><tr><td>retrieve_context</td><td>返回 Evidence Context</td><td><span class="tag">启用</span></td></tr><tr><td>get_knowledge_card</td><td>读取知识卡片</td><td><span class="tag">启用</span></td></tr><tr><td>explore_entity</td><td>实体关系探索</td><td><span class="tag warn">P2</span></td></tr></table></div>
@@ -235,7 +245,9 @@ event: complete    {"latencyMs":820}</pre></div>
 <div class="panel config" onclick="config('模型配置')"><b>模型配置</b><p>LLM / Embedding / Reranker / OCR / Model Gateway</p></div><div class="panel config" onclick="config('用户与组织')"><b>用户与组织</b><p>用户 / 部门 / 用户组 / SSO / 同步</p></div><div class="panel config" onclick="config('角色与权限')"><b>角色与权限</b><p>平台角色 / 空间角色 / 对象 ACL</p></div><div class="panel config" onclick="config('知识 Schema')"><b>知识 Schema</b><p>知识类型 / Entity / Relation / Ontology</p></div><div class="panel config" onclick="config('存储与索引')"><b>存储与索引</b><p>Object / FullText / Vector / Graph</p></div><div class="panel config" onclick="config('任务与告警')"><b>任务与告警</b><p>任务 / 重试 / DLQ / 告警规则</p></div><div class="panel config" onclick="config('审计日志')"><b>审计日志</b><p>知识 / 裁决 / 权限 / 集成调用</p></div><div class="panel config" onclick="config('知识空间')"><b>知识空间</b><p>空间列表 / 成员 / 默认权限策略</p></div>
 </div>
 </section>
-</main></div>
+</main>
+<footer class="appfooter"><span>▣ 智能知识平台　<b>V2.2</b>　生产环境 · 服务 1.2.0</span><span>企业自部署 · 版本与授权由部署镜像管理　<button class="btn ghost" onclick="toast('版本信息：产品 V2.2 · 服务 1.2.0 · 已核对')">版本信息</button></span></footer>
+</div>
 
 <div class="drawer" id="drawer"><div class="drawerhead"><h2 id="drawerTitle">详情</h2><button class="btn" onclick="closeDrawer()">关闭</button></div><div id="drawerBody"></div></div>
 <div class="modal" id="modal"><div class="dialog"><div class="drawerhead"><h2 id="modalTitle">创建</h2><button class="btn" onclick="closeModal()">关闭</button></div><div class="form"><label>名称</label><input placeholder="请输入名称"><label>知识空间</label><select><option>产品知识中心</option></select><label>说明</label><textarea rows="3"></textarea></div><p style="text-align:right"><button class="btn" onclick="closeModal()">取消</button> <button class="btn primary" onclick="closeModal();toast('已创建（原型）')">创建</button></p></div></div>
@@ -244,6 +256,19 @@ event: complete    {"latencyMs":820}</pre></div>
 function go(id){document.querySelectorAll('.page').forEach(x=>x.classList.remove('active'));const page=document.getElementById(id);if(!page)return;page.classList.add('active');document.querySelectorAll('.nav').forEach(x=>x.classList.toggle('active',x.dataset.page===id));history.replaceState(null,'','#'+id);window.scrollTo(0,0)}
 function tab(group, pane, name){document.querySelectorAll('[data-'+group+'tab]').forEach(x=>x.classList.toggle('active',x.dataset[group+'tab']===name));document.querySelectorAll('[data-'+group+'pane]').forEach(x=>x.classList.toggle('active',x.dataset[group+'pane']===name))}
 function setCreateTab(n){tab('c','pane',n)} function setSearchTab(n){tab('s','pane',n)} function setIntegrationTab(n){tab('i','pane',n)} function setWorkbenchTab(n){tab('w','pane',n)}
+/* ---- 用户视图 / 管理视图：data-admin="1" 的 Tab 与区块只在管理视图出现 ---- */
+var adminView=true;
+function setViewMode(m){adminView=(m==='admin');document.getElementById('viewUser').classList.toggle('active',!adminView);document.getElementById('viewAdmin').classList.toggle('active',adminView);applyView();toast(adminView?'已切换到管理视图':'已切换到用户视图')}
+function applyView(){
+  document.querySelectorAll('[data-admin="1"]').forEach(function(el){el.style.display=adminView?'':'none'});
+  /* 当前 Tab 被隐藏时回落到该模块第一个可见 Tab，避免停在目标视图里不存在的页面 */
+  [['c',setCreateTab],['s',setSearchTab],['i',setIntegrationTab]].forEach(function(p){
+    var g=p[0],set=p[1],first=null;
+    document.querySelectorAll('[data-'+g+'tab]').forEach(function(el){if(!first&&el.style.display!=='none')first=el});
+    var active=document.querySelector('[data-'+g+'tab].active');
+    if((!active||active.style.display==='none')&&first)set(first.dataset[g+'tab']);
+  });
+}
 function asset(n){document.getElementById('drawerTitle').textContent=n+'资产';document.getElementById('drawerBody').innerHTML='<p class="muted">资产浏览不再作为左侧菜单，通过工作台进入。</p><table><tr><th>名称</th><th>类型</th><th>状态</th></tr><tr><td>示例 '+n+' 001</td><td>'+n+'</td><td><span class="tag">ACTIVE</span></td></tr><tr><td>示例 '+n+' 002</td><td>'+n+'</td><td><span class="tag warn">PENDING</span></td></tr></table>';document.getElementById('drawer').classList.add('show')}
 function config(n){document.getElementById('drawerTitle').textContent=n;document.getElementById('drawerBody').innerHTML='<p>该配置模块从左侧导航移入“系统配置”主页面。</p><div class="panel"><h3>'+n+'</h3><p class="muted">列表、编辑、测试、启停等具体操作在此 Drawer / 独立配置工作区完成。</p><button class="btn primary" onclick="toast(&quot;保存配置&quot;)">保存配置</button></div>';document.getElementById('drawer').classList.add('show')}
 function closeDrawer(){document.getElementById('drawer').classList.remove('show')} function openModal(t){document.getElementById('modalTitle').textContent=t;document.getElementById('modal').classList.add('show')} function closeModal(){document.getElementById('modal').classList.remove('show')}

@@ -25,14 +25,14 @@ footer{padding:28px;text-align:center;border-top:1px solid var(--line);color:#7a
 <section class="hero">
 <h1>企业级智能知识库平台 产品规格说明书</h1>
 <div class="sub">以“知识资产”为中心的 AI 原生企业知识平台 · 五大一级菜单·知识生成与图谱检索版</div>
-<div class="meta"><span class="badge">PRD V2.2</span><span class="badge">2026-09</span><span class="badge">参考 Google Cloud Agent Search 的简洁资源组织思路</span><span class="badge">面向：产品 / 设计 / 研发 / 测试 / 实施</span></div>
+<div class="meta"><span class="badge">PRD V2.2</span><span class="badge">2026-09</span><span class="badge">参考 Google Cloud Agent Search 的简洁资源组织思路</span><span class="badge">用户视图 / 管理视图</span><span class="badge">面向：产品 / 设计 / 研发 / 测试 / 实施</span></div>
 </section>
 <main>
 <div class="toc"><strong>目录</strong><ol>
 <li><a href="#p1">产品定位与设计目标</a></li><li><a href="#p2">产品布局重构原则</a></li>
-<li><a href="#p3">总体信息架构</a></li><li><a href="#p4">知识工作台</a></li>
+<li><a href="#p3">总体信息架构</a></li><li><a href="#p4">知识概览</a></li>
 <li><a href="#p5">知识生成</a></li><li><a href="#p6">知识检索</a></li>
-<li><a href="#p7">知识集成</a></li><li><a href="#p8">系统配置</a></li>
+<li><a href="#p7">接口服务</a></li><li><a href="#p8">系统配置</a></li>
 <li><a href="#p9">核心知识模型</a></li><li><a href="#p10">知识全生命周期</a></li>
 <li><a href="#p11">角色与权限</a></li><li><a href="#p12">关键业务流程</a></li>
 <li><a href="#p13">MVP 与版本规划</a></li><li><a href="#p14">产品指标与验收</a></li>
@@ -46,31 +46,37 @@ footer{padding:28px;text-align:center;border-top:1px solid var(--line);color:#7a
 <div class="card"><strong>知识可检索</strong><p>统一提供关键词、语义、结构化与图关系检索，并支持引用、Trace 与检索质量评测。</p></div>
 <div class="card"><strong>知识服务化</strong><p>知识既供人使用，也通过 API、MCP、SSE 等标准能力提供给业务系统、AI 应用与 Agent。</p></div>
 </div>
-<div class="note ok"><b>本次 V2.0 的核心变化：</b>从原来的“工作台 / 知识空间 / 知识生产 / 知识管理 / 知识治理 / 检索中心 / 图谱 / 应用 / 评测 / 系统管理”等多一级入口，收敛为 <b>知识工作台、知识生成、知识检索、知识集成、系统配置</b> 五个一级菜单。复杂能力进入二级页面、Tab、Drawer 和对象详情页。</div>
+<div class="note ok"><b>本次 V2.0 的核心变化：</b>从原来的“工作台 / 知识空间 / 知识生产 / 知识管理 / 知识治理 / 检索中心 / 图谱 / 应用 / 评测 / 系统管理”等多一级入口，收敛为 <b>知识概览（工作台）、知识生成、知识检索、接口服务、系统配置</b> 五个一级菜单。复杂能力进入二级页面、Tab、Drawer 和对象详情页。</div>
+<div class="note ok"><b>本次修订（对齐当前实现）：</b>
+① “知识集成”更名为 <b>接口服务</b>：对外交付的是 API / MCP / SSE 接口能力，而不是内部的数据集成；
+② 引入 <b>用户视图 / 管理视图</b>：普通用户登录进入用户视图，管理员登录进入管理视图并可在顶栏切换，用户视图只保留“用知识”所需的入口；
+③ 顶栏精简为 <b>视图切换 / 知识库 / 全局搜索 / 主题 / 用户</b>，任务与服务状态不再占用顶栏，任务回到“知识生成 · 生成任务”查看；
+④ 版本与授权信息统一显示在主内容底部页脚，侧栏底部不再单独显示版本号。</div>
 </section>
 
 <section id="p2"><h2>2. 产品布局重构原则</h2>
 <p>本次布局参考 Google Cloud Agent Search 的产品思路：以 Data Store / Data Source、Document、Search App 等核心资源组织能力，创建过程围绕“选择来源 → 创建数据存储 → 连接应用 → 搜索/预览”展开。我们的平台保留这一“资源少、入口清晰、任务导向”的优点，但增加企业知识生产与可信治理能力。</p>
 <table><thead><tr><th>原则</th><th>产品设计</th></tr></thead><tbody>
 <tr><td>一级菜单少而稳定</td><td>固定五大一级入口，不把 Chunk、断言、图谱、评测等专业对象全部暴露为一级菜单。</td></tr>
-<tr><td>首页回答“知识现在怎么样”</td><td>知识工作台聚合来源、文档、卡片、断言、实体/关系、生命周期和治理状态。</td></tr>
+<tr><td>首页回答“知识现在怎么样”</td><td>知识概览聚合来源、文档、卡片、断言、实体/关系、生命周期和治理状态。</td></tr>
 <tr><td>创建过程任务化</td><td>所有“让新知识进入系统”的动作归入知识生成，包括文档导入、连接器、裁决与衍生。</td></tr>
 <tr><td>检索能力集中</td><td>搜索、Retrieval Test、策略、Trace、Benchmark 统一放入知识检索。</td></tr>
-<tr><td>消费与开放统一</td><td>问答/搜索应用以及 API、MCP、SSE 统一归入知识集成。</td></tr>
+<tr><td>消费与开放统一</td><td>问答/搜索应用以及 API、MCP、SSE 统一归入接口服务。</td></tr>
 <tr><td>技术参数后置</td><td>模型、索引、用户、权限、字典、任务等进入系统配置；普通知识用户不需要理解底层技术。</td></tr>
+<tr><td>按视图裁剪入口</td><td>同一套 IA 有两种视图：管理视图含生产流水线与运维/测评入口，用户视图只保留“用知识”的入口；差异由视图切换即时生效，不是两套产品。</td></tr>
 </tbody></table>
 </section>
 
 <section id="p3"><h2>3. 总体信息架构</h2>
 <div class="menu-grid">
-<div class="menu"><b>知识工作台</b><small>看全局<br>看资产<br>看健康度</small></div>
+<div class="menu"><b>知识概览</b><small>看全局<br>看资产<br>看健康度</small></div>
 <div class="menu"><b>知识生成</b><small>导入<br>连接<br>生产与治理</small></div>
-<div class="menu"><b>知识检索</b><small>搜索<br>测试<br>Trace</small></div>
-<div class="menu"><b>知识集成</b><small>API<br>MCP<br>SSE</small></div>
+<div class="menu"><b>知识检索</b><small>搜索<br>测试<br>图谱</small></div>
+<div class="menu"><b>接口服务</b><small>API<br>MCP<br>SSE</small></div>
 <div class="menu"><b>系统配置</b><small>模型<br>用户<br>平台参数</small></div>
 </div>
 <div class="flow">企业级智能知识库
-├─ 01 知识工作台
+├─ 01 知识概览（工作台）
 │  ├─ 总览
 │  ├─ 知识来源
 │  ├─ 文档
@@ -80,26 +86,29 @@ footer{padding:28px;text-align:center;border-top:1px solid var(--line);color:#7a
 │  └─ 治理状态
 │
 ├─ 02 知识生成
-│  ├─ 文档导入
-│  ├─ 连接器
-│  ├─ 生成任务 / 知识生成流水线
-│  ├─ 知识裁决
-│  └─ 知识衍生
+│  ├─ 生成概览                     管理视图
+│  ├─ 文档导入                     用户视图 / 管理视图（用户视图默认进入）
+│  ├─ 连接器                       管理视图
+│  ├─ 生成任务 / 知识生成流水线    管理视图
+│  ├─ 知识裁决                     用户视图 / 管理视图
+│  └─ 知识衍生                     用户视图 / 管理视图
 │
 ├─ 03 知识检索
-│  ├─ 知识搜索
-│  ├─ 检索测试
-│  ├─ 检索策略
-│  ├─ Query Trace
-│  ├─ 知识图谱
-│  └─ Benchmark / 评测
+│  ├─ 知识搜索                     用户视图 / 管理视图
+│  ├─ 检索测试                     用户视图 / 管理视图
+│  ├─ 检索策略                     用户视图 / 管理视图
+│  ├─ Query Trace（检索链路追踪）  管理视图
+│  ├─ 知识图谱                     用户视图 / 管理视图
+│  └─ Benchmark（检索评测）        管理视图
 │
-├─ 04 知识集成
-│  ├─ 集成概览
-│  ├─ API
-│  ├─ MCP
-│  ├─ SSE
-│  └─ 调用日志 / 凭证
+├─ 04 接口服务
+│  ├─ 接口概览                     管理视图
+│  ├─ 服务                         用户视图 / 管理视图（用户视图默认进入）
+│  ├─ API                          管理视图
+│  ├─ MCP                          管理视图
+│  ├─ SSE                          管理视图
+│  ├─ 凭证                         管理视图
+│  └─ 调用日志                     管理视图
 │
 └─ 05 系统配置
    ├─ 模型配置
@@ -110,12 +119,17 @@ footer{padding:28px;text-align:center;border-top:1px solid var(--line);color:#7a
    ├─ 任务与告警
    └─ 审计日志</div>
 
-<div class="note ok"><b>V2.2 原型对齐：</b>左侧导航严格保留五个一级菜单：<b>知识工作台 / 知识生成 / 知识检索 / 知识集成 / 系统配置</b>。原二十余个功能入口全部进入对应主页面，以 Tab、卡片、快捷操作、Drawer 和对象详情承载；其中“知识图谱”归入“知识检索”。</div>
-<div class="note"><b>知识空间（Knowledge Space）不再作为一级菜单。</b>它作为全局作用域存在于顶部空间选择器中。用户切换空间后，五个一级菜单均自动作用于当前空间；平台管理员可切换“全部空间”。</div>
+<div class="note ok"><b>V2.2 原型对齐：</b>左侧导航严格保留五个一级菜单：<b>知识概览（工作台）/ 知识生成 / 知识检索 / 接口服务 / 系统配置</b>。原二十余个功能入口全部进入对应主页面，以 Tab、卡片、快捷操作、Drawer 和对象详情承载；其中“知识图谱”归入“知识检索”，“知识集成”更名为“接口服务”。</div>
+<div class="note"><b>知识库（Knowledge Base）不再作为一级菜单。</b>它作为全局作用域存在于顶部知识库选择器中。切换知识库后，五个一级菜单均自动作用于当前知识库；平台管理员可切换“全部知识库”。</div>
+<div class="note ok"><b>3.x 两种视图（本次新增）：</b>同一套 IA 按登录人角色呈现两种视图，差异只体现在“模块内 Tab 与管理类入口”，一级菜单保持不变。
+<div style="margin-top:8px"><b>用户视图</b>（普通用户默认）：知识概览与当前一致；知识生成只保留 <b>文档导入（默认进入）/ 知识裁决 / 知识衍生</b>；知识检索保留 <b>搜索 / 检索测试 / 检索策略 / 知识图谱</b>，不含检索链路追踪与检索评测；接口服务只保留 <b>服务</b>。</div>
+<div><b>管理视图</b>（管理员默认）：模块内完整 Tab，包含生成概览、连接器、生成任务、检索链路追踪、检索评测、接口服务的协议配置 / 凭证 / 调用日志等运维入口。</div>
+<div>管理员可在顶栏随时切换两种视图用于核对普通成员看到的界面；切换后若当前页在目标视图不可见，自动回落到该模块的默认页。</div></div>
+<div class="note"><b>3.y 顶栏与底部（本次调整）：</b>顶栏从左到右为 <b>品牌 → 视图切换 → 知识库切换 → 全局搜索 → 主题切换 → 用户（头像 / 姓名 / 退出）</b>；任务入口与服务连接状态不再占用顶栏，异步任务在“知识生成 · 生成任务”页内查看与跟踪。版本与授权信息统一显示在主内容底部页脚（产品版本 + 运行环境 / 服务版本 + “企业自部署 · 版本与授权由部署镜像管理” + 版本信息入口），侧栏底部不再单独显示版本号。</div>
 </section>
 
-<section id="p4"><h2>4. 一级菜单一：知识工作台</h2>
-<p class="lead">知识工作台是产品默认首页，目标不是展示系统功能，而是在一个页面回答：<b>“当前企业知识资产有多少？从哪里来？处于什么生命周期？是否可信？哪里需要处理？”</b></p>
+<section id="p4"><h2>4. 一级菜单一：知识概览（工作台）</h2>
+<p class="lead">知识概览是产品默认首页，目标不是展示系统功能，而是在一个页面回答：<b>“当前企业知识资产有多少？从哪里来？处于什么生命周期？是否可信？哪里需要处理？”</b></p>
 <h3>4.1 页面布局</h3>
 <div class="flow">┌ 顶部：当前知识空间 / 时间范围 / 全局搜索 / 创建知识 ┐
 ├ KPI：来源 | 文档 | 卡片 | 断言 | 实体 | 关系 ┤
@@ -148,6 +162,7 @@ footer{padding:28px;text-align:center;border-top:1px solid var(--line);color:#7a
 
 <section id="p5"><h2>5. 一级菜单二：知识生成</h2>
 <p class="lead">“知识生成”覆盖一切让新知识进入平台、变成可信知识资产的过程。用户不需要理解后台的 Parser、Embedding 或 Index 服务，只需要选择来源、确认处理结果并完成治理。</p>
+<div class="note ok"><b>视图差异：</b>用户视图下知识生成只保留 <b>文档导入（默认进入）/ 知识裁决 / 知识衍生</b>；生成概览、连接器与生成任务属于生产流水线的运维入口，只在管理视图开放。</div>
 <h3>5.1 首页</h3>
 <div class="grid">
 <div class="card"><strong>文档导入</strong><p>拖拽上传、本地文件、URL、手工文本；支持批量导入与导入历史。</p></div>
@@ -183,12 +198,13 @@ footer{padding:28px;text-align:center;border-top:1px solid var(--line);color:#7a
 <p class="lead">知识检索同时服务普通知识查找与知识工程调优。默认是简洁搜索体验，高级能力通过 Tab/高级模式展开。</p>
 <h3>6.1 页面结构</h3>
 <div class="flow">知识检索
-├─ 搜索             默认入口：自然语言 / 关键词
-├─ 检索测试         对召回结果与 Score 进行调试
-├─ 检索策略         Retrieval Profile
-├─ Query Trace      查看一次查询完整链路
-├─ 知识图谱         实体关系探索、路径分析、图谱检索
-└─ Benchmark        批量评测与回归</div>
+├─ 搜索（智能问答）    默认入口：自然语言 / 关键词        两种视图
+├─ 检索测试            对召回结果与 Score 进行调试          两种视图
+├─ 检索策略            Retrieval Profile                    两种视图
+├─ 知识图谱            实体关系探索、路径分析、图谱检索      两种视图
+├─ 检索链路追踪        查看一次查询完整链路                  仅管理视图
+└─ 检索评测            批量评测与回归                        仅管理视图</div>
+<div class="note"><b>菜单去重：</b>智能问答（搜索）页面内部不再重复一排“检索测试 / 检索策略 / 检索链路追踪 / 检索评测”的菜单，检索模块的所有入口统一由页面顶部的模块 Tab 承载；一次问答的链路详情通过结果卡片上的“查看完整链路”进入 Trace 抽屉。</div>
 <h3>6.2 知识搜索</h3>
 <p>搜索结果不只返回 Chunk，而优先展示“知识卡片 / 断言 / 文档 / 实体”等知识对象；结果卡片展示来源、Evidence、版本、状态与相关知识。支持按来源、知识类型、标签、时间、状态过滤。</p>
 <h3>6.3 检索测试</h3>
@@ -204,7 +220,7 @@ footer{padding:28px;text-align:center;border-top:1px solid var(--line);color:#7a
 <p>将复杂参数封装为可复用 Retrieval Profile，例如“通用知识检索”“制度精确检索”“产品技术检索”“图谱影响分析”。普通用户只选择策略名称，知识工程师才能编辑高级参数。</p>
 
 <h3>6.5 知识图谱</h3>
-<p>知识图谱不再作为独立一级菜单，也不作为知识工作台的主要功能入口，而是归入“知识检索”，作为一种面向关系、路径与上下文的高级检索方式。用户可从搜索结果中的实体、断言或关系进入图谱，也可直接切换到“知识图谱”Tab。</p>
+<p>知识图谱不再作为独立一级菜单，也不作为知识概览的主要功能入口，而是归入“知识检索”，作为一种面向关系、路径与上下文的高级检索方式。用户可从搜索结果中的实体、断言或关系进入图谱，也可直接切换到“知识图谱”Tab。</p>
 <table><thead><tr><th>能力</th><th>产品说明</th></tr></thead><tbody>
 <tr><td>实体搜索</td><td>按实体名称、类型、属性定位中心实体。</td></tr>
 <tr><td>关系探索</td><td>以中心实体展开 1~N 跳关系，查看实体、关系、断言与 Evidence。</td></tr>
@@ -214,22 +230,25 @@ footer{padding:28px;text-align:center;border-top:1px solid var(--line);color:#7a
 </tbody></table>
 </section>
 
-<section id="p7"><h2>7. 一级菜单四：知识集成</h2>
-<p class="lead">知识集成负责把已经生产和治理好的知识，以标准协议和服务接口集成到业务系统、AI 应用与 Agent。V2.0 不把复杂 Agent Builder 作为 MVP 核心，而优先把企业知识服务接口标准化。</p>
-<h3>7.1 集成概览</h3>
-<p>展示已创建的知识集成服务、调用量、成功率、P95 延迟、Token/模型消耗、最近错误。支持创建“集成服务”，每个集成服务绑定知识空间、Retrieval Profile、权限策略和访问凭证。</p>
-<h3>7.2 API</h3>
+<section id="p7"><h2>7. 一级菜单四：接口服务</h2>
+<p class="lead">接口服务（原“知识集成”）负责把已经生产和治理好的知识，以标准协议和服务接口开放给业务系统、AI 应用与 Agent。对外交付的是 <b>API / MCP / SSE 接口能力</b>，而不是内部的数据集成。</p>
+<div class="note ok"><b>视图差异：</b>用户视图下接口服务只保留 <b>服务</b> 一个 Tab——调用方只需要知道有哪些服务、怎么接；接口概览、协议配置（API / MCP / SSE）、凭证与调用日志属于发布与运维侧，只在管理视图开放。面板内的“凭证”区块（API Key 的签发、吊销与调用审计）同样只出现在管理视图。</div>
+<h3>7.1 服务</h3>
+<p>服务是接口服务的主体对象，也是用户视图下的唯一入口：一个服务绑定知识库范围、Retrieval Profile、协议（REST / MCP / SSE）、凭证与限流策略，对外暴露 Search / Retrieve / Answer / Knowledge Object 四类能力。服务页展示服务卡片（名称、能力类型、协议、状态）与接入说明；创建与配置服务在管理视图的“接口概览 → 创建服务”完成。</p>
+<h3>7.2 接口概览</h3>
+<p>展示已创建的集成服务、调用量、成功率、P95 延迟、Token/模型消耗、最近错误。支持创建“集成服务”，每个集成服务绑定知识空间、Retrieval Profile、权限策略和访问凭证。</p>
+<h3>7.3 API</h3>
 <table><thead><tr><th>能力</th><th>用途</th></tr></thead><tbody>
 <tr><td>Search API</td><td>返回排序后的知识对象</td></tr>
 <tr><td>Retrieve API</td><td>返回供外部 LLM/Agent 使用的 Evidence Context</td></tr>
 <tr><td>Answer API</td><td>平台完成检索、上下文装配、生成与 Citation</td></tr>
 <tr><td>Knowledge API</td><td>读取 Card、Assertion、Entity、Evidence、Lineage</td></tr>
 </tbody></table>
-<h3>7.3 MCP</h3>
+<h3>7.4 MCP</h3>
 <p>将搜索、检索、知识对象读取等能力作为 MCP Tools/Resources 暴露，使 AI Agent 可以按权限使用企业知识。MCP 调用与 Web UI 使用同一 ACL、Retrieval Profile 与 Trace。</p>
-<h3>7.4 SSE</h3>
+<h3>7.5 SSE</h3>
 <p>SSE 用于 Answer/Agent 类长耗时调用的流式输出。事件至少包含 start、retrieval、citation、delta、complete、error；前端可逐步展示“正在检索 → 已找到证据 → 正在生成 → 完成”。</p>
-<h3>7.5 凭证与调用日志</h3>
+<h3>7.6 凭证与调用日志</h3>
 <p>集成服务级管理 AppKey/Token、允许来源、限流、过期时间和权限范围。调用日志支持 traceId 反查 Query、检索结果、引用、耗时和错误。</p>
 </section>
 
@@ -306,13 +325,23 @@ Evaluation / Feedback / Gap / Rebuild / Expire</div>
 
 <section id="p11"><h2>11. 角色与权限</h2>
 <table><thead><tr><th>角色</th><th>主要入口</th><th>典型任务</th></tr></thead><tbody>
-<tr><td>普通知识用户</td><td>知识工作台、知识检索</td><td>查知识、看卡片、看引用</td></tr>
-<tr><td>知识管理员</td><td>工作台、知识生成、检索</td><td>导入、同步、审核、运营</td></tr>
+<tr><td>普通知识用户</td><td>知识概览、知识检索</td><td>查知识、看卡片、看引用</td></tr>
+<tr><td>知识管理员</td><td>知识概览、知识生成、知识检索</td><td>导入、同步、审核、运营</td></tr>
 <tr><td>知识审核员</td><td>知识生成</td><td>审核断言、冲突裁决、发布</td></tr>
 <tr><td>知识工程师</td><td>创建、检索、系统配置（部分）</td><td>解析策略、检索策略、Benchmark</td></tr>
-<tr><td>应用开发者</td><td>知识集成</td><td>API/MCP/SSE 集成、凭证与日志</td></tr>
+<tr><td>应用开发者</td><td>接口服务</td><td>API/MCP/SSE 集成、凭证与日志</td></tr>
 <tr><td>平台管理员</td><td>系统配置</td><td>模型、用户、权限、存储、审计</td></tr>
 </tbody></table>
+<h3>11.1 用户视图 / 管理视图</h3>
+<p>角色决定“能不能做”，视图决定“看见多少”。管理员登录后进入管理视图，可在顶栏一键切到用户视图，用来核对普通成员实际看到的界面；普通账号固定为用户视图，顶栏的切换项保持可见但不可点，并给出原因提示。视图选择写入本地存储，刷新后保持。</p>
+<table><thead><tr><th>模块</th><th>用户视图</th><th>管理视图（增量）</th></tr></thead><tbody>
+<tr><td>知识概览</td><td>首页 / 工作台 / 资产浏览 / 版本 / 质量</td><td>与用户视图一致</td></tr>
+<tr><td>知识生成</td><td>文档导入（默认进入）/ 知识裁决 / 知识衍生</td><td>+ 生成概览、连接器、生成任务</td></tr>
+<tr><td>知识检索</td><td>搜索 / 检索测试 / 检索策略 / 知识图谱</td><td>+ 检索链路追踪、检索评测</td></tr>
+<tr><td>接口服务</td><td>服务（默认进入）</td><td>+ 接口概览、API、MCP、SSE、凭证、调用日志</td></tr>
+<tr><td>系统配置</td><td>按权限可见的配置页（不含用户与组织）</td><td>+ 用户与组织等管理员专属入口</td></tr>
+</tbody></table>
+<div class="note"><b>切换时的落点：</b>从管理视图切到用户视图时，若当前页面在用户视图不可见（例如检索评测），自动回落到该模块的默认页，不停留在无权页面上；页面内的快捷入口同步按目标视图裁剪，不留下点了没反应的死链。</div>
 </section>
 
 <section id="p12"><h2>12. 关键业务流程</h2>
@@ -361,7 +390,7 @@ Evaluation / Feedback / Gap / Rebuild / Expire</div>
 <tr><td>知识新鲜度</td><td>超过更新周期仍未同步/复核的知识比例</td></tr>
 <tr><td>应用可用性</td><td>API/MCP/SSE 成功率、P95 延迟、错误率</td></tr>
 </tbody></table>
-<div class="note ok"><b>最终产品心智：</b>用户打开平台首先看到“企业知识现在是什么状态”；需要增加知识时进入“知识生成”；需要验证知识能否被找到时进入“知识检索”；需要让系统和 Agent 使用知识时进入“知识集成”；只有管理员才频繁进入“系统配置”。</div>
+<div class="note ok"><b>最终产品心智：</b>用户打开平台首先看到“企业知识现在是什么状态”；需要增加知识时进入“知识生成”；需要验证知识能否被找到时进入“知识检索”；需要让系统和 Agent 使用知识时进入“接口服务”；只有管理员才频繁进入“系统配置”。</div>
 </section>
 </main><footer>企业级智能知识库平台 · 产品规格说明书 PRD V2.2 · 五大一级菜单·知识生成与图谱检索版</footer>
 </div></body></html>
