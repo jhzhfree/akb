@@ -138,14 +138,19 @@ export const NAV_SECTIONS: NavSection[] = [
     /** V2.2：原「知识集成」更名为「接口服务」——对外交付的是 API / MCP / SSE 接口能力。 */
     key: 'integration', label: '接口服务', icon: 'plug', group: 'integration', scoped: true,
     desc: '一个页面完成接口服务发布、协议配置、凭证管理和调用追踪',
+    /**
+     * 用户视图下接口服务只保留「服务」：调用方只需要知道有哪些服务、怎么接，
+     * 概览、协议配置（API / MCP / SSE）、凭证与调用日志属于发布与运维侧，只对管理视图开放。
+     * 「服务」是过滤后剩下的第一个可见 Tab，即用户视图的默认落点。
+     */
     tabs: [
-      { key: 'integration.overview', label: '接口概览', icon: 'plug', permission: PERM.INTEGRATION_VIEW },
+      { key: 'integration.overview', label: '接口概览', icon: 'plug', adminOnly: true, permission: PERM.INTEGRATION_VIEW },
       { key: 'integration.services', label: '服务', icon: 'server', permission: PERM.INTEGRATION_VIEW },
-      { key: 'integration.api', label: 'API', icon: 'code', debug: true, permission: PERM.INTEGRATION_VIEW },
-      { key: 'integration.mcp', label: 'MCP', icon: 'blocks', permission: PERM.INTEGRATION_VIEW },
-      { key: 'integration.sse', label: 'SSE', icon: 'broadcast', permission: PERM.INTEGRATION_VIEW },
-      { key: 'integration.credentials', label: '凭证', icon: 'key', permission: PERM.INTEGRATION_VIEW },
-      { key: 'integration.logs', label: '调用日志', icon: 'doc', permission: PERM.INTEGRATION_VIEW },
+      { key: 'integration.api', label: 'API', icon: 'code', debug: true, adminOnly: true, permission: PERM.INTEGRATION_VIEW },
+      { key: 'integration.mcp', label: 'MCP', icon: 'blocks', adminOnly: true, permission: PERM.INTEGRATION_VIEW },
+      { key: 'integration.sse', label: 'SSE', icon: 'broadcast', adminOnly: true, permission: PERM.INTEGRATION_VIEW },
+      { key: 'integration.credentials', label: '凭证', icon: 'key', adminOnly: true, permission: PERM.INTEGRATION_VIEW },
+      { key: 'integration.logs', label: '调用日志', icon: 'doc', adminOnly: true, permission: PERM.INTEGRATION_VIEW },
     ],
   },
   {

@@ -17,6 +17,8 @@ export interface KosShell {
   navigate: (key: string) => void
   /** 权限判定：按登录人角色下发的权限码判断，未开启认证时恒为 true。 */
   can: (code: string) => boolean
+  /** 当前是否为管理视图：面板内需要区分「调用方视角」与「运维视角」时用它裁剪区块。 */
+  adminView: () => boolean
   /** 视图 key 是否可达：页面内的快捷入口先用它置灰，避免点了才提示无权访问。 */
   canNavigate: (key: string) => boolean
   /** 模块内当前角色可见的 Tab，页面直接用它渲染 ModuleTabs。 */

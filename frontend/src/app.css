@@ -192,8 +192,8 @@ body{background:var(--bg-base);color:var(--ink-1)}
 /* 侧栏底部工具区：当前用户（点开看角色与常用入口）+ 系统配置 + 版本信息。
    角色说明从主页面顶部的横幅收进底部用户块的浮层：主页面首屏留给页面内容，
    角色信息仍在一击可达的位置，且不再随页面滚动被带走。 */
-/* 底部一行排下「用户名 + 设置图标 + 版本」：整行 flex 且不换行，
-   用户块吃掉剩余宽度并自行截断，图标与版本固定宽度靠右。 */
+/* 底部一行排下「用户名 + 设置图标」：整行 flex 且不换行，
+   用户块吃掉剩余宽度并自行截断，图标固定宽度靠右（版本已移到主内容底部页脚）。 */
 .kos-side-foot{
   flex:none;margin-top:10px;padding-top:10px;border-top:1px solid var(--line-d);
   display:flex;align-items:center;gap:6px;flex-wrap:nowrap;
@@ -266,14 +266,30 @@ body{background:var(--bg-base);color:var(--ink-1)}
   background:linear-gradient(90deg,rgba(79,140,247,.16),rgba(45,212,191,.06));
   border-color:var(--line);color:var(--accent-text);
 }
-.kos-side-ver{
-  flex:none;padding:2px 7px;border-radius:999px;cursor:pointer;font-family:inherit;
-  font-size:10px;font-weight:600;letter-spacing:.04em;color:var(--ink-3);
-  background:var(--bg-sub);border:1px solid var(--line-d);
-  transition:color .18s var(--ease),border-color .18s var(--ease);
+.kos-side-icon:focus-visible{outline:none;box-shadow:var(--ring)}
+
+/* ---------- 主内容底部：版本与授权 ---------- */
+/* 版本与授权信息统一收在主内容最下方：每个页面滚到底都能看到同一条说明，
+   不必在侧栏、顶栏或各页面内部重复摆放。 */
+.kos-footer{
+  display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;
+  margin-top:32px;padding-top:14px;border-top:1px solid var(--line-d);
+  font-size:11.5px;line-height:1.6;color:var(--ink-3);
 }
-.kos-side-ver:hover{color:var(--accent-text);border-color:var(--brand-400)}
-.kos-side-icon:focus-visible,.kos-side-ver:focus-visible{outline:none;box-shadow:var(--ring)}
+.kos-footer-left,.kos-footer-right{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.kos-footer-brand{font-weight:600;color:var(--ink-2)}
+.kos-footer-ver{
+  padding:1px 7px;border-radius:999px;font-size:10px;font-weight:600;letter-spacing:.04em;
+  color:var(--accent-text);background:var(--bg-sub);border:1px solid var(--line-d);
+}
+.kos-footer-env,.kos-footer-note{color:var(--ink-3)}
+.kos-footer-link{
+  padding:2px 8px;border-radius:8px;cursor:pointer;font-family:inherit;font-size:11.5px;font-weight:600;
+  color:var(--accent-text);background:transparent;border:1px solid var(--line-d);
+  transition:background .18s var(--ease),border-color .18s var(--ease);
+}
+.kos-footer-link:hover{background:var(--bg-sub);border-color:var(--brand-400)}
+.kos-footer-link:focus-visible{outline:none;box-shadow:var(--ring)}
 
 /* ---------- knowledge production pipeline ---------- */
 .kb-pipeline{display:flex;align-items:stretch;flex-wrap:wrap;gap:6px}
@@ -565,9 +581,9 @@ body{background:var(--bg-base);color:var(--ink-1)}
     background:var(--line-d);font-size:0;color:transparent;
   }
   .kos-nav-item{justify-content:center}
-  /* 底部仍是一行：窄侧栏只留头像与设置图标，用户名、箭头、版本号收起但不换行 */
+  /* 底部仍是一行：窄侧栏只留头像与设置图标，用户名与箭头收起但不换行 */
   .kos-side-user{flex-direction:row;justify-content:center;gap:0;padding:2px 0}
-  .kos-side-user-copy,.kos-side-ver,.kos-side-caret{display:none}
+  .kos-side-user-copy,.kos-side-caret{display:none}
   /* 侧栏只有 60px，面板改用视口定位向左展开，否则会被侧栏的 overflow:hidden 裁掉 */
   .kos-user-panel{position:fixed;left:66px;right:auto;bottom:16px;width:220px}
   .kos-brand-copy small{display:none}

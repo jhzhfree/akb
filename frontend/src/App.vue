@@ -21,7 +21,7 @@
   :user-name="me?.user?(me.user.displayName||me.user.username):''"
   :avatar="avatarText" :role-accent="roleAccent" :can-system="canSystem"
   :actions="roleQuickActions" :logged-in="!!me?.user"
-  :system-active="activeSection==='system'" :version="APP_VERSION"
+  :system-active="activeSection==='system'"
   @enter="enterSection" @enter-system="enterSystem" @go="key=>goto(key)" @logout="doLogout"/>
 <main class="kos-main">
   <div v-if="failure" class="mb-3 flex items-start gap-3 rounded-lg border px-4 py-3" style="background:var(--danger-bg);border-color:var(--danger)">
@@ -103,6 +103,9 @@
     :can-manage-users="!!me?.canManageUsers&&adminView"
     @select="selectKey" @acl-change="changeAcl"
     @select-base="selectBase" @create-base="showBases=true" @refresh="loadOverview"/>
+
+  <!-- 版本与授权信息：所有主页面共用同一条底部说明，侧栏不再单独放版本号。 -->
+  <AppFooter :product-version="APP_VERSION" :environment="environmentLabel"/>
 </main>
 </div>
 <KnowledgeBaseDialog :visible="showBases" :bases="bases" :groups="groups" :active-id="knowledgeBaseId" @close="showBases=false" @select="selectBase" @create="createBase"/>
@@ -143,6 +146,8 @@ import TaskCenterDrawer from './components/TaskCenterDrawer.vue'
 import SpaceContextBar from'./components/SpaceContextBar.vue';
 import AppHeader from './components/AppHeader.vue'
 import AppSidebar from './components/AppSidebar.vue'
+/** 主内容底部：版本与授权信息统一显示区 */
+import AppFooter from './components/AppFooter.vue'
 import KnowledgeBaseDialog from './components/KnowledgeBaseDialog.vue'
 import KnowledgeDetailWorkspace from './components/KnowledgeDetailWorkspace.vue'
 import QueryTracePanel from './components/QueryTracePanel.vue'
@@ -872,6 +877,7 @@ async function doLogout(){
 const shell:KosShell={
   navigate, openAssets, openGraph, openRun, openTrace, openCallTrace, openDetail, openEvidence, openCitation,
   can, canNavigate, tabs:key=>leavesOfSection(key,can,navRole.value),
+  adminView:()=>adminView.value,
   upload, pick, remove,
   uploadFiles:files=>{void uploadFiles(files)},
   cancelBatch:code=>{void cancelBatch(code)},

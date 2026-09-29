@@ -12,7 +12,7 @@
       <div class="flex shrink-0 items-center gap-2">
         <!-- V2.2：服务与凭证在知识集成内是两个 Tab，同一面板按入口聚焦到对应区块。 -->
         <button class="kb-btn-outline" :class="{'kb-btn-primary':section==='services'}" @click="section='services'">服务</button>
-        <button class="kb-btn-outline" :class="{'kb-btn-primary':section==='credentials'}" @click="section='credentials'">凭证</button>
+        <button v-if="canCredentials" class="kb-btn-outline" :class="{'kb-btn-primary':section==='credentials'}" @click="section='credentials'">凭证</button>
         <button class="kb-btn-outline" :disabled="loading" @click="loadAll">刷新</button>
       </div>
     </header>
@@ -281,14 +281,19 @@ import {
 } from '../api/external'
 import { unwrap } from '../api/knowledge'
 import { errorMessage as message } from '../utils/feedback'
+import { useShell } from '../shell'
 import MetricCard from './MetricCard.vue'
 import PanelState from './PanelState.vue'
 
 /** focus 由知识集成的 Tab 决定：服务 Tab 看协议与接入示例，凭证 Tab 看 API Key 与调用审计。 */
 const props = defineProps<{ bases:KnowledgeBase[]; focus?:'services'|'credentials' }>()
-const section = ref<'services'|'credentials'>(props.focus === 'credentials' ? 'credentials' : 'services')
+const shell = useShell()
+/** 凭证（API Key 的签发、吊销与调用审计）属于管理侧能力：用户视图只看服务怎么接。 */
+const canCredentials = computed(() => shell.adminView())
+const section = ref<'services'|'credentials'>(
+  props.focus === 'credentials' && shell.adminView() ? 'credentials' : 'services')
 watch(() => props.focus, value => {
-  section.value = value === 'credentials' ? 'credentials' : 'services'
+  section.value = value === 'credentials' && canCredentials.value ? 'credentials' : 'services'
 })
 
 const overview = ref<ExternalServiceOverview | null>(null)

@@ -55,24 +55,19 @@
       </div>
     </div>
 
-    <!-- 设置图标与版本与用户名同一行：底部工具区只有一行，窄侧栏也保持不换行。 -->
+    <!-- 设置图标与用户名同一行：底部工具区只有一行，窄侧栏也保持不换行。
+         版本信息已移到主内容底部的统一页脚，侧栏不再占用这一行。 -->
     <button v-if="canSystem" class="kos-side-icon" :class="{active:systemActive}"
       title="系统配置" aria-label="系统配置" @click="$emit('enter-system')">
       <NavIcon name="settings" :size="16"/>
     </button>
-    <button class="kos-side-ver" :title="`版本信息 · ${version}`" @click="versionVisible=true">
-      {{version}}
-    </button>
   </div>
-
-  <VersionInfoDialog v-model:visible="versionVisible" :product-version="version"/>
 </aside>
 </template>
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref } from 'vue'
 import type {NavGroup, NavSection} from '../navigation'
 import NavIcon from './NavIcon.vue'
-import VersionInfoDialog from './VersionInfoDialog.vue'
 
 defineProps<{
   /** 按业务域分组的一级入口：工作台 / 知识库 / 系统集成 */
@@ -85,8 +80,6 @@ defineProps<{
   loggedIn?:boolean
   /** 系统配置入口：无 system 权限时隐藏；当前停留在系统配置页时高亮 */
   canSystem?:boolean;systemActive?:boolean
-  /** 产品版本号，点击弹出「版本信息」弹窗 */
-  version:string
 }>()
 const emit = defineEmits<{
   (e:'enter',section:NavSection):void
@@ -95,7 +88,6 @@ const emit = defineEmits<{
   (e:'logout'):void
 }>()
 
-const versionVisible = ref(false)
 const panel = ref(false)
 
 function go(action:{key:string;disabled?:boolean}){
@@ -123,5 +115,5 @@ onBeforeUnmount(()=>{
   document.removeEventListener('keydown',onKey)
 })
 /** 切换一级入口时收起面板：浮层不该跟着页面留在这里。 */
-defineExpose({close:()=>{panel.value=false;versionVisible.value=false}})
+defineExpose({close:()=>{panel.value=false}})
 </script>
