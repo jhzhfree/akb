@@ -59,10 +59,14 @@ CHANNEL_DESCRIPTIONS = {
     "graph": "图谱邻域遍历，适合关系与多跳问题。",
 }
 
+# The two channels that carry verbatim document chunks carry the most citation-ready
+# evidence: an answer quoting a chunk can point at evidenceCode + evidenceHash, while a
+# card or graph path often cannot. They therefore start level with structured objects
+# instead of below them — see STABILITY-OPTIMIZATION-PLAN.md section B2.
 DEFAULT_CHANNEL_WEIGHTS = {
-    "bm25": 1.0,
-    "vector": 1.0,
-    "card": 1.15,
+    "bm25": 1.15,
+    "vector": 1.15,
+    "card": 1.10,
     "claim": 1.1,
     "graph": 1.05,
 }
@@ -278,12 +282,26 @@ class QualityWeights(BaseModel):
     evidence: float = Field(default=0.10, ge=0.0, le=1.0)
 
 
+class ChunkBoostPolicy(BaseModel):
+    """Extra ranking weight given to verbatim document chunks.
+
+    A chunk is the only evidence shape that always carries a quotable, hashable source,
+    so lifting it lifts citation faithfulness as a side effect (plan section B3).
+    """
+
+    enabled: bool = True
+    base: float = Field(default=1.25, ge=1.0, le=3.0)
+    headingHit: float = Field(default=0.15, ge=0.0, le=1.0)
+    coverage: float = Field(default=0.15, ge=0.0, le=1.0)
+
+
 class FusionPolicy(BaseModel):
-    """Weighted RRF fusion and quality-signal boost."""
+    """Weighted RRF fusion, quality-signal boost, and verbatim-chunk boost."""
 
     rrfK: int = Field(default=60, ge=1, le=1000)
     qualitySignalsEnabled: bool = True
     qualityWeights: QualityWeights = Field(default_factory=QualityWeights)
+    chunkBoost: ChunkBoostPolicy = Field(default_factory=ChunkBoostPolicy)
 
 
 class RerankPolicy(BaseModel):
@@ -297,6 +315,9 @@ class AnswerPolicy(BaseModel):
     """Context assembly, guardrail thresholds, and the refusal sentence."""
 
     contextMaxChars: int = Field(default=8000, ge=500, le=60000)
+    # Chunks are what an answer can quote verbatim; without a floor, high-scoring cards
+    # can fill the whole context and leave every sentence without an exact citation.
+    minChunkEvidence: int = Field(default=3, ge=0, le=20)
     evidenceGateEnabled: bool = True
     faithfulnessMin: float = Field(default=0.03, ge=0.0, le=1.0)
     entailmentMin: float = Field(default=0.08, ge=0.0, le=1.0)
@@ -462,6 +483,9 @@ def save_policy(payload: dict[str, Any]) -> QueryPolicy:
             "updatedAt": _now(),
             "policy": policy.model_dump(),
         }
+        # Keep the active policy mirrored at the top level for backward-compatible
+        # readers while named profiles remain the authoritative persistence model.
+        store.update(policy.model_dump())
         _write_store(store)
         _cache = policy
         return policy
@@ -667,6 +691,14 @@ def quality_weights(policy: QueryPolicy) -> dict[str, float]:
     }
 
 
+def chunk_boost_weights(policy: QueryPolicy) -> dict[str, float]:
+    """Return the verbatim-chunk boost settings, or ``{}`` when disabled."""
+    if not policy.fusion.chunkBoost.enabled:
+        return {}
+    boost = policy.fusion.chunkBoost
+    return {"base": float(boost.base), "headingHit": float(boost.headingHit), "coverage": float(boost.coverage)}
+
+
 def policy_summary(policy: QueryPolicy) -> dict[str, Any]:
     """Return the compact policy fingerprint recorded in every query trace."""
     return {
@@ -680,9 +712,11 @@ def policy_summary(policy: QueryPolicy) -> dict[str, Any]:
         "minRecallCandidates": policy.recall.minRecallCandidates,
         "rrfK": policy.fusion.rrfK,
         "qualitySignalsEnabled": policy.fusion.qualitySignalsEnabled,
+        "chunkBoostEnabled": policy.fusion.chunkBoost.enabled,
         "rerankEnabled": policy.rerank.enabled,
         "rerankTopN": policy.rerank.topN,
         "contextMaxChars": policy.answer.contextMaxChars,
+        "minChunkEvidence": policy.answer.minChunkEvidence,
         "answerPolicyVersion": policy.answer.policyVersion,
         "answerEvidenceGateEnabled": policy.answer.evidenceGateEnabled,
     }

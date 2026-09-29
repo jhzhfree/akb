@@ -18,7 +18,8 @@ public interface PlatformEventMapper {
      * Newest-first unless the caller asks for {@code ascending}, which is what SSE replay uses so
      * reconnected clients receive missed events in the original order.
      */
-    List<PlatformEvent> listPlatformEvents(@Param("kb") Long kb, @Param("types") List<String> types, @Param("sinceId") Long sinceId, @Param("ascending") boolean ascending, @Param("limit") int limit);
+    List<PlatformEvent> listPlatformEvents(@Param("kb") Long kb, @Param("types") List<String> types, @Param("sinceId") Long sinceId,
+        @Param("ascending") boolean ascending, @Param("limit") int limit);
 
     int deletePlatformEventsBefore(@Param("cutoff") LocalDateTime cutoff);
 

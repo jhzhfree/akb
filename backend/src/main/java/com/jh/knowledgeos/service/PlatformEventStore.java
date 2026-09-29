@@ -91,7 +91,8 @@ public class PlatformEventStore {
             return new LinkedHashMap<String, Object>();
         }
         try {
-            Map<String, Object> parsed = objectMapper.readValue(event.getDetailJson(), objectMapper.getTypeFactory().constructMapType(java.util.LinkedHashMap.class, String.class, Object.class));
+            Map<String, Object> parsed = objectMapper.readValue(event.getDetailJson(),
+                objectMapper.getTypeFactory().constructMapType(java.util.LinkedHashMap.class, String.class, Object.class));
             return parsed == null ? new LinkedHashMap<String, Object>() : parsed;
         } catch (Exception e) {
             log.warn("platform event detail of {} is unreadable: {}", event.getEventId(), e.getMessage());

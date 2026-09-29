@@ -10,6 +10,13 @@ public class QueryResponse {
 
     private String queryId;
 
+    /**
+     * Which kind of conclusion the answer is (design V1.1 §9.4): retrieved evidence, graph
+     * traversal, or derived knowledge. Without it an answer that nobody wrote down looks
+     * exactly like one quoted from a document.
+     */
+    private Map<String, Object> conclusionSource;
+
     private List<String> rewrittenQueries;
 
     private Map<String, Object> router;
@@ -152,5 +159,13 @@ public class QueryResponse {
 
     public void setTrace(Map<String, Object> trace) {
         this.trace = trace;
+    }
+
+    public Map<String, Object> getConclusionSource() {
+        return conclusionSource;
+    }
+
+    public void setConclusionSource(Map<String, Object> conclusionSource) {
+        this.conclusionSource = conclusionSource;
     }
 }

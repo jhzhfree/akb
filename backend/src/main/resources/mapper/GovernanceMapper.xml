@@ -119,4 +119,126 @@
     ORDER BY r.id DESC LIMIT 1
   </select>
 
+<select id="listAdjudicationCandidates" resultType="map">
+SELECT 'CLAIM' objectType,c.claim_code objectCode,CONCAT(c.subject,' ',c.predicate,' ',c.object_value) objectContent,c.confidence,
+ COUNT(DISTINCT ce.evidence_id) evidenceCount,COUNT(DISTINCT e.source_id) sourceCount,COALESCE(AVG(e.authority_score),0) authorityScore,COALESCE(AVG(e.freshness_score),0) freshnessScore,
+ COALESCE(MAX(cf.conflictCount),0) conflictCount,COALESCE(MAX(cf.maxConflictScore),0) maxConflictScore,c.status
+ FROM t_claim c
+ LEFT JOIN t_claim_evidence ce ON ce.claim_code=c.claim_code
+ LEFT JOIN t_evidence e ON e.id=ce.evidence_id
+ LEFT JOIN (
+   SELECT objectCode,COUNT(*) conflictCount,MAX(conflictScore) maxConflictScore
+   FROM (
+     SELECT object_a_code objectCode,conflict_score conflictScore FROM t_knowledge_conflict WHERE status='OPEN'
+     UNION ALL
+     SELECT object_b_code objectCode,conflict_score conflictScore FROM t_knowledge_conflict WHERE status='OPEN'
+   ) conflict_rows GROUP BY objectCode
+ ) cf ON cf.objectCode=c.claim_code
+ WHERE c.knowledge_base_id=#{kb} AND c.status IN ('DRAFT','UNCERTAIN','CONFLICTED','PENDING_REVIEW') GROUP BY c.id
+UNION ALL
+SELECT 'CARD' objectType,k.knowledge_code objectCode,CONCAT(k.title,' ',k.content) objectContent,k.confidence,
+ COUNT(DISTINCT ke.evidence_id) evidenceCount,COUNT(DISTINCT e.source_id) sourceCount,COALESCE(AVG(e.authority_score),0) authorityScore,COALESCE(AVG(e.freshness_score),0) freshnessScore,0 conflictCount,0 maxConflictScore,k.status
+ FROM t_knowledge_card k LEFT JOIN t_knowledge_evidence ke ON ke.knowledge_code=k.knowledge_code LEFT JOIN t_evidence e ON e.id=ke.evidence_id WHERE k.knowledge_base_id=#{kb} AND k.status IN ('DRAFT','UNCERTAIN','CONFLICTED','PENDING_REVIEW') GROUP BY k.id</select>
+
+
+<select id="listReviewsForObject" resultType="map">
+SELECT id,object_type objectType,object_code objectCode,decision,reviewer,
+       comment_text comment,created_time createdTime
+FROM t_knowledge_review WHERE object_type=#{objectType} AND object_code=#{objectCode}
+ORDER BY created_time DESC
+</select>
+
+
+<select id="listAssessmentsForObject" resultType="map">
+SELECT id,object_type objectType,object_code objectCode,policy_version policyVersion,
+       knowledge_confidence knowledgeConfidence,risk_level riskLevel,decision,
+       requires_human_review requiresHumanReview,score_json scoreJson,
+       ai_judge_json aiJudgeJson,reason_text reasonText,created_time createdTime
+FROM t_adjudication_assessment
+WHERE knowledge_base_id=#{kb} AND object_type=#{objectType} AND object_code=#{objectCode}
+ORDER BY created_time DESC LIMIT 20
+</select>
+
+
+<insert id="snapshotKnowledgeObject">
+INSERT INTO t_knowledge_version(knowledge_base_id,object_type,object_code,version_no,title,summary,content,status,confidence,change_type,changed_by,supersedes_version_no)
+SELECT #{kb},#{objectType},#{objectCode},COALESCE(v.max_version,0)+1,o.title,o.summary,o.content,o.status,o.confidence,#{changeType},#{changedBy},NULLIF(v.max_version,0)
+FROM (
+ SELECT k.title,k.summary,k.content,k.status,k.confidence FROM t_knowledge_card k
+ WHERE #{objectType}='CARD' AND k.knowledge_base_id=#{kb} AND k.knowledge_code=#{objectCode}
+ UNION ALL
+ SELECT c.subject,c.predicate,c.object_value,c.status,c.confidence FROM t_claim c
+ WHERE #{objectType}='CLAIM' AND c.knowledge_base_id=#{kb} AND c.claim_code=#{objectCode}
+) o CROSS JOIN (SELECT COALESCE(MAX(version_no),0) max_version FROM t_knowledge_version WHERE object_type=#{objectType} AND object_code=#{objectCode}) v
+</insert>
+
+
+<select id="listObjectConflicts" resultType="map">SELECT object_a_code objectACode,object_b_code objectBCode,conflict_type conflictType,conflict_score conflictScore,status FROM t_knowledge_conflict WHERE status='OPEN' AND (object_a_code=#{objectCode} OR object_b_code=#{objectCode})</select>
+
+
+<insert id="insertAssessment">INSERT INTO t_adjudication_assessment(knowledge_base_id,object_type,object_code,policy_version,knowledge_confidence,risk_level,decision,requires_human_review,score_json,ai_judge_json,reason_text) VALUES(#{kb},#{objectType},#{objectCode},#{policyVersion},#{confidence},#{riskLevel},#{decision},#{requiresHuman},CAST(#{scoreJson} AS JSON),CAST(#{aiJson} AS JSON),#{reason})</insert>
+
+
+<select id="listAssessments" resultType="map">SELECT id,object_type objectType,object_code objectCode,policy_version policyVersion,knowledge_confidence knowledgeConfidence,risk_level riskLevel,decision,requires_human_review requiresHumanReview,score_json scoreJson,ai_judge_json aiJudgeJson,reason_text reasonText,created_time createdTime FROM t_adjudication_assessment WHERE knowledge_base_id=#{kb} ORDER BY created_time DESC LIMIT #{limit}</select>
+
+
+<update id="updateCardStatus">UPDATE t_knowledge_card SET status=#{status} WHERE knowledge_code=#{code}</update>
+
+
+<update id="updateClaimStatus">UPDATE t_claim SET status=#{status} WHERE claim_code=#{code}</update>
+
+
+<insert id="insertJudgment">INSERT INTO t_knowledge_review(object_type,object_code,decision,reviewer,comment_text,input_object_codes,result_object_code,policy_version,judgment_time)VALUES(#{type},#{code},#{decision},#{reviewer},#{comment},CAST(#{inputObjectCodes} AS JSON),#{resultObjectCode},#{policyVersion},NOW())</insert>
+
+
+<insert id="insertConflict">INSERT IGNORE INTO t_knowledge_conflict(knowledge_base_id,object_a_code,object_b_code,conflict_type,conflict_score,status) VALUES(#{kb},#{a},#{b},#{type},#{score},'OPEN')</insert>
+
+
+<select id="listConflicts" resultType="map">SELECT c.id,c.knowledge_base_id knowledgeBaseId,c.object_a_code objectACode,c.object_b_code objectBCode,
+       c.conflict_type conflictType,c.conflict_score conflictScore,c.status,c.resolution,c.created_time createdTime,
+       a.objectType objectAType,a.displayTitle objectATitle,a.content objectAContent,a.status objectAStatus,a.confidence objectAConfidence,a.versionNo objectAVersion,
+       b.objectType objectBType,b.displayTitle objectBTitle,b.content objectBContent,b.status objectBStatus,b.confidence objectBConfidence,b.versionNo objectBVersion
+FROM t_knowledge_conflict c
+LEFT JOIN (
+  SELECT 'CARD' objectType,knowledge_code code,title displayTitle,CONCAT(title,'：',LEFT(COALESCE(summary,content),200)) content,status,confidence,version versionNo FROM t_knowledge_card
+  UNION ALL
+  SELECT 'CLAIM' objectType,claim_code code,CONCAT(subject,' ',predicate,' ',LEFT(object_value,120)) displayTitle,CONCAT(subject,' ',predicate,' ',object_value) content,status,confidence,
+    COALESCE((SELECT MAX(v.version_no) FROM t_knowledge_version v WHERE v.object_type='CLAIM' AND v.object_code=cv.claim_code),1) versionNo FROM t_claim cv
+) a ON a.code=c.object_a_code
+LEFT JOIN (
+  SELECT 'CARD' objectType,knowledge_code code,title displayTitle,CONCAT(title,'：',LEFT(COALESCE(summary,content),200)) content,status,confidence,version versionNo FROM t_knowledge_card
+  UNION ALL
+  SELECT 'CLAIM' objectType,claim_code code,CONCAT(subject,' ',predicate,' ',LEFT(object_value,120)) displayTitle,CONCAT(subject,' ',predicate,' ',object_value) content,status,confidence,
+    COALESCE((SELECT MAX(v.version_no) FROM t_knowledge_version v WHERE v.object_type='CLAIM' AND v.object_code=cv.claim_code),1) versionNo FROM t_claim cv
+) b ON b.code=c.object_b_code
+WHERE c.knowledge_base_id=#{kb} AND (#{status} IS NULL OR c.status=#{status}) ORDER BY c.conflict_score DESC,c.created_time DESC</select>
+
+
+<select id="getConflict" resultType="map">SELECT id,knowledge_base_id knowledgeBaseId,object_a_code objectACode,object_b_code objectBCode,conflict_type conflictType,conflict_score conflictScore,status,resolution,created_time createdTime FROM t_knowledge_conflict WHERE id=#{id}</select>
+
+
+<select id="listAdjudicationTargets" resultType="map">SELECT 'CLAIM' objectType,claim_code objectCode,CONCAT(subject,' ',predicate,' ',LEFT(object_value,200)) content,condition_json conditionJson,confidence,status,COALESCE((SELECT MAX(v.version_no) FROM t_knowledge_version v WHERE v.object_type='CLAIM' AND v.object_code=claim_code),1) versionNo FROM t_claim WHERE claim_code IN <foreach collection="codes" item="code" open="(" separator="," close=")">#{code}</foreach> UNION ALL SELECT 'CARD' objectType,knowledge_code objectCode,CONCAT(title,'：',LEFT(COALESCE(summary,content),200)) content,NULL conditionJson,confidence,status,COALESCE(version,1) versionNo FROM t_knowledge_card WHERE knowledge_code IN <foreach collection="codes" item="code" open="(" separator="," close=")">#{code}</foreach></select>
+
+
+<update id="resolveConflict">UPDATE t_knowledge_conflict SET status=#{status},resolution=#{resolution},updated_time=NOW() WHERE id=#{id}</update>
+
+
+<select id="listPendingReviews" resultType="map">SELECT pending.* FROM (
+  SELECT 'CARD' objectType,t.knowledge_code objectCode,t.title displayTitle,t.confidence,t.status,
+    (SELECT COUNT(*) FROM t_knowledge_conflict c WHERE c.status='OPEN' AND (c.object_a_code=t.knowledge_code OR c.object_b_code=t.knowledge_code)) conflictCount
+  FROM t_knowledge_card t WHERE t.knowledge_base_id=#{kb} AND t.status IN ('DRAFT','UNCERTAIN','CONFLICTED','PENDING_REVIEW')
+  UNION ALL
+  SELECT 'CLAIM' objectType,t.claim_code objectCode,CONCAT(t.subject,' ',t.predicate,' ',LEFT(t.object_value,120)) displayTitle,t.confidence,t.status,
+    (SELECT COUNT(*) FROM t_knowledge_conflict c WHERE c.status='OPEN' AND (c.object_a_code=t.claim_code OR c.object_b_code=t.claim_code)) conflictCount
+  FROM t_claim t WHERE t.knowledge_base_id=#{kb} AND t.status IN ('DRAFT','UNCERTAIN','CONFLICTED','PENDING_REVIEW')
+) pending ORDER BY CASE WHEN pending.status='CONFLICTED' THEN 0 ELSE 1 END,pending.conflictCount DESC,pending.confidence ASC</select>
+
+
+<select id="findKnowledgeBaseIdForObject" resultType="long">
+  SELECT knowledge_base_id FROM t_claim WHERE claim_code=#{objectCode} AND UPPER(#{objectType})='CLAIM'
+  UNION ALL
+  SELECT knowledge_base_id FROM t_knowledge_card WHERE knowledge_code=#{objectCode} AND UPPER(#{objectType})!='CLAIM'
+  LIMIT 1
+</select>
+
 </mapper>

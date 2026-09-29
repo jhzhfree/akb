@@ -59,7 +59,7 @@ class HashEmbeddingProvider(EmbeddingProvider):
 
 
 class OllamaEmbeddingProvider(EmbeddingProvider):
-    """Reusable async client instead of creating a new TCP pool per query."""
+    """Ollama ``/api/embed`` endpoint, with a fallback for servers that only speak the old one."""
 
     name = "ollama"
 
@@ -67,25 +67,28 @@ class OllamaEmbeddingProvider(EmbeddingProvider):
         self._config = config
         self.model = config.model
         self._base_url = config.base_url.rstrip("/")
-        self._client = httpx.AsyncClient(timeout=config.timeout)
 
     async def embed(self, texts):
-        response = await self._client.post(
-            self._base_url + "/api/embed",
-            json={"model": self._config.model, "input": texts},
-        )
-        if response.status_code < 400:
-            return response.json().get("embeddings", [])
-
-        # Compatibility fallback for older Ollama versions.
-        output = []
-        for text in texts:
-            response = await self._client.post(
-                self._base_url + "/api/embeddings",
-                json={"model": self._config.model, "prompt": text},
+        # One connection per batch, closed with it: a pool held for the life of the process
+        # keeps a socket that dies unnoticed when the network blinks, and every later index
+        # run then fails for a reason that never reaches the log.
+        async with httpx.AsyncClient(timeout=self._config.timeout) as client:
+            response = await client.post(
+                self._base_url + "/api/embed",
+                json={"model": self._config.model, "input": texts},
             )
-            response.raise_for_status()
-            output.append(response.json()["embedding"])
+            if response.status_code < 400:
+                return response.json().get("embeddings", [])
+
+            # Compatibility fallback for older Ollama versions.
+            output = []
+            for text in texts:
+                response = await client.post(
+                    self._base_url + "/api/embeddings",
+                    json={"model": self._config.model, "prompt": text},
+                )
+                response.raise_for_status()
+                output.append(response.json()["embedding"])
         return output
 
 
@@ -101,13 +104,14 @@ class OpenAIEmbeddingProvider(EmbeddingProvider):
         headers = {"Content-Type": "application/json"}
         if config.api_key:
             headers["Authorization"] = f"Bearer {config.api_key}"
-        self._client = httpx.AsyncClient(timeout=config.timeout, headers=headers)
+        self._headers = headers
 
     async def embed(self, texts):
-        response = await self._client.post(
-            self._url,
-            json={"model": self._config.model, "input": texts},
-        )
+        async with httpx.AsyncClient(timeout=self._config.timeout, headers=self._headers) as client:
+            response = await client.post(
+                self._url,
+                json={"model": self._config.model, "input": texts},
+            )
         response.raise_for_status()
         rows = sorted(response.json().get("data") or [], key=lambda row: row.get("index", 0))
         vectors = [row.get("embedding") or [] for row in rows]

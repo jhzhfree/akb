@@ -51,6 +51,7 @@ class AnswerQualification:
             "policyVersion": self.policy_version,
             "evidenceGateStatus": evidence.get("gateStatus"),
             "structuredGateStatus": structured.get("gateStatus"),
+            "blockReasons": evidence.get("blockReasons") or {},
             "decisionReasons": reasons,
             "originalAnswerHash": self._hash(original),
             "deliveredAnswerHash": self._hash(delivered),

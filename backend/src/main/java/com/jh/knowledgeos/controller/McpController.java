@@ -38,7 +38,8 @@ public class McpController {
 
     private final KnowledgeProperties.External properties;
 
-    public McpController(ExternalAccessService accessService, McpServerService mcpServerService, ExternalAuditService auditService, KnowledgeProperties properties) {
+    public McpController(ExternalAccessService accessService, McpServerService mcpServerService, ExternalAuditService auditService,
+        KnowledgeProperties properties) {
         this.accessService = accessService;
         this.mcpServerService = mcpServerService;
         this.auditService = auditService;

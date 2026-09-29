@@ -62,11 +62,14 @@ public class DashboardService {
         List<Map<String, Object>> stages = new ArrayList<Map<String, Object>>();
         // 接入阶段的异常只看“没接干净”的对象：失败或脏文档，而不是文档总数。
         stages.add(stage("接入", "INGEST", num(raw.get("ingestSource")) + num(raw.get("ingestDocument")), num(raw.get("publishDirty")), "create.sources"));
-        stages.add(stage("解析", "PARSE", num(raw.get("parseSuccess")) + num(raw.get("parseFailed")) + num(raw.get("parseRunning")), num(raw.get("parseFailed")), "create.jobs"));
-        stages.add(stage("抽取", "EXTRACT", num(raw.get("extractCandidate")) + num(raw.get("extractUncertain")), num(raw.get("extractUncertain")), "create.extraction"));
+        stages.add(stage("解析", "PARSE", num(raw.get("parseSuccess")) + num(raw.get("parseFailed")) + num(raw.get("parseRunning")),
+            num(raw.get("parseFailed")), "create.jobs"));
+        stages.add(stage("抽取", "EXTRACT", num(raw.get("extractCandidate")) + num(raw.get("extractUncertain")), num(raw.get("extractUncertain")),
+            "create.extraction"));
         stages.add(stage("衍生", "DERIVE", num(raw.get("derivedStale")), num(raw.get("derivedStale")), "create.derivation"));
         stages.add(stage("裁决", "JUDGE", num(raw.get("judgePending")) + num(raw.get("judgeConflict")), num(raw.get("judgeConflict")), "create.judgment"));
-        stages.add(stage("发布", "PUBLISH", num(raw.get("publishCardActive")) + num(raw.get("publishClaimActive")), num(raw.get("publishDirty")), "workbench.assets"));
+        stages.add(stage("发布", "PUBLISH", num(raw.get("publishCardActive")) + num(raw.get("publishClaimActive")), num(raw.get("publishDirty")),
+            "workbench.assets"));
         Map<String, Object> result = new LinkedHashMap<String, Object>();
         result.put("knowledgeBaseId", kb);
         result.put("stages", stages);

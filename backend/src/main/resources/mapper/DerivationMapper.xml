@@ -1,0 +1,141 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.jh.knowledgeos.mapper.DerivationMapper">
+
+<insert id="insertDerivationRule">INSERT INTO t_derivation_rule(rule_code,knowledge_base_id,preset_code,name,
+  derivation_type,schedule_type,cron_expr,next_fire_at,source_scope_json,definition_json,algorithm_version,created_by)
+VALUES(#{ruleCode},#{kb},#{presetCode},#{name},#{derivationType},#{scheduleType},#{cronExpr},#{nextFireAt},
+  CAST(#{sourceScopeJson} AS JSON),CAST(#{definitionJson} AS JSON),#{algorithmVersion},#{createdBy})</insert>
+
+<update id="resetDerivationRuleDefinition">UPDATE t_derivation_rule SET name=#{name},
+  derivation_type=#{derivationType},definition_json=CAST(#{definitionJson} AS JSON)
+WHERE rule_code=#{ruleCode}</update>
+
+<update id="updateDerivationRule">UPDATE t_derivation_rule SET name=#{name},derivation_type=#{derivationType},
+  schedule_type=#{scheduleType},cron_expr=#{cronExpr},next_fire_at=#{nextFireAt},
+  source_scope_json=CAST(#{sourceScopeJson} AS JSON),definition_json=CAST(#{definitionJson} AS JSON),
+  algorithm_version=#{algorithmVersion},enabled=#{enabled}
+WHERE rule_code=#{ruleCode}</update>
+
+<update id="updateDerivationRuleState">UPDATE t_derivation_rule SET status=#{status},
+  last_fire_at=#{lastFireAt},next_fire_at=#{nextFireAt},last_error=#{lastError}
+WHERE rule_code=#{ruleCode}</update>
+
+<delete id="deleteDerivationRule">DELETE FROM t_derivation_rule WHERE rule_code=#{ruleCode}</delete>
+
+<select id="getDerivationRule" resultType="map">SELECT rule_code ruleCode,knowledge_base_id knowledgeBaseId,
+  preset_code presetCode,name,derivation_type derivationType,enabled,schedule_type scheduleType,cron_expr cronExpr,
+  next_fire_at nextFireAt,last_fire_at lastFireAt,source_scope_json sourceScopeJson,
+  definition_json definitionJson,algorithm_version algorithmVersion,status,last_error lastError,
+  created_by createdBy,created_time createdTime,updated_time updatedTime
+FROM t_derivation_rule WHERE rule_code=#{ruleCode}</select>
+
+<select id="listDerivationRules" resultType="map">SELECT rule_code ruleCode,knowledge_base_id knowledgeBaseId,
+  preset_code presetCode,name,derivation_type derivationType,enabled,schedule_type scheduleType,cron_expr cronExpr,
+  next_fire_at nextFireAt,last_fire_at lastFireAt,source_scope_json sourceScopeJson,
+  definition_json definitionJson,algorithm_version algorithmVersion,status,last_error lastError,
+  created_by createdBy,created_time createdTime,updated_time updatedTime,
+  (SELECT COUNT(*) FROM t_derived_candidate c WHERE c.rule_code=r.rule_code) candidateCount,
+  (SELECT COUNT(*) FROM t_derived_candidate c WHERE c.rule_code=r.rule_code AND c.status='STALE') staleCount
+FROM t_derivation_rule r WHERE (knowledge_base_id=#{kb} OR #{kb} IS NULL)
+ORDER BY enabled DESC,created_time DESC</select>
+
+<select id="listDerivationRulePresetCodes" resultType="string">SELECT preset_code
+FROM t_derivation_rule WHERE knowledge_base_id=#{kb} AND preset_code IS NOT NULL</select>
+
+<select id="listDueDerivationRules" resultType="map">SELECT rule_code ruleCode,knowledge_base_id knowledgeBaseId,
+  name,derivation_type derivationType,schedule_type scheduleType,cron_expr cronExpr,
+  source_scope_json sourceScopeJson,definition_json definitionJson,algorithm_version algorithmVersion
+FROM t_derivation_rule WHERE enabled=1 AND schedule_type='SCHEDULED'
+  AND next_fire_at IS NOT NULL AND next_fire_at&lt;=#{now} AND (status IS NULL OR status!='RUNNING')
+ORDER BY next_fire_at LIMIT 5</select>
+
+<insert id="insertDerivedCandidate">INSERT INTO t_derived_candidate(candidate_code,knowledge_base_id,rule_code,
+  derivation_type,algorithm_version,title,content,confidence,status,base_assertion_codes,graph_path,
+  evidence_json,derived_from_json,permission_tags,authority_score,content_hash,created_by)
+VALUES(#{candidateCode},#{kb},#{ruleCode},#{derivationType},#{algorithmVersion},#{title},#{content},#{confidence},
+  'DRAFT',CAST(#{baseAssertionCodes} AS JSON),CAST(#{graphPath} AS JSON),CAST(#{evidenceJson} AS JSON),
+  CAST(#{derivedFromJson} AS JSON),CAST(#{permissionTags} AS JSON),#{authorityScore},#{contentHash},#{createdBy})</insert>
+
+<update id="touchDerivedCandidate">UPDATE t_derived_candidate SET confidence=#{confidence},
+  status=#{status},stale_reason=NULL WHERE rule_code=#{ruleCode} AND content_hash=#{contentHash}</update>
+
+<select id="getDerivedCandidate" resultType="map">SELECT candidate_code candidateCode,
+  knowledge_base_id knowledgeBaseId,rule_code ruleCode,derivation_type derivationType,
+  algorithm_version algorithmVersion,title,content,confidence,status,
+  base_assertion_codes baseAssertionCodes,graph_path graphPath,evidence_json evidenceJson,
+  derived_from_json derivedFromJson,permission_tags permissionTags,authority_score authorityScore,
+  stale_reason staleReason,created_by createdBy,created_time createdTime,updated_time updatedTime
+FROM t_derived_candidate WHERE candidate_code=#{candidateCode}</select>
+
+<select id="getDerivedCandidateByHash" resultType="map">SELECT candidate_code candidateCode,status
+FROM t_derived_candidate WHERE rule_code=#{ruleCode} AND content_hash=#{contentHash}</select>
+
+<select id="listDerivedCandidates" resultType="map">SELECT candidate_code candidateCode,
+  knowledge_base_id knowledgeBaseId,rule_code ruleCode,derivation_type derivationType,
+  algorithm_version algorithmVersion,title,confidence,status,base_assertion_codes baseAssertionCodes,
+  stale_reason staleReason,created_time createdTime,updated_time updatedTime,
+  JSON_LENGTH(base_assertion_codes) baseCount
+FROM t_derived_candidate
+WHERE (knowledge_base_id=#{kb} OR #{kb} IS NULL)
+<if test="status != null and status != ''">AND status=#{status}</if>
+<if test="ruleCode != null and ruleCode != ''">AND rule_code=#{ruleCode}</if>
+ORDER BY FIELD(status,'DRAFT','STALE','PENDING','APPROVED','REJECTED'),confidence DESC,created_time DESC
+LIMIT #{limit}</select>
+
+<update id="updateDerivedCandidateStatus">UPDATE t_derived_candidate SET status=#{status},
+  stale_reason=#{staleReason} WHERE candidate_code=#{candidateCode}</update>
+
+<select id="listCandidatesByBaseAssertion" resultType="map">SELECT candidate_code candidateCode,status
+FROM t_derived_candidate WHERE knowledge_base_id=#{kb} AND status IN ('DRAFT','PENDING','APPROVED')
+<foreach item="code" collection="codes" open="AND (" separator=" OR " close=")">
+  JSON_CONTAINS(base_assertion_codes,CONCAT('"',#{code},'"'))</foreach></select>
+
+<insert id="insertDerivationRun">INSERT INTO t_derivation_run(run_code,knowledge_base_id,rule_code,
+  trigger_type,status,started_time)
+VALUES(#{runCode},#{kb},#{ruleCode},#{triggerType},'RUNNING',CURRENT_TIMESTAMP)</insert>
+
+<update id="updateDerivationRun">UPDATE t_derivation_run SET status=#{status},scanned_count=#{scannedCount},
+  candidate_count=#{candidateCount},stale_count=#{staleCount},error_message=#{errorMessage},
+  finished_time=#{finishedTime} WHERE run_code=#{runCode}</update>
+
+<select id="listDerivationRuns" resultType="map">SELECT run_code runCode,knowledge_base_id knowledgeBaseId,
+  rule_code ruleCode,trigger_type triggerType,status,scanned_count scannedCount,candidate_count candidateCount,
+  stale_count staleCount,error_message errorMessage,started_time startedTime,finished_time finishedTime
+FROM t_derivation_run WHERE (knowledge_base_id=#{kb} OR #{kb} IS NULL)
+<if test="ruleCode != null and ruleCode != ''">AND rule_code=#{ruleCode}</if>
+ORDER BY started_time DESC,id DESC LIMIT #{limit}</select>
+
+<select id="listGraphPathPairs" resultType="map">SELECT a.entity_code headCode,a.canonical_name headName,
+  b.entity_code midCode,b.canonical_name midName,c.entity_code tailCode,c.canonical_name tailName,
+  r1.relation_type firstType,r2.relation_type secondType,r1.relation_code firstRelationCode,
+  r2.relation_code secondRelationCode,r1.confidence firstConfidence,r2.confidence secondConfidence
+FROM t_relation r1 JOIN t_relation r2 ON r2.source_entity_id=r1.target_entity_id
+JOIN t_entity a ON a.id=r1.source_entity_id
+JOIN t_entity b ON b.id=r1.target_entity_id
+JOIN t_entity c ON c.id=r2.target_entity_id
+WHERE r1.knowledge_base_id=#{kb} AND r2.knowledge_base_id=#{kb}
+  AND (#{firstType} IS NULL OR r1.relation_type=#{firstType})
+  AND (#{secondType} IS NULL OR r2.relation_type=#{secondType})
+  AND IFNULL(r1.confidence,0)&gt;=#{minConfidence} AND IFNULL(r2.confidence,0)&gt;=#{minConfidence}
+  AND IFNULL(r1.status,'ACTIVE')='ACTIVE' AND IFNULL(r2.status,'ACTIVE')='ACTIVE'
+  AND a.id&lt;&gt;c.id
+LIMIT #{limit}</select>
+
+<select id="listActiveRelations" resultType="map">SELECT r.relation_code relationCode,r.relation_type relationType,
+  s.entity_code sourceCode,s.canonical_name sourceName,t.entity_code targetCode,t.canonical_name targetName,
+  IFNULL(r.confidence,0) confidence
+FROM t_relation r JOIN t_entity s ON s.id=r.source_entity_id JOIN t_entity t ON t.id=r.target_entity_id
+WHERE r.knowledge_base_id=#{kb} AND IFNULL(r.status,'ACTIVE')='ACTIVE'
+  AND IFNULL(r.confidence,0)&gt;=#{minConfidence}
+ORDER BY r.id LIMIT #{limit}</select>
+
+<select id="listDerivationSourceClaims" resultType="map">SELECT claim_code claimCode,subject,predicate,
+  object_value objectValue,confidence,status,permission_tags permissionTags,version
+-- Deriving from a conflicting or uncertain assertion would launder doubt into a
+-- conclusion; pending review is still a statement the source stands behind.
+FROM t_claim WHERE knowledge_base_id=#{kb} AND IFNULL(confidence,0)&gt;=#{minConfidence}
+  AND IFNULL(status,'PENDING_REVIEW') IN ('APPROVED','EFFECTIVE','ACTIVE','PENDING_REVIEW')
+ORDER BY confidence DESC,id DESC LIMIT #{limit}</select>
+
+</mapper>

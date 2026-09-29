@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.jh.knowledgeos.mapper.SchemaMapper">
+
+<insert id="upsertSchemaType">INSERT INTO t_schema_type(knowledge_base_id,kind,type_code,label,description,
+  properties_json,status,updated_by)
+VALUES(#{kb},#{kind},#{typeCode},#{label},#{description},CAST(#{propertiesJson} AS JSON),#{status},#{updatedBy})
+ON DUPLICATE KEY UPDATE label=VALUES(label),description=VALUES(description),
+  properties_json=VALUES(properties_json),status=VALUES(status),updated_by=VALUES(updated_by),
+  version=version+1</insert>
+
+<delete id="deleteSchemaType">DELETE FROM t_schema_type
+WHERE knowledge_base_id=#{kb} AND kind=#{kind} AND type_code=#{typeCode} AND built_in=0</delete>
+
+<select id="getSchemaType" resultType="map">SELECT knowledge_base_id knowledgeBaseId,kind,type_code typeCode,
+  label,description,properties_json propertiesJson,status,built_in builtIn,version,updated_by updatedBy,
+  updated_time updatedTime
+FROM t_schema_type WHERE knowledge_base_id=#{kb} AND kind=#{kind} AND type_code=#{typeCode}</select>
+
+<select id="listSchemaTypes" resultType="map">SELECT knowledge_base_id knowledgeBaseId,kind,type_code typeCode,
+  label,description,properties_json propertiesJson,status,built_in builtIn,version,updated_by updatedBy,
+  updated_time updatedTime
+FROM t_schema_type WHERE (knowledge_base_id=#{kb} OR knowledge_base_id=0)
+<if test="kind != null and kind != ''">AND kind=#{kind}</if>
+ORDER BY kind,built_in DESC,type_code</select>
+
+<insert id="insertSchemaRelease">INSERT INTO t_schema_release(release_code,knowledge_base_id,version,state,
+  definition_json,validation_json,checksum,published_by,published_time)
+VALUES(#{releaseCode},#{kb},#{version},#{state},CAST(#{definitionJson} AS JSON),
+  CAST(#{validationJson} AS JSON),#{checksum},#{publishedBy},
+  IF(#{state}='PUBLISHED',CURRENT_TIMESTAMP,NULL))</insert>
+
+<select id="listSchemaReleases" resultType="map">SELECT release_code releaseCode,knowledge_base_id knowledgeBaseId,
+  version,state,definition_json definitionJson,validation_json validationJson,checksum,
+  published_by publishedBy,published_time publishedTime,created_time createdTime
+FROM t_schema_release WHERE knowledge_base_id=#{kb} ORDER BY id DESC LIMIT 20</select>
+
+<select id="getPublishedSchemaRelease" resultType="map">SELECT release_code releaseCode,
+  knowledge_base_id knowledgeBaseId,version,state,definition_json definitionJson,
+  validation_json validationJson,checksum,published_by publishedBy,published_time publishedTime
+FROM t_schema_release WHERE knowledge_base_id=#{kb} AND state='PUBLISHED' ORDER BY id DESC LIMIT 1</select>
+
+<update id="retireSchemaReleases">UPDATE t_schema_release SET state='ARCHIVED'
+WHERE knowledge_base_id=#{kb} AND state='PUBLISHED'</update>
+
+<select id="listEntityTypeUsage" resultType="map">SELECT entity_type typeCode,COUNT(*) useCount
+FROM t_entity WHERE knowledge_base_id=#{kb} GROUP BY entity_type</select>
+
+<select id="listRelationTypeUsage" resultType="map">SELECT relation_type typeCode,COUNT(*) useCount
+FROM t_relation WHERE knowledge_base_id=#{kb} GROUP BY relation_type</select>
+
+<select id="listKnowledgeTypeUsage" resultType="map">SELECT type typeCode,COUNT(*) useCount
+FROM t_knowledge_card WHERE knowledge_base_id=#{kb} GROUP BY type</select>
+
+</mapper>

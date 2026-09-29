@@ -47,7 +47,8 @@ public class ExternalServiceAdminController {
 
     private final KnowledgeProperties.External properties;
 
-    public ExternalServiceAdminController(ApiKeyService apiKeyService, ExternalAuditService auditService, McpServerService mcpServerService, KnowledgeProperties properties) {
+    public ExternalServiceAdminController(ApiKeyService apiKeyService, ExternalAuditService auditService, McpServerService mcpServerService,
+        KnowledgeProperties properties) {
         this.apiKeyService = apiKeyService;
         this.auditService = auditService;
         this.mcpServerService = mcpServerService;
@@ -65,7 +66,10 @@ public class ExternalServiceAdminController {
         rest.put("enabled", properties.isEnabled());
         rest.put("basePath", "/api/v1/external");
         rest.put("auth", "X-API-Key 或 Authorization: Bearer");
-        rest.put("endpoints", Arrays.asList(endpoint("GET", "/bases", "可见知识库列表"), endpoint("POST", "/query", "可追溯问答"), endpoint("POST", "/search", "检索（不生成答案）"), endpoint("GET", "/cards", "知识卡片清单"), endpoint("GET", "/cards/{code}", "知识卡片详情"), endpoint("GET", "/claims", "断言清单"), endpoint("GET", "/claims/{code}", "断言详情"), endpoint("GET", "/evidence/{code}", "证据原文"), endpoint("GET", "/graph/{code}", "图谱邻域"), endpoint("GET", "/queries/{queryId}", "问答链路回放"), endpoint("GET", "/overview", "知识库概览"), endpoint("POST", "/documents/text", "文本接入（INGEST）")));
+        rest.put("endpoints", Arrays.asList(endpoint("GET", "/bases", "可见知识库列表"), endpoint("POST", "/query", "可追溯问答"), endpoint("POST", "/search",
+            "检索（不生成答案）"), endpoint("GET", "/cards", "知识卡片清单"), endpoint("GET", "/cards/{code}", "知识卡片详情"), endpoint("GET", "/claims", "断言清单"),
+            endpoint("GET", "/claims/{code}", "断言详情"), endpoint("GET", "/evidence/{code}", "证据原文"), endpoint("GET", "/graph/{code}", "图谱邻域"),
+            endpoint("GET", "/queries/{queryId}", "问答链路回放"), endpoint("GET", "/overview", "知识库概览"), endpoint("POST", "/documents/text", "文本接入（INGEST）")));
         Map<String, Object> mcp = new LinkedHashMap<String, Object>();
         mcp.put("enabled", properties.isEnabled() && properties.isMcpEnabled());
         mcp.put("endpoint", "/api/mcp");
@@ -76,7 +80,9 @@ public class ExternalServiceAdminController {
         sse.put("enabled", properties.isEnabled() && properties.isSseEnabled());
         sse.put("heartbeatSeconds", properties.getSseHeartbeatSeconds());
         sse.put("maxMinutes", properties.getSseMaxMinutes());
-        sse.put("endpoints", Arrays.asList(endpoint("GET", "/api/v1/external/stream/query", "流式问答：stage / delta / citation / done"), endpoint("GET", "/api/v1/external/stream/events", "事件订阅：知识库 / 卡片 / 检索 / 权限等事件，支持 types 过滤与 Last-Event-ID 续传"), endpoint("GET", "/api/v1/external/stream/events?legacy=true", "旧版计数轮询订阅：ingestion / knowledge / heartbeat")));
+        sse.put("endpoints", Arrays.asList(endpoint("GET", "/api/v1/external/stream/query", "流式问答：stage / delta / citation / done"), endpoint("GET",
+            "/api/v1/external/stream/events", "事件订阅：知识库 / 卡片 / 检索 / 权限等事件，支持 types 过滤与 Last-Event-ID 续传"), endpoint("GET",
+            "/api/v1/external/stream/events?legacy=true", "旧版计数轮询订阅：ingestion / knowledge / heartbeat")));
         Map<String, Object> payload = new LinkedHashMap<String, Object>();
         payload.put("rest", rest);
         payload.put("mcp", mcp);
@@ -122,7 +128,8 @@ public class ExternalServiceAdminController {
 
     @GetMapping("/audits")
     @Operation(summary = "对外调用审计：RESTful / MCP / SSE 合并展示")
-    public ApiResponse<Object> audits(@RequestParam(value = "keyId", required = false) Long keyId, @RequestParam(value = "limit", required = false) Integer limit) {
+    public ApiResponse<Object> audits(@RequestParam(value = "keyId", required = false) Long keyId, @RequestParam(value = "limit", required = false)
+        Integer limit) {
         requireManager();
         return ApiResponse.ok(auditService.recent(keyId, limit == null ? 50 : limit));
     }

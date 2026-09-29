@@ -3,8 +3,8 @@
     <div class="kb-section-head">
       <div><small>策略</small><h3>问答策略配置</h3></div>
       <div class="flex flex-wrap items-center gap-2">
-        <span class="kb-badge bg-slate-100 text-ink-600">来源：{{ policy?.source==='file'?'配置文件':'内置默认' }}</span>
-        <span class="kb-badge bg-slate-100 text-ink-600">{{ policy?.version || '-' }}</span>
+        <span class="kb-badge bg-[color:var(--bg-sub)] text-ink-600">来源：{{ policy?.source==='file'?'配置文件':'内置默认' }}</span>
+        <span class="kb-badge bg-[color:var(--bg-sub)] text-ink-600">{{ policy?.version || '-' }}</span>
         <el-button size="small" @click="load">刷新</el-button>
         <el-button size="small" @click="reset">恢复默认</el-button>
         <el-button size="small" type="primary" :loading="saving" @click="save">保存配置</el-button>
@@ -25,7 +25,7 @@
           <el-select v-model="profileName" size="small" class="!w-48" placeholder="选择策略">
             <el-option v-for="p in profiles" :key="p.name" :label="p.label || p.name" :value="p.name">
               <span>{{ p.label || p.name }}</span>
-              <span v-if="p.name===activeName" class="ml-2 text-[11px] text-indigo-500">生效中</span>
+              <span v-if="p.name===activeName" class="ml-2 text-[11px] text-accent">生效中</span>
             </el-option>
           </el-select>
           <el-button size="small" :disabled="!profileName || profileName===activeName" @click="activateProfile">切换</el-button>
@@ -37,20 +37,29 @@
       <div class="flex flex-wrap gap-2">
         <button
           v-for="p in profiles" :key="p.name" class="rounded border px-2 py-1 text-[11px]"
-          :class="p.name===activeName?'border-indigo-300 bg-indigo-50 text-indigo-700':'border-ink-100 bg-white text-ink-600'"
+          :class="p.name===activeName?'border-[color:var(--info-bd)] kb-state-info':'border-ink-100 text-ink-600'"
           @click="profileName=p.name">
           {{ p.label || p.name }}
-          <span v-if="p.summary?.routingEnabled" class="ml-1 text-ink-400">路由</span>
-          <span v-if="p.summary?.rerankEnabled" class="ml-1 text-ink-400">重排</span>
+          <span v-if="p.summary?.routingEnabled" class="ml-1 text-ink-500">路由</span>
+          <span v-if="p.summary?.rerankEnabled" class="ml-1 text-ink-500">重排</span>
         </button>
-        <span v-if="!profiles.length" class="text-[11px] text-ink-400">暂无已保存策略</span>
+        <span v-if="!profiles.length" class="text-[11px] text-ink-500">暂无已保存策略</span>
       </div>
     </div>
 
-    <div v-if="message" class="mb-3 rounded-lg bg-emerald-50 px-3 py-2 text-[11px] leading-5 text-emerald-700">{{ message }}</div>
-    <div v-if="error" class="mb-3 rounded-lg bg-rose-50 px-3 py-2 text-[11px] leading-5 text-rose-700">{{ error }}</div>
+    <div v-if="message" class="mb-3 rounded-lg bg-[color:var(--ok-bg)] px-3 py-2 text-[11px] leading-5 text-[color:var(--ok)]">{{ message }}</div>
+    <div v-if="error" class="mb-3 rounded-lg bg-[color:var(--danger-bg)] px-3 py-2 text-[11px] leading-5 text-[color:var(--danger)]">{{ error }}</div>
 
     <div v-if="policy" class="grid gap-4">
+      <!-- 0. 生效规则速览：一屏看懂这次检索到底按什么规则走 -->
+      <div class="rounded-lg border border-[color:var(--info-bd)] bg-[color:var(--info-bg)] p-4">
+        <b class="text-xs text-ink-700">当前生效规则</b>
+        <p class="mt-2 text-[11px] leading-5 text-ink-700">{{ ruleSummary }}</p>
+        <p class="mt-2 text-[10px] leading-5 text-ink-500">
+          依次作用于：路由命中 → 通道召回 → RRF 融合 → 质量与原文段落加权 → 重排 → 上下文装配 → 证据门控。
+        </p>
+      </div>
+
       <!-- 1. 查询理解与意图路由 -->
       <div class="rounded-lg border border-ink-100 p-4">
         <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
@@ -154,7 +163,7 @@
                 <td class="py-2"><el-switch v-model="policy.recall.channels[name].enabled" size="small"/></td>
                 <td class="py-2">
                   <b class="text-ink-700">{{ channelLabel(name) }}</b>
-                  <p class="text-[10px] leading-4 text-ink-400">{{ channelDesc(name) }}</p>
+                  <p class="text-[10px] leading-4 text-ink-500">{{ channelDesc(name) }}</p>
                 </td>
                 <td class="py-2 pr-1">
                   <el-input-number v-model="policy.recall.channels[name].weight" size="small"
@@ -249,10 +258,38 @@
           </label>
         </div>
       </div>
-    </div>
-    <div v-else class="py-10 text-center text-xs text-ink-400">加载问答策略中…</div>
 
-    <p class="mt-3 text-[10px] leading-5 text-ink-400">
+      <!-- 7. 原文段落与忠实度：把"能被原文引用"的证据提到前面 -->
+      <div class="rounded-lg border border-ink-100 p-4">
+        <div class="mb-3">
+          <b class="text-xs text-ink-700">⑦ 原文段落与忠实度</b>
+          <p class="mt-1 text-[11px] leading-5 text-ink-500">
+            原文段落是唯一稳定带有可引用来源（证据编码 + 内容哈希）的证据形态：段落进得了上下文，答案才引用得准，
+            证据门控才放得行。加成发生在融合与质量加权之后、重排之前；保底条数保证高分卡片不会把段落挤出上下文。
+          </p>
+        </div>
+        <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          <label class="field"><span>启用原文段落加成</span>
+            <el-switch v-model="policy.fusion.chunkBoost.enabled" size="small"/>
+          </label>
+          <label class="field"><span>基础加成（乘在融合分上）</span>
+            <el-input-number v-model="policy.fusion.chunkBoost.base" size="small" :min="1" :max="3" :step="0.05" :precision="2" class="!w-full"/>
+          </label>
+          <label class="field"><span>标题命中额外加成</span>
+            <el-input-number v-model="policy.fusion.chunkBoost.headingHit" size="small" :min="0" :max="1" :step="0.05" :precision="2" class="!w-full"/>
+          </label>
+          <label class="field"><span>问题词覆盖度加成上限</span>
+            <el-input-number v-model="policy.fusion.chunkBoost.coverage" size="small" :min="0" :max="1" :step="0.05" :precision="2" class="!w-full"/>
+          </label>
+          <label class="field"><span>上下文原文段落保底条数</span>
+            <el-input-number v-model="policy.answer.minChunkEvidence" size="small" :min="0" :max="20" class="!w-full"/>
+          </label>
+        </div>
+      </div>
+    </div>
+    <div v-else class="py-10 text-center text-xs text-ink-500">加载问答策略中…</div>
+
+    <p class="mt-3 text-[10px] leading-5 text-ink-500">
       配置持久化到 <b>{{ policy?.policyFile || schema?.policyFile || 'ai-service/data/query_policy.json' }}</b>（文件权限 600），
       保存后下一次问答起生效，无需重启；每一次问答的链路追踪都会记录当时生效的策略指纹（通道、权重、RRF k、门控阈值），便于回溯结果差异。
       当前为平台级策略，对所有知识库生效。
@@ -328,6 +365,33 @@ const split = (text:string) => text.split(/[、,，;；\s]+/).map(item => item.t
 
 /** 关键词在同义词/UI 中以顿号分隔展示，提交前拆成数组。 */
 function setKeywords(rule:RouteRule, text:string) { rule.keywords = split(text) }
+
+const num = (value:unknown, fallback:number) => Number.isFinite(Number(value)) ? Number(value) : fallback
+
+/**
+ * 把当前策略压成一句人话：配置页上十几个输入框，使用者真正需要知道的是
+ * "这次检索按什么规则走"，而不是每个数字放在哪一格。
+ */
+const ruleSummary = computed(() => {
+  const p = policy.value
+  if (!p) return ''
+  const channels = Object.entries(p.recall?.channels || {})
+    .filter(([, channel]) => channel?.enabled)
+    .map(([name, channel]) => `${channelLabel(name)} ${num(channel?.weight, 1).toFixed(2)}`)
+  const boost = p.fusion?.chunkBoost
+  const parts = [
+    p.route?.enabled ? `路由开启（${p.route.rules?.length || 0} 条规则）` : '路由关闭',
+    channels.length ? `通道 ${channels.join(' / ')}` : '未启用通道',
+    `RRF k=${num(p.fusion?.rrfK, 60)}`,
+    boost?.enabled
+      ? `原文段落加成 ×${num(boost.base, 1).toFixed(2)}（标题命中 +${num(boost.headingHit, 0).toFixed(2)}，覆盖度 +${num(boost.coverage, 0).toFixed(2)}）`
+      : '原文段落加成未启用',
+    p.rerank?.enabled ? `重排开启（${num(p.rerank.topN, 0) || '全部候选'}）` : '重排关闭',
+    `上下文 ${num(p.answer?.contextMaxChars, 8000)} 字、原文段落保底 ${num(p.answer?.minChunkEvidence, 0)} 条`,
+    `忠实度阈值 ${num(p.answer?.faithfulnessMin, 0.03)}、断言覆盖 ${num(p.answer?.entailmentMin, 0.08)}`,
+  ]
+  return parts.join('；') + '。'
+})
 function setTargets(item:{ source:string; targets:string[] }, text:string) { item.targets = split(text) }
 
 function addRule() {
@@ -355,6 +419,15 @@ async function load() {
   try {
     schema.value = unwrap(await getQueryPolicySchema(), null as unknown as QueryPolicySchema)
     policy.value = unwrap(await getQueryPolicy(), null as unknown as QueryPolicy)
+    // 旧配置文件没有新增的段落块与保底条数字段，补齐后再编辑，避免整块控件是空的。
+    if (policy.value) {
+      const boost = policy.value.fusion.chunkBoost || (policy.value.fusion.chunkBoost = { enabled:true, base:1.25, headingHit:0.15, coverage:0.15 })
+      boost.enabled = boost.enabled !== false
+      boost.base = num(boost.base, 1.25)
+      boost.headingHit = num(boost.headingHit, 0.15)
+      boost.coverage = num(boost.coverage, 0.15)
+      policy.value.answer.minChunkEvidence = num(policy.value.answer.minChunkEvidence, 3)
+    }
     synonyms.value = Object.entries(policy.value?.rewrite.synonyms || {})
       .map(([source, targets]) => ({ source, targets:[...targets] }))
   } catch (e) {
@@ -489,6 +562,6 @@ onMounted(load)
 </script>
 <style scoped>
 .field{display:block}
-.field>span{display:block;margin-bottom:4px;font-size:11px;color:#66738e}
+.field>span{display:block;margin-bottom:4px;font-size:11px;color:var(--ink-3)}
 th{font-weight:600}
 </style>

@@ -67,7 +67,8 @@ public class TaskCenterService {
     /**
      * Task types the centre offers as a filter, in the order the console shows them.
      */
-    public static final List<String> TASK_TYPES = Collections.unmodifiableList(Arrays.asList(TYPE_INGESTION, TYPE_EXTRACTION, TYPE_EMBEDDING, TYPE_INDEX, TYPE_DERIVATION, TYPE_EVALUATION, TYPE_SYNC, TYPE_SCHEMA, TYPE_ACL_REBUILD));
+    public static final List<String> TASK_TYPES = Collections.unmodifiableList(Arrays.asList(TYPE_INGESTION, TYPE_EXTRACTION, TYPE_EMBEDDING,
+        TYPE_INDEX, TYPE_DERIVATION, TYPE_EVALUATION, TYPE_SYNC, TYPE_SCHEMA, TYPE_ACL_REBUILD));
 
     private static final DateTimeFormatter TS = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
@@ -88,9 +89,11 @@ public class TaskCenterService {
     /**
      * Register a job before it starts, so a crash mid-flight still leaves a trace.
      */
-    public Map<String, Object> enqueue(Long kb, String taskType, String taskName, String targetType, String targetCode, String triggerType, Map<String, Object> payload) {
+    public Map<String, Object> enqueue(Long kb, String taskType, String taskName, String targetType, String targetCode, String triggerType,
+        Map<String, Object> payload) {
         String taskCode = ids.next("TASK");
-        mapper.insertTaskRun(taskCode, kb, normalizeType(taskType), taskName, targetType, targetCode, defaultTrigger(triggerType), currentUser(), 3, write(payload));
+        mapper.insertTaskRun(taskCode, kb, normalizeType(taskType), taskName, targetType, targetCode, defaultTrigger(triggerType), currentUser(), 3,
+            write(payload));
         Map<String, Object> created = new LinkedHashMap<String, Object>();
         created.put("taskCode", taskCode);
         created.put("status", QUEUED);

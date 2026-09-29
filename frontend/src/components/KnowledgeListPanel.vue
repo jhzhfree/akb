@@ -61,7 +61,7 @@
                   <el-tag v-if="row.polarity" :type="isNegative(row) ? 'danger' : 'success'" size="small" effect="plain">
                     {{ polarityLabel(row.polarity) }}
                   </el-tag>
-                  <span v-else class="text-[11px] text-ink-400">未标注</span>
+                  <span v-else class="text-[11px] text-ink-500">未标注</span>
                 </template>
               </el-table-column>
               <el-table-column label="确定性" width="88">

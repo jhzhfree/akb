@@ -6,6 +6,8 @@ import com.jh.knowledgeos.common.UserRole;
 import com.jh.knowledgeos.domain.KnowledgeBase;
 import com.jh.knowledgeos.domain.User;
 import com.jh.knowledgeos.mapper.KnowledgeMapper;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -20,16 +22,21 @@ import java.util.Map;
 @Service
 public class KnowledgeBaseService {
 
+    private static final Logger LOG = LoggerFactory.getLogger(KnowledgeBaseService.class);
+
     private final KnowledgeMapper mapper;
 
     private final IdGenerator ids;
 
     private final PlatformEventPublisher publisher;
 
-    public KnowledgeBaseService(KnowledgeMapper mapper, IdGenerator ids, PlatformEventPublisher publisher) {
+    private final KnowledgeDerivationService derivation;
+
+    public KnowledgeBaseService(KnowledgeMapper mapper, IdGenerator ids, PlatformEventPublisher publisher, KnowledgeDerivationService derivation) {
         this.mapper = mapper;
         this.ids = ids;
         this.publisher = publisher;
+        this.derivation = derivation;
     }
 
     public List<KnowledgeBase> list() {
@@ -59,9 +66,11 @@ public class KnowledgeBaseService {
         base.setVisibility(scope.visibility.name());
         base.setOwnerGroupId(scope.ownerGroupId);
         mapper.insertKnowledgeBase(base);
+        seedDerivationPresets(base.getId());
         Map<String, Object> detail = describe(base);
         detail.put("description", base.getDescription());
-        publisher.emitUser(PlatformEventTypes.KNOWLEDGE_BASE_CREATED, base.getId(), PlatformEventPublisher.SOURCE_UI, "KNOWLEDGE_BASE", base.getBaseCode(), "创建知识库：" + base.getName(), detail);
+        publisher.emitUser(PlatformEventTypes.KNOWLEDGE_BASE_CREATED, base.getId(), PlatformEventPublisher.SOURCE_UI, "KNOWLEDGE_BASE",
+            base.getBaseCode(), "创建知识库：" + base.getName(), detail);
         return base;
     }
 
@@ -78,7 +87,8 @@ public class KnowledgeBaseService {
         Map<String, Object> detail = describe(updated);
         detail.put("previousVisibility", previousVisibility);
         detail.put("previousOwnerGroupId", previousGroup);
-        publisher.emitUser(PlatformEventTypes.KNOWLEDGE_BASE_ACCESS_UPDATED, updated.getId(), PlatformEventPublisher.SOURCE_UI, "KNOWLEDGE_BASE", updated.getBaseCode(), "调整知识库可见范围：" + updated.getName() + " → " + scope.visibility.name(), detail);
+        publisher.emitUser(PlatformEventTypes.KNOWLEDGE_BASE_ACCESS_UPDATED, updated.getId(), PlatformEventPublisher.SOURCE_UI, "KNOWLEDGE_BASE",
+            updated.getBaseCode(), "调整知识库可见范围：" + updated.getName() + " → " + scope.visibility.name(), detail);
         return updated;
     }
 
@@ -86,8 +96,27 @@ public class KnowledgeBaseService {
         KnowledgeBase base = mapper.getKnowledgeBase(id);
         mapper.updateKnowledgeBaseStatus(id, "ARCHIVED");
         KnowledgeBase updated = mapper.getKnowledgeBase(id);
-        publisher.emitUser(PlatformEventTypes.KNOWLEDGE_BASE_ARCHIVED, id, PlatformEventPublisher.SOURCE_UI, "KNOWLEDGE_BASE", base == null ? String.valueOf(id) : base.getBaseCode(), "归档知识库：" + (base == null ? String.valueOf(id) : base.getName()), describe(updated == null ? base : updated));
+        publisher.emitUser(PlatformEventTypes.KNOWLEDGE_BASE_ARCHIVED, id, PlatformEventPublisher.SOURCE_UI, "KNOWLEDGE_BASE", base == null ?
+            String.valueOf(id) : base.getBaseCode(), "归档知识库：" + (base == null ? String.valueOf(id) : base.getName()), describe(updated == null ? base
+            : updated));
         return updated;
+    }
+
+    /**
+     * A new workspace opens with the derivation rules almost everyone ends up wanting —
+     * deployment chains, dependency impact, ownership — because a derivation console that
+     * starts empty is a console nobody starts. They arrive disabled-by-schedule (manual
+     * trigger) and switched on, so nothing runs unattended before anyone asked for it.
+     *
+     * <p>Seeding is idempotent and best effort: a workspace that could not be seeded still
+     * works, and the same rules can be installed later from the console.</p>
+     */
+    private void seedDerivationPresets(Long kb) {
+        try {
+            derivation.seed(kb, null);
+        } catch (RuntimeException e) {
+            LOG.warn("知识库 {} 启用常用衍生规则失败：{}", kb, e.getMessage());
+        }
     }
 
     /**

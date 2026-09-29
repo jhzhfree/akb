@@ -1,8 +1,10 @@
 package com.jh.knowledgeos.service;
 
 import com.jh.knowledgeos.mapper.KnowledgeMapper;
+import com.jh.knowledgeos.mapper.GraphMapper;
 import org.springframework.stereotype.Service;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -23,11 +25,15 @@ public class EntityResolutionService {
 
     private final KnowledgeMapper mapper;
 
+    private final GraphMapper graphMapper;
+
+
     private final AiClient aiClient;
 
     private final TransactionRunner transactionRunner;
 
-    public EntityResolutionService(KnowledgeMapper mapper, AiClient aiClient, TransactionRunner transactionRunner) {
+    public EntityResolutionService(KnowledgeMapper mapper, AiClient aiClient, TransactionRunner transactionRunner, GraphMapper graphMapper) {
+        this.graphMapper = graphMapper;
         this.mapper = mapper;
         this.aiClient = aiClient;
         this.transactionRunner = transactionRunner;
@@ -67,7 +73,8 @@ public class EntityResolutionService {
             summary.put("aliases", 0);
             return summary;
         }
-        List<Map<String, Object>> canonical = mapper.listEntityNames(knowledgeBaseId);
+        List<Map<String, Object>> canonical = graphMapper.listEntityNames(knowledgeBaseId);
+        attachKnownAliases(canonical, graphMapper.listEntityAliasIndex(knowledgeBaseId));
         Map<String, Object> request = new LinkedHashMap<String, Object>();
         request.put("knowledgeBaseId", knowledgeBaseId);
         request.put("entities", mentions);
@@ -97,9 +104,9 @@ public class EntityResolutionService {
                     continue;
                 }
                 // Re-point every object link first, then retire the duplicate node.
-                mapper.reassignCardEntityLinks(knowledgeBaseId, from, to);
-                mapper.reassignClaimEntityLinks(knowledgeBaseId, from, to);
-                mapper.updateEntityStatus(knowledgeBaseId, from, "MERGED");
+                graphMapper.reassignCardEntityLinks(knowledgeBaseId, from, to);
+                graphMapper.reassignClaimEntityLinks(knowledgeBaseId, from, to);
+                graphMapper.updateEntityStatus(knowledgeBaseId, from, "MERGED");
             }
             for (Map<String, Object> alias : aliases) {
                 String entityCode = stringValue(alias.get("entityCode"));
@@ -107,7 +114,8 @@ public class EntityResolutionService {
                 if (entityCode.isEmpty() || aliasValue.isEmpty()) {
                     continue;
                 }
-                mapper.upsertEntityAlias(knowledgeBaseId, entityCode, aliasValue, stringValue(alias.get("aliasType")), doubleValue(alias.get("confidence"), 0.0D));
+                graphMapper.upsertEntityAlias(knowledgeBaseId, entityCode, aliasValue, stringValue(alias.get("aliasType")),
+                    doubleValue(alias.get("confidence"), 0.0D));
             }
             return null;
         });
@@ -116,6 +124,36 @@ public class EntityResolutionService {
         summary.put("mergeDetails", merges);
         summary.put("degraded", false);
         return summary;
+    }
+
+    /**
+     * Attach the surface forms already stored for each canonical entity.
+     *
+     * <p>Resolution only sees the canonical name unless the alias dictionary travels with it,
+     * so a document that writes "安全公告：CVE-2026-1234" next to a node called "CVE-2026-1234"
+     * would create a second node and split the very chain the graph exists to answer.</p>
+     */
+    private void attachKnownAliases(List<Map<String, Object>> canonical, List<Map<String, Object>> aliasRows) {
+        Map<String, List<String>> byCode = new LinkedHashMap<String, List<String>>();
+        for (Map<String, Object> row : aliasRows) {
+            String code = stringValue(row.get("entityCode"));
+            String alias = stringValue(row.get("alias"));
+            if (code.isEmpty() || alias.isEmpty()) {
+                continue;
+            }
+            List<String> aliases = byCode.get(code);
+            if (aliases == null) {
+                aliases = new ArrayList<String>();
+                byCode.put(code, aliases);
+            }
+            if (!aliases.contains(alias)) {
+                aliases.add(alias);
+            }
+        }
+        for (Map<String, Object> entity : canonical) {
+            List<String> aliases = byCode.get(stringValue(entity.get("entityCode")));
+            entity.put("aliases", aliases == null ? Collections.<String>emptyList() : aliases);
+        }
     }
 
     @SuppressWarnings("unchecked")

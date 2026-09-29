@@ -1,0 +1,96 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.jh.knowledgeos.mapper.EvaluationMapper">
+
+<insert id="insertEvaluationDataset" parameterType="com.jh.knowledgeos.domain.EvaluationDataset" useGeneratedKeys="true" keyProperty="id">
+INSERT INTO t_evaluation_dataset(dataset_code,knowledge_base_id,name,description,version,status,created_by)
+VALUES(#{datasetCode},#{knowledgeBaseId},#{name},#{description},#{version},#{status},#{createdBy})
+</insert>
+
+<select id="listEvaluationDatasets" resultType="map">
+SELECT id,dataset_code datasetCode,knowledge_base_id knowledgeBaseId,name,description,version,status,created_by createdBy,created_time createdTime,
+  (SELECT COUNT(*) FROM t_evaluation_case c WHERE c.dataset_id=t_evaluation_dataset.id AND c.status='ACTIVE') caseCount
+FROM t_evaluation_dataset WHERE knowledge_base_id=#{kb} ORDER BY id DESC
+</select>
+
+<select id="getEvaluationDataset" resultType="map">
+SELECT id,dataset_code datasetCode,knowledge_base_id knowledgeBaseId,name,description,version,status,created_by createdBy,created_time createdTime
+FROM t_evaluation_dataset WHERE dataset_code=#{code}
+</select>
+
+<update id="updateEvaluationDataset">
+UPDATE t_evaluation_dataset SET name=#{name},description=#{description},status=#{status} WHERE dataset_code=#{code}
+</update>
+
+<insert id="insertEvaluationCase" parameterType="com.jh.knowledgeos.domain.EvaluationCase" useGeneratedKeys="true" keyProperty="id">
+INSERT INTO t_evaluation_case(case_code,dataset_id,question,expected_object_codes_json,expected_evidence_codes_json,expected_answer,tags_json,difficulty,version,status)
+VALUES(#{caseCode},#{datasetId},#{question},CAST(#{expectedObjectCodesJson} AS JSON),CAST(#{expectedEvidenceCodesJson} AS JSON),#{expectedAnswer},CAST(#{tagsJson} AS JSON),#{difficulty},#{version},#{status})
+</insert>
+
+<select id="listEvaluationCases" resultType="map">
+SELECT id,case_code caseCode,dataset_id datasetId,question,expected_object_codes_json expectedObjectCodesJson,
+  expected_evidence_codes_json expectedEvidenceCodesJson,expected_answer expectedAnswer,tags_json tagsJson,difficulty,version,status,created_time createdTime
+FROM t_evaluation_case WHERE dataset_id=#{datasetId} AND status='ACTIVE' ORDER BY id
+</select>
+
+<delete id="deleteEvaluationCase">DELETE FROM t_evaluation_case WHERE id=#{id}</delete>
+
+<insert id="insertEvaluationRun" parameterType="com.jh.knowledgeos.domain.EvaluationRun" useGeneratedKeys="true" keyProperty="id">
+INSERT INTO t_evaluation_run(run_code,dataset_id,knowledge_base_id,status,mode,top_k,baseline_run_code,case_count)
+VALUES(#{runCode},#{datasetId},#{knowledgeBaseId},#{status},#{mode},#{topK},#{baselineRunCode},#{caseCount})
+</insert>
+
+<update id="finishEvaluationRun" parameterType="com.jh.knowledgeos.domain.EvaluationRun">
+UPDATE t_evaluation_run SET status=#{status},policy_version=#{policyVersion},case_count=#{caseCount},
+  hit_at1_rate=#{hitAt1Rate},hit_at3_rate=#{hitAt3Rate},hit_at5_rate=#{hitAt5Rate},recall_at5=#{recallAt5},
+  mrr=#{mrr},ndcg_at10=#{ndcgAt10},latency_p50_ms=#{latencyP50Ms},latency_p95_ms=#{latencyP95Ms},
+  citation_accuracy=#{citationAccuracy},faithfulness=#{faithfulness},regression_verdict=#{regressionVerdict},
+  baseline_delta_json=CAST(#{baselineDeltaJson} AS JSON),gaps_json=CAST(#{gapsJson} AS JSON),finished_time=NOW()
+WHERE run_code=#{runCode}
+</update>
+
+<update id="failEvaluationRun">
+UPDATE t_evaluation_run SET status='FAILED',error_message=#{errorMessage},finished_time=NOW() WHERE run_code=#{runCode}
+</update>
+
+<select id="getEvaluationRun" resultType="map">
+SELECT id,run_code runCode,dataset_id datasetId,knowledge_base_id knowledgeBaseId,status,mode,top_k topK,
+  policy_version policyVersion,baseline_run_code baselineRunCode,case_count caseCount,
+  hit_at1_rate hitAt1Rate,hit_at3_rate hitAt3Rate,hit_at5_rate hitAt5Rate,recall_at5 recallAt5,mrr,ndcg_at10 ndcgAt10,
+  latency_p50_ms latencyP50Ms,latency_p95_ms latencyP95Ms,citation_accuracy citationAccuracy,faithfulness,
+  regression_verdict regressionVerdict,baseline_delta_json baselineDeltaJson,gaps_json gapsJson,
+  error_message errorMessage,started_time startedTime,finished_time finishedTime
+FROM t_evaluation_run WHERE run_code=#{runCode}
+</select>
+
+<select id="listEvaluationRuns" resultType="map">
+SELECT r.id,r.run_code runCode,r.dataset_id datasetId,r.knowledge_base_id knowledgeBaseId,r.status,r.mode,r.top_k topK,
+  r.policy_version policyVersion,r.baseline_run_code baselineRunCode,r.case_count caseCount,
+  r.hit_at1_rate hitAt1Rate,r.hit_at3_rate hitAt3Rate,r.hit_at5_rate hitAt5Rate,r.recall_at5 recallAt5,r.mrr,
+  r.ndcg_at10 ndcgAt10,r.latency_p50_ms latencyP50Ms,r.latency_p95_ms latencyP95Ms,
+  r.citation_accuracy citationAccuracy,r.faithfulness,r.regression_verdict regressionVerdict,
+  r.error_message errorMessage,r.started_time startedTime,r.finished_time finishedTime,
+  d.name datasetName,d.dataset_code datasetCode
+FROM t_evaluation_run r LEFT JOIN t_evaluation_dataset d ON d.id=r.dataset_id
+WHERE r.knowledge_base_id=#{kb}
+  <if test="datasetId != null">AND r.dataset_id=#{datasetId}</if>
+ORDER BY r.id DESC LIMIT #{limit}
+</select>
+
+<insert id="insertEvaluationResult" parameterType="com.jh.knowledgeos.domain.EvaluationResult">
+INSERT INTO t_evaluation_result(run_id,case_id,case_code,query_id,status,expected_codes_json,retrieved_codes_json,
+  hit_at1,hit_at3,hit_at5,reciprocal_rank,recall_at5,ndcg_at10,latency_ms,citation_total,citation_hit,citation_accuracy,faithfulness,error_message)
+VALUES(#{runId},#{caseId},#{caseCode},#{queryId},#{status},CAST(#{expectedCodesJson} AS JSON),CAST(#{retrievedCodesJson} AS JSON),
+  #{hitAt1},#{hitAt3},#{hitAt5},#{reciprocalRank},#{recallAt5},#{ndcgAt10},#{latencyMs},#{citationTotal},#{citationHit},#{citationAccuracy},#{faithfulness},#{errorMessage})
+</insert>
+
+<select id="listEvaluationResults" resultType="map">
+SELECT id,run_id runId,case_id caseId,case_code caseCode,query_id queryId,status,
+  expected_codes_json expectedCodesJson,retrieved_codes_json retrievedCodesJson,
+  hit_at1 hitAt1,hit_at3 hitAt3,hit_at5 hitAt5,reciprocal_rank reciprocalRank,recall_at5 recallAt5,
+  ndcg_at10 ndcgAt10,latency_ms latencyMs,citation_total citationTotal,citation_hit citationHit,
+  citation_accuracy citationAccuracy,faithfulness,error_message errorMessage,created_time createdTime
+FROM t_evaluation_result WHERE run_id=#{runId} ORDER BY id
+</select>
+
+</mapper>

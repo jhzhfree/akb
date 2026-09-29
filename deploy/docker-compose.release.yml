@@ -95,11 +95,13 @@ services:
       retries: 20
 
   milvus-minio:
-    image: minio/minio:RELEASE.2025-07-23T15-54-02Z
+    # docker hub 的 minio/minio 仓库已下线，改用官方维护的 quay 源；
+    # 该镜像只认 MINIO_ROOT_USER/ROOT_PASSWORD，旧的 ACCESS_KEY/SECRET_KEY 会被忽略并导致启动失败。
+    image: quay.io/minio/minio:RELEASE.2025-07-23T15-54-02Z
     restart: unless-stopped
     environment:
-      MINIO_ACCESS_KEY: minioadmin
-      MINIO_SECRET_KEY: minioadmin
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
     command: minio server /minio_data --console-address :9001
     volumes:
       - milvus_minio:/minio_data

@@ -1,6 +1,7 @@
 package com.jh.knowledgeos.service;
 
 import com.jh.knowledgeos.mapper.KnowledgeMapper;
+import com.jh.knowledgeos.mapper.GraphMapper;
 import org.springframework.stereotype.Service;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -29,9 +30,13 @@ public class EntityGovernanceService {
 
     private final KnowledgeMapper mapper;
 
+    private final GraphMapper graphMapper;
+
+
     private final TransactionRunner transactionRunner;
 
-    public EntityGovernanceService(KnowledgeMapper mapper, TransactionRunner transactionRunner) {
+    public EntityGovernanceService(KnowledgeMapper mapper, TransactionRunner transactionRunner, GraphMapper graphMapper) {
+        this.graphMapper = graphMapper;
         this.mapper = mapper;
         this.transactionRunner = transactionRunner;
     }
@@ -40,7 +45,7 @@ public class EntityGovernanceService {
      * Entities of a knowledge base with alias and mention cardinality, merged ones included.
      */
     public List<Map<String, Object>> entities(Long knowledgeBaseId) {
-        return mapper.listEntitiesWithUsage(knowledgeBaseId);
+        return graphMapper.listEntitiesWithUsage(knowledgeBaseId);
     }
 
     /**
@@ -52,7 +57,7 @@ public class EntityGovernanceService {
     public Map<String, Object> detail(Long knowledgeBaseId, String entityCode) {
         Map<String, Object> entity = requireEntity(knowledgeBaseId, entityCode);
         Map<String, Object> result = new LinkedHashMap<String, Object>(entity);
-        result.put("aliases", mapper.listEntityAliases(knowledgeBaseId, entityCode));
+        result.put("aliases", graphMapper.listEntityAliases(knowledgeBaseId, entityCode));
         Map<String, Object> usage = findUsage(knowledgeBaseId, entityCode);
         result.put("aliasCount", usage.get("aliasCount"));
         result.put("claimCount", usage.get("claimCount"));
@@ -66,11 +71,12 @@ public class EntityGovernanceService {
         if (normalized.isEmpty()) {
             throw new IllegalArgumentException("别名不能为空");
         }
-        mapper.upsertEntityAlias(knowledgeBaseId, entityCode, normalized, aliasType == null || aliasType.trim().isEmpty() ? "MANUAL" : aliasType.trim(), confidence == null ? 1.0D : confidence);
+        graphMapper.upsertEntityAlias(knowledgeBaseId, entityCode, normalized, aliasType == null || aliasType.trim().isEmpty() ? "MANUAL" :
+            aliasType.trim(), confidence == null ? 1.0D : confidence);
         Map<String, Object> summary = new LinkedHashMap<String, Object>();
         summary.put("entityCode", entityCode);
         summary.put("alias", normalized);
-        summary.put("aliases", mapper.listEntityAliases(knowledgeBaseId, entityCode));
+        summary.put("aliases", graphMapper.listEntityAliases(knowledgeBaseId, entityCode));
         return summary;
     }
 
@@ -80,12 +86,12 @@ public class EntityGovernanceService {
         if (normalized.isEmpty()) {
             throw new IllegalArgumentException("别名不能为空");
         }
-        int removed = mapper.deleteEntityAlias(knowledgeBaseId, entityCode, normalized);
+        int removed = graphMapper.deleteEntityAlias(knowledgeBaseId, entityCode, normalized);
         Map<String, Object> summary = new LinkedHashMap<String, Object>();
         summary.put("entityCode", entityCode);
         summary.put("alias", normalized);
         summary.put("removed", removed);
-        summary.put("aliases", mapper.listEntityAliases(knowledgeBaseId, entityCode));
+        summary.put("aliases", graphMapper.listEntityAliases(knowledgeBaseId, entityCode));
         return summary;
     }
 
@@ -107,7 +113,7 @@ public class EntityGovernanceService {
         requireEntity(knowledgeBaseId, toCode);
         Map<String, Object> impact = findUsage(knowledgeBaseId, fromCode);
         List<String> movedAliases = new ArrayList<String>();
-        for (Map<String, Object> alias : mapper.listEntityAliases(knowledgeBaseId, fromCode)) {
+        for (Map<String, Object> alias : graphMapper.listEntityAliases(knowledgeBaseId, fromCode)) {
             Object value = alias.get("alias");
             if (value != null) {
                 movedAliases.add(String.valueOf(value));
@@ -116,11 +122,11 @@ public class EntityGovernanceService {
         // Retried on deadlock for the same reason resolution is: the steps are idempotent and a
         // manual merge can race a batch that is retiring entities in the same knowledge base.
         transactionRunner.retryingOnDeadlock(() -> {
-            mapper.reassignCardEntityLinks(knowledgeBaseId, fromCode, toCode);
-            mapper.reassignClaimEntityLinks(knowledgeBaseId, fromCode, toCode);
-            mapper.deleteConflictingAliases(knowledgeBaseId, fromCode, toCode);
-            mapper.moveEntityAliases(knowledgeBaseId, fromCode, toCode);
-            mapper.updateEntityStatus(knowledgeBaseId, fromCode, "MERGED");
+            graphMapper.reassignCardEntityLinks(knowledgeBaseId, fromCode, toCode);
+            graphMapper.reassignClaimEntityLinks(knowledgeBaseId, fromCode, toCode);
+            graphMapper.deleteConflictingAliases(knowledgeBaseId, fromCode, toCode);
+            graphMapper.moveEntityAliases(knowledgeBaseId, fromCode, toCode);
+            graphMapper.updateEntityStatus(knowledgeBaseId, fromCode, "MERGED");
             return null;
         });
         Map<String, Object> summary = new LinkedHashMap<String, Object>();
@@ -129,7 +135,7 @@ public class EntityGovernanceService {
         summary.put("to", toCode);
         summary.put("movedAliases", movedAliases);
         summary.put("impact", impact);
-        summary.put("targetAliases", mapper.listEntityAliases(knowledgeBaseId, toCode));
+        summary.put("targetAliases", graphMapper.listEntityAliases(knowledgeBaseId, toCode));
         return summary;
     }
 
@@ -145,7 +151,7 @@ public class EntityGovernanceService {
         if (!ALLOWED_STATUSES.contains(normalized)) {
             throw new IllegalArgumentException("不支持的实体状态：" + status);
         }
-        mapper.updateEntityStatus(knowledgeBaseId, entityCode, normalized);
+        graphMapper.updateEntityStatus(knowledgeBaseId, entityCode, normalized);
         Map<String, Object> summary = new LinkedHashMap<String, Object>();
         summary.put("entityCode", entityCode);
         summary.put("status", normalized);
@@ -157,7 +163,7 @@ public class EntityGovernanceService {
         if (code.isEmpty()) {
             throw new IllegalArgumentException("实体编码不能为空");
         }
-        Map<String, Object> entity = mapper.getEntity(knowledgeBaseId, code);
+        Map<String, Object> entity = graphMapper.getEntity(knowledgeBaseId, code);
         if (entity == null || entity.isEmpty()) {
             throw new IllegalArgumentException("实体不存在：" + entityCode);
         }
@@ -165,7 +171,7 @@ public class EntityGovernanceService {
     }
 
     private Map<String, Object> findUsage(Long knowledgeBaseId, String entityCode) {
-        for (Map<String, Object> row : mapper.listEntitiesWithUsage(knowledgeBaseId)) {
+        for (Map<String, Object> row : graphMapper.listEntitiesWithUsage(knowledgeBaseId)) {
             if (entityCode.equals(String.valueOf(row.get("entityCode")))) {
                 return row;
             }

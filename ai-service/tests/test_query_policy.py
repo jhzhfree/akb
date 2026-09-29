@@ -10,6 +10,7 @@ import json
 import pytest
 from app.core import query_policy as qp
 from app.services.query_engine import QueryRewriter, QueryRouter
+from app.services.query_presentation import chunk_boost as qp_chunk_boost
 from app.services.retrieval.hybrid import HybridRetriever
 
 
@@ -20,6 +21,29 @@ def isolated_policy(tmp_path, monkeypatch):
     qp.reset_cache()
     yield
     qp.reset_cache()
+
+
+def test_verbatim_chunk_channels_outrank_structured_objects():
+    """Chunks carry the quotable source; they must not start below cards and graph paths."""
+    defaults = qp.DEFAULT_CHANNEL_WEIGHTS
+    assert defaults["bm25"] == defaults["vector"] > defaults["card"]
+    assert defaults["card"] >= defaults["graph"]
+
+
+def test_chunk_boost_is_off_for_structured_evidence_and_on_for_chunks():
+    """The boost is a chunk-shaped affordance: cards and graph paths must not borrow it."""
+    policy = qp.load_policy()
+    weights = qp.chunk_boost_weights(policy)
+    assert weights["base"] > 1.0
+
+    chunk = {"channel": "vector", "content": "OpenSSL 3.0.12 存在漏洞。", "title": "OpenSSL 安全公告", "metadata": {"object_type": "DOCUMENT"}}
+    card = {"channel": "card", "content": "OpenSSL 3.0.12 存在漏洞。", "title": "OpenSSL 安全公告", "metadata": {"object_type": "CARD"}}
+    boost, signals = qp_chunk_boost(chunk, "OpenSSL 3.0.12 漏洞", weights)
+    assert boost > 1.0
+    assert signals["headingHit"] == 1.0
+    assert signals["coverage"] > 0.0
+    assert qp_chunk_boost(card, "OpenSSL 3.0.12 漏洞", weights) == (1.0, None)
+    assert qp_chunk_boost(chunk, "OpenSSL 3.0.12 漏洞", {}) == (1.0, None)
 
 
 def test_saved_policy_is_reloaded():

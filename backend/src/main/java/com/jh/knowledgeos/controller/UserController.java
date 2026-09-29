@@ -46,7 +46,8 @@ public class UserController {
     @Operation(summary = "创建用户")
     public ApiResponse<Object> create(@RequestBody UserRequest request) {
         requireAdmin();
-        return ApiResponse.ok(service.create(request.getUsername(), request.getPassword(), request.getDisplayName(), request.getEmail(), request.getRole(), request.getGroupIds()));
+        return ApiResponse.ok(service.create(request.getUsername(), request.getPassword(), request.getDisplayName(), request.getEmail(),
+            request.getRole(), request.getGroupIds()));
     }
 
     @PutMapping("/{id}")

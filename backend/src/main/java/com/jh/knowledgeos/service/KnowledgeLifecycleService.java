@@ -3,6 +3,8 @@ package com.jh.knowledgeos.service;
 import com.jh.knowledgeos.common.KnowledgeStatus;
 import com.jh.knowledgeos.common.PlatformEventTypes;
 import com.jh.knowledgeos.mapper.KnowledgeMapper;
+import com.jh.knowledgeos.mapper.CardClaimMapper;
+import com.jh.knowledgeos.mapper.GovernanceMapper;
 import org.springframework.stereotype.Service;
 import java.util.ArrayList;
 import java.util.Date;
@@ -23,13 +25,21 @@ public class KnowledgeLifecycleService {
 
     private final KnowledgeMapper mapper;
 
+    private final CardClaimMapper cardClaimMapper;
+
+    private final GovernanceMapper governanceMapper;
+
+
     private final IndexOutboxService indexOutboxService;
 
     private final TransactionRunner transactionRunner;
 
     private final PlatformEventPublisher publisher;
 
-    public KnowledgeLifecycleService(KnowledgeMapper mapper, IndexOutboxService indexOutboxService, TransactionRunner transactionRunner, PlatformEventPublisher publisher) {
+    public KnowledgeLifecycleService(KnowledgeMapper mapper, IndexOutboxService indexOutboxService, TransactionRunner transactionRunner,
+        PlatformEventPublisher publisher, GovernanceMapper governanceMapper, CardClaimMapper cardClaimMapper) {
+        this.cardClaimMapper = cardClaimMapper;
+        this.governanceMapper = governanceMapper;
         this.mapper = mapper;
         this.indexOutboxService = indexOutboxService;
         this.transactionRunner = transactionRunner;
@@ -54,15 +64,16 @@ public class KnowledgeLifecycleService {
     public Map<String, Object> expireDueClaims(Long knowledgeBaseId, boolean dryRun) {
         Date now = new Date();
         Map<String, Object> summary = new LinkedHashMap<String, Object>();
-        List<Map<String, Object>> rows = mapper.listClaimsWithValidity(knowledgeBaseId);
+        List<Map<String, Object>> rows = cardClaimMapper.listClaimsWithValidity(knowledgeBaseId);
         List<String> expired = new ArrayList<String>();
         List<String> due = dueClaimCodes(rows, now);
         if (!dryRun) {
             transactionRunner.required(() -> {
                 for (String claimCode : due) {
-                    mapper.updateClaimStatus(claimCode, KnowledgeStatus.EXPIRED.name());
-                    mapper.snapshotKnowledgeObject(knowledgeBaseId, "CLAIM", claimCode, "EXPIRED", "LIFECYCLE_ENGINE");
-                    indexOutboxService.enqueueObjectStatus(knowledgeBaseId, "CLAIM", claimCode, KnowledgeStatus.EXPIRED.name(), "lifecycle_expire_" + claimCode + "_" + UUID.randomUUID());
+                    governanceMapper.updateClaimStatus(claimCode, KnowledgeStatus.EXPIRED.name());
+                    governanceMapper.snapshotKnowledgeObject(knowledgeBaseId, "CLAIM", claimCode, "EXPIRED", "LIFECYCLE_ENGINE");
+                    indexOutboxService.enqueueObjectStatus(knowledgeBaseId, "CLAIM", claimCode, KnowledgeStatus.EXPIRED.name(), "lifecycle_expire_" +
+                        claimCode + "_" + UUID.randomUUID());
                     expired.add(claimCode);
                 }
                 return null;
@@ -81,7 +92,8 @@ public class KnowledgeLifecycleService {
             detail.put("scanned", rows.size());
             detail.put("expiredCount", expired.size());
             detail.put("expiredClaimCodes", expired.size() > 20 ? expired.subList(0, 20) : expired);
-            publisher.emitUser(PlatformEventTypes.KNOWLEDGE_OBJECT_EXPIRED, knowledgeBaseId, PlatformEventPublisher.SOURCE_UI, "CLAIM", expired.get(0), "有效期到期：失效 " + expired.size() + " 条主张", detail);
+            publisher.emitUser(PlatformEventTypes.KNOWLEDGE_OBJECT_EXPIRED, knowledgeBaseId, PlatformEventPublisher.SOURCE_UI, "CLAIM",
+                expired.get(0), "有效期到期：失效 " + expired.size() + " 条主张", detail);
         }
         return summary;
     }
@@ -92,8 +104,8 @@ public class KnowledgeLifecycleService {
      */
     public Map<String, Object> summary(Long knowledgeBaseId, Integer withinDays) {
         int days = withinDays == null ? 30 : Math.max(1, Math.min(withinDays, 365));
-        Map<String, Long> claimStatus = statusCounts(mapper.countClaimsByStatus(knowledgeBaseId));
-        Map<String, Long> cardStatus = statusCounts(mapper.countCardsByStatus(knowledgeBaseId));
+        Map<String, Long> claimStatus = statusCounts(cardClaimMapper.countClaimsByStatus(knowledgeBaseId));
+        Map<String, Long> cardStatus = statusCounts(cardClaimMapper.countCardsByStatus(knowledgeBaseId));
         long claimTotal = total(claimStatus);
         long cardTotal = total(cardStatus);
         long claimExpired = value(claimStatus, KnowledgeStatus.EXPIRED.name());
@@ -117,7 +129,7 @@ public class KnowledgeLifecycleService {
         result.put("decayedTotal", decayed);
         result.put("claimStatusCounts", claimStatus);
         result.put("cardStatusCounts", cardStatus);
-        result.put("dueNowCount", dueClaimCodes(mapper.listClaimsWithValidity(knowledgeBaseId), new Date()).size());
+        result.put("dueNowCount", dueClaimCodes(cardClaimMapper.listClaimsWithValidity(knowledgeBaseId), new Date()).size());
         result.put("expiringSoonCount", expiringClaims(knowledgeBaseId, days).size());
         result.put("expiredRate", total == 0 ? 0.0D : round((double) decayed / (double) total));
         return result;
@@ -129,7 +141,7 @@ public class KnowledgeLifecycleService {
     public List<Map<String, Object>> expiringClaims(Long knowledgeBaseId, Integer withinDays) {
         int days = withinDays == null ? 30 : Math.max(1, Math.min(withinDays, 365));
         Date horizon = new Date(System.currentTimeMillis() + days * 24L * 60L * 60L * 1000L);
-        return mapper.listExpiringClaims(knowledgeBaseId, horizon);
+        return cardClaimMapper.listExpiringClaims(knowledgeBaseId, horizon);
     }
 
     /**
@@ -198,11 +210,11 @@ public class KnowledgeLifecycleService {
         }
         transactionRunner.required(() -> {
             if ("CARD".equalsIgnoreCase(objectType)) {
-                mapper.updateCardStatus(oldObjectCode, KnowledgeStatus.SUPERSEDED.name());
-                mapper.snapshotKnowledgeObject(knowledgeBaseId, "CARD", oldObjectCode, "SUPERSEDED", "LIFECYCLE_ENGINE");
+                governanceMapper.updateCardStatus(oldObjectCode, KnowledgeStatus.SUPERSEDED.name());
+                governanceMapper.snapshotKnowledgeObject(knowledgeBaseId, "CARD", oldObjectCode, "SUPERSEDED", "LIFECYCLE_ENGINE");
             } else {
-                mapper.updateClaimStatus(oldObjectCode, KnowledgeStatus.SUPERSEDED.name());
-                mapper.snapshotKnowledgeObject(knowledgeBaseId, "CLAIM", oldObjectCode, "SUPERSEDED", "LIFECYCLE_ENGINE");
+                governanceMapper.updateClaimStatus(oldObjectCode, KnowledgeStatus.SUPERSEDED.name());
+                governanceMapper.snapshotKnowledgeObject(knowledgeBaseId, "CLAIM", oldObjectCode, "SUPERSEDED", "LIFECYCLE_ENGINE");
             }
             return null;
         });
@@ -214,7 +226,8 @@ public class KnowledgeLifecycleService {
         detail.put("objectType", objectType == null ? null : objectType.toUpperCase());
         detail.put("superseded", oldObjectCode);
         detail.put("supersededBy", newObjectCode);
-        publisher.emitUser(PlatformEventTypes.KNOWLEDGE_OBJECT_SUPERSEDED, knowledgeBaseId, PlatformEventPublisher.SOURCE_UI, objectType == null ? null : objectType.toUpperCase(), oldObjectCode, "知识对象被替代：" + oldObjectCode + " → " + newObjectCode, detail);
+        publisher.emitUser(PlatformEventTypes.KNOWLEDGE_OBJECT_SUPERSEDED, knowledgeBaseId, PlatformEventPublisher.SOURCE_UI, objectType == null ?
+            null : objectType.toUpperCase(), oldObjectCode, "知识对象被替代：" + oldObjectCode + " → " + newObjectCode, detail);
         return summary;
     }
 

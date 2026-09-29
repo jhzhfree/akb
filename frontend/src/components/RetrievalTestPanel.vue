@@ -41,7 +41,7 @@
           <el-table-column label="分数" width="110">
             <template #default="{ row }">
               <div>{{ score(row) }}</div>
-              <div class="text-[10px] text-ink-400">RRF {{ rrfScore(row) }}</div>
+              <div class="text-[10px] text-ink-500">RRF {{ rrfScore(row) }}</div>
             </template>
           </el-table-column>
           <el-table-column label="类型" width="110">
@@ -67,7 +67,7 @@
     <template #side>
       <article class="kb-card">
         <div class="kb-card-head">
-          <div><b class="text-sm">链路回放</b><div class="text-[10px] text-ink-400">链路回放</div></div>
+          <div><b class="text-sm">链路回放</b><div class="text-[10px] text-ink-500">链路回放</div></div>
         </div>
         <div class="p-3">
           <p class="kb-muted">
@@ -76,10 +76,10 @@
           <div v-if="recent.length" class="mt-3 space-y-2">
             <button
               v-for="item in recent" :key="item.queryId"
-              class="block w-full rounded-lg border border-ink-100 px-3 py-2 text-left text-[12px] hover:border-[#c3d3ee] hover:bg-[#f7faff]"
+              class="block w-full rounded-lg border border-ink-100 px-3 py-2 text-left text-[12px] hover:border-[color:var(--line-soft)] hover:bg-[color:var(--bg-sub)]"
               @click="emit('open-trace', item.queryId)">
               <b class="line-clamp-2 font-medium text-ink-700">{{ item.query }}</b>
-              <div class="mt-1 flex items-center justify-between text-[11px] text-ink-400">
+              <div class="mt-1 flex items-center justify-between text-[11px] text-ink-500">
                 <span>{{ item.at }}</span><span>{{ item.count }} 条候选</span>
               </div>
             </button>

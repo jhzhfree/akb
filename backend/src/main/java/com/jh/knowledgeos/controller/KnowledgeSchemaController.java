@@ -69,7 +69,8 @@ public class KnowledgeSchemaController {
 
     @DeleteMapping("/types")
     @Operation(summary = "删除知识库自定义类型（内置类型不可删除）")
-    public ApiResponse<Object> delete(@RequestParam(value = "kb", required = false) Long kb, @RequestParam(value = "kind", required = false) String kind, @RequestParam(value = "typeCode", required = false) String typeCode) {
+    public ApiResponse<Object> delete(@RequestParam(value = "kb", required = false) Long kb, @RequestParam(value = "kind", required = false) String
+        kind, @RequestParam(value = "typeCode", required = false) String typeCode) {
         schema.delete(kb, kind, typeCode);
         return ApiResponse.ok("deleted");
     }

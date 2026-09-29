@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.jh.knowledgeos.mapper.TraceMapper">
+<insert id="insertTrace" parameterType="com.jh.knowledgeos.domain.QueryTraceRecord">INSERT INTO t_query_trace(query_id,knowledge_base_id,trace_id,original_query,rewritten_queries_json,router_decision_json,retrieval_json,fusion_json,rerank_json,selected_context_json,citations_json,model_name,latency_ms,token_usage_json,error_code,trace_json,answer) VALUES(#{queryId},#{knowledgeBaseId},#{traceId},#{originalQuery},CAST(#{rewrittenQueriesJson} AS JSON),CAST(#{routerDecisionJson} AS JSON),CAST(#{retrievalJson} AS JSON),CAST(#{fusionJson} AS JSON),CAST(#{rerankJson} AS JSON),CAST(#{selectedContextJson} AS JSON),CAST(#{citationsJson} AS JSON),#{modelName},#{latencyMs},CAST(#{tokenUsageJson} AS JSON),#{errorCode},CAST(#{traceJson} AS JSON),#{answer})</insert>
+<insert id="insertAnswerEvidenceAssessment">
+INSERT INTO t_answer_evidence_assessment(query_id,knowledge_base_id,gate_status,completeness_score,faithfulness_score,factual_claim_count,supported_claim_count,citation_count,unsupported_claims_json,verification_json)
+VALUES(#{queryId},#{kb},#{gateStatus},#{completeness},#{faithfulness},#{claimCount},#{supportedCount},#{citationCount},CAST(#{unsupportedJson} AS JSON),CAST(#{verificationJson} AS JSON))
+</insert>
+<insert id="insertAnswerQualification">
+INSERT INTO t_answer_qualification(query_id,knowledge_base_id,policy_version,gate_status,evidence_gate_status,structured_gate_status,decision_reasons_json,original_answer_hash,delivered_answer_hash,claim_count)
+VALUES(#{queryId},#{kb},#{policyVersion},#{gateStatus},#{evidenceGateStatus},#{structuredGateStatus},CAST(#{reasonsJson} AS JSON),#{originalHash},#{deliveredHash},#{claimCount})
+</insert>
+<insert id="insertAnswerClaimAssessment">
+INSERT INTO t_answer_claim_assessment(query_id,claim_id,policy_version,statement_text,decision,confidence,entailment_score,citation_indexes_json,evidence_codes_json,evidence_statuses_json,included_in_final_answer)
+VALUES(#{queryId},#{claimId},#{policyVersion},#{statement},#{decision},#{confidence},#{entailmentScore},CAST(#{citationIndexesJson} AS JSON),CAST(#{evidenceCodesJson} AS JSON),CAST(#{evidenceStatusesJson} AS JSON),#{included})
+</insert>
+<select id="getAnswerQualification" resultType="map">
+SELECT query_id queryId,knowledge_base_id knowledgeBaseId,policy_version policyVersion,
+gate_status gateStatus,evidence_gate_status evidenceGateStatus,structured_gate_status structuredGateStatus,
+decision_reasons_json decisionReasonsJson,original_answer_hash originalAnswerHash,
+delivered_answer_hash deliveredAnswerHash,claim_count claimCount,created_time createdTime
+FROM t_answer_qualification WHERE query_id=#{queryId}
+</select>
+<select id="getAnswerVerificationJson" resultType="map">
+SELECT verification_json verificationJson FROM t_answer_evidence_assessment WHERE query_id=#{queryId} ORDER BY id DESC LIMIT 1
+</select>
+<select id="listAnswerClaimAssessments" resultType="map">
+SELECT claim_id claimId,policy_version policyVersion,statement_text statement,decision,confidence,
+entailment_score entailmentScore,citation_indexes_json citationIndexesJson,evidence_codes_json evidenceIdsJson,
+evidence_statuses_json evidenceStatusesJson,included_in_final_answer includedInFinalAnswer,created_time createdTime
+FROM t_answer_claim_assessment WHERE query_id=#{queryId} ORDER BY id
+</select>
+<select id="summarizeAnswerQualifications" resultType="map">
+SELECT COUNT(*) totalCount,
+COALESCE(SUM(gate_status='PASS'),0) passCount,COALESCE(SUM(gate_status='PARTIAL'),0) partialCount,
+COALESCE(SUM(gate_status='BLOCKED'),0) blockedCount,COALESCE(SUM(gate_status='BYPASSED'),0) bypassedCount,
+COALESCE(ROUND(AVG(gate_status='PASS'),5),0) passRate,
+COALESCE(ROUND(AVG(gate_status='BLOCKED'),5),0) blockedRate,
+COUNT(DISTINCT policy_version) policyVersionCount
+FROM t_answer_qualification
+WHERE knowledge_base_id=#{kb} AND created_time&gt;=TIMESTAMPADD(HOUR,-#{hours},CURRENT_TIMESTAMP)
+</select>
+<select id="listAnswerQualificationPolicyStats" resultType="map">
+SELECT policy_version policyVersion,COUNT(*) totalCount,
+COALESCE(SUM(gate_status='PASS'),0) passCount,COALESCE(SUM(gate_status='PARTIAL'),0) partialCount,
+COALESCE(SUM(gate_status='BLOCKED'),0) blockedCount,COALESCE(SUM(gate_status='BYPASSED'),0) bypassedCount,
+COALESCE(ROUND(AVG(gate_status='PASS'),5),0) passRate,MAX(created_time) latestTime
+FROM t_answer_qualification
+WHERE knowledge_base_id=#{kb} AND created_time&gt;=TIMESTAMPADD(HOUR,-#{hours},CURRENT_TIMESTAMP)
+GROUP BY policy_version ORDER BY latestTime DESC
+</select>
+<select id="getTrace" resultType="map">SELECT id,query_id queryId,knowledge_base_id knowledgeBaseId,trace_id traceId,original_query originalQuery,rewritten_queries_json rewrittenQueriesJson,router_decision_json routerDecisionJson,retrieval_json retrievalJson,fusion_json fusionJson,rerank_json rerankJson,selected_context_json selectedContextJson,citations_json citationsJson,model_name modelName,latency_ms latencyMs,token_usage_json tokenUsageJson,error_code errorCode,trace_json traceJson,pipeline_json pipelineJson,answer,created_time createdTime FROM t_query_trace WHERE query_id=#{qid}</select>
+<select id="listQueryTraces" resultType="map">
+SELECT query_id queryId,original_query originalQuery,answer,model_name modelName,
+       latency_ms latencyMs,error_code errorCode,created_time createdTime
+FROM t_query_trace
+WHERE knowledge_base_id=#{kb}
+ORDER BY created_time DESC
+LIMIT #{limit}
+</select>
+</mapper>

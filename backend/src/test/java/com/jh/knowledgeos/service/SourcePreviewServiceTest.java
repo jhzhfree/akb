@@ -9,6 +9,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 import com.jh.knowledgeos.domain.SourceFile;
+import com.jh.knowledgeos.mapper.DocumentMapper;
 import com.jh.knowledgeos.mapper.KnowledgeMapper;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -23,14 +24,14 @@ class SourcePreviewServiceTest {
     @TempDir
     Path storageRoot;
 
-    private KnowledgeMapper mapperReturning(Map<String, Object> row) {
-        KnowledgeMapper mapper = mock(KnowledgeMapper.class);
+    private DocumentMapper mapperReturning(Map<String, Object> row) {
+        DocumentMapper mapper = mock(DocumentMapper.class);
         when(mapper.getSourcePreview(any(), any(), any())).thenReturn(row);
         return mapper;
     }
 
-    private SourcePreviewService service(KnowledgeMapper mapper) {
-        return new SourcePreviewService(mapper, new SourceFileStorageService(storageRoot.toString()));
+    private SourcePreviewService service(DocumentMapper mapper) {
+        return new SourcePreviewService(mock(KnowledgeMapper.class), new SourceFileStorageService(storageRoot.toString()), mapper);
     }
 
     private Map<String, Object> row(String name, String rawText) {

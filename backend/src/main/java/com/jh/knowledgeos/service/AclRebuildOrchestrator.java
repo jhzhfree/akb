@@ -2,6 +2,8 @@ package com.jh.knowledgeos.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.jh.knowledgeos.mapper.KnowledgeMapper;
+import com.jh.knowledgeos.mapper.IndexMapper;
+import com.jh.knowledgeos.mapper.GraphMapper;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import java.util.LinkedHashMap;
@@ -17,13 +19,21 @@ public class AclRebuildOrchestrator {
 
     private final KnowledgeMapper mapper;
 
+    private final GraphMapper graphMapper;
+
+    private final IndexMapper indexMapper;
+
+
     private final IndexSchemaService schemaService;
 
     private final ObjectMapper objectMapper;
 
     private final AiClient aiClient;
 
-    public AclRebuildOrchestrator(KnowledgeMapper mapper, IndexSchemaService schemaService, ObjectMapper objectMapper, AiClient aiClient) {
+    public AclRebuildOrchestrator(KnowledgeMapper mapper, IndexSchemaService schemaService, ObjectMapper objectMapper, AiClient aiClient, GraphMapper
+        graphMapper, IndexMapper indexMapper) {
+        this.graphMapper = graphMapper;
+        this.indexMapper = indexMapper;
         this.mapper = mapper;
         this.schemaService = schemaService;
         this.objectMapper = objectMapper;
@@ -62,10 +72,10 @@ public class AclRebuildOrchestrator {
         String schemaVersion = String.valueOf(job.get("schemaVersion"));
         Map<String, Object> request = new LinkedHashMap<String, Object>();
         request.put("schemaVersion", schemaVersion);
-        com.jh.knowledgeos.domain.IndexSchemaRelease release = mapper.findIndexSchemaRelease(String.valueOf(job.get("releaseId")));
+        com.jh.knowledgeos.domain.IndexSchemaRelease release = indexMapper.findIndexSchemaRelease(String.valueOf(job.get("releaseId")));
         request.put("expectedManifestHash", release == null ? null : release.getSnapshotChecksum());
         request.put("expectedManifestCount", release == null ? null : release.getSnapshotCount());
-        Map<String, Object> graphManifest = mapper.getGraphManifest(String.valueOf(job.get("releaseId")));
+        Map<String, Object> graphManifest = graphMapper.getGraphManifest(String.valueOf(job.get("releaseId")));
         request.put("expectedGraphManifestHash", graphManifest == null ? null : graphManifest.get("manifestHash"));
         request.put("expectedGraphEntityCount", graphManifest == null ? null : graphManifest.get("entityCount"));
         request.put("expectedGraphRelationCount", graphManifest == null ? null : graphManifest.get("relationCount"));
@@ -73,7 +83,8 @@ public class AclRebuildOrchestrator {
         boolean passed = Boolean.TRUE.equals(evidence.get("qualified"));
         try {
             String json = objectMapper.writeValueAsString(evidence);
-            mapper.updateAclRebuildJob(jobCode, passed ? "READY" : "FAILED", null, passed ? "PASSED" : "FAILED", json, passed ? null : "Machine ACL leakage qualification failed");
+            mapper.updateAclRebuildJob(jobCode, passed ? "READY" : "FAILED", null, passed ? "PASSED" : "FAILED", json, passed ? null :
+                "Machine ACL leakage qualification failed");
             return mapper.getAclRebuildJob(jobCode);
         } catch (Exception ex) {
             throw new IllegalStateException("Cannot persist ACL qualification", ex);
@@ -91,7 +102,8 @@ public class AclRebuildOrchestrator {
         mapper.updateAclRebuildJob(jobCode, "ACTIVATING", null, null, null, null);
         schemaService.activate(kb, releaseId);
         mapper.updateAclRebuildJob(jobCode, "COMPLETED", null, null, null, null);
-        mapper.updateAclChangePropagation(String.valueOf(job.get("changeCode")), "COMPLETED", "{\"aclRebuildJob\":\"" + jobCode + "\",\"releaseId\":\"" + releaseId + "\"}", null);
+        mapper.updateAclChangePropagation(String.valueOf(job.get("changeCode")), "COMPLETED", "{\"aclRebuildJob\":\"" + jobCode +
+            "\",\"releaseId\":\"" + releaseId + "\"}", null);
         return mapper.getAclRebuildJob(jobCode);
     }
 

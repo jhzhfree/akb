@@ -52,7 +52,9 @@ public class TaskCenterController {
 
     @GetMapping
     @Operation(summary = "任务与告警总览：任务列表、统计、告警与死信")
-    public ApiResponse<Object> overview(@RequestParam(value = "kb", required = false) Long kb, @RequestParam(value = "status", required = false) String status, @RequestParam(value = "taskType", required = false) String taskType, @RequestParam(value = "triggerType", required = false) String triggerType, @RequestParam(value = "limit", required = false) Integer limit) {
+    public ApiResponse<Object> overview(@RequestParam(value = "kb", required = false) Long kb, @RequestParam(value = "status", required = false)
+        String status, @RequestParam(value = "taskType", required = false) String taskType, @RequestParam(value = "triggerType", required = false)
+        String triggerType, @RequestParam(value = "limit", required = false) Integer limit) {
         Map<String, Object> payload = new LinkedHashMap<String, Object>();
         payload.put("tasks", tasks.list(kb, status, taskType, triggerType, limit));
         payload.put("stats", tasks.stats(kb));
@@ -128,7 +130,8 @@ public class TaskCenterController {
     // ---------------------------------------------------------------- alerting
     @GetMapping("/alerts")
     @Operation(summary = "告警事件：未处理优先，可按下状态与级别筛选")
-    public ApiResponse<Object> alerts(@RequestParam(value = "kb", required = false) Long kb, @RequestParam(value = "status", required = false) String status, @RequestParam(value = "severity", required = false) String severity, @RequestParam(value = "limit", required = false) Integer limit) {
+    public ApiResponse<Object> alerts(@RequestParam(value = "kb", required = false) Long kb, @RequestParam(value = "status", required = false) String
+        status, @RequestParam(value = "severity", required = false) String severity, @RequestParam(value = "limit", required = false) Integer limit) {
         Map<String, Object> payload = new LinkedHashMap<String, Object>();
         payload.put("events", alerts.events(kb, status, severity, limit));
         payload.put("stats", alerts.stats(kb));

@@ -6,7 +6,7 @@
         <p class="kb-muted mt-1">{{ trace?.originalQuery || '正在加载查询链路…' }}</p></div>
       <span v-if="trace?.latencyMs" class="kb-badge">{{ trace.latencyMs }} ms</span>
     </header>
-    <div v-if="loading" class="kb-card p-12 text-center text-sm text-ink-400">正在装配检索链路追踪…</div>
+    <div v-if="loading" class="kb-card p-12 text-center text-sm text-ink-500">正在装配检索链路追踪…</div>
     <template v-else-if="trace">
       <div class="mb-4 grid gap-3 md:grid-cols-4">
         <div class="kb-metric"><span>查询标识</span><b class="truncate text-sm">{{ trace.queryId }}</b></div>
@@ -29,7 +29,7 @@
         <div class="kb-section-head"><div><small>召回通道</small><h3>多路召回分布</h3></div></div>
         <div class="grid gap-2 sm:grid-cols-5">
           <div v-for="(count,name) in recallCounts" :key="name" class="rounded-lg border border-ink-100 bg-white p-3">
-            <div class="text-[10px] font-semibold uppercase text-ink-400">{{ name }}</div>
+            <div class="text-[10px] font-semibold uppercase text-ink-500">{{ name }}</div>
             <div class="mt-1 text-xl font-bold text-ink-800">{{ count }}</div>
           </div>
         </div>

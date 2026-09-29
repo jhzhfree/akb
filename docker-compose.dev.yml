@@ -221,7 +221,10 @@ services:
     environment:
       discovery.type: single-node
       DISABLE_INSTALL_DEMO_CONFIG: 'true'
-      DISABLE_SECURITY_PLUGIN: 'true'
+      # ES 9 的安全默认开启，DISABLE_SECURITY_PLUGIN 对它无效（已移除）。
+      # 变量名与 prod/release 编排保持一致，首次启动用它初始化 elastic，健康检查也用它探活。
+      # 默认值与现有 es 数据卷里的密码一致，重建容器后 ai-service 保存的凭证无需改动。
+      ELASTICSEARCH_INITIAL_ADMIN_PASSWORD: ${ELASTICSEARCH_INITIAL_ADMIN_PASSWORD:-eucwdo0h4IlxoHdErDsa}
       ES_JAVA_OPTS: -Xms1g -Xmx1g
       TZ: Asia/Shanghai
     ports:
@@ -238,9 +241,12 @@ services:
         soft: 65536
         hard: 65536
     healthcheck:
+      # 安全开启后匿名探活必然 401，必须带上 elastic 凭据，否则容器永远是 unhealthy。
       test:
         - CMD-SHELL
-        - curl -fsS http://127.0.0.1:9200/_cluster/health >/dev/null
+        # $$ 是转义：让 compose 不要把 $ELASTIC_PASSWORD 在主机侧替换掉，
+        # 交给容器内的 shell 展开成容器自己的环境变量。
+        - 'curl -fsS -u "elastic:$$ELASTICSEARCH_INITIAL_ADMIN_PASSWORD" http://127.0.0.1:9200/_cluster/health >/dev/null'
       interval: 10s
       timeout: 5s
       retries: 30
@@ -272,11 +278,13 @@ services:
 
   milvus-minio:
     profiles: ["dual-retrieval"]
-    image: minio/minio:RELEASE.2025-07-23T15-54-02Z
+    # docker hub 上的 minio/minio 仓库已下线（pull 直接 401），改用它官方维护的 quay 源；
+    # 该镜像只认 MINIO_ROOT_USER/ROOT_PASSWORD，旧的 ACCESS_KEY/SECRET_KEY 会被忽略并导致启动失败。
+    image: quay.io/minio/minio:RELEASE.2025-07-23T15-54-02Z
     container_name: kos-dev-minio
     environment:
-      MINIO_ACCESS_KEY: minioadmin
-      MINIO_SECRET_KEY: minioadmin
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
     command: minio server /minio_data --console-address :9001
     volumes:
       - dev_minio_data:/minio_data

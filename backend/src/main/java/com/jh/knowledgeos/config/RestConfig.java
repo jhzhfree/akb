@@ -23,6 +23,10 @@ public class RestConfig {
             }
             return execution.execute(request, body);
         };
-        return builder.setConnectTimeout(Duration.ofMillis(properties.getAiConnectTimeoutMs())).setReadTimeout(Duration.ofMillis(properties.getAiReadTimeoutMs())).additionalInterceptors(traceInterceptor).build();
+        return builder
+                .setConnectTimeout(Duration.ofMillis(properties.getAiConnectTimeoutMs()))
+                .setReadTimeout(Duration.ofMillis(properties.getAiReadTimeoutMs()))
+                .additionalInterceptors(traceInterceptor)
+                .build();
     }
 }

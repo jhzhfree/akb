@@ -30,7 +30,7 @@
 
     <div
       v-if="summaryError"
-      class="mt-3 flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2.5 text-xs text-amber-700">
+      class="mt-3 flex items-start gap-2 rounded-lg border border-[color:var(--warn-bd)] bg-[color:var(--warn-bg)] px-4 py-2.5 text-xs text-[color:var(--warn)]">
       <span>⚠</span>
       <span class="flex-1">生命周期指标加载失败：{{ summaryError }}（下方治理操作仍可使用）</span>
       <button class="shrink-0 underline" @click="load">重试</button>
@@ -72,7 +72,7 @@
                 <option value="CLAIM">断言</option>
               </select>
               <input v-model="oldCode" class="kb-input w-40" placeholder="旧对象编码" />
-              <span class="text-ink-400">→</span>
+              <span class="text-ink-500">→</span>
               <input v-model="newCode" class="kb-input w-40" placeholder="新对象编码" />
               <button class="kb-btn-primary" :disabled="busy || !oldCode.trim() || !newCode.trim()" @click="supersede">执行替代</button>
             </div>
@@ -111,7 +111,7 @@
               <div class="text-sm">
                 共影响 <b>{{ impact.affectedCount ?? 0 }}</b> 个知识对象
               </div>
-              <div v-if="impact.degraded" class="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] text-amber-700">
+              <div v-if="impact.degraded" class="mt-2 rounded-lg border border-[color:var(--warn-bd)] bg-[color:var(--warn-bg)] px-3 py-2 text-[11px] text-[color:var(--warn)]">
                 未查询到关联对象：该来源可能尚未完成抽取，或证据链未建立。
               </div>
               <div class="mt-3 space-y-3">
@@ -154,7 +154,7 @@
             <el-table-column label="断言内容" min-width="260" show-overflow-tooltip>
               <template #default="{ row }">
                 <span class="text-[12px]">
-                  {{ row.subject }} <span class="text-ink-400">{{ row.predicate }}</span> {{ row.objectValue }}
+                  {{ row.subject }} <span class="text-ink-500">{{ row.predicate }}</span> {{ row.objectValue }}
                 </span>
               </template>
             </el-table-column>

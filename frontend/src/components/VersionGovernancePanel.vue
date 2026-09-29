@@ -1,20 +1,22 @@
 <template>
-  <section class="kb-card p-5">
-    <div class="kb-section-head">
+  <section class="kb-page">
+    <header class="kb-section-head">
       <div>
-        <small>版本治理</small>
-        <h3>版本治理</h3>
+        <div class="kb-eyebrow">知识工作台</div>
+        <h1 class="kb-title mt-1">版本治理</h1>
         <p class="kb-muted mt-1">
           每次新建、裁决、复核、冲突检测都会留下不可变快照。这里回答四个问题：现在是什么、以前是什么、为什么变、原文在哪。
         </p>
       </div>
-      <div class="flex items-center gap-2">
+      <div class="flex shrink-0 items-center gap-2">
         <span class="kb-muted">共 {{ total }} 个快照</span>
-        <button class="kb-btn-outline text-[12px]" @click="load">刷新</button>
+        <button class="kb-btn-outline" @click="load">刷新</button>
       </div>
-    </div>
+    </header>
 
-    <div class="mt-4 grid grid-cols-1 gap-2 md:grid-cols-[130px_160px_minmax(0,1fr)]">
+    <!-- 页头之后收进一张卡片：与工作台概览、资产浏览同构，不再整页包在卡片里 -->
+    <div class="kb-card p-4">
+    <div class="grid grid-cols-1 gap-2 md:grid-cols-[130px_160px_minmax(0,1fr)]">
       <select v-model="objectType" class="kb-input" @change="load">
         <option value="">全部对象</option>
         <option value="CARD">知识卡片</option>
@@ -32,7 +34,7 @@
         v-for="group in groups" :key="group.objectType + group.changeType"
         class="kb-badge transition"
         :class="group.objectType === objectType && group.changeType === changeType
-          ? 'bg-indigo-100 text-indigo-700' : 'bg-ink-50 text-ink-600 hover:bg-ink-100'"
+          ? 'kb-state-info' : 'bg-ink-50 text-ink-600 hover:bg-ink-100'"
         @click="applyGroup(group)">
         {{ labelOf(group.objectType) }} · {{ group.changeType }} · {{ group.total }}
       </button>
@@ -54,7 +56,7 @@
         <el-table-column label="对象" min-width="200" show-overflow-tooltip>
           <template #default="{ row }">
             <div class="truncate">{{ row.title || row.objectCode }}</div>
-            <div class="text-[10px] text-ink-400">{{ row.objectType }} · {{ row.objectCode.slice(0, 16) }}</div>
+            <div class="text-[10px] text-ink-500">{{ row.objectType }} · {{ row.objectCode.slice(0, 16) }}</div>
           </template>
         </el-table-column>
         <el-table-column label="变更" width="140">
@@ -114,13 +116,14 @@
                 <span class="text-xs text-ink-700">{{ item.sourceName || '—' }} · {{ item.documentTitle || item.documentCode || '—' }}</span>
                 <span class="kb-badge">{{ pageLabel(item) }}</span>
               </div>
-              <div v-if="item.headingPath" class="mt-1 text-[11px] text-ink-400">{{ item.headingPath }}</div>
-              <div class="mt-1 text-[11px] text-indigo-600">{{ item.contentUnitCode }}</div>
+              <div v-if="item.headingPath" class="mt-1 text-[11px] text-ink-500">{{ item.headingPath }}</div>
+              <div class="mt-1 text-[11px] text-accent">{{ item.contentUnitCode }}</div>
               <p class="mt-2 text-xs leading-5 text-ink-600">{{ item.quoteText || '—' }}</p>
             </li>
           </ul>
         </div>
       </div>
+    </div>
     </div>
   </section>
 </template>

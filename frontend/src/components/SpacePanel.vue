@@ -38,7 +38,7 @@
             <div
               v-for="base in bases" :key="base.id"
               class="rounded-lg border p-3 transition"
-              :class="base.id === activeId ? 'border-[#93b4fd] bg-[#f7faff]' : 'border-[#eef2f7] bg-white hover:border-[#c3d3ee]'">
+              :class="base.id === activeId ? 'border-[color:var(--accent-text)] bg-[color:var(--accent-bg)]' : 'border-[color:var(--line-d)] bg-[color:var(--bg-raised)] hover:border-[color:var(--line-soft)]'">
               <div class="flex items-start justify-between gap-2">
                 <b class="truncate text-sm">{{ base.name }}</b>
                 <span class="kb-badge shrink-0" :class="visibilityClass(base.visibility)">
@@ -79,8 +79,8 @@ const emit = defineEmits<{ select:[id:number]; create:[] }>()
 
 function visibilityClass(visibility?:string) {
   switch (visibility) {
-    case 'PUBLIC': return 'bg-[#e8f7f0] text-[#15803d]'
-    case 'GROUP': return 'bg-[#eff6ff] text-[#1d4ed8]'
+    case 'PUBLIC': return 'bg-[color:var(--ok-bg)] text-[color:var(--ok)]'
+    case 'GROUP': return 'bg-[color:var(--accent-bg)] text-[color:var(--accent-text)]'
     default: return 'bg-ink-100 text-ink-600'
   }
 }

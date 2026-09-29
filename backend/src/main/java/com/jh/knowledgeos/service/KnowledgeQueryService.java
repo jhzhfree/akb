@@ -4,7 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.jh.knowledgeos.common.PlatformEventTypes;
 import com.jh.knowledgeos.domain.QueryTraceRecord;
 import com.jh.knowledgeos.domain.User;
-import com.jh.knowledgeos.mapper.KnowledgeMapper;
+import com.jh.knowledgeos.mapper.TraceMapper;
 import org.slf4j.MDC;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -18,7 +18,7 @@ import java.util.Map;
 @Service
 public class KnowledgeQueryService {
 
-    private final KnowledgeMapper mapper;
+    private final TraceMapper traceMapper;
 
     private final AiClient aiClient;
 
@@ -28,8 +28,9 @@ public class KnowledgeQueryService {
 
     private final PlatformEventPublisher publisher;
 
-    public KnowledgeQueryService(KnowledgeMapper mapper, AiClient aiClient, ObjectMapper objectMapper, IdGenerator idGenerator, PlatformEventPublisher publisher) {
-        this.mapper = mapper;
+    public KnowledgeQueryService(TraceMapper traceMapper, AiClient aiClient, ObjectMapper objectMapper, IdGenerator idGenerator, PlatformEventPublisher
+        publisher) {
+        this.traceMapper = traceMapper;
         this.aiClient = aiClient;
         this.objectMapper = objectMapper;
         this.idGenerator = idGenerator;
@@ -48,7 +49,7 @@ public class KnowledgeQueryService {
         long startedAt = System.currentTimeMillis();
         Map<String, Object> response = aiClient.post(AiApiPaths.QUERY, payload);
         long clientLatencyMs = System.currentTimeMillis() - startedAt;
-        mapper.insertTrace(toTrace(queryId, payload, response, clientLatencyMs));
+        traceMapper.insertTrace(toTrace(queryId, payload, response, clientLatencyMs));
         persistAnswerEvidenceAssessment(queryId, payload, response);
         persistAnswerQualification(queryId, payload, response);
         response.put("queryId", queryId);
@@ -86,7 +87,10 @@ public class KnowledgeQueryService {
         detail.put("externalKeyName", request.get("externalKeyName"));
         User user = AuthContext.get();
         String source = request.get("source") == null ? PlatformEventPublisher.SOURCE_UI : String.valueOf(request.get("source"));
-        publisher.emit(PlatformEventTypes.RETRIEVAL_EXECUTED, kb, source, "QUERY", String.valueOf(request.get("queryId")), "知识检索：" + preview(String.valueOf(request.get("query"))), detail, user == null ? PlatformEventPublisher.ACTOR_API_KEY : PlatformEventPublisher.ACTOR_USER, user == null ? String.valueOf(request.get("externalKeyCode")) : String.valueOf(user.getId()), user == null ? String.valueOf(request.get("externalKeyName")) : user.getUsername());
+        publisher.emit(PlatformEventTypes.RETRIEVAL_EXECUTED, kb, source, "QUERY", String.valueOf(request.get("queryId")), "知识检索：" +
+            preview(String.valueOf(request.get("query"))), detail, user == null ? PlatformEventPublisher.ACTOR_API_KEY :
+            PlatformEventPublisher.ACTOR_USER, user == null ? String.valueOf(request.get("externalKeyCode")) : String.valueOf(user.getId()), user ==
+            null ? String.valueOf(request.get("externalKeyName")) : user.getUsername());
     }
 
     private Object latencyOf(Map<String, Object> response, long fallback) {
@@ -124,7 +128,10 @@ public class KnowledgeQueryService {
         Map<String, Object> qualification = (Map<String, Object>) value;
         Long kb = Long.valueOf(String.valueOf(request.get("knowledgeBaseId")));
         String policyVersion = stringValue(qualification.get("policyVersion"));
-        mapper.insertAnswerQualification(queryId, kb, policyVersion, stringValue(qualification.get("gateStatus")), stringValue(qualification.get("evidenceGateStatus")), stringValue(qualification.get("structuredGateStatus")), json(qualification.get("decisionReasons")), stringValue(qualification.get("originalAnswerHash")), stringValue(qualification.get("deliveredAnswerHash")), intValue(qualification.get("claimCount")));
+        traceMapper.insertAnswerQualification(queryId, kb, policyVersion, stringValue(qualification.get("gateStatus")),
+            stringValue(qualification.get("evidenceGateStatus")), stringValue(qualification.get("structuredGateStatus")),
+            json(qualification.get("decisionReasons")), stringValue(qualification.get("originalAnswerHash")),
+            stringValue(qualification.get("deliveredAnswerHash")), intValue(qualification.get("claimCount")));
         Object claims = qualification.get("claims");
         if (!(claims instanceof List)) {
             return;
@@ -134,7 +141,10 @@ public class KnowledgeQueryService {
                 continue;
             }
             Map<String, Object> claim = (Map<String, Object>) item;
-            mapper.insertAnswerClaimAssessment(queryId, stringValue(claim.get("claimId")), policyVersion, stringValue(claim.get("statement")), stringValue(claim.get("decision")), doubleValue(claim.get("confidence")), doubleValue(claim.get("entailmentScore")), json(claim.get("citationIndexes")), json(claim.get("evidenceIds")), json(claim.get("evidenceStatuses")), booleanValue(claim.get("includedInFinalAnswer")));
+            traceMapper.insertAnswerClaimAssessment(queryId, stringValue(claim.get("claimId")), policyVersion, stringValue(claim.get("statement")),
+                stringValue(claim.get("decision")), doubleValue(claim.get("confidence")), doubleValue(claim.get("entailmentScore")),
+                json(claim.get("citationIndexes")), json(claim.get("evidenceIds")), json(claim.get("evidenceStatuses")),
+                booleanValue(claim.get("includedInFinalAnswer")));
         }
     }
 
@@ -177,7 +187,11 @@ public class KnowledgeQueryService {
             return;
         }
         Map<String, Object> verification = (Map<String, Object>) value;
-        mapper.insertAnswerEvidenceAssessment(queryId, Long.valueOf(String.valueOf(request.get("knowledgeBaseId"))), stringValue(verification.get("gateStatus")), doubleValue(verification.get("completenessScore")), doubleValue(verification.get("faithfulnessScore")), intValue(verification.get("factualClaimCount")), intValue(verification.get("supportedClaimCount")), intValue(verification.get("citationCount")), json(verification.get("unsupportedClaims")), json(verification));
+        traceMapper.insertAnswerEvidenceAssessment(queryId, Long.valueOf(String.valueOf(request.get("knowledgeBaseId"))),
+            stringValue(verification.get("gateStatus")), doubleValue(verification.get("completenessScore")),
+            doubleValue(verification.get("faithfulnessScore")), intValue(verification.get("factualClaimCount")),
+            intValue(verification.get("supportedClaimCount")), intValue(verification.get("citationCount")),
+            json(verification.get("unsupportedClaims")), json(verification));
     }
 
     private Double doubleValue(Object value) {

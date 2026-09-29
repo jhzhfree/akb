@@ -105,16 +105,25 @@ public class McpServerService {
 
     public Map<String, Object> toolsList() {
         List<Map<String, Object>> tools = new ArrayList<Map<String, Object>>();
-        tools.add(tool("knowledge_query", "可追溯知识问答：返回答案、引用与 queryId，可用于后续溯源", schema(properties(prop("knowledgeBaseId", "integer", "知识库 ID"), prop("question", "string", "要提问的问题"), prop("topK", "integer", "召回数量，默认 10")), Arrays.asList("knowledgeBaseId", "question"))));
-        tools.add(tool("knowledge_search", "只做检索不生成答案：返回召回候选、重排结果与引用，便于自行装配上下文", schema(properties(prop("knowledgeBaseId", "integer", "知识库 ID"), prop("query", "string", "检索语句"), prop("topK", "integer", "召回数量，默认 10")), Arrays.asList("knowledgeBaseId", "query"))));
+        tools.add(tool("knowledge_query", "可追溯知识问答：返回答案、引用与 queryId，可用于后续溯源", schema(properties(prop("knowledgeBaseId", "integer", "知识库 ID"),
+            prop("question", "string", "要提问的问题"), prop("topK", "integer", "召回数量，默认 10")), Arrays.asList("knowledgeBaseId", "question"))));
+        tools.add(tool("knowledge_search", "只做检索不生成答案：返回召回候选、重排结果与引用，便于自行装配上下文", schema(properties(prop("knowledgeBaseId", "integer", "知识库 ID"),
+            prop("query", "string", "检索语句"), prop("topK", "integer", "召回数量，默认 10")), Arrays.asList("knowledgeBaseId", "query"))));
         tools.add(tool("list_knowledge_bases", "列出当前 API Key 可见的知识库", schema(new LinkedHashMap<String, Object>(), new ArrayList<String>())));
-        tools.add(tool("list_knowledge_cards", "列出知识卡片（结构化标准答案，如 SOP）", schema(properties(prop("knowledgeBaseId", "integer", "知识库 ID")), Arrays.asList("knowledgeBaseId"))));
-        tools.add(tool("get_knowledge_card", "按编码读取一张知识卡片的详情与证据链", schema(properties(prop("knowledgeBaseId", "integer", "知识库 ID"), prop("code", "string", "知识卡片编码")), Arrays.asList("knowledgeBaseId", "code"))));
-        tools.add(tool("list_claims", "列出断言（可被判断真伪的结论性陈述）", schema(properties(prop("knowledgeBaseId", "integer", "知识库 ID")), Arrays.asList("knowledgeBaseId"))));
-        tools.add(tool("get_claim", "按编码读取一条断言的详情", schema(properties(prop("knowledgeBaseId", "integer", "知识库 ID"), prop("code", "string", "断言编码")), Arrays.asList("knowledgeBaseId", "code"))));
-        tools.add(tool("get_evidence", "按编码读取一条证据的原文与出处", schema(properties(prop("knowledgeBaseId", "integer", "知识库 ID"), prop("evidenceCode", "string", "证据编码")), Arrays.asList("knowledgeBaseId", "evidenceCode"))));
-        tools.add(tool("graph_neighbors", "读取实体/知识对象的图谱邻域", schema(properties(prop("knowledgeBaseId", "integer", "知识库 ID"), prop("code", "string", "对象编码"), prop("depth", "integer", "跳数，默认 2"), prop("limit", "integer", "返回上限，默认 50")), Arrays.asList("knowledgeBaseId", "code"))));
-        tools.add(tool("ingest_text", "把一段文本接入知识库（需要 INGEST 权限）", schema(properties(prop("knowledgeBaseId", "integer", "知识库 ID"), prop("title", "string", "标题，作为来源名"), prop("text", "string", "正文内容"), prop("permissionTags", "string", "权限标签，逗号分隔")), Arrays.asList("knowledgeBaseId", "text"))));
+        tools.add(tool("list_knowledge_cards", "列出知识卡片（结构化标准答案，如 SOP）", schema(properties(prop("knowledgeBaseId", "integer", "知识库 ID")),
+            Arrays.asList("knowledgeBaseId"))));
+        tools.add(tool("get_knowledge_card", "按编码读取一张知识卡片的详情与证据链", schema(properties(prop("knowledgeBaseId", "integer", "知识库 ID"), prop("code",
+            "string", "知识卡片编码")), Arrays.asList("knowledgeBaseId", "code"))));
+        tools.add(tool("list_claims", "列出断言（可被判断真伪的结论性陈述）", schema(properties(prop("knowledgeBaseId", "integer", "知识库 ID")),
+            Arrays.asList("knowledgeBaseId"))));
+        tools.add(tool("get_claim", "按编码读取一条断言的详情", schema(properties(prop("knowledgeBaseId", "integer", "知识库 ID"), prop("code", "string", "断言编码")),
+            Arrays.asList("knowledgeBaseId", "code"))));
+        tools.add(tool("get_evidence", "按编码读取一条证据的原文与出处", schema(properties(prop("knowledgeBaseId", "integer", "知识库 ID"), prop("evidenceCode",
+            "string", "证据编码")), Arrays.asList("knowledgeBaseId", "evidenceCode"))));
+        tools.add(tool("graph_neighbors", "读取实体/知识对象的图谱邻域", schema(properties(prop("knowledgeBaseId", "integer", "知识库 ID"), prop("code", "string",
+            "对象编码"), prop("depth", "integer", "跳数，默认 2"), prop("limit", "integer", "返回上限，默认 50")), Arrays.asList("knowledgeBaseId", "code"))));
+        tools.add(tool("ingest_text", "把一段文本接入知识库（需要 INGEST 权限）", schema(properties(prop("knowledgeBaseId", "integer", "知识库 ID"), prop("title",
+            "string", "标题，作为来源名"), prop("text", "string", "正文内容"), prop("permissionTags", "string", "权限标签，逗号分隔")), Arrays.asList("knowledgeBaseId", "text"))));
         Map<String, Object> payload = new LinkedHashMap<String, Object>();
         payload.put("tools", tools);
         return payload;

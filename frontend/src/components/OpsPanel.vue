@@ -20,7 +20,65 @@
       <MetricCard label="索引漂移" :value="driftCount" :hint="driftHint" />
     </div>
 
-    <div v-if="error" class="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2.5 text-xs text-amber-700">
+    <!-- 检索引擎开关：ES / Milvus 是否参与召回，保存后即时生效，关闭则由本地索引承接。 -->
+    <article class="kb-card mt-4">
+      <div class="kb-card-head">
+        <b class="text-sm">检索引擎开关</b>
+        <span class="kb-muted">保存即生效（无需重启）；关闭后对应通道由本地索引承接</span>
+      </div>
+      <div class="p-3 grid grid-cols-1 gap-4 xl:grid-cols-2">
+        <div class="engine-box">
+          <div class="engine-head">
+            <b>Elasticsearch 全文</b>
+            <el-switch v-model="retrievalForm.elasticsearch.enabled" size="small" />
+            <span class="kb-state" :class="engineState('elasticsearch')">{{ engineText('elasticsearch') }}</span>
+          </div>
+          <div class="engine-fields">
+            <label>地址</label>
+            <el-input v-model="retrievalForm.elasticsearch.url" size="small" placeholder="http://127.0.0.1:9200" />
+            <label>索引</label>
+            <el-input v-model="retrievalForm.elasticsearch.index" size="small" />
+            <label>用户名</label>
+            <el-input v-model="retrievalForm.elasticsearch.username" size="small" placeholder="留空=无认证" />
+            <label>密码</label>
+            <el-input
+v-model="retrievalForm.elasticsearch.password" size="small" type="password" show-password
+:placeholder="retrieval?.elasticsearch?.passwordSet ? '已保存，留空则不修改' : '留空'" />
+          </div>
+        </div>
+        <div class="engine-box">
+          <div class="engine-head">
+            <b>Milvus 向量</b>
+            <el-switch v-model="retrievalForm.milvus.enabled" size="small" />
+            <span class="kb-state" :class="engineState('milvus')">{{ engineText('milvus') }}</span>
+          </div>
+          <div class="engine-fields">
+            <label>地址</label>
+            <el-input v-model="retrievalForm.milvus.url" size="small" placeholder="http://127.0.0.1:19530" />
+            <label>集合</label>
+            <el-input v-model="retrievalForm.milvus.collection" size="small" />
+            <label>Token</label>
+            <el-input
+v-model="retrievalForm.milvus.token" size="small" type="password" show-password
+:placeholder="retrieval?.milvus?.tokenSet ? '已保存，留空则不修改' : '留空'" />
+            <span class="engine-note">召回模式</span>
+            <select v-model="retrievalForm.mode" class="kb-input">
+              <option value="auto">auto · 可用则用，否则回退</option>
+              <option value="local">local · 只用本地索引</option>
+              <option value="external">external · 只用外部引擎</option>
+              <option value="dual">dual · 双路</option>
+            </select>
+          </div>
+        </div>
+      </div>
+      <div class="mt-3 flex flex-wrap items-center gap-2 border-t border-ink-100 pt-3">
+        <button class="kb-btn-primary" :disabled="retrievalBusy" @click="saveRetrieval">保存开关</button>
+        <button class="kb-btn-outline" :disabled="retrievalBusy" @click="probeRetrieval">探测连通性</button>
+        <span class="kb-muted text-xs">{{ probeText || '探测会分别报告「已关闭 / 可用 / 不可用」' }}</span>
+      </div>
+    </article>
+
+    <div v-if="error" class="mt-3 rounded-lg border border-[color:var(--warn-bd)] bg-[color:var(--warn-bg)] px-4 py-2.5 text-xs text-[color:var(--warn)]">
       {{ error }}
     </div>
 
@@ -56,7 +114,7 @@
                 <template #default="{ row }">
                   <el-button v-if="!isActive(row)" size="small" plain :disabled="busy" @click="activate(row)">激活</el-button>
                   <el-button v-if="!isActive(row)" size="small" type="warning" plain :disabled="busy" @click="rollback(row)">回滚</el-button>
-                  <span v-if="isActive(row)" class="text-[11px] text-ink-400">当前生效</span>
+                  <span v-if="isActive(row)" class="text-[11px] text-ink-500">当前生效</span>
                 </template>
               </el-table-column>
             </el-table>
@@ -107,7 +165,7 @@
                 <template #default="{ row }">
                   <el-button v-if="!isDone(row)" size="small" type="primary" plain :disabled="busy" @click="replay(row)">重放</el-button>
                   <el-button v-if="!isDone(row)" size="small" plain :disabled="busy" @click="skip(row)">跳过</el-button>
-                  <span v-if="isDone(row)" class="text-[11px] text-ink-400">已完成</span>
+                  <span v-if="isDone(row)" class="text-[11px] text-ink-500">已完成</span>
                 </template>
               </el-table-column>
             </el-table>
@@ -139,9 +197,9 @@
       </article>
     </div>
 
-    <article class="kb-card mt-4 border-rose-200">
+    <article class="kb-card mt-4 border-[color:var(--danger-bd)]">
       <div class="kb-card-head">
-        <b class="text-sm text-rose-600">危险操作 · 清空知识库</b>
+        <b class="text-sm text-[color:var(--danger)]">危险操作 · 清空知识库</b>
         <span class="kb-muted">不可恢复，知识库本身保留</span>
       </div>
       <div class="p-4">
@@ -173,7 +231,7 @@
             </span>
           </div>
         </div>
-        <div v-else class="mt-3 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-[11px] text-emerald-700">
+        <div v-else class="mt-3 rounded-lg border border-[color:var(--ok-bd)] bg-[color:var(--ok-bg)] px-3 py-2 text-[11px] text-[color:var(--ok)]">
           权威库与派生索引（Elasticsearch / Milvus / Neo4j）一致，无漂移。
         </div>
       </div>
@@ -185,12 +243,13 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { integrityLabel, statusLabel } from '../types'
-import type { DriftResult, IndexSchema, OutboxEvent, OutboxStats } from '../types'
+import type { DriftResult, IndexSchema, OutboxEvent, OutboxStats, RetrievalSettings } from '../types'
 import { errorMessage as message } from '../utils/feedback'
 import {
   activateIndexSchema, getIndexDrift, getIndexSchemas, getOutboxEvents, getOutboxStats,
-  purgeKnowledgeBase,
-  rebuildIndexSchema, replayOutboxEvent, rollbackIndexSchema, skipOutboxEvent, unwrap,
+  getRetrievalSettings, purgeKnowledgeBase,
+  rebuildIndexSchema, replayOutboxEvent, rollbackIndexSchema, saveRetrievalSettings,
+  skipOutboxEvent, testRetrievalSettings, unwrap,
 } from '../api/knowledge'
 import MetricCard from './MetricCard.vue'
 import PanelState from './PanelState.vue'
@@ -212,6 +271,90 @@ const error = ref('')
 const busy = ref(false)
 const schemaVersion = ref('')
 const eventStatus = ref('')
+
+/**
+ * 检索引擎开关：表单只带界面需要编辑的字段，凭据一律不回填（掩码串回传表示"不修改"），
+ * 因此保存时不会把 **** 写回服务端。
+ */
+const retrieval = ref<RetrievalSettings | null>(null)
+const retrievalBusy = ref(false)
+const probeText = ref('')
+const retrievalForm = ref({
+  mode: 'auto',
+  elasticsearch: { enabled: false, url: '', index: '', username: '', password: '' },
+  milvus: { enabled: false, url: '', collection: '', token: '' },
+})
+function applyRetrieval(data: RetrievalSettings | null) {
+  if (!data) return
+  retrieval.value = data
+  retrievalForm.value = {
+    mode: data.mode || 'auto',
+    elasticsearch: {
+      enabled: !!data.elasticsearch?.enabled,
+      url: data.elasticsearch?.url || '',
+      index: data.elasticsearch?.index || '',
+      username: data.elasticsearch?.username || '',
+      password: '',
+    },
+    milvus: {
+      enabled: !!data.milvus?.enabled,
+      url: data.milvus?.url || '',
+      collection: data.milvus?.collection || '',
+      token: '',
+    },
+  }
+}
+/** 开关状态与实际可用性分开呈现：启用但连不上是最容易被误读成"没数据"的一种状态。 */
+function engineState(name: 'elasticsearch' | 'milvus') {
+  const enabled = retrievalForm.value[name].enabled
+  if (!enabled) return 'kb-state-neutral'
+  return (retrieval.value?.providers || {})[name]?.available ? 'kb-state-ok' : 'kb-state-danger'
+}
+function engineText(name: 'elasticsearch' | 'milvus') {
+  if (!retrievalForm.value[name].enabled) return '已关闭 · 本地承接'
+  return (retrieval.value?.providers || {})[name]?.available ? '可用' : '不可用 · 回退本地'
+}
+async function saveRetrieval() {
+  retrievalBusy.value = true
+  try {
+    const form = retrievalForm.value
+    applyRetrieval(unwrap(await saveRetrievalSettings({
+      mode: form.mode as RetrievalSettings['mode'],
+      elasticsearch: {
+        enabled: form.elasticsearch.enabled,
+        url: form.elasticsearch.url,
+        index: form.elasticsearch.index,
+        username: form.elasticsearch.username,
+        password: form.elasticsearch.password,
+      } as RetrievalSettings['elasticsearch'],
+      milvus: {
+        enabled: form.milvus.enabled,
+        url: form.milvus.url,
+        collection: form.milvus.collection,
+        token: form.milvus.token,
+      } as RetrievalSettings['milvus'],
+    }), null))
+    ElMessage.success('检索开关已保存并生效')
+  } catch (e) {
+    ElMessage.error(message(e))
+  } finally {
+    retrievalBusy.value = false
+  }
+}
+async function probeRetrieval() {
+  retrievalBusy.value = true
+  try {
+    const result = unwrap(await testRetrievalSettings(), {})
+    if (retrieval.value) retrieval.value = { ...retrieval.value, providers: result as RetrievalSettings['providers'] }
+    probeText.value = ['elasticsearch', 'milvus']
+      .map(name => `${name === 'elasticsearch' ? 'ES' : 'Milvus'}：${(result[name]?.detail as string) || '—'}`)
+      .join(' · ')
+  } catch (e) {
+    probeText.value = message(e)
+  } finally {
+    retrievalBusy.value = false
+  }
+}
 
 const flowSteps = ['裁决通过', '元数据发布', 'Outbox 投递', '索引构建', '一致性校验', '蓝绿激活']
 /** 与后端 IndexOutboxStatus 保持一致：早期前端里的 DONE 过滤器永远查不到数据。 */
@@ -235,6 +378,11 @@ const driftPairs = computed(() => Object.entries(drift.value || {})
 async function load() {
   loading.value = true
   error.value = ''
+  try {
+    applyRetrieval(unwrap(await getRetrievalSettings(), null))
+  } catch {
+    retrieval.value = null
+  }
   try {
     outbox.value = unwrap(await getOutboxStats(props.knowledgeBaseId), {})
   } catch (e) {
@@ -469,3 +617,11 @@ function eventTagType(status?:string) {
 watch(() => props.knowledgeBaseId, () => { eventsPage.value = 1; void load() })
 onMounted(load)
 </script>
+<style scoped>
+/* 检索引擎开关：两栏并排，字段用「标签 + 输入」两列网格，保持与策略面板同一套密度。 */
+.engine-box{border:1px solid var(--line-d);border-radius:10px;padding:12px}
+.engine-head{display:flex;align-items:center;gap:8px;margin-bottom:10px}
+.engine-head b{flex:1;font-size:13px;color:var(--ink-1)}
+.engine-fields{display:grid;grid-template-columns:64px 1fr;gap:8px;align-items:center}
+.engine-fields label,.engine-note{font-size:11.5px;color:var(--ink-3)}
+</style>

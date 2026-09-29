@@ -1,0 +1,161 @@
+/* ============================================================================
+   主题 token：全站唯一配色入口
+   - ink-* / brand-* 是「语义色阶」：50 = 背景端，950 = 文本端。
+     深色主题下 50 最暗、950 最亮；浅色主题整体反向，组件里写 text-ink-900
+     永远表示「主文本」，不必关心当前是深是浅。
+   - *-rgb 是通道形式，供 tailwind.config.js 生成 rgb(var(--x) / <alpha-value>)，
+     这样 opacity 修饰符（如 ring-brand-500/30）在任意主题下都可用。
+   - 其余是 app.css 直接消费的语义变量（表面、文字、边框、状态色）。
+   改色只改这里；新增主题 = 再加一个 [data-theme='x'] 块。
+   ============================================================================ */
+:root {
+  color-scheme: dark;
+
+  /* ---- 语义色阶（深色） ---- */
+  --ink-50-rgb: 11 18 32;    /* 页面底色 */
+  --ink-100-rgb: 17 26 48;   /* 卡片 / 面板 */
+  --ink-200-rgb: 26 36 64;   /* 次级面板 / hover */
+  --ink-300-rgb: 39 53 90;   /* 分割线 */
+  --ink-400-rgb: 58 74 115;  /* 弱边框 / hover 边框 */
+  --ink-500-rgb: 107 122 147;/* 弱化文字 */
+  --ink-600-rgb: 153 167 191;/* 次级文字 */
+  --ink-700-rgb: 198 208 227;/* 正文 */
+  --ink-800-rgb: 219 228 242;/* 标题 */
+  --ink-900-rgb: 234 240 250;/* 主文本 */
+  --ink-950-rgb: 246 249 255;/* 最强文本 */
+
+  --brand-50-rgb: 238 244 255; --brand-100-rgb: 219 231 254; --brand-200-rgb: 195 215 253;
+  --brand-300-rgb: 147 180 253; --brand-400-rgb: 91 139 247; --brand-500-rgb: 79 140 247;
+  --brand-600-rgb: 59 111 224; --brand-700-rgb: 43 86 184; --brand-800-rgb: 29 63 140;
+  --brand-900-rgb: 18 42 99;
+
+  /* ---- 表面 / 文字 / 边框 ---- */
+  --bg-base: #0b1220;
+  --bg-raised: #111a30;
+  --bg-sub: #1a2440;
+  --bg-sunken: #070c18;
+  --ink-1: #eaf0fa;   /* 主文本 */
+  --ink-2: #aab7cc;   /* 次级文本 */
+  --ink-3: #6b7a93;   /* 弱化 / 占位 */
+  --line-d: #1e2a45;  /* 细分割线 */
+  --line: #27355a;    /* 常规边框 */
+  --line-soft: #2a3757;
+
+  /* 强调文字色：链接、激活项、标签这类「用品牌色写出来的字」。
+     不能直接用 brand-300：它在浅色主题下是 #93c5fd，压在浅底上读不清。
+     深/浅各取一档，保证两个主题下都是「背景上能读的蓝」。 */
+  --accent-text: #93b4fd;
+  --accent-text-rgb: 147 180 253;
+  --accent-bg: #1d3f8c;   /* 强调胶囊的底色，与 accent-text 成对使用 */
+
+  --brand-50: #eef4ff; --brand-100: #dbe7fe; --brand-200: #c3d7fd; --brand-300: #93b4fd;
+  --brand-400: #5b8bf7; --brand-500: #4f8cf7; --brand-600: #3b6fe0; --brand-700: #2b56b8;
+  --brand-800: #1d3f8c; --brand-900: #122a63;
+  --teal-300: #5eead4; --teal-400: #2dd4bf; --teal-500: #14b8a6;
+
+  /* ---- 状态色：深底高亮 ----
+     每个状态都是「字色 / 底色 / 边框」三件套，组件只消费三件套，不再自己挑色：
+     .kb-state-* 胶囊、.kb-dot-* 状态点、Element Plus 的 --el-color-* 全部由这里派生，
+     保证同一个「成功」在按钮、列表、徽章、表格里永远是同一种绿。 */
+  --warn: #fbbf24; --warn-bg: #3b2f14; --warn-bd: #5a4718;
+  --danger: #f87171; --danger-bg: #3a1626; --danger-bd: #5c2130;
+  --ok: #34d399; --ok-bg: #12352a; --ok-bd: #1f5c48;
+  --info: #60a5fa; --info-bg: #1d3f8c; --info-bd: #2a4f9c;
+  /* 中性状态（排队中 / 已取消 / 未知）：不参与语义配色，只做弱化 */
+  --neutral-fg: #aab7cc; --neutral-bg: #1a2440; --neutral-bd: #27355a;
+
+  /* ---- 顶栏 / 侧栏专用表面（带渐变，无法用色阶表达） ---- */
+  --topbar-bg: linear-gradient(96deg, #0b1324 0%, #14203f 40%, #1d3570 78%, #12425a 100%);
+  --topbar-fg: #ffffff;
+  --topbar-muted: rgba(226, 235, 255, .72);
+  --topbar-accent: #d7e2ff;
+  --topbar-line: rgba(255, 255, 255, .18);
+  --topbar-chip: rgba(255, 255, 255, .08);
+  --topbar-chip-hover: rgba(255, 255, 255, .16);
+  --topbar-placeholder: rgba(226, 235, 255, .5);
+  /* 实色按钮/徽标上的文字：主色蓝、危险红都是深底高亮，两个主题都用白字 */
+  --on-brand: #ffffff;
+  /* 关系图画布：背景与网格点 */
+  --gc-bg: #0e1728;
+  --gc-grid: rgba(148, 163, 184, .18);
+  --topbar-shadow: 0 6px 24px rgba(3, 7, 16, .5);
+  --topbar-glow: linear-gradient(90deg, rgba(120, 170, 255, .4), rgba(120, 200, 190, .06));
+  --side-bg: linear-gradient(180deg, #111a30, #0d1526);
+
+  /* ---- 层次 ---- */
+  --sd-1: 0 1px 2px rgba(0, 0, 0, .4);
+  --sd-2: 0 8px 24px rgba(0, 0, 0, .45);
+  --sd-3: 0 18px 44px rgba(0, 0, 0, .55);
+  --ring: 0 0 0 3px rgba(79, 140, 247, .35);
+}
+
+/* ============================================================================
+   浅色主题：与上面结构一一对应，只换值。
+   ============================================================================ */
+:root[data-theme='light'] {
+  color-scheme: light;
+
+  --ink-50-rgb: 244 246 251;
+  --ink-100-rgb: 255 255 255;
+  --ink-200-rgb: 238 242 249;
+  --ink-300-rgb: 226 232 240;
+  --ink-400-rgb: 203 213 225;
+  --ink-500-rgb: 100 116 139;
+  --ink-600-rgb: 71 85 105;
+  --ink-700-rgb: 51 65 85;
+  --ink-800-rgb: 30 41 59;
+  --ink-900-rgb: 15 23 42;
+  --ink-950-rgb: 2 6 23;
+
+  --brand-50-rgb: 239 246 255; --brand-100-rgb: 219 234 254; --brand-200-rgb: 191 219 254;
+  --brand-300-rgb: 147 197 253; --brand-400-rgb: 96 165 250; --brand-500-rgb: 59 130 246;
+  --brand-600-rgb: 37 99 235; --brand-700-rgb: 29 78 216; --brand-800-rgb: 30 64 175;
+  --brand-900-rgb: 30 58 138;
+
+  --bg-base: #f4f6fb;
+  --bg-raised: #ffffff;
+  --bg-sub: #eef2f9;
+  --bg-sunken: #e7ecf5;
+  --ink-1: #0f172a;
+  --ink-2: #475569;
+  --ink-3: #64748b;
+  --line-d: #e2e8f0;
+  --line: #cbd5e1;
+  --line-soft: #d8e0ec;
+
+  --accent-text: #1d4ed8;
+  --accent-text-rgb: 29 78 216;
+  --accent-bg: #dbeafe;
+
+  --brand-50: #eff6ff; --brand-100: #dbeafe; --brand-200: #bfdbfe; --brand-300: #93c5fd;
+  --brand-400: #60a5fa; --brand-500: #3b82f6; --brand-600: #2563eb; --brand-700: #1d4ed8;
+  --brand-800: #1e40af; --brand-900: #1e3a8a;
+  --teal-300: #2dd4bf; --teal-400: #14b8a6; --teal-500: #0d9488;
+
+  /* 浅底需要压深状态色，否则黄/绿在白底上读不清；三件套与深色一一对应 */
+  --warn: #b45309; --warn-bg: #fef3c7; --warn-bd: #fcd34d;
+  --danger: #dc2626; --danger-bg: #fee2e2; --danger-bd: #fecaca;
+  --ok: #047857; --ok-bg: #d1fae5; --ok-bd: #a7f3d0;
+  --info: #1d4ed8; --info-bg: #dbeafe; --info-bd: #bfdbfe;
+  --neutral-fg: #475569; --neutral-bg: #eef2f9; --neutral-bd: #e2e8f0;
+
+  --topbar-bg: linear-gradient(96deg, #ffffff 0%, #f6f9ff 40%, #e8f0ff 78%, #e6f7fb 100%);
+  --topbar-fg: #0f172a;
+  --topbar-muted: rgba(15, 23, 42, .62);
+  --topbar-accent: #1e40af;
+  --topbar-line: rgba(15, 23, 42, .14);
+  --topbar-chip: rgba(15, 23, 42, .04);
+  --topbar-chip-hover: rgba(15, 23, 42, .09);
+  --topbar-placeholder: rgba(15, 23, 42, .45);
+  --on-brand: #ffffff;
+  --gc-bg: #fbfcfe;
+  --gc-grid: #e2e8f0;
+  --topbar-shadow: 0 4px 16px rgba(15, 23, 42, .08);
+  --topbar-glow: linear-gradient(90deg, rgba(37, 99, 235, .25), rgba(20, 184, 166, .08));
+  --side-bg: linear-gradient(180deg, #ffffff, #f5f8fc);
+
+  --sd-1: 0 1px 2px rgba(15, 23, 42, .06);
+  --sd-2: 0 6px 18px rgba(15, 23, 42, .08);
+  --sd-3: 0 16px 40px rgba(15, 23, 42, .12);
+  --ring: 0 0 0 3px rgba(37, 99, 235, .25);
+}

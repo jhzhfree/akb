@@ -91,7 +91,8 @@ public class EvaluationService {
         if (existing == null) {
             throw new IllegalArgumentException("评测数据集不存在：" + datasetCode);
         }
-        return mapper.updateEvaluationDataset(datasetCode, string(body.get("name")), string(body.get("description")), defaultString(body.get("status"), "ACTIVE"));
+        return mapper.updateEvaluationDataset(datasetCode, string(body.get("name")), string(body.get("description")),
+            defaultString(body.get("status"), "ACTIVE"));
     }
 
     public List<Map<String, Object>> listCases(String datasetCode) {
@@ -267,7 +268,8 @@ public class EvaluationService {
     /**
      * Grades one case: retrieval metrics always, citation and faithfulness only in FULL mode.
      */
-    private EvaluationResult gradeOne(Map<String, Object> evaluationCase, Long kb, int topK, boolean full, List<String> permissionTags, String[] policyVersionHolder) {
+    private EvaluationResult gradeOne(Map<String, Object> evaluationCase, Long kb, int topK, boolean full, List<String> permissionTags, String[]
+        policyVersionHolder) {
         EvaluationResult result = new EvaluationResult();
         result.setCaseId(longValue(evaluationCase.get("id")));
         result.setCaseCode(String.valueOf(evaluationCase.get("caseCode")));
@@ -526,7 +528,8 @@ public class EvaluationService {
         delta.put("mrr", delta(run.getMrr(), number(baseline.get("mrr"))));
         delta.put("recallAt5", delta(run.getRecallAt5(), number(baseline.get("recallAt5"))));
         delta.put("latencyP50Ms", run.getLatencyP50Ms() == null ? null : run.getLatencyP50Ms() - intValue(baseline.get("latencyP50Ms")));
-        boolean regressed = worse(run.getHitAt1Rate(), number(baseline.get("hitAt1Rate"))) || worse(run.getMrr(), number(baseline.get("mrr"))) || worse(run.getRecallAt5(), number(baseline.get("recallAt5")));
+        boolean regressed = worse(run.getHitAt1Rate(), number(baseline.get("hitAt1Rate"))) || worse(run.getMrr(), number(baseline.get("mrr"))) ||
+            worse(run.getRecallAt5(), number(baseline.get("recallAt5")));
         Integer baselineLatency = baseline.get("latencyP50Ms") == null ? null : intValue(baseline.get("latencyP50Ms"));
         if (!regressed && run.getLatencyP50Ms() != null && baselineLatency != null && baselineLatency > 0) {
             regressed = run.getLatencyP50Ms() > baselineLatency * (1 + LATENCY_REGRESSION_RATIO);
@@ -546,12 +549,14 @@ public class EvaluationService {
         detail.put("mrr", run.getMrr());
         detail.put("latencyP50Ms", run.getLatencyP50Ms());
         detail.put("verdict", run.getRegressionVerdict());
-        events.emitSystem(PlatformEventTypes.EVALUATION_COMPLETED, kb, "EVALUATION_RUN", run.getRunCode(), "评测完成：Hit@1 " + percent(run.getHitAt1Rate()) + "，MRR " + percent(run.getMrr()), detail);
+        events.emitSystem(PlatformEventTypes.EVALUATION_COMPLETED, kb, "EVALUATION_RUN", run.getRunCode(), "评测完成：Hit@1 " +
+            percent(run.getHitAt1Rate()) + "，MRR " + percent(run.getMrr()), detail);
         List<String> missed = gapCodes(results);
         if (!missed.isEmpty()) {
             Map<String, Object> gapDetail = new LinkedHashMap<String, Object>(detail);
             gapDetail.put("missedCases", missed);
-            events.emitSystem(PlatformEventTypes.KNOWLEDGE_GAP_DETECTED, kb, "EVALUATION_RUN", run.getRunCode(), "发现知识缺口：" + missed.size() + " 个问题未召回期望知识", gapDetail);
+            events.emitSystem(PlatformEventTypes.KNOWLEDGE_GAP_DETECTED, kb, "EVALUATION_RUN", run.getRunCode(), "发现知识缺口：" + missed.size() +
+                " 个问题未召回期望知识", gapDetail);
         }
     }
 

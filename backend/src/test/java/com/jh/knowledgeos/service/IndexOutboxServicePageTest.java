@@ -2,6 +2,7 @@ package com.jh.knowledgeos.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.jh.knowledgeos.domain.IndexOutboxEvent;
+import com.jh.knowledgeos.mapper.IndexMapper;
 import com.jh.knowledgeos.mapper.KnowledgeMapper;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -25,9 +26,9 @@ import static org.mockito.Mockito.when;
  */
 class IndexOutboxServicePageTest {
 
-    private final KnowledgeMapper mapper = mock(KnowledgeMapper.class);
+    private final IndexMapper mapper = mock(IndexMapper.class);
 
-    private final IndexOutboxService service = new IndexOutboxService(mapper, new ObjectMapper(), 8);
+    private final IndexOutboxService service = new IndexOutboxService(mock(KnowledgeMapper.class), new ObjectMapper(), 8, mapper);
 
     @Test
     void pageWindowsOffsetFromPageAndSize() {

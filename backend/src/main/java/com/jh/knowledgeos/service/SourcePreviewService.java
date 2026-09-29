@@ -2,6 +2,7 @@ package com.jh.knowledgeos.service;
 
 import com.jh.knowledgeos.domain.SourceFile;
 import com.jh.knowledgeos.mapper.KnowledgeMapper;
+import com.jh.knowledgeos.mapper.DocumentMapper;
 import org.springframework.core.io.FileSystemResource;
 import org.springframework.stereotype.Service;
 import java.io.IOException;
@@ -31,9 +32,13 @@ public class SourcePreviewService {
 
     private final KnowledgeMapper mapper;
 
+    private final DocumentMapper documentMapper;
+
+
     private final SourceFileStorageService storage;
 
-    public SourcePreviewService(KnowledgeMapper mapper, SourceFileStorageService storage) {
+    public SourcePreviewService(KnowledgeMapper mapper, SourceFileStorageService storage, DocumentMapper documentMapper) {
+        this.documentMapper = documentMapper;
         this.mapper = mapper;
         this.storage = storage;
     }
@@ -48,7 +53,7 @@ public class SourcePreviewService {
         Map<String, Object> result = new LinkedHashMap<String, Object>();
         result.put("knowledgeBaseId", kb);
         result.put("sourceId", sourceId);
-        Map<String, Object> row = mapper.getSourcePreview(kb, sourceId, permissionTags);
+        Map<String, Object> row = documentMapper.getSourcePreview(kb, sourceId, permissionTags);
         if (row == null) {
             result.put("available", false);
             result.put("reason", "资料不存在，或不在当前权限范围内");
@@ -86,7 +91,7 @@ public class SourcePreviewService {
      * Stream the stored original upload, or null when it is unknown, unreadable or out of scope.
      */
     public SourceFile file(Long kb, Long sourceId, List<String> permissionTags) {
-        Map<String, Object> row = mapper.getSourcePreview(kb, sourceId, permissionTags);
+        Map<String, Object> row = documentMapper.getSourcePreview(kb, sourceId, permissionTags);
         if (row == null) {
             return null;
         }

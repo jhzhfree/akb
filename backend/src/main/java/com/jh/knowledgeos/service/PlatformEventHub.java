@@ -91,7 +91,8 @@ public class PlatformEventHub {
         String subscriptionId = "SUB-" + System.currentTimeMillis() + "-" + subscriptions.size();
         SseEmitter emitter = new SseEmitter(0L);
         long budget = Math.max(properties.getSseMaxMinutes(), 1) * 60_000L;
-        Subscription subscription = new Subscription(subscriptionId, principal, knowledgeBaseId, types, visibility, emitter, System.currentTimeMillis() + budget);
+        Subscription subscription = new Subscription(subscriptionId, principal, knowledgeBaseId, types, visibility, emitter,
+            System.currentTimeMillis() + budget);
         subscriptions.put(subscriptionId, subscription);
         Runnable release = () -> {
             subscriptions.remove(subscriptionId);

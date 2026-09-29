@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.jh.knowledgeos.mapper.KnowledgeObjectMapper">
+
+<select id="getKnowledgeObject" resultType="map">
+SELECT 'CARD' objectType,k.id,k.knowledge_code objectCode,k.title,k.type,
+       k.summary,k.content,k.status,k.confidence,k.created_time createdTime,k.updated_time updatedTime
+FROM t_knowledge_card k
+WHERE #{objectType}='CARD' AND k.knowledge_base_id=#{kb} AND k.knowledge_code=#{objectCode} AND (k.permission_tags IS NULL OR JSON_LENGTH(k.permission_tags)=0
+ <if test="permissionTags != null and permissionTags.size() > 0">
+ OR (<foreach collection="permissionTags" item="tag" separator=" OR ">JSON_CONTAINS(k.permission_tags, JSON_QUOTE(#{tag}))</foreach>)
+ </if>)
+UNION ALL
+SELECT 'CLAIM',c.id,c.claim_code,c.subject,c.predicate,
+       NULL,c.object_value,c.status,c.confidence,c.created_time,c.updated_time
+FROM t_claim c
+WHERE #{objectType}='CLAIM' AND c.knowledge_base_id=#{kb} AND c.claim_code=#{objectCode} AND (c.permission_tags IS NULL OR JSON_LENGTH(c.permission_tags)=0
+ <if test="permissionTags != null and permissionTags.size() > 0">
+ OR (<foreach collection="permissionTags" item="tag" separator=" OR ">JSON_CONTAINS(c.permission_tags, JSON_QUOTE(#{tag}))</foreach>)
+ </if>)
+</select>
+
+<select id="listKnowledgeVersions" resultType="map">
+SELECT id,object_type objectType,object_code objectCode,version_no versionNo,title,summary,content,status,confidence,
+       change_type changeType,changed_by changedBy,supersedes_version_no supersedesVersionNo,created_time createdTime
+FROM t_knowledge_version WHERE knowledge_base_id=#{kb} AND object_type=#{objectType} AND object_code=#{objectCode}
+ORDER BY version_no DESC
+</select>
+
+</mapper>

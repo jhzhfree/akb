@@ -31,6 +31,8 @@ router = APIRouter()
 
 
 class ProfileCreate(BaseModel):
+    """Payload for creating a named query-policy profile."""
+
     name: str = Field(..., min_length=1, max_length=40)
     label: str | None = None
     base: str | None = None
@@ -38,10 +40,14 @@ class ProfileCreate(BaseModel):
 
 
 class ProfilePatch(BaseModel):
+    """Partial query-policy profile update payload."""
+
     policy: dict[str, Any] | None = None
 
 
 class ProfileRename(BaseModel):
+    """Payload for renaming a query-policy profile or its display label."""
+
     label: str | None = None
     newName: str | None = None
 

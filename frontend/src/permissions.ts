@@ -37,7 +37,7 @@ export type PermissionCode = typeof PERM[keyof typeof PERM]
 
 /** 未开启认证或后端未下发权限时按全权限处理，避免匿名/单机部署被权限系统挡住。 */
 export function hasPermission(granted: string[] | null | undefined, code: string): boolean {
-  if (!granted || granted.length === 0) return true
+  if (granted == null) return true
   return granted.indexOf(code) >= 0
 }
 
@@ -57,4 +57,16 @@ export const ROLE_BRIEF: Record<UserRoleValue, string> = {
   KNOWLEDGE_OPERATOR: '简化知识生成：上传文件、生成知识、查看知识对象；可检索，不能裁决、不能衍生、不能配置策略与测评',
   KNOWLEDGE_AUDITOR: '知识运营员 + 知识裁决 + 知识测评',
   KNOWLEDGE_VIEWER: '可查看知识工作台（总览 / 资产浏览 / 版本 / 质量）与知识检索，不能改动知识',
+}
+
+/**
+ * 角色身份色：仅用于视觉识别（顶栏 / 侧栏 / 欢迎区），不改权限判定。
+ * 已定义的 CSS 变量：--role-admin / --role-knowledge-admin / --role-operator / --role-auditor / --role-viewer。
+ */
+export const ROLE_ACCENT: Record<UserRoleValue, string> = {
+  ADMIN: 'var(--role-admin)',
+  KNOWLEDGE_ADMIN: 'var(--role-knowledge-admin)',
+  KNOWLEDGE_OPERATOR: 'var(--role-operator)',
+  KNOWLEDGE_AUDITOR: 'var(--role-auditor)',
+  KNOWLEDGE_VIEWER: 'var(--role-viewer)',
 }

@@ -1,6 +1,7 @@
 <template>
   <div class="gc-wrap">
-    <div class="gc-toolbar">
+    <!-- 概览模式（工作台卡片内）只留画布与计数：工具栏与图例在工作台里是噪音，完整交互留给图谱页。 -->
+    <div v-if="!compact" class="gc-toolbar">
       <span class="tag gray">{{ nodes.length }} 节点 · {{ edges.length }} 关系</span>
       <button class="kb-btn-outline gc-tool" title="放大" @click="zoomBy(1.25)">＋</button>
       <button class="kb-btn-outline gc-tool" title="缩小" @click="zoomBy(0.8)">－</button>
@@ -12,6 +13,7 @@
     <svg
       ref="svgRef"
       class="gc-svg"
+      :style="{ height: `${canvasHeight}px` }"
       @wheel.prevent="onWheel"
       @pointerdown="onCanvasDown"
       @pointermove="onPointerMove"
@@ -51,7 +53,7 @@
       </g>
     </svg>
 
-    <div class="gc-legend">
+    <div v-if="!compact" class="gc-legend">
       <span v-for="item in legend" :key="item.type" class="gc-legend-item">
         <i :style="{ background:item.color }"></i>{{ item.label }}
       </span>
@@ -59,6 +61,24 @@
     </div>
   </div>
 </template>
+
+<script lang="ts">
+/**
+ * 配色与图例对外导出：工作台「图谱概览」用的是同一张画布，
+ * 概览里那行小图例必须与这里同源，否则两处各写一份迟早颜色漂移。
+ */
+export const GRAPH_COLORS: Record<string, string> = {
+  CARD: '#2563eb', CLAIM: '#0f766e', EVIDENCE: '#b45309',
+  ENTITY: '#7c3aed', SOURCE: '#15803d',
+}
+export const GRAPH_LEGEND: { type:string; label:string; color:string }[] = [
+  { type:'CARD', label:'知识卡片', color:GRAPH_COLORS.CARD },
+  { type:'CLAIM', label:'断言', color:GRAPH_COLORS.CLAIM },
+  { type:'EVIDENCE', label:'证据', color:GRAPH_COLORS.EVIDENCE },
+  { type:'ENTITY', label:'实体', color:GRAPH_COLORS.ENTITY },
+  { type:'SOURCE', label:'来源', color:GRAPH_COLORS.SOURCE },
+]
+</script>
 
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
@@ -75,11 +95,15 @@ const props = defineProps<{
   nodes: GraphNode[]
   edges: GraphEdge[]
   focused?: string
+  /** 画布高度：工作台卡片里用矮画布，图谱页保持默认的展开高度。 */
+  height?: number
+  /** 概览模式：隐去工具栏与图例，只留关系视图本身。 */
+  compact?: boolean
 }>()
 const emit = defineEmits<{ select: [code:string] }>()
 
 const WIDTH = 900
-const HEIGHT = 520
+const canvasHeight = computed(() => (props.height && props.height >= 220 ? props.height : 520))
 const REPULSION = 7200
 const SPRING = 0.012
 const REST_LENGTH = 150
@@ -87,17 +111,8 @@ const GRAVITY = 0.018
 const DAMPING = 0.82
 const MIN_DISTANCE = 16
 
-const COLORS: Record<string, string> = {
-  CARD: '#2563eb', CLAIM: '#0f766e', EVIDENCE: '#b45309',
-  ENTITY: '#7c3aed', SOURCE: '#15803d',
-}
-const LEGEND = [
-  { type:'CARD', label:'知识卡片', color:COLORS.CARD },
-  { type:'CLAIM', label:'断言', color:COLORS.CLAIM },
-  { type:'EVIDENCE', label:'证据', color:COLORS.EVIDENCE },
-  { type:'ENTITY', label:'实体', color:COLORS.ENTITY },
-  { type:'SOURCE', label:'来源', color:COLORS.SOURCE },
-]
+const COLORS = GRAPH_COLORS
+const LEGEND = GRAPH_LEGEND
 
 interface SimNode {
   id:string; code:string; type:string; label:string
@@ -172,17 +187,20 @@ function radiusOf(degree: number) {
 
 function build() {
   const nodes = props.nodes || []
+  const height = canvasHeight.value
+  // A short canvas needs a tighter initial ring, or the first frame starts off-screen.
+  const ring = Math.max(60, Math.min(150, height / 3.6))
   const ids = new Map(nodes.map((node, index) => [nodeId(node), index]))
   sim.value = nodes.map((node, index) => {
     const angle = (index / Math.max(1, nodes.length)) * Math.PI * 2
-    const radius = 110 + (index % 6) * 28
+    const radius = ring + (index % 6) * (ring / 6)
     return {
       id: nodeId(node),
       code: String(node.code || ''),
       type: String(node.type || 'NODE').toUpperCase(),
       label: labelOf(node),
       x: WIDTH / 2 + Math.cos(angle) * radius,
-      y: HEIGHT / 2 + Math.sin(angle) * radius,
+      y: height / 2 + Math.sin(angle) * radius,
       vx: 0, vy: 0,
       r: radiusOf(Number(node.degree || 0)),
       fixed: false,
@@ -240,9 +258,10 @@ function step() {
     b.vx -= ux * force
     b.vy -= uy * force
   }
+  const centerY = canvasHeight.value / 2
   for (const node of nodes) {
     node.vx += (WIDTH / 2 - node.x) * GRAVITY
-    node.vy += (HEIGHT / 2 - node.y) * GRAVITY
+    node.vy += (centerY - node.y) * GRAVITY
   }
   for (const node of nodes) {
     if (node.fixed) { node.vx = 0; node.vy = 0; continue }
@@ -369,28 +388,28 @@ defineExpose({ fit })
 .gc-wrap { display:flex; flex-direction:column; gap:8px; }
 .gc-toolbar { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
 .gc-tool { padding:2px 9px; font-size:13px; }
-.gc-hint { font-size:11px; color:#94a3b8; }
+.gc-hint { font-size:11px; color:var(--ink-3); }
 .gc-svg {
   width:100%; height:520px; background:
-    radial-gradient(circle at 1px 1px, #e2e8f0 1px, transparent 0) 0 0 / 22px 22px, #fbfcfe;
-  border:1px solid #dfe5ee; border-radius:12px; cursor:grab; touch-action:none;
+    radial-gradient(circle at 1px 1px, var(--gc-grid) 1px, transparent 0) 0 0 / 22px 22px, var(--gc-bg);
+  border:1px solid var(--line-d); border-radius:12px; cursor:grab; touch-action:none;
 }
 .gc-svg:active { cursor:grabbing; }
-.gc-edge { stroke:#b9c6da; stroke-width:1.5; transition:opacity .15s; }
-.gc-edge.dashed { stroke-dasharray:5 4; stroke:#cbd5e1; }
-.gc-edge.hot { stroke:#2563eb; stroke-width:2.2; }
+.gc-edge { stroke:var(--ink-400); stroke-width:1.5; transition:opacity .15s; }
+.gc-edge.dashed { stroke-dasharray:5 4; stroke:var(--ink-400); }
+.gc-edge.hot { stroke:var(--brand-600); stroke-width:2.2; }
 .gc-edge.dim { opacity:.16; }
-.gc-edge-label { font-size:9.5px; fill:#475569; text-anchor:middle; }
+.gc-edge-label { font-size:9.5px; fill:var(--ink-3); text-anchor:middle; }
 .gc-node { cursor:pointer; }
-.gc-node circle { stroke:#fff; stroke-width:2; transition:opacity .15s; }
-.gc-node.focused circle { stroke:#f59e0b; stroke-width:3; }
+.gc-node circle { stroke:var(--gc-bg); stroke-width:2; transition:opacity .15s; }
+.gc-node.focused circle { stroke:var(--warn); stroke-width:3; }
 .gc-node.dim { opacity:.2; }
 .gc-node-label {
-  font-size:10.5px; fill:#334155; text-anchor:middle; pointer-events:none;
-  paint-order:stroke; stroke:#fbfcfe; stroke-width:3px; stroke-linejoin:round;
+  font-size:10.5px; fill:var(--ink-2); text-anchor:middle; pointer-events:none;
+  paint-order:stroke; stroke:var(--gc-bg); stroke-width:3px; stroke-linejoin:round;
 }
-.gc-legend { display:flex; gap:14px; flex-wrap:wrap; font-size:11.5px; color:#5b667a; }
+.gc-legend { display:flex; gap:14px; flex-wrap:wrap; font-size:11.5px; color:var(--ink-3); }
 .gc-legend-item { display:inline-flex; align-items:center; gap:5px; }
 .gc-legend-item i { width:9px; height:9px; border-radius:50%; display:inline-block; }
-.gc-legend-dash { width:16px !important; height:0 !important; border-radius:0 !important; border-top:2px dashed #cbd5e1; }
+.gc-legend-dash { width:16px !important; height:0 !important; border-radius:0 !important; border-top:2px dashed var(--ink-400); }
 </style>

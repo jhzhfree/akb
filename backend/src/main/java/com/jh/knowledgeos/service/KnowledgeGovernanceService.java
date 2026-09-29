@@ -4,6 +4,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.jh.knowledgeos.common.KnowledgeStatus;
 import com.jh.knowledgeos.domain.User;
 import com.jh.knowledgeos.mapper.KnowledgeMapper;
+import com.jh.knowledgeos.mapper.GovernanceMapper;
+import com.jh.knowledgeos.mapper.EvidenceMapper;
 import org.springframework.stereotype.Service;
 import org.slf4j.MDC;
 import org.springframework.transaction.annotation.Transactional;
@@ -25,12 +27,23 @@ public class KnowledgeGovernanceService {
 
     private static final int DEFAULT_ASSESSMENT_LIMIT = 100;
 
+    /** How a decision is spoken, mapped to the state it actually means. */
+    private static final Map<String, String> DECISION_ALIASES = new LinkedHashMap<String, String>();
+
+    static {
+        DECISION_ALIASES.put("APPROVE", KnowledgeStatus.APPROVED.name());
+        DECISION_ALIASES.put("ACCEPT", KnowledgeStatus.APPROVED.name());
+        DECISION_ALIASES.put("REJECT", KnowledgeStatus.REJECTED.name());
+        DECISION_ALIASES.put("DENY", KnowledgeStatus.REJECTED.name());
+    }
+
     private static final int MAX_ASSESSMENT_LIMIT = 500;
 
     /**
      * Accepted verdicts for conflict adjudication; anything else is rejected early rather than silently ignored.
      */
-    private static final Set<String> SUPPORTED_VERDICTS = Collections.unmodifiableSet(new HashSet<String>(Arrays.asList("KEEP_A", "KEEP_B", "MERGE", "REJECT_BOTH", "REQUEST_EVIDENCE", "IGNORE")));
+    private static final Set<String> SUPPORTED_VERDICTS = Collections.unmodifiableSet(new HashSet<String>(Arrays.asList("KEEP_A", "KEEP_B", "MERGE",
+        "REJECT_BOTH", "REQUEST_EVIDENCE", "IGNORE")));
 
     /**
      * Conflict stays open while evidence is being collected: closing it would hide the pending work.
@@ -38,6 +51,11 @@ public class KnowledgeGovernanceService {
     private static final String CONFLICT_STATUS_EVIDENCE_PENDING = "OPEN";
 
     private final KnowledgeMapper mapper;
+
+    private final EvidenceMapper evidenceMapper;
+
+    private final GovernanceMapper governanceMapper;
+
 
     private final AiClient aiClient;
 
@@ -47,7 +65,10 @@ public class KnowledgeGovernanceService {
 
     private final IndexOutboxService outboxService;
 
-    public KnowledgeGovernanceService(KnowledgeMapper mapper, AiClient aiClient, ObjectMapper objectMapper, TransactionRunner transactionRunner, IndexOutboxService outboxService) {
+    public KnowledgeGovernanceService(KnowledgeMapper mapper, AiClient aiClient, ObjectMapper objectMapper, TransactionRunner transactionRunner,
+        IndexOutboxService outboxService, EvidenceMapper evidenceMapper, GovernanceMapper governanceMapper) {
+        this.evidenceMapper = evidenceMapper;
+        this.governanceMapper = governanceMapper;
         this.mapper = mapper;
         this.aiClient = aiClient;
         this.objectMapper = objectMapper;
@@ -62,16 +83,17 @@ public class KnowledgeGovernanceService {
     Map<String, Object> adjudicate(Map<String, Object> request) {
         String type = stringValue(request.get("objectType"));
         String code = stringValue(request.get("objectCode"));
-        String decision = stringValue(request.get("decision"));
+        String decision = normalizeDecision(request.get("decision"));
         String reviewer = reviewerOrDefault(request.get("reviewer"));
         updateObjectStatus(type, code, decision);
-        Long kb = mapper.findKnowledgeBaseIdForObject(type, code);
+        Long kb = governanceMapper.findKnowledgeBaseIdForObject(type, code);
         if (kb != null) {
-            mapper.snapshotKnowledgeObject(kb, type, code, "HUMAN_REVIEW", reviewer);
+            governanceMapper.snapshotKnowledgeObject(kb, type, code, "HUMAN_REVIEW", reviewer);
             outboxService.enqueueObjectStatus(kb, type, code, decision, MDC.get("traceId"));
         }
         // A decision is only auditable when it also records what was compared and under which policy.
-        mapper.insertJudgment(type, code, decision, reviewer, stringValue(request.get("comment")), stringValue(request.get("inputObjectCodes")), stringValue(request.get("resultObjectCode")), stringValue(request.get("policyVersion")));
+        governanceMapper.insertJudgment(type, code, decision, reviewer, stringValue(request.get("comment")),
+            stringValue(request.get("inputObjectCodes")), stringValue(request.get("resultObjectCode")), stringValue(request.get("policyVersion")));
         return request;
     }
 
@@ -81,7 +103,7 @@ public class KnowledgeGovernanceService {
      * external model calls remain outside database transactions.
      */
     Map<String, Object> intelligentAdjudicate(Long knowledgeBaseId) throws Exception {
-        List<Map<String, Object>> candidates = mapper.listAdjudicationCandidates(knowledgeBaseId);
+        List<Map<String, Object>> candidates = governanceMapper.listAdjudicationCandidates(knowledgeBaseId);
         List<Map<String, Object>> results = new ArrayList<Map<String, Object>>(candidates.size());
         int autoApproved = 0;
         int needsHuman = 0;
@@ -89,8 +111,8 @@ public class KnowledgeGovernanceService {
         for (Map<String, Object> candidate : candidates) {
             String type = stringValue(candidate.get("objectType"));
             String code = stringValue(candidate.get("objectCode"));
-            List<Map<String, Object>> evidence = mapper.listEvidenceForObject(type, code);
-            List<Map<String, Object>> conflicts = mapper.listObjectConflicts(code);
+            List<Map<String, Object>> evidence = evidenceMapper.listEvidenceForObject(type, code);
+            List<Map<String, Object>> conflicts = governanceMapper.listObjectConflicts(code);
             // Evidence support is scored once, inside the AI adjudication engine, from evidenceCount;
             // a second formula here would silently diverge from the published weights.
             Map<String, Object> payload = new LinkedHashMap<String, Object>(candidate);
@@ -114,7 +136,7 @@ public class KnowledgeGovernanceService {
                     finalStatus = KnowledgeStatus.PENDING_REVIEW.name();
                 }
                 updateObjectStatus(type, code, finalStatus);
-                mapper.snapshotKnowledgeObject(knowledgeBaseId, type, code, "AI_ADJUDICATION", "AI_JUDGE");
+                governanceMapper.snapshotKnowledgeObject(knowledgeBaseId, type, code, "AI_ADJUDICATION", "AI_JUDGE");
                 outboxService.enqueueObjectStatus(knowledgeBaseId, type, code, finalStatus, String.valueOf(MDC.get("traceId")) + ":" + type + ":" + code);
             });
             if (KnowledgeStatus.APPROVED.name().equals(decision)) {
@@ -143,20 +165,20 @@ public class KnowledgeGovernanceService {
 
     public List<Map<String, Object>> assessments(Long kb, Integer limit) {
         int normalized = limit == null ? DEFAULT_ASSESSMENT_LIMIT : Math.min(MAX_ASSESSMENT_LIMIT, Math.max(1, limit));
-        return mapper.listAssessments(kb, normalized);
+        return governanceMapper.listAssessments(kb, normalized);
     }
 
     public List<Map<String, Object>> pendingReviews(Long kb) {
-        return mapper.listPendingReviews(kb);
+        return governanceMapper.listPendingReviews(kb);
     }
 
     public List<Map<String, Object>> conflicts(Long kb, String status) {
-        return mapper.listConflicts(kb, status);
+        return governanceMapper.listConflicts(kb, status);
     }
 
     @Transactional
     public Map<String, Object> resolveConflict(Long id, String status, String resolution) {
-        mapper.resolveConflict(id, status, resolution);
+        governanceMapper.resolveConflict(id, status, resolution);
         Map<String, Object> result = new LinkedHashMap<String, Object>();
         result.put("id", id);
         result.put("status", status);
@@ -169,7 +191,7 @@ public class KnowledgeGovernanceService {
      * Each side carries its own evidence list: source, page and authority are what a verdict is justified by.
      */
     public Map<String, Object> conflictTargets(Long id) {
-        Map<String, Object> conflict = mapper.getConflict(id);
+        Map<String, Object> conflict = governanceMapper.getConflict(id);
         if (conflict == null) {
             throw new IllegalArgumentException("Conflict not found: " + id);
         }
@@ -184,7 +206,7 @@ public class KnowledgeGovernanceService {
         Map<String, String> types = objectTypes(codes);
         Map<String, Map<String, Object>> rows = new LinkedHashMap<String, Map<String, Object>>();
         if (!codes.isEmpty()) {
-            for (Map<String, Object> row : mapper.listAdjudicationTargets(codes)) {
+            for (Map<String, Object> row : governanceMapper.listAdjudicationTargets(codes)) {
                 rows.put(stringValue(row.get("objectCode")), row);
             }
         }
@@ -194,7 +216,7 @@ public class KnowledgeGovernanceService {
             Map<String, Object> side = rows.get(code) == null ? new LinkedHashMap<String, Object>() : new LinkedHashMap<String, Object>(rows.get(code));
             side.put("objectType", type);
             side.put("objectCode", code);
-            List<Map<String, Object>> evidence = mapper.listEvidenceForObject(type, code);
+            List<Map<String, Object>> evidence = evidenceMapper.listEvidenceForObject(type, code);
             side.put("evidenceCount", evidence.size());
             side.put("evidence", evidence);
             sides.add(side);
@@ -216,7 +238,7 @@ public class KnowledgeGovernanceService {
      * and every status change is snapshot and published so the index and the audit trail agree with the decision.
      */
     Map<String, Object> adjudicateConflict(Long id, String decision, String comment, String reviewer) {
-        Map<String, Object> conflict = mapper.getConflict(id);
+        Map<String, Object> conflict = governanceMapper.getConflict(id);
         if (conflict == null) {
             throw new IllegalArgumentException("Conflict not found: " + id);
         }
@@ -253,12 +275,12 @@ public class KnowledgeGovernanceService {
             String type = types.get(code);
             updateObjectStatus(type, code, entry.getValue());
             if (kb != null) {
-                mapper.snapshotKnowledgeObject(kb, type, code, "CONFLICT_ADJUDICATION", resolvedReviewer);
+                governanceMapper.snapshotKnowledgeObject(kb, type, code, "CONFLICT_ADJUDICATION", resolvedReviewer);
                 outboxService.enqueueObjectStatus(kb, type, code, entry.getValue(), MDC.get("traceId") + ":" + type + ":" + code);
             }
         }
         String conflictStatus = evidenceRequested ? CONFLICT_STATUS_EVIDENCE_PENDING : ("IGNORE".equals(verdict) ? "IGNORED" : "RESOLVED");
-        mapper.resolveConflict(id, conflictStatus, adjudicationNote(verdict, winner, comment));
+        governanceMapper.resolveConflict(id, conflictStatus, adjudicationNote(verdict, winner, comment));
         Map<String, Object> result = new LinkedHashMap<String, Object>();
         result.put("id", id);
         result.put("verdict", verdict);
@@ -292,7 +314,7 @@ public class KnowledgeGovernanceService {
         if (known.isEmpty()) {
             return types;
         }
-        for (Map<String, Object> row : mapper.listAdjudicationTargets(known)) {
+        for (Map<String, Object> row : governanceMapper.listAdjudicationTargets(known)) {
             String code = stringValue(row.get("objectCode"));
             String type = stringValue(row.get("objectType"));
             if (!code.isEmpty() && !type.isEmpty()) {
@@ -315,14 +337,16 @@ public class KnowledgeGovernanceService {
     private void persistAssessment(Long kb, String type, String code, Map<String, Object> result, boolean requiresHuman) throws Exception {
         Object aiJudge = result.get("aiJudge");
         String reason = aiJudge instanceof Map ? stringValue(((Map<String, Object>) aiJudge).get("reason")) : "";
-        mapper.insertAssessment(kb, type, code, stringValue(result.get("policyVersion")), doubleValue(result.get("knowledgeConfidence"), 0.0D), stringValue(result.get("riskLevel")), stringValue(result.get("decision")), requiresHuman, objectMapper.writeValueAsString(result.get("components")), objectMapper.writeValueAsString(result.get("aiJudge")), reason);
+        governanceMapper.insertAssessment(kb, type, code, stringValue(result.get("policyVersion")), doubleValue(result.get("knowledgeConfidence"),
+            0.0D), stringValue(result.get("riskLevel")), stringValue(result.get("decision")), requiresHuman,
+            objectMapper.writeValueAsString(result.get("components")), objectMapper.writeValueAsString(result.get("aiJudge")), reason);
     }
 
     private void updateObjectStatus(String type, String code, String status) {
         if ("CLAIM".equalsIgnoreCase(type)) {
-            mapper.updateClaimStatus(code, status);
+            governanceMapper.updateClaimStatus(code, status);
         } else {
-            mapper.updateCardStatus(code, status);
+            governanceMapper.updateCardStatus(code, status);
         }
     }
 
@@ -351,5 +375,35 @@ public class KnowledgeGovernanceService {
         } catch (NumberFormatException ex) {
             return defaultValue;
         }
+    }
+
+    /**
+     * Accept only a state the lifecycle knows, translating how a decision is spoken into how it is stored.
+     *
+     * <p>"APPROVE" is what an operator types and what an integration sends, but the stored state is
+     * "APPROVED". Writing the raw value straight through used to mark an object approved on every
+     * screen while retrieval silently skipped it, because retrieval only admits APPROVED/EFFECTIVE —
+     * a knowledge base that looks populated and answers nothing. An unrecognised decision is refused
+     * here rather than persisted, so the caller finds out at the call instead of at the answer.</p>
+     */
+    private String normalizeDecision(Object raw) {
+        String value = stringValue(raw).trim().toUpperCase(Locale.ROOT);
+        if (value.isEmpty()) {
+            throw new IllegalArgumentException("裁决结果不能为空");
+        }
+        String translated = DECISION_ALIASES.get(value);
+        if (translated != null) {
+            value = translated;
+        }
+        for (KnowledgeStatus status : KnowledgeStatus.values()) {
+            if (status.name().equals(value)) {
+                return status.name();
+            }
+        }
+        List<String> allowed = new ArrayList<String>();
+        for (KnowledgeStatus status : KnowledgeStatus.values()) {
+            allowed.add(status.name());
+        }
+        throw new IllegalArgumentException("裁决结果不是合法状态：" + value + "（可选 " + String.join("、", allowed) + "）");
     }
 }

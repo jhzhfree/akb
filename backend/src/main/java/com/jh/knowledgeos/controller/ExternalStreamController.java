@@ -47,7 +47,8 @@ public class ExternalStreamController {
 
     private final KnowledgeProperties.External properties;
 
-    public ExternalStreamController(ExternalAccessService accessService, ExternalStreamService streamService, ExternalAuditService auditService, PlatformEventHub hub, PlatformEventVisibilityService visibility, KnowledgeProperties properties) {
+    public ExternalStreamController(ExternalAccessService accessService, ExternalStreamService streamService, ExternalAuditService auditService,
+        PlatformEventHub hub, PlatformEventVisibilityService visibility, KnowledgeProperties properties) {
         this.accessService = accessService;
         this.streamService = streamService;
         this.auditService = auditService;
@@ -58,7 +59,8 @@ public class ExternalStreamController {
 
     @GetMapping(value = "/query", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     @Operation(summary = "流式问答：依次推送 stage / delta / citation / done 事件")
-    public SseEmitter streamQuery(HttpServletRequest request, @RequestParam(value = "knowledgeBaseId", required = false) Long knowledgeBaseId, @RequestParam("question") String question, @RequestParam(value = "topK", required = false) Integer topK) {
+    public SseEmitter streamQuery(HttpServletRequest request, @RequestParam(value = "knowledgeBaseId", required = false) Long knowledgeBaseId,
+        @RequestParam("question") String question, @RequestParam(value = "topK", required = false) Integer topK) {
         ApiKey key = open(request, "/stream/query", knowledgeBaseId);
         Long kb = accessService.resolveKnowledgeBase(key, knowledgeBaseId);
         accessService.assertScope(key, ApiKey.SCOPE_READ);
@@ -77,7 +79,9 @@ public class ExternalStreamController {
      */
     @GetMapping(value = "/events", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     @Operation(summary = "知识库事件订阅：知识库/卡片/检索/权限等事件，支持 types、断线续传")
-    public SseEmitter streamEvents(HttpServletRequest request, @RequestParam(value = "knowledgeBaseId", required = false) Long knowledgeBaseId, @RequestParam(value = "types", required = false) String types, @RequestParam(value = "sinceEventId", required = false) Long sinceEventId, @RequestParam(value = "legacy", defaultValue = "false") boolean legacy) {
+    public SseEmitter streamEvents(HttpServletRequest request, @RequestParam(value = "knowledgeBaseId", required = false) Long knowledgeBaseId,
+        @RequestParam(value = "types", required = false) String types, @RequestParam(value = "sinceEventId", required = false) Long sinceEventId,
+        @RequestParam(value = "legacy", defaultValue = "false") boolean legacy) {
         ApiKey key = open(request, "/stream/events", knowledgeBaseId);
         Long kb = accessService.resolveKnowledgeBase(key, knowledgeBaseId);
         accessService.assertScope(key, ApiKey.SCOPE_READ);

@@ -10,7 +10,7 @@
         </p>
       </div>
       <div class="flex shrink-0 items-center gap-2">
-        <span class="kb-badge" :class="manifest?.enabled ? 'bg-emerald-50 text-emerald-700' : 'bg-ink-50 text-ink-500'">
+        <span class="kb-badge" :class="manifest?.enabled ? 'kb-state-ok' : 'bg-ink-50 text-ink-500'">
           {{ manifest?.enabled ? '已启用' : '已关闭' }}
         </span>
         <button class="kb-btn-outline" :disabled="loading" @click="loadAll">刷新</button>
@@ -24,7 +24,7 @@
       <MetricCard label="平均耗时" :value="avgDuration" hint="最近调用均值（ms）" />
     </div>
 
-    <div v-if="error" class="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2.5 text-xs text-amber-700">
+    <div v-if="error" class="mt-3 rounded-lg border border-[color:var(--warn-bd)] bg-[color:var(--warn-bg)] px-4 py-2.5 text-xs text-[color:var(--warn)]">
       {{ error }}
     </div>
 
@@ -49,15 +49,15 @@
                 <b class="text-[11px] text-ink-600">入参</b>
                 <ul class="mt-1 space-y-1">
                   <li v-for="(prop, name) in tool.inputSchema?.properties || {}" :key="String(name)" class="text-xs text-ink-700">
-                    <code class="rounded bg-white px-1">{{ name }}</code>
-                    <span class="text-ink-400">· {{ prop.type }}</span>
-                    <span v-if="(tool.inputSchema?.required || []).includes(String(name))" class="text-rose-500">· 必填</span>
+                    <code class="rounded bg-white px-1" style="background:var(--bg-sunken);color:var(--ink-2)">{{ name }}</code>
+                    <span class="text-ink-500">· {{ prop.type }}</span>
+                    <span v-if="(tool.inputSchema?.required || []).includes(String(name))" class="text-[color:var(--danger)]">· 必填</span>
                     <span class="text-ink-500">— {{ prop.description }}</span>
                   </li>
-                  <li v-if="!Object.keys(tool.inputSchema?.properties || {}).length" class="text-xs text-ink-400">无入参</li>
+                  <li v-if="!Object.keys(tool.inputSchema?.properties || {}).length" class="text-xs text-ink-500">无入参</li>
                 </ul>
                 <b class="mt-3 block text-[11px] text-ink-600">tools/call 调用示例</b>
-                <pre class="mt-1 overflow-x-auto rounded-lg bg-white p-2 text-[11px] leading-5 text-ink-700">{{ callSample(tool) }}</pre>
+                <pre class="mt-1 overflow-x-auto rounded-lg bg-white p-2 text-[11px] leading-5" style="background:var(--bg-sunken);color:var(--ink-2)">{{ callSample(tool) }}</pre>
               </div>
             </li>
           </ul>
@@ -92,16 +92,16 @@
               <li v-for="call in calls" :key="call.id" class="px-4 py-2.5">
                 <div class="flex items-center justify-between gap-2">
                   <code class="text-xs text-ink-800">{{ call.method }}</code>
-                  <span class="kb-badge" :class="call.statusCode >= 400 ? 'bg-rose-50 text-rose-700' : 'bg-emerald-50 text-emerald-700'">
+                  <span class="kb-badge" :class="call.statusCode >= 400 ? 'kb-state-danger' : 'kb-state-ok'">
                     {{ call.statusCode }}
                   </span>
                 </div>
-                <div class="mt-0.5 flex items-center justify-between text-[11px] text-ink-400">
+                <div class="mt-0.5 flex items-center justify-between text-[11px] text-ink-500">
                   <span>{{ call.keyCode || '—' }} · {{ call.durationMs }} ms</span>
                   <span>{{ time(call.createdTime) }}</span>
                 </div>
-                <div v-if="call.message" class="mt-1 text-[11px] text-rose-600">{{ call.message }}</div>
-                <div v-if="call.traceId" class="mt-0.5 truncate text-[11px] text-ink-400">trace {{ call.traceId }}</div>
+                <div v-if="call.message" class="mt-1 text-[11px] text-[color:var(--danger)]">{{ call.message }}</div>
+                <div v-if="call.traceId" class="mt-0.5 truncate text-[11px] text-ink-500">trace {{ call.traceId }}</div>
               </li>
             </ul>
           </PanelState>

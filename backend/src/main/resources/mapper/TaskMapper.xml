@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.jh.knowledgeos.mapper.TaskMapper">
+
+<insert id="insertTaskRun">INSERT INTO t_task_run(task_code,knowledge_base_id,task_type,task_name,
+  target_type,target_code,status,stage,progress,trigger_type,triggered_by,max_attempts,payload_json)
+VALUES(#{taskCode},#{kb},#{taskType},#{taskName},#{targetType},#{targetCode},'QUEUED','QUEUED',0,
+  #{triggerType},#{triggeredBy},#{maxAttempts},CAST(#{payloadJson} AS JSON))</insert>
+
+<update id="updateTaskRun">UPDATE t_task_run SET status=#{status},
+  stage=IFNULL(#{stage},stage),progress=#{progress},
+  started_time=IF(started_time IS NULL AND #{status}!='QUEUED',CURRENT_TIMESTAMP,started_time),
+  finished_time=IF(#{status} IN ('SUCCEEDED','FAILED','CANCELED','DEAD'),CURRENT_TIMESTAMP,finished_time),
+  error_message=#{errorMessage},
+  result_json=IF(#{resultJson} IS NULL,result_json,CAST(#{resultJson} AS JSON)),
+  retry_count=IF(#{status}='FAILED',retry_count+1,retry_count)
+WHERE task_code=#{taskCode}</update>
+
+<select id="getTaskRun" resultType="map">SELECT task_code taskCode,knowledge_base_id knowledgeBaseId,
+  task_type taskType,task_name taskName,target_type targetType,target_code targetCode,status,stage,progress,
+  trigger_type triggerType,triggered_by triggeredBy,retry_count retryCount,max_attempts maxAttempts,
+  payload_json payloadJson,result_json resultJson,error_message errorMessage,next_attempt_at nextAttemptAt,
+  started_time startedTime,finished_time finishedTime,created_time createdTime,updated_time updatedTime
+FROM t_task_run WHERE task_code=#{taskCode}</select>
+
+<select id="listTaskRuns" resultType="map">SELECT task_code taskCode,knowledge_base_id knowledgeBaseId,
+  task_type taskType,task_name taskName,target_type targetType,target_code targetCode,status,stage,progress,
+  trigger_type triggerType,triggered_by triggeredBy,retry_count retryCount,max_attempts maxAttempts,
+  error_message errorMessage,started_time startedTime,finished_time finishedTime,created_time createdTime
+FROM t_task_run
+WHERE (knowledge_base_id=#{kb} OR #{kb} IS NULL)
+<if test="status != null and status != ''">AND status=#{status}</if>
+<if test="taskType != null and taskType != ''">AND task_type=#{taskType}</if>
+<if test="triggerType != null and triggerType != ''">AND trigger_type=#{triggerType}</if>
+ORDER BY created_time DESC,id DESC LIMIT #{limit}</select>
+
+<select id="taskStats" resultType="map">SELECT status,COUNT(*) total FROM t_task_run
+WHERE (knowledge_base_id=#{kb} OR #{kb} IS NULL) AND created_time&gt;=DATE_SUB(NOW(),INTERVAL 7 DAY)
+GROUP BY status</select>
+
+<select id="countTaskOutcome" resultType="int">SELECT COUNT(*) FROM t_task_run
+WHERE (knowledge_base_id=#{kb} OR #{kb} IS NULL) AND created_time&gt;=#{since} AND status IN
+<foreach item="status" collection="statuses" open="(" separator="," close=")">#{status}</foreach></select>
+
+</mapper>

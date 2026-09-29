@@ -16,23 +16,23 @@
   <div class="grid gap-4 lg:grid-cols-[1fr_280px]">
     <div>
       <article class="kb-card overflow-hidden">
-        <textarea :value="query" rows="5" class="w-full resize-none border-0 bg-white px-5 py-4 text-[15px] leading-7 text-ink-900 outline-none"
+        <textarea :value="query" rows="5" class="w-full resize-none border-0 px-5 py-4 text-[15px] leading-7 text-ink-900 outline-none"
           placeholder="向企业知识库提问…" @input="$emit('update:query',($event.target as HTMLTextAreaElement).value)" />
         <footer class="flex items-center justify-between border-t border-ink-100 bg-ink-50/70 px-4 py-2.5">
-          <span class="text-[11px] text-ink-400">回答必须可追溯到 证据 / 来源</span>
+          <span class="text-[11px] text-ink-500">回答必须可追溯到 证据 / 来源</span>
           <button class="kb-btn-primary" :disabled="asking" @click="$emit('ask')">{{ asking ? '检索中…' : '发送问题' }}</button>
         </footer>
       </article>
 
       <div v-if="asking" class="kb-card mt-4 flex items-center gap-2 p-4 text-sm text-ink-500">
-        <span class="inline-block h-3 w-3 animate-spin rounded-full border-2 border-indigo-500 border-t-transparent"/>
+        <span class="inline-block h-3 w-3 animate-spin rounded-full border-2 border-[color:var(--info)] border-t-transparent"/>
         正在检索知识库并生成回答…
       </div>
 
       <template v-else-if="result">
         <!-- 用户问题气泡（llmwiki 对话式样式） -->
         <div class="mt-4 flex justify-end">
-          <div class="max-w-[80%] rounded-2xl rounded-br-sm bg-indigo-600 px-4 py-2.5 text-sm leading-6 text-white shadow-sm">
+          <div class="max-w-[80%] rounded-2xl rounded-br-sm bg-brand-600 px-4 py-2.5 text-sm leading-6 text-[color:var(--on-brand)] shadow-sm">
             {{ result.question || query }}
           </div>
         </div>
@@ -43,11 +43,17 @@
           <!-- eslint-disable-next-line vue/no-v-html -->
           <div class="md-answer" v-html="renderedAnswer"></div>
 
-          <p class="mt-3 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-ink-400">
-            <span v-if="result.questionTypeLabel" class="kb-badge bg-sky-50 text-sky-700">{{ result.questionTypeLabel }}</span>
+          <!-- 结论来源：这句话是查到的、走图谱走出来的，还是规则推出来的 -->
+          <p v-if="conclusionLabel" class="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px]">
+            <span class="kb-badge" :class="conclusionClass" :title="conclusionHint">结论来源 · {{ conclusionLabel }}</span>
+            <span class="text-ink-500">{{ conclusionHint }}</span>
+          </p>
+
+          <p class="mt-3 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-ink-500">
+            <span v-if="result.questionTypeLabel" class="kb-badge kb-state-info">{{ result.questionTypeLabel }}</span>
             <span v-if="rewritten" title="改写后查询：{{ result.rewrittenQuery }}">已改写 ↻</span>
             <span :title="result.routerNote || ''">召回通道：{{ (result.channels || result.strategies || []).join(' + ') || '（无）' }}</span>
-            <span v-if="result.reranked" class="kb-badge bg-emerald-50 text-emerald-700">已重排序</span>
+            <span v-if="result.reranked" class="kb-badge kb-state-ok">已重排序</span>
             <span v-if="gateStatus" class="kb-badge" :class="gateClass">门控 {{ gateStatus }}</span>
             <span v-if="typeof result.confidence === 'number' && result.confidence > 0"
               title="检索强度 + 断言支撑的综合估计">置信度 {{ Math.round(result.confidence * 100) }}%</span>
@@ -57,22 +63,36 @@
           </p>
 
           <div v-if="(result.claims || []).length" class="mt-2 border-t border-ink-100 pt-2">
-            <p class="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-ink-400">支撑断言</p>
+            <p class="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-ink-500">支撑断言</p>
             <div class="flex flex-wrap gap-1.5">
               <span v-for="claim in result.claims" :key="claim.claimId"
                 class="kb-badge cursor-default"
-                :class="claim.status === 'EFFECTIVE' ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'"
+                :class="claim.status === 'EFFECTIVE' ? 'kb-state-ok' : 'kb-state-warn'"
                 :title="claimTitle(claim)">
                 {{ claim.subject }} --{{ claim.predicate }}--&gt; {{ claim.object }}
               </span>
             </div>
           </div>
 
+          <div v-if="graphPaths.length" class="mt-3 border-t border-ink-100 pt-3">
+            <p class="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-ink-500">推导路径 · {{ graphPaths.length }} 条</p>
+            <ol class="space-y-1">
+              <li v-for="(path,pathIndex) in graphPaths.slice(0,5)" :key="pathIndex"
+                class="flex flex-wrap items-center gap-1 text-xs text-ink-700">
+                <template v-for="(hop,hopIndex) in path" :key="hopIndex">
+                  <span v-if="hopIndex === 0">{{ hop.sourceName || '—' }}</span>
+                  <span class="kb-badge kb-state-info">--{{ hop.relationType }}--&gt;</span>
+                  <span>{{ hop.targetName || '—' }}</span>
+                </template>
+              </li>
+            </ol>
+          </div>
+
           <div v-if="(result.citations || []).length" class="mt-3 border-t border-ink-100 pt-3">
-            <p class="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-ink-400">引用来源</p>
+            <p class="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-ink-500">引用来源</p>
             <div class="flex flex-wrap gap-1.5">
               <button v-for="citation in result.citations" :key="citation.index ?? citation.objectId"
-                class="rounded px-1.5 py-0.5 text-xs text-indigo-600 hover:bg-indigo-50 hover:underline"
+                class="rounded px-1.5 py-0.5 text-xs text-accent hover:bg-[color:var(--info-bg)] hover:underline"
                 :title="citationTitle(citation)"
                 @click="$emit('open-citation',citation)">
                 [{{ citation.index ?? 0 }}] {{ citation.title || citation.objectId || 'Evidence' }}
@@ -85,17 +105,17 @@
           </div>
         </article>
       </template>
-      <div v-else class="mt-16 text-center text-sm text-ink-400">输入问题开始检索</div>
+      <div v-else class="mt-16 text-center text-sm text-ink-500">输入问题开始检索</div>
     </div>
     <aside class="kb-card h-fit overflow-hidden">
-      <div class="kb-card-head"><div><b class="text-sm">问答历史</b><div class="text-[10px] text-ink-400">查询历史</div></div>
-        <button class="text-xs text-indigo-600" @click="$emit('refresh-history')">刷新</button></div>
+      <div class="kb-card-head"><div><b class="text-sm">问答历史</b><div class="text-[10px] text-ink-500">查询历史</div></div>
+        <button class="text-xs text-accent" @click="$emit('refresh-history')">刷新</button></div>
       <div class="max-h-[620px] divide-y divide-ink-100 overflow-auto">
         <button v-for="item in history" :key="item.queryId" class="block w-full p-3 text-left hover:bg-ink-50" @click="$emit('open-trace',item.queryId)">
           <b class="line-clamp-2 text-xs leading-5 text-ink-700">{{ item.originalQuery }}</b>
-          <div class="mt-2 flex justify-between text-[10px] text-ink-400"><span>{{ time(item.createdTime) }}</span><span>{{ item.latencyMs || 0 }}ms</span></div>
+          <div class="mt-2 flex justify-between text-[10px] text-ink-500"><span>{{ time(item.createdTime) }}</span><span>{{ item.latencyMs || 0 }}ms</span></div>
         </button>
-        <div v-if="!history.length" class="p-8 text-center text-xs text-ink-400">暂无问答历史</div>
+        <div v-if="!history.length" class="p-8 text-center text-xs text-ink-500">暂无问答历史</div>
       </div>
     </aside>
   </div>
@@ -135,10 +155,28 @@ const gateStatus = computed(() => {
   return status && status !== 'BYPASSED' ? String(status) : ''
 })
 const gateClass = computed(() => ({
-  'bg-emerald-50 text-emerald-700': gateStatus.value === 'PASS',
-  'bg-amber-50 text-amber-700': gateStatus.value === 'PARTIAL',
-  'bg-rose-50 text-rose-700': gateStatus.value === 'BLOCKED',
+  'kb-state-ok': gateStatus.value === 'PASS',
+  'kb-state-warn': gateStatus.value === 'PARTIAL',
+  'kb-state-danger': gateStatus.value === 'BLOCKED',
 }))
+/**
+ * 结论来源：一句话说清这个答案是怎么来的。
+ * 查到的和推出来的在界面上长得一样时，没人知道该不该追问一句"依据呢"。
+ */
+const conclusionType = computed(() => String(props.result?.conclusionSource?.type || ''))
+const conclusionLabel = computed(() => String(props.result?.conclusionSource?.label || ''))
+const conclusionClass = computed(() => ({
+  'kb-state-info': conclusionType.value === 'GRAPH_TRAVERSAL',
+  'kb-state-warn': conclusionType.value === 'DERIVED',
+  'kb-state-ok': !conclusionType.value || conclusionType.value === 'RETRIEVED',
+}))
+const conclusionHint = computed(() => {
+  if (conclusionType.value === 'GRAPH_TRAVERSAL') return '沿图谱关系遍历得出，原文未直接写出'
+  if (conclusionType.value === 'DERIVED') return '由衍生规则推导，可展开基础断言核对'
+  return '来自资料原文检索'
+})
+const graphPaths = computed(() => props.result?.conclusionSource?.graphPaths || [])
+
 const claimTitle = (claim:QuerySupportClaim) => {
   const confidence = typeof claim.confidence === 'number' ? `置信度 ${Math.round(claim.confidence * 100)}%` : ''
   const conditions = claim.conditions?.length ? ` · 条件：${claim.conditions.join('；')}` : ''
@@ -153,14 +191,14 @@ const citationTitle = (citation:QueryCitation) => {
 }
 </script>
 <style scoped>
-.md-answer{padding:0.25rem 1rem 0.25rem 0;font-size:14px;line-height:1.8;color:#1f2937}
+.md-answer{padding:0.25rem 1rem 0.25rem 0;font-size:14px;line-height:1.8;color:var(--ink-1)}
 .md-answer :deep(p){margin:0.5rem 0}
-.md-answer :deep(.md-heading){margin:0.9rem 0 0.4rem;font-weight:600;color:#111827}
+.md-answer :deep(.md-heading){margin:0.9rem 0 0.4rem;font-weight:600;color:var(--ink-1)}
 .md-answer :deep(.md-heading:first-child){margin-top:0.2rem}
 .md-answer :deep(ul),.md-answer :deep(ol){margin:0.4rem 0;padding-left:1.4rem}
 .md-answer :deep(li){margin:0.2rem 0}
-.md-answer :deep(blockquote){margin:0.5rem 0;border-left:3px solid #c7d2fe;padding:0.1rem 0 0.1rem 0.75rem;color:#4b5563}
-.md-answer :deep(.md-code){border-radius:4px;background:#f3f4f6;padding:0.1rem 0.3rem;font-family:ui-monospace,monospace;font-size:12px}
-.md-answer :deep(.md-pre){margin:0.5rem 0;border-radius:8px;background:#0f172a;color:#e2e8f0;padding:0.75rem 1rem;overflow:auto;font-size:12px;line-height:1.6}
-.md-answer :deep(.md-cite){margin-left:2px;color:#4f46e5;font-weight:600;cursor:help}
+.md-answer :deep(blockquote){margin:0.5rem 0;border-left:3px solid var(--line-soft);padding:0.1rem 0 0.1rem 0.75rem;color:var(--ink-2)}
+.md-answer :deep(.md-code){border-radius:4px;background:var(--bg-sub);padding:0.1rem 0.3rem;font-family:ui-monospace,monospace;font-size:12px}
+.md-answer :deep(.md-pre){margin:0.5rem 0;border-radius:8px;background:var(--bg-sunken);color:var(--ink-2);padding:0.75rem 1rem;overflow:auto;font-size:12px;line-height:1.6}
+.md-answer :deep(.md-cite){margin-left:2px;color:var(--accent-text);font-weight:600;cursor:help}
 </style>

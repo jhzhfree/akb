@@ -53,11 +53,15 @@
                   </div>
                   <div class="flex gap-2">
                     <b class="w-20 shrink-0 font-normal text-ink-500">传入参数</b>
-                    <pre class="max-h-56 flex-1 overflow-auto whitespace-pre-wrap break-all rounded border border-black/10 bg-black/[0.03] p-2 text-[11px] leading-relaxed">{{ pretty(row.requestParams) }}</pre>
+                    <pre
+                      class="max-h-56 flex-1 overflow-auto whitespace-pre-wrap break-all rounded border border-black/10 bg-black/[0.03] p-2 text-[11px] leading-relaxed">
+          {{ pretty(row.requestParams) }}</pre>
                   </div>
                   <div class="flex gap-2">
                     <b class="w-20 shrink-0 font-normal text-ink-500">返回数据</b>
-                    <pre class="max-h-56 flex-1 overflow-auto whitespace-pre-wrap break-all rounded border border-black/10 bg-black/[0.03] p-2 text-[11px] leading-relaxed">{{ pretty(row.responseData) }}</pre>
+                    <pre
+                      class="max-h-56 flex-1 overflow-auto whitespace-pre-wrap break-all rounded border border-black/10 bg-black/[0.03] p-2 text-[11px] leading-relaxed">
+          {{ pretty(row.responseData) }}</pre>
                   </div>
                 </div>
               </template>
@@ -73,7 +77,7 @@
             <el-table-column prop="method" label="方法" width="160" show-overflow-tooltip />
             <el-table-column label="状态" width="90">
               <template #default="{ row }">
-                <span :class="row.status != null && row.status >= 400 ? 'text-rose-600' : 'text-emerald-600'">
+                <span :class="row.status != null && row.status >= 400 ? 'text-[color:var(--danger)]' : 'text-[color:var(--ok)]'">
                   {{ row.status ?? '—' }}
                 </span>
               </template>
@@ -86,7 +90,7 @@
               <template #default="{ row }">
                 <button
                   v-if="row.traceId"
-                  class="text-[12px] text-indigo-600 hover:text-indigo-700"
+                  class="text-[12px] text-accent hover:text-accent"
                   @click="$emit('open-trace',String(row.traceId))">
                   查看 Trace
                 </button>

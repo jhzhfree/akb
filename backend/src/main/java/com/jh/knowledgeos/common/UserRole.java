@@ -80,7 +80,10 @@ public enum UserRole {
                 granted.addAll(Permissions.ALL);
                 break;
             case KNOWLEDGE_ADMIN:
-                granted.addAll(Arrays.asList(Permissions.WORKBENCH_VIEW, Permissions.WORKBENCH_ASSET, Permissions.GENERATE_IMPORT, Permissions.GENERATE_CONNECTOR, Permissions.GENERATE_JUDGE, Permissions.GENERATE_DERIVE, Permissions.SEARCH_QUERY, Permissions.SEARCH_GRAPH, Permissions.SEARCH_TEST, Permissions.SEARCH_POLICY, Permissions.SEARCH_EVALUATE, Permissions.INTEGRATION_VIEW, Permissions.SYSTEM_SPACE, Permissions.SYSTEM_SCHEMA));
+                granted.addAll(Arrays.asList(Permissions.WORKBENCH_VIEW, Permissions.WORKBENCH_ASSET, Permissions.GENERATE_IMPORT,
+                    Permissions.GENERATE_CONNECTOR, Permissions.GENERATE_JUDGE, Permissions.GENERATE_DERIVE, Permissions.SEARCH_QUERY,
+                    Permissions.SEARCH_GRAPH, Permissions.SEARCH_TEST, Permissions.SEARCH_POLICY, Permissions.SEARCH_EVALUATE,
+                    Permissions.INTEGRATION_VIEW, Permissions.SYSTEM_SPACE, Permissions.SYSTEM_SCHEMA));
                 break;
             case KNOWLEDGE_AUDITOR:
                 granted.addAll(knowledgeOperatorPermissions());
@@ -106,7 +109,8 @@ public enum UserRole {
      * 知识运营员的基线权限：简化知识生成 + 只读知识检索。
      */
     private static Set<String> knowledgeOperatorPermissions() {
-        return new LinkedHashSet<String>(Arrays.asList(Permissions.WORKBENCH_VIEW, Permissions.WORKBENCH_ASSET, Permissions.GENERATE_IMPORT, Permissions.SEARCH_QUERY, Permissions.SEARCH_GRAPH));
+        return new LinkedHashSet<String>(Arrays.asList(Permissions.WORKBENCH_VIEW, Permissions.WORKBENCH_ASSET, Permissions.GENERATE_IMPORT,
+            Permissions.SEARCH_QUERY, Permissions.SEARCH_GRAPH));
     }
 
     public boolean has(String permission) {

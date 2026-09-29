@@ -15,7 +15,7 @@ import re
 import uuid
 from typing import Any
 
-from app.core.knowledge_schema import relation_vocabulary
+from app.core.knowledge_schema import entity_types, relation_vocabulary
 from app.services.llm_provider import get_llm_provider
 from app.services.standard_document import clean_inline, has_content
 
@@ -109,7 +109,40 @@ RELATION_VOCABULARY = (
     "DESCRIBES",
     "CONTAINS",
     "MANAGES",
+    "AFFECTS",
+    "DEPLOYED_IN",
 )
+# How each controlled relation label reads in running text. A model answers in the language it
+# was asked in, so a Chinese predicate such as "受影响于" arrives even when the vocabulary is
+# English; mapping it back here is what keeps an edge typed instead of collapsing into
+# RELATED_TO, which no traversal rule can travel on.
+RELATION_HINTS: tuple[tuple[str, tuple[str, ...]], ...] = (
+    ("AFFECTS", ("受影响", "影响", "波及", "危害", "命中", "存在风险", "affects", "impacts")),
+    ("CAUSES", ("导致", "引起", "造成", "引发", "causes")),
+    ("DEPENDS_ON", ("依赖", "依赖于", "基于", "depends on")),
+    ("USES", ("使用", "采用", "集成", "uses", "utilizes")),
+    ("DEPLOYED_IN", ("部署于", "部署在", "部署到", "部署", "上线于", "运行于", "运行在", "deployed")),
+    ("BELONGS_TO", ("属于", "归属于", "隶属于", "归属", "belongs to")),
+    ("MANAGES", ("管理", "负责", "运维", "owner", "managed by")),
+    ("PART_OF", ("组成部分", "的一部分", "组成", "part of")),
+    ("CONTAINS", ("包含", "含有", "contains")),
+    ("LOCATED_IN", ("位于", "坐落于", "located in")),
+    ("DESCRIBES", ("描述", "说明", "定义为", "describes")),
+)
+RELATION_LABELS: dict[str, str] = {
+    "RELATED_TO": "通用关联",
+    "PART_OF": "组成部分",
+    "DEPENDS_ON": "依赖",
+    "USES": "使用",
+    "CAUSES": "导致",
+    "BELONGS_TO": "归属/属于",
+    "LOCATED_IN": "位于",
+    "DESCRIBES": "描述",
+    "CONTAINS": "包含",
+    "MANAGES": "管理/负责",
+    "AFFECTS": "受影响于/影响",
+    "DEPLOYED_IN": "部署于",
+}
 
 logger = logging.getLogger(__name__)
 
@@ -136,11 +169,25 @@ class KnowledgeExtractor:
         # Relation labels come from the published schema of this knowledge base, so a
         # customised vocabulary is honoured without redeploying the extractor.
         vocabulary = relation_vocabulary(knowledge_base_id)
+        types = entity_types(knowledge_base_id)
         if llm.name != "mock" and text:
             try:
-                result = await llm.extract_json(self._prompt(text[:14000], material, vocabulary))
+                # The full budget is spent up front: a reasoning model that runs out of tokens
+                # mid-thought returns an empty answer, and losing cards and claims to that is
+                # worse than the extra latency of asking for a bigger response once.
+                result = await llm.extract_json(
+                    self._prompt(text[:14000], material, vocabulary, types), max_tokens=8192
+                )
+                if not isinstance(result, dict):
+                    # A reasoning model can spend the whole output budget on thinking and return an
+                    # empty answer. One stricter retry with the full budget is worth the latency:
+                    # the alternative is silently falling back to co-occurrence edges, which are
+                    # exactly the untyped RELATED_TO relations no traversal rule can travel on.
+                    result = await llm.extract_json(
+                        self._strict_prompt(text[:8000], vocabulary, types), max_tokens=8192
+                    )
                 if isinstance(result, dict):
-                    return self._normalize(result, material, vocabulary)
+                    return self._normalize(result, material, vocabulary, types)
             except Exception as exc:
                 # Extraction must remain usable offline. Log why fallback was
                 # selected instead of silently swallowing the model failure.
@@ -185,9 +232,30 @@ class KnowledgeExtractor:
         return material
 
     @staticmethod
-    def _prompt(text: str, material: list[dict[str, Any]], vocabulary: tuple | None = None) -> str:
+    def _relation_glossary(vocabulary: tuple | None = None) -> str:
+        """One readable line per allowed relation type, with the wording that triggers it.
+
+        A model asked for "DEPENDS_ON" answers "依赖" unless the vocabulary also says what the
+        label means; the glossary closes that gap without hard-coding Chinese into the schema.
+        """
+        parts = []
+        for rtype in vocabulary or RELATION_VOCABULARY:
+            keywords = next((item[1] for item in RELATION_HINTS if item[0] == rtype), ())
+            hint = "、".join(keywords[:3])
+            label = RELATION_LABELS.get(rtype, "")
+            parts.append("%s（%s%s）" % (rtype, label, ("，出现" + hint + "时用") if hint else ""))
+        return "；".join(parts)
+
+    @classmethod
+    def _prompt(
+        cls,
+        text: str,
+        material: list[dict[str, Any]],
+        vocabulary: tuple | None = None,
+        types: tuple | None = None,
+    ) -> str:
         return (
-            "请从企业知识材料中抽取结构化知识，只输出 JSON：\n"
+            "请从企业知识材料中抽取结构化知识，直接输出 JSON，不要输出分析过程或代码块：\n"
             '{"cards":[{"type":"FACT|PROCEDURE|RULE|PROBLEM_SOLUTION|CONCEPT",'
             '"title":"","summary":"","content":"","confidence":0.0,'
             '"evidence_ids":[],"entity_codes":[]}],'
@@ -201,9 +269,16 @@ class KnowledgeExtractor:
             "说明：polarity 只能为 POSITIVE/NEGATIVE；certainty 是表述确定性；"
             "valid_from/valid_to 表示该结论的适用期限，无法确定时留空。\n"
             "关系要求：relations 描述实体之间的关联，source/target 必须是同一个 "
-            "entities 数组里出现过的实体名称，relation_type 只能取 "
-            + "|".join(vocabulary or RELATION_VOCABULARY)
-            + "，不要输出自环，最多 30 条有把握的关系。\n"
+            "entities 数组里出现过的实体名称；relation_type 必须原样输出下列受控英文代号之一，"
+            "不得输出中文或自造类型：\n"
+            + cls._relation_glossary(vocabulary)
+            + "\n例：“OpenSSL 3.0.12 受 CVE-2026-1234 影响”→ AFFECTS；“SecureGateway V5.2 使用 OpenSSL 3.0.12”→ USES；"
+            "“上海银行安全网关项目部署 SecureGateway V5.2”→ DEPLOYED_IN；“上海银行安全网关项目属于上海银行”→ BELONGS_TO。"
+            "不要输出自环，最多 30 条有把握的关系。\n"
+            "实体要求：entities 的 type 只能取 "
+            + "|".join(types or ("TERM",))
+            + "，例如漏洞取 VULNERABILITY、产品取 PRODUCT、项目取 PROJECT、客户取 CUSTOMER；"
+            "客户、组织机构等参与方必须单独抽取为实体，不要只抽取项目名。\n"
             "挂载要求：cards/claims 的 entity_codes 填写该条知识涉及的实体名称，"
             "没有则留空数组。\n"
             "标题要求：title 不得包含 #、*、-、| 等排版符号，不得照抄表格分隔行；"
@@ -215,6 +290,7 @@ class KnowledgeExtractor:
         result: dict[str, Any],
         material: list[dict[str, Any]],
         vocabulary: tuple | None = None,
+        types: tuple | None = None,
     ) -> dict[str, Any]:
         """Keep only candidates that carry meaning after cleaning.
 
@@ -250,10 +326,11 @@ class KnowledgeExtractor:
             if not has_content(name):
                 continue
             entity["name"] = name[:120]
-            entity["type"] = str(entity.get("type") or "TERM").upper()[:32]
+            entity["type"] = self._entity_type(entity.get("type"), types)
             entities.append(entity)
         index = self._entity_index(entities)
-        relations = self._clean_relations(result.get("relations", []), index, vocabulary)
+        contexts = [str(item.get("content") or "") for item in material]
+        relations = self._clean_relations(result.get("relations", []), index, vocabulary, contexts)
         self._link_entities(cards, claims, index)
         if not relations:
             relations = self._cooccurrence_relations(material, index)
@@ -312,9 +389,18 @@ class KnowledgeExtractor:
             claim["entity_codes"] = cls._codes_in(text, index)
 
     def _clean_relations(
-        self, raw: Any, index: dict[str, str], vocabulary: tuple | None = None
+        self,
+        raw: Any,
+        index: dict[str, str],
+        vocabulary: tuple | None = None,
+        contexts: list[str] | None = None,
     ) -> list[dict[str, Any]]:
-        """Resolve model relations onto batch entities, dropping dangling or self edges."""
+        """Resolve model relations onto batch entities, dropping dangling or self edges.
+
+        A label the model invented, or wrote in Chinese, still names the relation in the
+        sentence it came from; when the label is not in the vocabulary the wording of that
+        sentence decides the type, so "受影响于" becomes AFFECTS instead of RELATED_TO.
+        """
         relations = []
         for item in raw or []:
             if not isinstance(item, dict):
@@ -327,17 +413,79 @@ class KnowledgeExtractor:
             )
             if not source or not target or self._key(source) == self._key(target):
                 continue
+            raw_type = item.get("relation_type") or item.get("type") or item.get("predicate")
+            relation_type = self._relation_type(raw_type, vocabulary)
+            if relation_type == "RELATED_TO":
+                sentence = self._context_sentence(source, target, contexts)
+                relation_type = self._infer_relation_type(sentence or str(raw_type or ""), vocabulary) or relation_type
             relations.append(
                 {
                     "source": source,
                     "target": target,
-                    "relation_type": self._relation_type(
-                        item.get("relation_type") or item.get("type") or item.get("predicate")
-                    ),
+                    "relation_type": relation_type,
                     "confidence": self._confidence(item.get("confidence"), 0.6),
                 }
             )
         return relations
+
+    @classmethod
+    def _typed_cooccurrence(
+        cls,
+        material: list[dict[str, Any]],
+        index: dict[str, str],
+        vocabulary: tuple | None = None,
+        contexts: list[str] | None = None,
+    ) -> list[dict[str, Any]]:
+        """Co-occurrence edges, typed by the wording of the sentence that mentions both ends."""
+        relations = cls._cooccurrence_relations(material, index)
+        for relation in relations:
+            sentence = cls._context_sentence(relation.get("source"), relation.get("target"), contexts)
+            inferred = cls._infer_relation_type(sentence, vocabulary)
+            if inferred:
+                relation["relation_type"] = inferred
+        return relations
+
+    @classmethod
+    def _strict_prompt(cls, text: str, vocabulary: tuple | None = None, types: tuple | None = None) -> str:
+        """Fallback prompt: the smallest request that still yields typed entities and relations.
+
+        Used when the first attempt came back empty. It drops cards and claims — they are valuable
+        but the graph is what makes an impact chain answerable — and asks for JSON only, because
+        a model that is thinking out loud has no budget left for the answer.
+        """
+        return (
+            "只输出 JSON，不要输出分析过程、解释或代码块。\n"
+            '格式：{"entities":[{"name":"","type":""}],'
+            '"relations":[{"source":"","target":"","relation_type":""}]}\n'
+            "relation_type 只能取：" + "|".join(vocabulary or RELATION_VOCABULARY) + "\n"
+            "type 只能取：" + "|".join(types or ("TERM",)) + "\n"
+            "关系含义：" + cls._relation_glossary(vocabulary) + "\n"
+            "材料：\n" + text
+        )
+
+    @classmethod
+    def _context_sentence(cls, source: str, target: str, contexts: list[str] | None) -> str:
+        """The sentence that mentions both endpoints; wording decides the relation type."""
+        for block in contexts or []:
+            for sentence in re.split(r"[。！？；;\n]", str(block or "")):
+                if source and target and source in sentence and target in sentence:
+                    return sentence
+        return ""
+
+    @classmethod
+    def _infer_relation_type(cls, context: Any, vocabulary: tuple | None = None) -> str:
+        """Map the wording of a sentence onto a controlled relation label."""
+        text = str(context or "")
+        if not text:
+            return ""
+        allowed = vocabulary or RELATION_VOCABULARY
+        for relation_type, keywords in RELATION_HINTS:
+            if relation_type not in allowed:
+                continue
+            for keyword in keywords:
+                if keyword in text:
+                    return relation_type
+        return ""
 
     @classmethod
     def _resolve_ref(cls, value: Any, index: dict[str, str]) -> str:
@@ -359,6 +507,16 @@ class KnowledgeExtractor:
         return text[:40]
 
     @staticmethod
+    def _entity_type(value: Any, types: tuple | None = None) -> str:
+        """Whitelist the entity type so node kinds stay inside the published schema."""
+        text = re.sub(r"[^A-Za-z0-9_]", "_", str(value or "").strip().upper())
+        text = re.sub(r"_+", "_", text).strip("_")
+        allowed = tuple(types or ()) or ("TERM",)
+        if text and text in allowed:
+            return text[:32]
+        return "TERM" if "TERM" in allowed else allowed[0]
+
+    @staticmethod
     def _confidence(value: Any, default: float) -> float:
         try:
             score = float(value)
@@ -373,18 +531,30 @@ class KnowledgeExtractor:
         index: dict[str, str],
         vocabulary: tuple | None = None,
     ) -> list[dict[str, Any]]:
-        """Turn subject/predicate/object claims into typed entity relations."""
+        """Turn subject/predicate/object claims into typed entity relations.
+
+        A predicate is written in the language of the source document ("受影响于"), and the
+        vocabulary is a set of English codes, so mapping the wording back is what keeps a
+        claim from becoming an untyped edge that no traversal rule can follow.
+        """
         relations = []
         for claim in claims:
             source = cls._match_entity(claim.get("subject"), index)
             target = cls._match_entity(claim.get("object") or claim.get("object_value"), index)
             if not source or not target or source == target:
                 continue
+            relation_type = cls._relation_type(claim.get("predicate") or "DESCRIBES", vocabulary)
+            if relation_type == "RELATED_TO":
+                wording = "%s %s" % (
+                    claim.get("predicate") or "",
+                    claim.get("object") or claim.get("object_value") or "",
+                )
+                relation_type = cls._infer_relation_type(wording, vocabulary) or relation_type
             relations.append(
                 {
                     "source": source,
                     "target": target,
-                    "relation_type": cls._relation_type(claim.get("predicate") or "DESCRIBES", vocabulary),
+                    "relation_type": relation_type,
                     "confidence": cls._confidence(claim.get("confidence"), 0.6),
                 }
             )

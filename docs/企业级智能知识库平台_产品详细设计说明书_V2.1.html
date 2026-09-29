@@ -33,7 +33,7 @@ footer{padding:28px;text-align:center;border-top:1px solid var(--line);color:#7a
 <section class="cover"><div class="badge" style="background:#ffffff22;color:#fff">Detailed Product Design Specification</div>
 <h1>企业级智能知识库平台 产品详细设计说明书</h1>
 <h2>基于 PRD V2.2 五大一级菜单 · 知识生成 · 知识图谱归入知识检索</h2>
-<div class="meta"><span>版本：V2.0</span><span>日期：2026-09</span><span>面向：产品 / UI / 前端 / 后端 / AI / 测试</span><span>设计目标：少入口、任务导向、知识资产中心化</span></div></section>
+<div class="meta"><span>版本：V2.1</span><span>日期：2026-09（修订）</span><span>面向：产品 / UI / 前端 / 后端 / AI / 测试</span><span>设计目标：少入口、任务导向、知识资产中心化</span><span>呈现层：深浅双主题 · 语义化样式 token</span></div></section>
 <main>
 <div class="note ok"><b>V2.1 设计基线变更：</b>
 ① “知识创建”统一更名为“知识生成”，强调从原始数据到可信知识资产的流水线，而不是简单 CRUD；
@@ -42,7 +42,7 @@ footer{padding:28px;text-align:center;border-top:1px solid var(--line);color:#7a
 </div>
 
 <div class="toc"><strong>目录</strong><ol>
-<li><a href="#d1">设计基线与总体原则</a></li><li><a href="#d2">全局框架与导航</a></li>
+<li><a href="#d1">设计基线与总体原则</a></li><li><a href="#d2">全局框架与导航</a></li><li><a href="#theme">主题与视觉规范（深浅双主题）</a></li>
 <li><a href="#d3">知识工作台详细设计</a></li><li><a href="#d4">知识生成详细设计</a></li>
 <li><a href="#d5">知识检索详细设计</a></li><li><a href="#d6">知识集成详细设计</a></li>
 <li><a href="#d7">系统配置详细设计</a></li><li><a href="#d8">核心对象与统一详情</a></li>
@@ -83,11 +83,73 @@ footer{padding:28px;text-align:center;border-top:1px solid var(--line);color:#7a
 <tr><td>全局搜索</td><td>搜索 Card/Assertion/Document/Entity；Enter 进入“知识检索”。</td></tr>
 <tr><td>任务</td><td>展示解析、同步、索引、评测等异步任务；失败任务可进入详情。</td></tr>
 <tr><td>用户菜单</td><td>个人信息、API Token（如授权）、退出。</td></tr>
+<tr><td>主题切换</td><td>顶栏右侧切换深色 / 浅色；选择写入本地存储并在刷新后保持；未选择时跟随系统偏好。</td></tr>
+</tbody></table>
+</section>
+
+<section id="theme"><h2>2.2 主题与视觉规范（深浅双主题）</h2>
+<p class="lead">呈现层不再按页面各自调色，所有组件只消费一套主题 token：同一个语义在深色与浅色下取不同值，组件只写“主文本 / 次级表面 / 成功态”这类语义，不写具体色值。新增一个主题只需新增一组变量，不改任何组件。</p>
+
+<h3>2.2.1 主题切换与作用域</h3>
+<table><thead><tr><th>项</th><th>规则</th></tr></thead><tbody>
+<tr><td>切换入口</td><td>顶栏右侧；切换后整站（含顶栏、侧栏、弹窗、抽屉、表格、图谱画布）同步变化。</td></tr>
+<tr><td>持久化</td><td>本地存储保存选择，刷新与重新登录保持；未选择时跟随系统 <code>prefers-color-scheme</code>。</td></tr>
+<tr><td>作用域</td><td>主题作用于根节点的 <code>data-theme</code>，所有变量在该作用域下重定义；组件无需感知当前主题。</td></tr>
+<tr><td>对比度</td><td>正文与背景对比度不低于 4.5:1；弱化文字不低于 3:1；状态色在两种主题下都必须落在“可读”区间。</td></tr>
+</tbody></table>
+
+<h3>2.2.2 语义色阶与表面</h3>
+<table><thead><tr><th>语义</th><th>深色取值</th><th>浅色取值</th><th>用途</th></tr></thead><tbody>
+<tr><td>页面底色</td><td><code>#0b1220</code></td><td><code>#f4f6fb</code></td><td>应用最外层背景</td></tr>
+<tr><td>卡片 / 面板</td><td><code>#111a30</code></td><td><code>#ffffff</code></td><td>卡片、弹窗、抽屉</td></tr>
+<tr><td>次级表面</td><td><code>#1a2440</code></td><td><code>#eef2f9</code></td><td>表头、行 hover、内嵌块</td></tr>
+<tr><td>凹陷面</td><td><code>#070c18</code></td><td><code>#e7ecf5</code></td><td>代码块、只读区</td></tr>
+<tr><td>主文本 / 次级 / 弱化</td><td><code>#eaf0fa</code> / <code>#aab7cc</code> / <code>#6b7a93</code></td><td><code>#0f172a</code> / <code>#475569</code> / <code>#64748b</code></td><td>标题、正文、说明与占位</td></tr>
+<tr><td>细分割线 / 常规边框 / 悬浮边框</td><td><code>#1e2a45</code> / <code>#27355a</code> / <code>#2a3757</code></td><td><code>#e2e8f0</code> / <code>#cbd5e1</code> / <code>#d8e0ec</code></td><td>分割、卡片边、可交互元素边</td></tr>
+<tr><td>强调文字</td><td><code>#93b4fd</code></td><td><code>#1d4ed8</code></td><td>链接、激活项、可点文字（禁止直接使用品牌色原色）</td></tr>
+</tbody></table>
+<div class="note">色阶采用“语义编号”而非“明暗编号”：<code>text-ink-900</code> 永远表示主文本，在深色下是亮色、浅色下是深色。组件因此不需要写任何主题分支。</div>
+
+<h3>2.2.3 按钮三档</h3>
+<table><thead><tr><th>档位</th><th>形态</th><th>用于</th><th>两主题表现</th></tr></thead><tbody>
+<tr><td>主操作</td><td>品牌色实心 + 白字 + 品牌色边框</td><td>页面唯一主行动点：生成知识、开始导入、发布服务</td><td>形态一致，仅品牌色深浅不同</td></tr>
+<tr><td>次操作</td><td>表面底 + <b>可见边框</b> + 主文本</td><td>刷新、重试、预览、批量操作</td><td>边框在深色下必须可见，否则会退化成一块看不出边界的深色</td></tr>
+<tr><td>弱操作</td><td>无边框 + 次级文字，hover 才出现底色</td><td>取消、关闭、次要链接</td><td>同上</td></tr>
+<tr><td>危险操作</td><td>危险色实心 + 白字</td><td>删除、停用、废止</td><td>同上</td></tr>
+</tbody></table>
+<div class="note warn">切换类按钮（如“文档 / 文本分块 / 实体归一”）统一写成「次操作 + 选中即切主操作」，并依赖样式层顺序保证主操作覆盖次操作；禁止用透明度、下划线或自绘底色表示选中。</div>
+
+<h3>2.2.4 状态三件套与状态胶囊</h3>
+<p>任何位置展示“成功 / 警告 / 失败 / 进行中 / 中性”，一律使用同一枚状态胶囊：底色 + 字色 + 边框三件套由主题给出，深浅各一套。</p>
+<table><thead><tr><th>状态</th><th>深色（字 / 底 / 边）</th><th>浅色（字 / 底 / 边）</th><th>典型场景</th></tr></thead><tbody>
+<tr><td>成功</td><td><code>#34d399</code> / <code>#12352a</code> / <code>#1f5c48</code></td><td><code>#047857</code> / <code>#d1fae5</code> / <code>#a7f3d0</code></td><td>解析成功、已发布、启用、健康</td></tr>
+<tr><td>警告</td><td><code>#fbbf24</code> / <code>#3b2f14</code> / <code>#5a4718</code></td><td><code>#b45309</code> / <code>#fef3c7</code> / <code>#fcd34d</code></td><td>运行中、待审核、待处理、降级</td></tr>
+<tr><td>失败</td><td><code>#f87171</code> / <code>#3a1626</code> / <code>#5c2130</code></td><td><code>#dc2626</code> / <code>#fee2e2</code> / <code>#fecaca</code></td><td>解析失败、冲突、异常、停用</td></tr>
+<tr><td>信息</td><td><code>#60a5fa</code> / <code>#1d3f8c</code> / <code>#2a4f9c</code></td><td><code>#1d4ed8</code> / <code>#dbeafe</code> / <code>#bfdbfe</code></td><td>排队中、进行中提示、类型标签</td></tr>
+<tr><td>中性</td><td><code>#aab7cc</code> / <code>#1a2440</code> / <code>#27355a</code></td><td><code>#475569</code> / <code>#eef2f9</code> / <code>#e2e8f0</code></td><td>已取消、未知、编码类标签</td></tr>
+</tbody></table>
+<table><thead><tr><th>形态</th><th>使用位置</th><th>规则</th></tr></thead><tbody>
+<tr><td>状态胶囊</td><td>列表状态列、表格状态列、详情头部、结果卡片</td><td>统一圆角与字号；与正文同列时不换行挤压；文字使用中文状态（成功 / 失败 / 进行中 / 已取消 / 排队中），不直接展示后端枚举</td></tr>
+<tr><td>状态点</td><td>接入日志运行列表、批量文件行、时间线节点</td><td>圆点与胶囊同色系，仅用于“扫一眼看出状态”，旁侧仍需文字或胶囊</td></tr>
+<tr><td>选中行</td><td>文件列表、运行列表、资料列表</td><td>强调底色 + 左侧强调竖条，与 hover 态区分开</td></tr>
+</tbody></table>
+
+<h3>2.2.5 第三方组件的主题桥接</h3>
+<p>表格、标签、按钮、进度条、弹窗、分页等基础组件来自 Element Plus，其默认皮肤是浅色的。做法是把组件的 CSS 变量整体接到本套 token 上（背景、文字、边框、填充、状态色及其浅色变体），使它们在深色主题下自动变成深色底 + 亮色字，在浅色主题下使用本套状态色，而不需要逐个组件写主题分支。</p>
+<div class="note ok"><b>收益：</b>状态色在“自己写的胶囊”和“第三方组件的标签”上完全一致；新增主题时第三方组件自动跟随。</div>
+
+<h3>2.2.6 实施纪律</h3>
+<table><thead><tr><th>禁止</th><th>替代做法</th></tr></thead><tbody>
+<tr><td>在组件里写固定调色板色（如“浅绿底 + 深绿字”）</td><td>使用状态胶囊类，配色由主题给出</td></tr>
+<tr><td>用品牌色原色当文字色</td><td>使用强调文字色（深色下更亮、浅色下更深）</td></tr>
+<tr><td>用灰色写死边框、分割线</td><td>使用分割线 / 边框变量</td></tr>
+<tr><td>用透明度表示禁用或弱化</td><td>使用弱化文字色与禁用态样式</td></tr>
+<tr><td>每个页面自定义按钮与标签</td><td>使用按钮三档与状态胶囊</td></tr>
 </tbody></table>
 </section>
 
 <section id="d3"><h2>3. 知识工作台详细设计</h2>
-<p>路由建议：<code>/knowledge/workbench?spaceId=...</code>。这是登录后的默认业务首页。</p>
+<p>路由建议：<code>/knowledge/workbench?spaceId=...</code>。这是登录后的默认业务首页。页面顶部 Tab：<b>工作台 / 资产浏览 / 版本 / 质量</b>（横向切换，不是左侧二级菜单）。</p>
 <div class="screen"><div class="bar">知识工作台</div><div class="body">
 <div class="flow">[空间名称]  知识健康度 92%                         [创建知识] [知识搜索]
 
@@ -142,10 +204,12 @@ footer{padding:28px;text-align:center;border-top:1px solid var(--line);color:#7a
 [采用 A] [采用 B] [合并] [全部拒绝] [要求补充证据]</div></div></div>
 <h3>4.5 知识衍生</h3>
 <p>包含三个 Tab：衍生规则、候选衍生知识、运行记录。候选详情必须展示 baseAssertionIds、derivationType、rule/algorithmVersion、graphPath、confidence 和 Evidence；基础知识变更后标记 STALE。</p>
+<h3>4.6 摄入运行日志</h3>
+<p>左列为已上传文件 / 运行记录，右列为该次运行的时间线（接入 → 解析 → 入库 → 抽取 → 建索引）。左列每行展示状态点 + 文件名 + 阶段与时间 + 状态胶囊；状态胶囊显示<b>中文</b>状态（成功 / 失败 / 进行中 / 排队中 / 已取消），不展示后端枚举原文。选中行使用强调底色 + 左侧强调竖条，与 hover 态区分。上传进行中时日志跟随最新事件滚动。</p>
 </section>
 
 <section id="d5"><h2>5. 知识检索详细设计</h2>
-<p>路由：<code>/knowledge/search</code>，顶部 Tab：搜索｜检索测试｜检索策略｜Query Trace｜知识图谱｜Benchmark。</p>
+<p>路由：<code>/knowledge/search</code>，顶部 Tab：<b>搜索｜检索测试｜检索策略｜检索链路追踪（Query Trace）｜知识图谱｜检索评测（Benchmark）</b>。「检索测试」与「检索链路追踪」属于调试类页面：配置区 + 结果区 + Trace 抽屉。</p>
 <h3>5.1 搜索</h3>
 <div class="flow">[自然语言或关键词................................] [搜索]
 过滤：来源 | 知识类型 | 标签 | 状态 | 时间 | 对象类型
@@ -162,7 +226,7 @@ footer{padding:28px;text-align:center;border-top:1px solid var(--line);color:#7a
 <p>左侧 Query/策略配置，右侧结果；结果展开 Score Breakdown：BM25、Vector、RRF、Rerank、Business Weight。点击“Trace”打开 Drawer 查看各阶段输入输出与耗时。</p>
 <h3>5.3 Retrieval Profile</h3>
 <p>Profile 采用“基础设置 + 高级设置”。基础设置仅包含知识范围、搜索模式、TopK；高级设置包含权重、阈值、RRF K、Reranker、Graph Expansion、Context Window。</p>
-<h3>5.4 Benchmark</h3>
+<h3>5.4 检索评测（Benchmark）</h3>
 <p>数据集管理、运行历史、版本对比。至少显示 Hit@1/3/5、Recall@K、Citation Accuracy、Latency；P1 增加 MRR/NDCG/Faithfulness。</p>
 </section>
 
@@ -263,6 +327,7 @@ data: {"code":"...","message":"..."}</div>
 </section>
 
 <section id="d7"><h2>7. 系统配置详细设计</h2>
+<p>页面顶部 Tab：<b>配置总览 / 模型配置 / 用户与组织 / 角色与权限 / 知识 Schema / 存储与索引 / 任务与告警 / 审计日志 / 知识空间</b>。低频平台配置集中在此，不占用业务导航；「用户与组织」仅管理员可见。</p>
 <table><thead><tr><th>模块</th><th>页面</th><th>关键设计</th></tr></thead><tbody>
 <tr><td>模型配置</td><td>LLM / Embedding / Reranker / OCR</td><td>Provider、Endpoint、Model、Key、Timeout、默认模型、连通性测试</td></tr>
 <tr><td>用户组织</td><td>用户 / 部门 / 用户组</td><td>启停、同步、批量授权</td></tr>
@@ -271,6 +336,7 @@ data: {"code":"...","message":"..."}</div>
 <tr><td>存储索引</td><td>Object / FullText / Vector / Graph</td><td>健康度、容量、重建，不暴露底层复杂配置给普通用户</td></tr>
 <tr><td>任务告警</td><td>任务 / DLQ / 告警规则</td><td>重试、人工重跑、Trace</td></tr>
 <tr><td>审计</td><td>操作 / 权限 / 裁决 / 集成调用</td><td>不可修改，按 traceId/objectId 检索</td></tr>
+<tr><td>知识空间</td><td>空间列表 / 成员 / 默认策略</td><td>空间是全局上下文，不在业务导航中重复出现</td></tr>
 </tbody></table>
 </section>
 
@@ -318,6 +384,7 @@ Derived ACTIVE → STALE → RECOMPUTING → PENDING/ACTIVE</div>
 <tr><td>Integration</td><td>/integration/services /credentials /mcp /api /streams /call-logs</td></tr>
 <tr><td>System</td><td>/models /users /roles /acl /schemas /indexes /tasks /audit</td></tr>
 </tbody></table>
+<div class="note"><b>当前实现路径：</b>上表为逻辑接口域，实际服务前缀为 <code>/api/knowledge/*</code>（dashboard、governance、derivations、evaluations、schema、settings、tasks、acl、env）、<code>/api/integration/*</code>、<code>/api/v1/external/*</code>（开放检索与流式）、<code>/api/external/admin/*</code>（服务与凭证管理）、<code>/api/mcp/*</code>、<code>/api/auth/*</code>、<code>/api/users/*</code>、<code>/api/groups/*</code>、<code>/api/internal/platform/events/*</code>。AI 能力由 Python 服务以 <code>/ai/documents/parse</code>、<code>/ai/extract</code>、<code>/ai/index/*</code>、<code>/ai/standard/search</code>、<code>/ai/entity-resolve</code>、<code>/ai/derive</code> 等内部接口提供。</div>
 <h3>11.1 关键事件</h3>
 <div class="code light">document.imported
 document.parsed
@@ -346,6 +413,16 @@ evaluation.completed</div>
 
 <section id="d13"><h2>13. 响应式与交互规范</h2>
 <p>桌面端为主要知识工程工作台；≥1440px 内容最大宽度建议 1600px，复杂页面允许全宽。Drawer 用于轻量详情和 Trace；需要原文对照、图谱、裁决的复杂任务使用独立页面。所有异步操作返回 taskId 并提供全局任务状态。</p>
+<h3>13.1 主题与状态呈现</h3>
+<table><thead><tr><th>场景</th><th>规范</th></tr></thead><tbody>
+<tr><td>主题切换</td><td>顶栏常驻入口，随时可切；不得把主题设置藏在系统配置里。</td></tr>
+<tr><td>状态呈现</td><td>列表状态列、日志运行列表、批量文件行、详情头部统一使用状态胶囊；状态点仅作辅助。</td></tr>
+<tr><td>状态文案</td><td>展示中文状态（成功 / 失败 / 进行中 / 排队中 / 已取消），前端负责枚举翻译。</td></tr>
+<tr><td>加载与空态</td><td>骨架屏、空态、错误态使用与主题一致的表面与文字层级；错误态使用失败色，不使用红色实心块。</td></tr>
+<tr><td>异步反馈</td><td>进行中使用警告色，成功使用成功色，失败可重试并在文案中给出下一步动作。</td></tr>
+</tbody></table>
+<h3>13.2 断点与密度</h3>
+<p>≥1440px 全宽复杂页；1100–1440px 双列降为单列或保持双列但压缩内边距；≤1100px 侧栏收起为图标条，卡片网格降为两列；≤720px 仅保证查看与关键操作，复杂编辑类任务提示使用桌面端。</p>
 </section>
 
 <section id="d14"><h2>14. 研发拆分与验收</h2>

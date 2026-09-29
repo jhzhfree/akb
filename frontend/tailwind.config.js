@@ -1,34 +1,46 @@
-/** @type {import('tailwindcss').Config} */
-// brand / teal 色阶与 src/app.css 的 :root token 一一对应，改色请两边同步，
-// 否则同一语义会出现「 tailwind 类一种蓝、自定义 CSS 另一种蓝 」。
+/** tailwind.config —— ai-knowledge-os 前端主题
+ *  ink / brand 是语义色阶：50 = 背景端，950 = 文本端。
+ *  值全部指向 theme.css 的通道变量（[data-theme] 切换时整体换肤），
+ *  用 rgb(var(--x) / <alpha-value>) 形式保留 bg-xxx/30 这类透明度修饰符。
+ */
+const token = (name) => `rgb(var(${name}) / <alpha-value>)`
+
 export default {
-  content: ['./index.html', './src/**/*.{vue,ts}'],
+  content: ['./index.html', './src/**/*.{vue,ts,tsx}'],
   theme: {
     extend: {
       colors: {
         ink: {
-          50:'#f6f7f9',100:'#eceef2',200:'#d5d9e2',300:'#b0b8c9',400:'#8591a9',
-          500:'#66738e',600:'#515c74',700:'#424b5e',800:'#3a4050',900:'#343845',950:'#23262e',
+          50: token('--ink-50-rgb'),
+          100: token('--ink-100-rgb'),
+          200: token('--ink-200-rgb'),
+          300: token('--ink-300-rgb'),
+          400: token('--ink-400-rgb'),
+          500: token('--ink-500-rgb'),
+          600: token('--ink-600-rgb'),
+          700: token('--ink-700-rgb'),
+          800: token('--ink-800-rgb'),
+          900: token('--ink-900-rgb'),
+          950: token('--ink-950-rgb'),
         },
+        // accent = 强调文字/链接色（深浅两档由主题给出），组件里写 text-accent 即可
+        accent: token('--accent-text-rgb'),
         brand: {
-          50:'#eef4ff',100:'#dbe7fe',200:'#c3d7fd',300:'#93b4fd',400:'#5b8bf7',
-          500:'#2563eb',600:'#1d4ed8',700:'#1b3fa8',800:'#172554',900:'#111a3c',
+          50: token('--brand-50-rgb'),
+          100: token('--brand-100-rgb'),
+          200: token('--brand-200-rgb'),
+          300: token('--brand-300-rgb'),
+          400: token('--brand-400-rgb'),
+          500: token('--brand-500-rgb'),
+          600: token('--brand-600-rgb'),
+          700: token('--brand-700-rgb'),
+          800: token('--brand-800-rgb'),
+          900: token('--brand-900-rgb'),
         },
-        teal: { 400:'#14b8a6', 500:'#0f766e' },
-      },
-      fontFamily: {
-        sans:['Inter','PingFang SC','Microsoft YaHei','system-ui','sans-serif'],
-        mono:['JetBrains Mono','Cascadia Code','Consolas','monospace'],
-      },
-      borderRadius: {
-        sm:'8px', md:'12px', lg:'16px', xl:'20px',
-      },
-      boxShadow: {
-        card:'0 1px 2px rgba(16,24,40,.04)',
-        lift:'0 4px 14px rgba(23,37,84,.07)',
-        float:'0 16px 40px rgba(23,37,84,.14)',
       },
     },
   },
-  plugins: [],
+  corePlugins: {
+    preflight: false, // app.css 已做 reset，避免与 Element Plus 冲突
+  },
 }

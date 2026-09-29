@@ -9,12 +9,11 @@ import asyncio
 import logging
 import re
 import time
-from datetime import datetime
 
 from app.core.config import settings
 from app.core.query_policy import (
-    DEFAULT_SYNONYMS,
     channel_weights,
+    chunk_boost_weights,
     effective_strategies,
     load_policy,
     policy_summary,
@@ -24,6 +23,8 @@ from app.core.query_policy import (
 from app.services.answer_evidence_gate import AnswerEvidenceGate
 from app.services.answer_qualification import AnswerQualification
 from app.services.llm_provider import get_llm_provider
+from app.services.query_understanding import QueryRouter, QueryRewriter
+from app.services.query_presentation import build_score_breakdown, chunk_boost, is_chunk_evidence, quality_signals
 from app.services.reranker import get_reranker
 from app.services.retrieval.hybrid import HybridRetriever, rrf
 from app.services.structured_answer_gate import StructuredAnswerGate
@@ -42,241 +43,6 @@ QUESTION_TYPE_LABELS = {
     "FACT": "事实/定义",
     "DEFAULT": "通用问答",
 }
-
-
-class QueryRouter:
-    """Map query intent to the minimum useful set of retrieval channels.
-
-    Rules come from the runtime query policy (design V1.1 section 8.1) instead of a
-    hard-coded table, so operators can add question types, change trigger keywords, tune
-    priorities, or switch the recall channels of one intent without a code change. Every
-    decision carries a human-readable reason so it stays auditable inside the trace.
-    """
-
-    def __init__(self, rules=None):
-        """Bind an optional static rule set; ``None`` resolves the live policy per call."""
-        self._rules = rules
-
-    def route(self, q, rules=None, enabled=True, defaultStrategies=None):
-        """Return the winning rule for one question, or the configured fallback."""
-        entries = self._resolve(rules)
-        defaults = defaultStrategies if defaultStrategies is not None else load_policy().route.defaultStrategies
-        if not enabled:
-            return self._fallback(defaults, "policy_disabled", "路由规则已停用，统一使用默认通道组合。")
-        query = q or ""
-        best = None
-        for rule in entries:
-            if not rule.enabled or not rule.keywords:
-                continue
-            matched = [keyword for keyword in rule.keywords if keyword in query]
-            if not matched:
-                continue
-            # The longest matched keyword is the most specific one, so it wins:
-            # "timeout 配置项哪个版本还在生效" must be routed to CONFLICT, not EXACT.
-            candidate = (max(len(keyword) for keyword in matched), rule.priority)
-            if best is None or candidate > best[0]:
-                best = (
-                    candidate,
-                    {
-                        "questionType": rule.questionType,
-                        "strategies": list(rule.strategies),
-                        "reason": rule.reason,
-                        "matchedRule": "keyword",
-                        "matchedKeyword": max(matched, key=len),
-                    },
-                )
-        if best is not None:
-            return best[1]
-        return self._fallback(defaults, "default", "未命中任何路由规则，按默认通道组合处理。")
-
-    def _resolve(self, rules=None):
-        """Return the rules to evaluate: explicit > bound > persisted policy."""
-        if rules is not None:
-            return rules
-        if self._rules is not None:
-            return self._rules
-        return list(load_policy().route.rules)
-
-    @staticmethod
-    def _fallback(defaults, matched_rule, reason):
-        """Build the fallback decision used when no rule matches."""
-        return {
-            "questionType": "DEFAULT",
-            "strategies": list(defaults),
-            "reason": reason,
-            "matchedRule": matched_rule,
-        }
-
-    def available_types(self, rules=None):
-        """Expose the routing rules so operators can see which intents are supported."""
-        return [
-            {"questionType": rule.questionType, "keywords": list(rule.keywords), "strategies": rule.strategies}
-            for rule in self._resolve(rules)
-        ]
-
-
-class QueryRewriter:
-    """Produce query rewrites used for recall expansion.
-
-    Design V1.1 section 8 expects an explicit rewrite/expansion stage. Synonyms, the
-    variant cap, and the LLM assist are policy-driven; the deterministic branch always
-    produces a usable rewrite set so retrieval never depends on model availability.
-    """
-
-    SYNONYMS = DEFAULT_SYNONYMS
-
-    async def rewrite(self, q, policy=None):
-        """Return up to ``policy.maxVariants`` rewritten variants of the question."""
-        rewrite_policy = policy or load_policy().rewrite
-        normalized = " ".join((q or "").strip().split())
-        if not normalized or not rewrite_policy.enabled:
-            return [normalized] if normalized else []
-        rewrites = [normalized]
-        for source, targets in (rewrite_policy.synonyms or self.SYNONYMS).items():
-            if source in normalized:
-                for target in targets:
-                    candidate = normalized.replace(source, target)
-                    if candidate not in rewrites:
-                        rewrites.append(candidate)
-        llm_variants = await self._llm_rewrite(normalized, rewrite_policy)
-        for variant in llm_variants:
-            if variant and variant not in rewrites:
-                rewrites.append(variant)
-        return rewrites[: max(1, int(rewrite_policy.maxVariants))]
-
-    async def _llm_rewrite(self, q, policy=None):
-        rewrite_policy = policy or load_policy().rewrite
-        if not rewrite_policy.llmEnabled:
-            return []
-        try:
-            llm = get_llm_provider()
-            if llm.name == "mock":
-                return []
-            result = await llm.extract_json(self._prompt(q))
-            if not isinstance(result, dict):
-                return []
-            variants = result.get("rewrites") or []
-            return [str(item).strip() for item in variants if str(item).strip()][:2]
-        except Exception as exc:
-            # Rewriting is optional; losing it must not break the query.
-            logger.warning("LLM query rewrite failed: %s", exc)
-            return []
-
-    @staticmethod
-    def _prompt(q):
-        return (
-            '请把用户问题改写为 1-2 个用于企业知识库检索的同义问法，只输出 JSON：\n{"rewrites":["",""]}\n问题：%s' % q
-        )
-
-
-def _clamp01(value, default):
-    """Coerce a numeric signal into [0,1] and fall back when the index lacks the field."""
-    try:
-        return max(0.0, min(1.0, float(value)))
-    except (TypeError, ValueError):
-        return default
-
-
-def quality_signals(candidate):
-    """Read the evidence/authority/freshness/confidence signals carried by an indexed object.
-
-    Missing signals fall back to neutral values so an incomplete index cannot distort ranking.
-    """
-    metadata = candidate.get("metadata") or {}
-    return {
-        "authority": _clamp01(metadata.get("authority_score"), 0.5),
-        "freshness": _freshness(metadata.get("updated_at")),
-        "confidence": _clamp01(metadata.get("confidence"), 0.5),
-        "evidence": _clamp01(metadata.get("evidence_count"), 0.0),
-    }
-
-
-def _freshness(updated_at):
-    """Decay freshness from the indexed update time; unknown timestamps get a neutral score."""
-    if not updated_at:
-        return 0.6
-    try:
-        if isinstance(updated_at, (int, float)):
-            moment = datetime.fromtimestamp(float(updated_at))
-        else:
-            moment = datetime.fromisoformat(str(updated_at).replace("Z", "+00:00"))
-        if moment.tzinfo is not None:
-            moment = moment.replace(tzinfo=None)
-        age_days = max(0.0, (datetime.utcnow() - moment).total_seconds() / 86400.0)
-    except (TypeError, ValueError):
-        return 0.6
-    # 365-day half-life keeps long-lived enterprise knowledge from collapsing to zero.
-    return round(max(0.2, 0.5 ** (age_days / 365.0)), 4)
-
-
-CHANNEL_LABELS = {
-    "bm25": "BM25 全文",
-    "vector": "向量",
-    "card": "知识卡",
-    "claim": "断言",
-    "graph": "图谱",
-}
-
-
-def build_score_breakdown(candidate, channel_weights, rrf_k, rerank_depth, top_k):
-    """Explain one candidate's final score (design §12.4).
-
-    The retrieval test page must answer three questions per row: which channel hit it,
-    how each stage moved its score, and why it was dropped. Everything needed is already
-    computed upstream — this only projects it into a stable, UI-facing shape.
-    """
-    metadata = candidate.get("metadata") or {}
-    channel_scores = candidate.get("channelScores") or {}
-    channel_ranks = candidate.get("channelRanks") or {}
-    matched = metadata.get("matched_channels") or list(channel_ranks.keys())
-    weights = channel_weights or {}
-
-    channels = []
-    reasons = []
-    for channel in matched:
-        label = CHANNEL_LABELS.get(channel, channel)
-        weight = float(weights.get(channel, 1.0))
-        rank = channel_ranks.get(channel)
-        raw = channel_scores.get(channel)
-        contribution = round(weight / (rrf_k + rank), 6) if rank and rrf_k else None
-        channels.append(
-            {
-                "channel": channel,
-                "label": label,
-                "rank": rank,
-                "rawScore": raw,
-                "weight": weight,
-                "rrfContribution": contribution,
-            }
-        )
-        reasons.append(
-            "%s命中第 %s 名（原始分 %s，通道权重 %.2f）"
-            % (label, rank if rank else "-", ("%.4f" % raw) if raw is not None else "-", weight)
-        )
-
-    filtered = []
-    if rerank_depth and candidate.get("rerankScore") is None:
-        filtered.append("RERANK_DEPTH_CUTOFF")
-    rerank_rank = candidate.get("rerankRank")
-    if rerank_rank and top_k and rerank_rank > top_k:
-        filtered.append("TOPK_CUTOFF")
-
-    return {
-        "rrfScore": candidate.get("rrfScore"),
-        "rrfK": rrf_k,
-        "channelWeights": dict(weights),
-        "channels": channels,
-        "qualityBoost": candidate.get("qualityBoost"),
-        "qualitySignals": candidate.get("quality"),
-        "preRerankScore": candidate.get("preRerankScore"),
-        "rerankScore": candidate.get("rerankScore"),
-        "finalScore": candidate.get("score"),
-        "fusionRank": candidate.get("fusionRank"),
-        "rerankRank": candidate.get("rerankRank"),
-        "rankDelta": candidate.get("rankDelta"),
-        "whyMatched": reasons or ["融合后进入候选（无通道明细）"],
-        "filteredBy": filtered,
-    }
 
 
 class QueryEngine:
@@ -318,8 +84,11 @@ class QueryEngine:
         fusion_weights = channel_weights(policy)
         fusion_started = time.perf_counter()
         candidates = rrf(result_sets, k=policy.fusion.rrfK, weights=fusion_weights, top_k=topk)
+        candidates = self._chunk_candidate_floor(candidates, result_sets, policy)
         signal_weights = quality_weights(policy)
+        chunk_weights = chunk_boost_weights(policy)
         quality_sample = []
+        boosted = bool(signal_weights or chunk_weights)
         if signal_weights:
             for candidate in candidates:
                 signals = quality_signals(candidate)
@@ -327,6 +96,15 @@ class QueryEngine:
                 candidate["qualityBoost"] = boost
                 candidate["quality"] = signals
                 candidate["score"] = float(candidate.get("score") or 0.0) * boost
+        if chunk_weights:
+            for candidate in candidates:
+                boost, signals = chunk_boost(candidate, rewritten, chunk_weights)
+                if signals is None:
+                    continue
+                candidate["chunkBoost"] = boost
+                candidate["chunkSignals"] = signals
+                candidate["score"] = float(candidate.get("score") or 0.0) * boost
+        if boosted:
             candidates.sort(key=lambda item: item.get("score") or 0.0, reverse=True)
             quality_sample = [
                 {"id": item.get("id"), **item.get("quality", {}), "boost": item.get("qualityBoost")}
@@ -589,12 +367,15 @@ class QueryEngine:
             },
         ]
 
+        conclusion_source = self._conclusion_source(candidates, citations)
+
         return {
             "queryId": qid,
             "traceId": qid,
             "question": q,
             "questionType": question_type,
             "questionTypeLabel": type_label,
+            "conclusionSource": conclusion_source,
             "rewrittenQuery": used_rewrite or normalized,
             "routerNote": router_note,
             "channels": strategies,
@@ -732,12 +513,105 @@ class QueryEngine:
             base *= 0.5
         return round(max(0.0, min(base, 0.95)), 3)
 
+    @staticmethod
+    def _conclusion_source(candidates, citations):
+        """State which kind of conclusion the answer is, from the evidence that supported it.
+
+        Design §9.4 asks an answer to say whether it was retrieved, traversed or derived. Once a
+        paragraph is generated that distinction is invisible, so it is computed from the evidence
+        actually cited: knowledge published from a derivation candidate is a derived conclusion, a
+        cited graph path is a traversed one, and everything else is sourced retrieval.
+        """
+        used = {str(item.get("id")) for item in citations}
+        paths = []
+        kinds = []
+        for candidate in candidates:
+            if str(candidate.get("id")) not in used:
+                continue
+            metadata = candidate.get("metadata") or {}
+            path = metadata.get("graph_path")
+            if path:
+                paths.append(path)
+            if (
+                metadata.get("derived")
+                or metadata.get("derivedFrom")
+                or str(metadata.get("object_type") or "") == "DERIVED"
+            ):
+                kinds.append("DERIVED_KNOWLEDGE")
+            elif path:
+                kinds.append("GRAPH_TRAVERSAL")
+            else:
+                kinds.append("RETRIEVED_KNOWLEDGE")
+        labels = {
+            "DERIVED_KNOWLEDGE": "系统推导（Derived Knowledge）",
+            "GRAPH_TRAVERSAL": "图谱遍历推导",
+            "RETRIEVED_KNOWLEDGE": "证据检索",
+        }
+        kind = "RETRIEVED_KNOWLEDGE"
+        for preferred in ("DERIVED_KNOWLEDGE", "GRAPH_TRAVERSAL"):
+            if preferred in kinds:
+                kind = preferred
+                break
+        return {
+            "type": kind,
+            "label": labels[kind],
+            "graphPaths": paths[:5],
+            "evidenceKinds": sorted(set(kinds)),
+        }
+
+    @staticmethod
+    def _chunk_candidate_floor(candidates, result_sets, policy):
+        """Give verbatim chunks a seat among the fused candidates before ranking continues.
+
+        Boosting chunks only helps chunks that were recalled. Cards and graph paths routinely
+        take every fused slot, so the boost would apply to nothing; this pulls the best
+        chunk-shaped candidates that lost the RRF cut back into the list.
+        """
+        floor = int(getattr(policy.answer, "minChunkEvidence", 0) or 0)
+        if floor <= 0:
+            return candidates
+        have = sum(1 for candidate in candidates if is_chunk_evidence(candidate))
+        if have >= floor:
+            return candidates
+        seen = {str(candidate.get("id")) for candidate in candidates}
+        extra = []
+        for items in result_sets.values():
+            for item in items:
+                if have + len(extra) >= floor:
+                    break
+                if str(item.get("id")) in seen or not is_chunk_evidence(item):
+                    continue
+                seen.add(str(item.get("id")))
+                extra.append(dict(item))
+            if have + len(extra) >= floor:
+                break
+        return candidates + extra
+
+    @staticmethod
+    def _chunk_floor(candidates, policy):
+        """Move verbatim chunks to the front so the prompt never loses its quotable evidence.
+
+        Cards and graph paths can outrank chunks on score, yet only a chunk carries the
+        evidence code and hash an answer needs to cite; without a floor the model ends up
+        paraphrasing summaries and the evidence gate blocks every sentence.
+        """
+        floor = int(getattr(policy.answer, "minChunkEvidence", 0) or 0)
+        if floor <= 0:
+            return list(candidates)
+        chunks = [c for c in candidates if is_chunk_evidence(c)][:floor]
+        if len(chunks) < floor or not chunks:
+            return list(candidates)
+        head_ids = {id(item) for item in chunks}
+        return chunks + [c for c in candidates if id(c) not in head_ids]
+
     def _context(self, candidates, limit=None):
         blocks = []
         citations = []
         used = 0
-        budget = int(limit) if limit else int(load_policy().answer.contextMaxChars)
-        for i, c in enumerate(candidates, 1):
+        policy = load_policy()
+        budget = int(limit) if limit else int(policy.answer.contextMaxChars)
+        ordered = self._chunk_floor(candidates, policy)
+        for i, c in enumerate(ordered, 1):
             meta = c.get("metadata", {})
             loc = ""
             if meta.get("page_no"):

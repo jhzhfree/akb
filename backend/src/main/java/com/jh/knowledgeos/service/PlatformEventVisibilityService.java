@@ -23,7 +23,8 @@ import java.util.Set;
 @Service
 public class PlatformEventVisibilityService {
 
-    private static final Set<String> EXTERNAL_DENYLIST = new HashSet<String>(Arrays.asList("permissionTags", "aclTags", "requirePermissionTags", "effectiveTags", "tagScope", "tagScopes", "userId", "subjectCode"));
+    private static final Set<String> EXTERNAL_DENYLIST = new HashSet<String>(Arrays.asList("permissionTags", "aclTags", "requirePermissionTags",
+        "effectiveTags", "tagScope", "tagScopes", "userId", "subjectCode"));
 
     private static final int EXTERNAL_TEXT_LIMIT = 240;
 

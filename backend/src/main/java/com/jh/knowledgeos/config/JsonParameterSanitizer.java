@@ -49,7 +49,8 @@ public class JsonParameterSanitizer implements Interceptor {
     /**
      * Substrings that mark a JSON parameter holding a collection.
      */
-    private static final String[] ARRAY_HINTS = { "tags", "codes", "indexes", "statuses", "queries", "citations", "gaps", "reasons", "unsupported", "entities" };
+    private static final String[] ARRAY_HINTS = { "tags", "codes", "indexes", "statuses", "queries", "citations", "gaps", "reasons", "unsupported",
+        "entities" };
 
     private static final int MAX_DEPTH = 4;
 

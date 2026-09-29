@@ -6,6 +6,9 @@ from typing import Any
 from app.services.answer_claims import split_claims, strip_citations
 
 _CITATION_RE = re.compile(r"\[证据(\d+)\]")
+# Version strings, error codes and proper nouns are what make a claim checkable: a sentence
+# that gets those right is worth more than one that only shares filler wording.
+_VERIFIABLE_RE = re.compile(r"\d|[a-z]{3,}")
 
 
 class AnswerEvidenceGate:
@@ -20,6 +23,7 @@ class AnswerEvidenceGate:
         claims = self._claims(answer)
         details = []
         supported = 0
+        block_reasons = {"missingCitation": 0, "nonExactEvidence": 0, "lowFaithfulness": 0}
         for claim in claims:
             refs = [int(value) for value in _CITATION_RE.findall(claim)]
             valid_refs = [ref for ref in refs if ref in citation_by_index]
@@ -30,6 +34,15 @@ class AnswerEvidenceGate:
             ok = bool(valid_refs) and exact and score >= self.faithfulness_min
             if ok:
                 supported += 1
+            else:
+                # One reason per sentence, in the order the checks fire: knowing which of the
+                # three is eating the answer tells you what to tune instead of guessing.
+                if not valid_refs:
+                    block_reasons["missingCitation"] += 1
+                elif not exact:
+                    block_reasons["nonExactEvidence"] += 1
+                else:
+                    block_reasons["lowFaithfulness"] += 1
             details.append(
                 {
                     # Raw sentence kept verbatim (with citations) so a partially supported answer can be
@@ -56,6 +69,7 @@ class AnswerEvidenceGate:
             "completenessScore": round(completeness, 5),
             "faithfulnessScore": round(faithfulness, 5),
             "unsupportedClaims": [item["claim"] for item in details if not item["supported"]],
+            "blockReasons": block_reasons,
             "claims": details,
         }
 
@@ -84,12 +98,30 @@ class AnswerEvidenceGate:
         right = AnswerEvidenceGate._tokens(evidence)
         if not left or not right:
             return 0.0
-        return len(left.intersection(right)) / float(len(left))
+        overlap = left.intersection(right)
+        if not overlap:
+            return 0.0
+        # Weighted coverage: identical semantics to before, but the terms that actually
+        # identify a fact — versions, codes, proper nouns — count double, so a sentence
+        # naming "OpenSSL 3.0.12" is not sunk by the wording around it.
+        hit = sum(2.0 if _VERIFIABLE_RE.search(term) else 1.0 for term in overlap)
+        total = sum(2.0 if _VERIFIABLE_RE.search(term) else 1.0 for term in left)
+        return hit / float(total) if total else 0.0
 
     @staticmethod
     def _tokens(text: str) -> set:
         normalized = re.sub(r"\s+", "", (text or "").lower())
-        latin = set(re.findall(r"[a-z0-9_.+-]{2,}", normalized))
+        # Chinese is stripped before Latin terms are read: left in place, "OpenSSL3.0.12漏洞"
+        # and "OpenSSL" tokenize differently depending on where the Chinese sits, and two
+        # texts describing the same fact would share nothing.
+        stripped = re.sub(r"[\u4e00-\u9fff]+", " ", normalized)
+        # A Latin run is split at the letter/digit boundary so "openssl3.0.12" becomes
+        # {"openssl", "3.0.12"}: a chunk naming the product then matches a question naming
+        # the product and its version, instead of needing the exact same concatenation.
+        latin = set()
+        for run in re.findall(r"[a-z0-9_.+-]{2,}", stripped):
+            for part in re.findall(r"[a-z]{2,}|\d[\d._]{1,}", run):
+                latin.add(part)
         han = "".join(re.findall(r"[\u4e00-\u9fff]", normalized))
         grams = {han[i : i + 2] for i in range(max(0, len(han) - 1))}
         return latin.union(grams)

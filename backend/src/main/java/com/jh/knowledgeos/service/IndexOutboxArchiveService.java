@@ -1,6 +1,7 @@
 package com.jh.knowledgeos.service;
 
 import com.jh.knowledgeos.mapper.KnowledgeMapper;
+import com.jh.knowledgeos.mapper.IndexMapper;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
@@ -14,6 +15,9 @@ public class IndexOutboxArchiveService {
 
     private final KnowledgeMapper mapper;
 
+    private final IndexMapper indexMapper;
+
+
     private final TransactionRunner transactionRunner;
 
     private final IndexOutboxMetrics metrics;
@@ -24,7 +28,10 @@ public class IndexOutboxArchiveService {
 
     private final int batchSize;
 
-    public IndexOutboxArchiveService(KnowledgeMapper mapper, TransactionRunner transactionRunner, IndexOutboxMetrics metrics, @Value("${indexing.outbox.archive.enabled:true}") boolean enabled, @Value("${indexing.outbox.archive.retention-days:14}") int retentionDays, @Value("${indexing.outbox.archive.batch-size:500}") int batchSize) {
+    public IndexOutboxArchiveService(KnowledgeMapper mapper, TransactionRunner transactionRunner, IndexOutboxMetrics metrics,
+        @Value("${indexing.outbox.archive.enabled:true}") boolean enabled, @Value("${indexing.outbox.archive.retention-days:14}") int retentionDays,
+        @Value("${indexing.outbox.archive.batch-size:500}") int batchSize, IndexMapper indexMapper) {
+        this.indexMapper = indexMapper;
         this.mapper = mapper;
         this.transactionRunner = transactionRunner;
         this.metrics = metrics;
@@ -46,11 +53,11 @@ public class IndexOutboxArchiveService {
     }
 
     private int archiveBatch(LocalDateTime cutoff) {
-        int copied = mapper.archiveCompletedIndexOutbox(cutoff, batchSize);
+        int copied = indexMapper.archiveCompletedIndexOutbox(cutoff, batchSize);
         if (copied > 0) {
-            mapper.archiveIndexDeliveryAttempts(cutoff);
-            mapper.deleteArchivedIndexDeliveryAttempts(cutoff);
-            mapper.deleteArchivedIndexOutbox(cutoff, batchSize);
+            indexMapper.archiveIndexDeliveryAttempts(cutoff);
+            indexMapper.deleteArchivedIndexDeliveryAttempts(cutoff);
+            indexMapper.deleteArchivedIndexOutbox(cutoff, batchSize);
         }
         return copied;
     }

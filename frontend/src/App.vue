@@ -1,76 +1,43 @@
 <template>
 <!-- 认证探测未完成时不渲染业务页面：此时还不知道角色权限，
      若按上次会话的页面直接渲染，无权账号会先发出被拒的请求（例如用户列表 403）。 -->
-<div v-if="!authReady" class="flex h-screen items-center justify-center text-[13px] text-slate-500">
+<div v-if="!authReady" class="flex h-screen items-center justify-center text-[13px] text-ink-500">
   正在进入工作台…
 </div>
 <LoginView v-else-if="needLogin" :hint="loginHint" @success="onLogin"/>
 <div v-else class="kos-shell">
-<header class="kos-topbar">
-  <div class="kos-brand">
-    <KosBrandMark :size="28"/>
-    <span class="kos-brand-copy">
-      <b>智能知识平台</b>
-      <small>Knowledge OS</small>
-    </span>
-  </div>
-  <span class="kos-pill" title="平台版本">V2.2</span>
-  <div class="kos-grow"></div>
-  <!-- 设计 §2.2：知识空间选择器固定在顶栏；全局搜索回车后进入搜索页并直接执行检索。 -->
-  <button class="kos-kbswitch" @click="showBases=true">
-    <span>知识库：<b>{{activeBase?.name||'选择知识库'}}</b></span>
-    <em class="ml-2 text-[11px] text-slate-400 not-italic">{{visibilityLabel(activeBase?.visibility)}}</em>
-    <i>▾</i>
-  </button>
-  <form class="kos-search" @submit.prevent="globalSearch">
-    <input v-model="globalKeyword" class="kos-search-input" placeholder="搜索知识…" aria-label="全局搜索" />
-    <button type="submit" class="kos-search-btn" aria-label="执行搜索">⌕</button>
-  </form>
-  <!-- 任务中心：异步任务统一入口，失败任务可直接进入详情。只对有生成或运维权限的角色开放。 -->
-  <button v-if="canSeeTasks" class="kos-task" :class="{alert:failedTaskCount>0}" @click="taskCenterVisible=true">
-    任务<em v-if="failedTaskCount">{{failedTaskCount}}</em>
-  </button>
-  <div class="kos-status"><i class="kos-dot" :class="{ok:capabilities}"></i>{{capabilities?'服务已连接':'服务状态未知'}}</div>
-  <div class="kos-user">
-    <span class="kos-avatar">{{avatarText}}</span>
-    <div class="kos-user-copy">
-      <b>{{me?.user?.displayName||me?.user?.username||'未登录'}}</b>
-      <small :title="roleBrief">{{me?.user?roleName:'匿名访问'}}</small>
-    </div>
-    <button v-if="me?.user" class="kos-logout" @click="doLogout">退出</button>
-  </div>
-</header>
+<AppHeader :base-name="activeBase?.name" :visibility="visibilityLabel(activeBase?.visibility)"
+  v-model:keyword="globalKeyword" :show-tasks="canSeeTasks" :failed-task-count="failedTaskCount"
+  :connected="!!capabilities" :avatar="avatarText" :display-name="me?.user?.displayName||me?.user?.username"
+  :role-title="roleTitle" :logged-in="!!me?.user" :role-accent="roleAccent"
+  @switch-base="showBases=true" @search="globalSearch" @tasks="taskCenterVisible=true" @logout="doLogout"/>
 <div class="kos-body">
-<!-- 设计 §1 / §2.2：左侧只放五个一级入口，且不挂任何二级菜单；
-     Chunk、Assertion、Graph、Evaluation、凭证等全部进入模块页面内部的 Tab、卡片与抽屉。 -->
-<aside class="kos-side">
-  <div class="kos-nav-title">信息架构</div>
-  <button
-    v-for="section in navSections"
-    :key="section.key"
-    class="kos-nav-item kos-nav-l1"
-    :class="{active:activeSection===section.key}"
-    :title="section.desc"
-    @click="enterSection(section)">
-    <span class="kos-nav-ic">{{section.icon}}</span>
-    <span class="kos-nav-tx">{{section.label}}</span>
-    <em v-if="sectionBadge(section)" class="kos-nav-dot">{{sectionBadge(section)}}</em>
-  </button>
-</aside>
+<!-- 设计 §1 / §2.2：左侧只放业务一级入口，且不挂任何二级菜单；
+     Chunk、Assertion、Graph、Evaluation、凭证等全部进入模块页面内部的 Tab、卡片与抽屉。
+     系统配置属于低频平台配置，收进侧栏底部的用户工具区（设置图标），不再占用业务导航。 -->
+<AppSidebar :sections="navSections" :active-section="activeSection" :badge="sectionBadge"
+  :role-brief="me?.user?roleBrief:''" :user-name="me?.user?(me.user.displayName||me.user.username):''"
+  :avatar="avatarText" :role-accent="roleAccent" :can-system="canSystem"
+  :system-active="activeSection==='system'" :version="APP_VERSION"
+  @enter="enterSection" @enter-system="enterSystem"/>
 <main class="kos-main">
-  <div v-if="failure" class="mb-3 flex items-start gap-3 rounded-lg border border-rose-200 bg-rose-50 px-4 py-3">
-    <span class="text-[13px] leading-5 text-rose-500">⚠</span>
+  <div v-if="failure" class="mb-3 flex items-start gap-3 rounded-lg border px-4 py-3" style="background:var(--danger-bg);border-color:var(--danger)">
+    <span class="text-[13px] leading-5 text-[color:var(--danger)]">⚠</span>
     <div class="min-w-0 flex-1">
-      <b class="text-[12px] text-rose-700">操作失败</b>
-      <pre class="mt-1 whitespace-pre-wrap break-words font-sans text-[11px] leading-5 text-rose-700">{{failure}}</pre>
+      <b class="text-[12px] text-[color:var(--danger)]">操作失败</b>
+      <pre class="mt-1 whitespace-pre-wrap break-words font-sans text-[11px] leading-5 text-[color:var(--danger)]">{{failure}}</pre>
     </div>
-    <button class="text-[12px] text-rose-400 hover:text-rose-600" @click="failure=''">✕</button>
+    <button class="text-[12px] text-[color:var(--danger)] hover:text-[color:var(--danger)]" @click="failure=''">✕</button>
   </div>
   <!-- 第 4 章：进入知识空间后，页面顶部保留「当前空间 + 环境 + 索引状态」。 -->
   <SpaceContextBar
     v-if="scopedView"
     :base="activeBase" :environment="environmentLabel" :index="indexState" :loading="contextLoading"
     @switch="showBases=true" @refresh="loadSpaceContext"/>
+
+  <!-- 角色欢迎区：登录角色落地页顶部展示身份色 + 职责 + 常用入口（仅登录用户显示）。 -->
+  <RoleWelcomeBanner v-if="me?.user" :role-name="roleName" :brief="roleBrief" :accent="roleAccent"
+    :actions="roleQuickActions" @go="key=>goto(key)"/>
 
   <!-- 设计 §1：五个一级页面各自内部用 Tab 组织能力，App 只负责选择模块页面。 -->
   <WorkbenchPage
@@ -159,13 +126,15 @@ import type {
 import type { AssetType } from './components/AssetBrowserPanel.vue'
 import TaskCenterDrawer from './components/TaskCenterDrawer.vue'
 import SpaceContextBar from'./components/SpaceContextBar.vue';
-import KosBrandMark from './components/KosBrandMark.vue'
+import AppHeader from './components/AppHeader.vue'
+import AppSidebar from './components/AppSidebar.vue'
 import KnowledgeBaseDialog from './components/KnowledgeBaseDialog.vue'
 import KnowledgeDetailWorkspace from './components/KnowledgeDetailWorkspace.vue'
 import QueryTracePanel from './components/QueryTracePanel.vue'
 import ApiCallTracePanel from './components/ApiCallTracePanel.vue'
 import EvidenceViewer from './components/EvidenceViewer.vue'
 import LoginView from './components/LoginView.vue'
+import RoleWelcomeBanner from './components/RoleWelcomeBanner.vue'
 /** 五个一级模块页面：左侧导航不再挂二级菜单，模块内部自持 Tab（设计 §1）。 */
 import WorkbenchPage from './components/WorkbenchPage.vue'
 import GeneratePage from './components/GeneratePage.vue'
@@ -189,15 +158,16 @@ import {
   getDashboardSummary, getDashboardLifecycle, getDashboardGovernance,
 } from './api/knowledge'
 import {
-  defaultLeafOf, leavesOfSection, locate, normalizeViewKey, visibleLeaves, visibleSections,
+  NAV_SECTIONS, defaultLeafOf, leavesOfSection, locate, normalizeViewKey, visibleLeaves, visibleSections,
 } from './navigation'
 import type { NavLeaf, NavSection } from './navigation'
-import { PERM, ROLE_BRIEF, hasPermission } from './permissions'
-import type { UserRoleValue } from './types'
+import { PERM, hasPermission } from './permissions'
+import { APP_VERSION } from './version'
+import { roleExperience } from './role-experience'
 import {
   AUTH_EXPIRED_EVENT, getAuthStatus, getMe, getToken, listGroups, logout, setToken,
 } from './api/auth'
-import { userRoleLabel, visibilityLabel } from './types'
+import { visibilityLabel } from './types'
 import { errorMessage } from './utils/feedback'
 /**
  * 当前视图：取 IA 二级入口 key（见 navigation.ts），旧的 tab 值会自动归一化。
@@ -333,8 +303,15 @@ const avatarText=computed(()=>
  * 与后端 PermissionInterceptor 对空 AuthContext 的放行保持一致。
  */
 const can=(code:string)=>hasPermission(me.value?.permissions,code)
-/** 一级导航固定为 IA 的五个入口，二级入口全部下沉到模块页面内部的 Tab。 */
-const navSections=computed(()=>visibleSections(can))
+/**
+ * 一级导航：IA 的业务模块，二级入口全部下沉到模块页面内部的 Tab。
+ * 「系统配置」不再作为业务一级入口，改由侧栏底部的设置图标进入（低频平台配置不占业务导航）。
+ */
+const navSections=computed(()=>visibleSections(can).filter(section=>section.key!=='system'))
+/** 系统配置模块本身：只在底部工具区使用，是否展示由该模块内是否有可见 Tab 决定。 */
+const systemSection=NAV_SECTIONS.find(section=>section.key==='system')
+/** 无任何系统配置权限时不展示设置入口，避免点进去处处 403。 */
+const canSystem=computed(()=>!!systemSection&&visibleLeaves(systemSection,can).length>0)
 const activeLocation=computed(()=>locate(active.value))
 const activeSection=computed(()=>activeLocation.value?.section.key||'workbench')
 /** 属于知识空间的页面才展示「空间 + 环境 + 索引状态」上下文条。 */
@@ -355,6 +332,11 @@ function leavesOf(section:NavSection){
 function enterSection(section:NavSection){
   active.value=defaultLeafOf(section,can).key
 }
+/** 点击侧栏底部设置图标：进入系统配置的默认页（按权限取第一个可见 Tab）。 */
+function enterSystem(){
+  if(!systemSection)return
+  goto(defaultLeafOf(systemSection,can).key)
+}
 /** 模块页面回传的视图 key：规划中与无权访问的入口不进入，避免落到未实现页面。 */
 function selectKey(key:string){
   const leaf=locate(key)?.leaf
@@ -374,11 +356,29 @@ function canNavigate(key:string){
 const canSeeTasks=computed(()=>
   can(PERM.GENERATE_IMPORT)||can(PERM.GENERATE_DERIVE)||can(PERM.SYSTEM_TASK))
 /** 顶栏角色名：优先用后端下发的中文名，避免出现角色码。 */
-const roleName=computed(()=>
-  me.value?.roleLabel||me.value?.user?.roleLabel||userRoleLabel(me.value?.user?.role))
-const roleBrief=computed(()=>{
-  const role=String(me.value?.user?.role||'') as UserRoleValue
-  return ROLE_BRIEF[role]||''
+const currentRoleExperience=computed(()=>roleExperience(
+  me.value?.user?.role,me.value?.roleLabel||me.value?.user?.roleLabel))
+const roleName=computed(()=>currentRoleExperience.value.name)
+const roleBrief=computed(()=>currentRoleExperience.value.brief)
+/** 角色身份色：接入顶栏头像底色 / 侧栏 / 欢迎区视觉标识（纯展示，不参与权限判定）。 */
+const roleAccent=computed(()=>currentRoleExperience.value.accent)
+/** 顶栏头像 hover 说明：角色名与职责从顶栏收起后仍可查，但不再占顶栏位置。 */
+const roleTitle=computed(()=>me.value?.user?`${roleName.value} · ${roleBrief.value}`:'未登录')
+/** 角色欢迎区常用入口：按当前角色权限预置常用目标，无权者置灰而非隐藏。 */
+const roleQuickActions=computed(()=>{
+  const Actions:{key:string;label:string;icon:string;disabled?:boolean}[]=[]
+  const push=(key:string,label:string,icon:string)=>{
+    const leaf=locate(normalizeViewKey(key))?.leaf
+    if(!leaf)return
+    Actions.push({key:leaf.key,label,icon,disabled:!canLeaf(leaf)})
+  }
+  const r=me.value?.user?.role
+  if(r==='ADMIN'){push('system.audit','审计日志','📜');push('system.schema','知识Schema','🧬')}
+  else if(r==='KNOWLEDGE_ADMIN'){push('system.space','知识空间','◈');push('system.schema','知识Schema','🧬');push('workbench.assets','资产浏览','🗃')}
+  else if(r==='KNOWLEDGE_OPERATOR'){push('create.import','上传文档','📄');push('create.jobs','生成任务','⏳');push('search.query','知识检索','⌕')}
+  else if(r==='KNOWLEDGE_AUDITOR'){push('create.judgment','知识裁决','⚖');push('search.benchmark','检索评测','📈')}
+  else{push('workbench.assets','资产浏览','🗃');push('search.query','知识检索','⌕')}
+  return Actions
 })
 /** 角标只用于需要人工介入的入口：待审核与未解决冲突。 */
 function leafBadge(leaf:NavLeaf):number|string{

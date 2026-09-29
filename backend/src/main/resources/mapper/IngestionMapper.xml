@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.jh.knowledgeos.mapper.IngestionMapper">
+
+<insert id="insertIngestionRun" parameterType="com.jh.knowledgeos.domain.IngestionRun" useGeneratedKeys="true" keyProperty="id">INSERT INTO t_ingestion_run(run_code,knowledge_base_id,source_name,status,current_stage,chunk_count,card_count,claim_count) VALUES(#{runCode},#{knowledgeBaseId},#{sourceName},#{status},#{currentStage},#{chunkCount},#{cardCount},#{claimCount})</insert>
+
+<insert id="insertIngestionEvent">INSERT INTO t_ingestion_event(run_id,event_type,stage,status,message,detail_json) VALUES(#{runId},#{eventType},#{stage},#{status},#{message},#{detailJson})</insert>
+
+<update id="updateIngestionRunStage">UPDATE t_ingestion_run SET current_stage=#{stage} WHERE id=#{runId} AND status='RUNNING'</update>
+
+<update id="completeIngestionRun">UPDATE t_ingestion_run SET status=#{status},current_stage=#{stage},chunk_count=#{chunkCount},card_count=#{cardCount},claim_count=#{claimCount},error_message=#{errorMessage},finished_time=CURRENT_TIMESTAMP WHERE id=#{runId}</update>
+
+<select id="listIngestionRuns" resultType="com.jh.knowledgeos.domain.IngestionRun">SELECT * FROM t_ingestion_run WHERE knowledge_base_id=#{kb} ORDER BY started_time DESC LIMIT #{limit}</select>
+
+<select id="getIngestionRun" resultType="com.jh.knowledgeos.domain.IngestionRun">SELECT * FROM t_ingestion_run WHERE id=#{runId}</select>
+
+<select id="listIngestionEvents" resultType="map">SELECT id,run_id AS runId,event_type AS eventType,stage,status,message,detail_json AS detailJson,created_time AS createdTime FROM t_ingestion_event WHERE run_id=#{runId} ORDER BY id</select>
+
+<delete id="purgeIngestionEvents">DELETE FROM t_ingestion_event WHERE run_id IN (SELECT id FROM t_ingestion_run WHERE knowledge_base_id=#{kb})</delete>
+
+</mapper>

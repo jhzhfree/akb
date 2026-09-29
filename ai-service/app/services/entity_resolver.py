@@ -39,6 +39,9 @@ ALIAS_DICTIONARY: dict[str, str] = {
 
 _VERSION_SUFFIX = re.compile(r"[\s_\-]?v?\d+(\.\d+)*[\s_\-]?[a-z]*$", re.IGNORECASE)
 _SEPARATORS = re.compile(r"[\s_\-\./\\:：，,、（）()\[\]]+")
+# Below this a substring match is an accident: "银行" sits inside "上海银行" without naming the
+# same thing, while "CVE-2026-1234" inside "安全公告：CVE-2026-1234" does.
+CONTAINMENT_MIN_LENGTH = 6
 
 
 def normalize_name(name: str) -> str:
@@ -52,6 +55,50 @@ def normalize_name(name: str) -> str:
     text = _SEPARATORS.sub("", text)
     stripped = _VERSION_SUFFIX.sub("", text)
     return stripped or text
+
+
+def _compact(name: str) -> str:
+    """Separator-free lower-case form, version included, used for containment matching."""
+    text = (name or "").strip().lower()
+    if not text:
+        return ""
+    aliased = ALIAS_DICTIONARY.get(text)
+    if aliased:
+        text = aliased
+    return _SEPARATORS.sub("", text)
+
+
+def match_key(name: str) -> tuple[str, str]:
+    """Identity of a mention for equality: its base form plus the version it carries.
+
+    Version travels with the name because it is the difference between "affected" and
+    "patched"; two mentions only merge when their versions agree, or when one has none.
+    """
+    text = (name or "").strip().lower()
+    if not text:
+        return "", ""
+    aliased = ALIAS_DICTIONARY.get(text)
+    if aliased:
+        text = aliased
+    compact = _SEPARATORS.sub("", text)
+    match = _VERSION_SUFFIX.search(text.strip())
+    if not match:
+        return compact, ""
+    version = re.sub(r"[^a-z0-9.]", "", match.group(0).lower())
+    base = _VERSION_SUFFIX.sub("", compact)
+    return (base or compact), version
+
+
+def _mention_code(mention: dict[str, Any]) -> str:
+    return str(mention.get("code") or mention.get("entity_code") or "").strip()
+
+
+def _mention_name(mention: dict[str, Any]) -> str:
+    return str(mention.get("name") or mention.get("canonical_name") or "").strip()
+
+
+def _canonical_code(canonical: dict[str, Any]) -> str:
+    return str(canonical.get("entityCode") or canonical.get("code") or "").strip()
 
 
 class EntityResolver:
@@ -92,22 +139,39 @@ class EntityResolver:
         unmatched: list[tuple[dict[str, Any], str]] = []
 
         for mention in entities:
-            code = str(mention.get("code") or mention.get("entity_code") or "").strip()
-            name = str(mention.get("name") or mention.get("canonical_name") or "").strip()
+            code = _mention_code(mention)
+            name = _mention_name(mention)
             if not code or not name:
                 continue
-            normalized = normalize_name(name)
-            target = self._exact_target(canonical_entities, normalized, name)
+            target = self._exact_target(canonical_entities, name, self_code=code)
             if target is None:
-                already_merged = self._exact_target_from_merges(merges, entities, normalized)
-                target = already_merged
+                # Mentions inside the same batch may already share a canonical representative.
+                target = self._batch_target(merges, entities, name, self_code=code)
             if target is not None:
                 if target != code:
                     merges.append(self._merge_record(mention, target, "NORMALIZED_MATCH", 1.0))
                     aliases.append(self._alias_record(target, name, "NORMALIZED_MATCH", 1.0))
+                    continue
+                # The canonical node is this very mention: keep its surface form on record so
+                # the next document can match the alias instead of creating a twin node.
+                aliases.append(self._alias_record(code, name, "SELF", 1.0))
                 continue
             aliases.append(self._alias_record(code, name, "SELF", 1.0))
-            unmatched.append((mention, normalized))
+            unmatched.append((mention, name))
+
+        # "安全公告：CVE-2026-1234" and "CVE-2026-1234" are one entity written two ways; the
+        # dictionary cannot hold every document title, so a surface form that *contains* a
+        # known canonical form — and is long enough not to be a substring by accident —
+        # collapses onto it instead of fragmenting the graph.
+        still_unmatched: list[tuple[dict[str, Any], str]] = []
+        for mention, name in unmatched:
+            target = self._containment_target(canonical_entities, entities, merges, name, self_code=_mention_code(mention))
+            if target is None:
+                still_unmatched.append((mention, name))
+                continue
+            merges.append(self._merge_record(mention, target, "CONTAINS_MATCH", 0.9))
+            aliases.append(self._alias_record(target, name, "CONTAINS_MATCH", 0.9))
+        unmatched = still_unmatched
 
         if unmatched and getattr(settings, "entity_resolution_embedding_enabled", False):
             anchors: list[tuple[str, str]] = []
@@ -166,31 +230,96 @@ class EntityResolver:
                     self._alias_record(best_anchor, str(mention.get("name") or ""), "EMBEDDING_MATCH", best_score)
                 )
 
-    @staticmethod
-    def _exact_target(canonical_entities: Iterable[dict[str, Any]], normalized: str, raw_name: str) -> str | None:
+    @classmethod
+    def _exact_target(
+        cls, canonical_entities: Iterable[dict[str, Any]], name: str, self_code: str = ""
+    ) -> str | None:
+        """Match a mention against canonical names and the aliases already on record.
+
+        Version is part of identity: OpenSSL 3.0.12 and OpenSSL 3.0.0 differ by exactly the
+        thing a vulnerability range is written in, so two mentions only merge when their
+        versions agree — or when one of them carries no version at all.
+        """
+        base, version = match_key(name)
+        if not base:
+            return None
         for canonical in canonical_entities:
-            code = str(canonical.get("entityCode") or canonical.get("code") or "").strip()
-            name = str(canonical.get("canonicalName") or canonical.get("name") or "").strip()
-            if not code:
+            code = _canonical_code(canonical)
+            if not code or code == self_code:
                 continue
-            if name and normalize_name(name) == normalized:
+            for candidate in cls._names_of(canonical):
+                candidate_base, candidate_version = match_key(candidate)
+                if not candidate_base or candidate_base != base:
+                    continue
+                if version and candidate_version and version != candidate_version:
+                    continue
                 return code
-            if raw_name and name.lower() == raw_name.lower():
+        return None
+
+    @classmethod
+    def _batch_target(cls, merges, entities, name, self_code: str = "") -> str | None:
+        """Mentions inside the same batch may already share a canonical representative."""
+        merged_codes = {str(m.get("from")) for m in merges}
+        base, version = match_key(name)
+        if not base:
+            return None
+        for mention in entities:
+            code = _mention_code(mention)
+            if not code or code == self_code or code in merged_codes:
+                continue
+            candidate_base, candidate_version = match_key(_mention_name(mention))
+            if not candidate_base or candidate_base != base:
+                continue
+            if version and candidate_version and version != candidate_version:
+                continue
+            return code
+        return None
+
+    @classmethod
+    def _containment_target(
+        cls,
+        canonical_entities: Iterable[dict[str, Any]],
+        entities: Iterable[dict[str, Any]],
+        merges,
+        name: str,
+        self_code: str = "",
+    ) -> str | None:
+        """Collapse a documented surface form onto the canonical form it contains."""
+        whole = _compact(name)
+        if not whole:
+            return None
+        merged_codes = {str(m.get("from")) for m in merges}
+        for canonical in canonical_entities:
+            code = _canonical_code(canonical)
+            if not code or code == self_code:
+                continue
+            for candidate in cls._names_of(canonical):
+                if cls._contains(whole, _compact(candidate)):
+                    return code
+        for mention in entities:
+            code = _mention_code(mention)
+            if not code or code == self_code or code in merged_codes:
+                continue
+            if cls._contains(whole, _compact(_mention_name(mention))):
                 return code
         return None
 
     @staticmethod
-    def _exact_target_from_merges(merges, entities, normalized) -> str | None:
-        """Mentions inside the same batch may already share a canonical representative."""
-        merged_codes = {str(m.get("from")) for m in merges}
-        for mention in entities:
-            code = str(mention.get("code") or mention.get("entity_code") or "").strip()
-            if not code or code in merged_codes:
-                continue
-            name = str(mention.get("name") or mention.get("canonical_name") or "").strip()
-            if name and normalize_name(name) == normalized:
-                return code
-        return None
+    def _contains(left: str, right: str) -> bool:
+        """One form wraps the other, and the shorter one is long enough to be deliberate."""
+        shorter, longer = (left, right) if len(left) <= len(right) else (right, left)
+        if not shorter or shorter == longer or len(shorter) < CONTAINMENT_MIN_LENGTH:
+            return False
+        return shorter in longer
+
+    @staticmethod
+    def _names_of(canonical: dict[str, Any]) -> list[str]:
+        """Canonical name plus the alias dictionary rows the backend already stored."""
+        names = [str(canonical.get("canonicalName") or canonical.get("name") or "")]
+        raw = canonical.get("aliases")
+        if isinstance(raw, list):
+            names.extend(str(value or "") for value in raw)
+        return [name for name in names if name.strip()]
 
     @staticmethod
     def _merge_record(mention: dict[str, Any], target: str, strategy: str, score: float) -> dict[str, Any]:

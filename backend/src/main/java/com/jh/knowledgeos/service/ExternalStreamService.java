@@ -37,7 +37,8 @@ public class ExternalStreamService {
 
     private final Executor executor;
 
-    public ExternalStreamService(ExternalKnowledgeFacade facade, IngestionObservabilityService ingestionService, KnowledgeProperties properties, @Qualifier("externalStreamExecutor") Executor executor) {
+    public ExternalStreamService(ExternalKnowledgeFacade facade, IngestionObservabilityService ingestionService, KnowledgeProperties properties,
+        @Qualifier("externalStreamExecutor") Executor executor) {
         this.facade = facade;
         this.ingestionService = ingestionService;
         this.properties = properties.external();
@@ -140,7 +141,8 @@ public class ExternalStreamService {
             return "";
         }
         Map<String, Object> values = (Map<String, Object>) overview;
-        return "cards=" + values.get("cardCount") + " claims=" + values.get("claimCount") + " chunks=" + values.get("chunkCount") + " pending=" + values.get("pendingReviewCount");
+        return "cards=" + values.get("cardCount") + " claims=" + values.get("claimCount") + " chunks=" + values.get("chunkCount") + " pending=" +
+            values.get("pendingReviewCount");
     }
 
     private Map<String, Object> stagePayload(Long kb, String stage) {

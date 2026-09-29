@@ -63,7 +63,7 @@ footer{padding:28px;text-align:center;border-top:1px solid var(--line);color:#7a
 <div class="stack"><div class="l">产品应用层</div><div class="r">知识检索、智能问答、知识助手、知识图谱、知识地图、知识生产工作台、知识裁决、运营驾驶舱、开放 API。</div></div>
 <div class="stack"><div class="l">业务平台层</div><div class="r"><b>Spring Boot</b>：用户/组织/角色/ACL、知识空间、Source/Document、Knowledge Card、版本、审核、任务、审计、统一 API Gateway。作为控制面和权威状态入口。</div></div>
 <div class="stack"><div class="l">知识智能引擎</div><div class="r"><b>Python AI Service</b>：Parsing、Semantic Chunking、Extraction、Entity Resolution、Conflict Detection、Knowledge Judgment、Graph Build、Derived Knowledge、Query Planner、Multi Recall、RRF、Rerank、Context Assembly、Evaluation。</div></div>
-<div class="stack"><div class="l">数据与索引层</div><div class="r">MySQL 权威元数据；MinIO/OSS 源文件；OpenSearch 负责 BM25/全文与可选向量混合检索；Milvus 或 pgvector 作为独立向量能力的可选实现（二选一为主，FAISS 仅建议单机研发/离线实验）；Neo4j 用于关系探索与图计算；Redis 用于缓存/短状态；MQ 用于异步事件。生产环境不建议同时启用多套功能重叠的向量检索引擎。</div></div>
+<div class="stack"><div class="l">数据与索引层</div><div class="r"><b>当前落地基线（双检索）：</b>MySQL 8.0 权威元数据；MinIO/OSS 不可变源文件；<b>Elasticsearch 负责 BM25 / 全文与结构化过滤</b>，<b>Milvus 负责语义向量检索</b>，两者构成“全文 + 向量”双路召回，由 RRF / 加权融合后进入重排；Neo4j 5.x 用于关系探索与图召回；Redis 用于缓存与短状态；MQ 用于异步事件。选择双检索而非单引擎混合模式的理由：全文与向量的相关性特征、过滤能力与扩缩容节奏不同，拆开后可各自独立调优、独立扩缩、独立重建，且任一引擎故障时另一路仍可降级服务。</div></div>
 <div class="stack"><div class="l">模型层</div><div class="r">Embedding、LLM、Reranker、多模态/VLM、领域小模型。通过 Model Gateway 统一适配本地与外部模型。</div></div>
 <div class="stack"><div class="l">基础设施</div><div class="r">Docker/K8s、GPU/CPU、对象存储、日志/指标/Trace、Prometheus + Grafana、备份与灾备。</div></div>
 
@@ -89,6 +89,32 @@ Python Knowledge Intelligence Engine
        ├── Full-text Index
        ├── Vector DB
        └── Neo4j</div>
+
+<h3>2.4 前端呈现层与主题体系</h3>
+<p>呈现层是独立的一层：它不持有业务权威状态，只负责把控制面与智能面返回的对象、状态、证据与 Trace 以一致的方式呈现，并把用户动作转换为任务（返回 taskId / traceId 供追踪）。其工程约束如下。</p>
+<table><thead><tr><th>项</th><th>选型 / 约束</th></tr></thead><tbody>
+<tr><td>框架</td><td>Vue 3（组合式 API）+ TypeScript + Vite 5；路由按五大一级菜单组织，专业功能全部收敛在页面内 Tab</td></tr>
+<tr><td>基础组件库</td><td>Element Plus 2.8（表格、弹窗、表单、进度、分页）；业务外观由自定义语义层统一，不逐页自定义</td></tr>
+<tr><td>样式方案</td><td>Tailwind 3.4 + 语义化组件类；主题 token 集中在单一变量文件中，组件只写语义不写色值</td></tr>
+<tr><td>请求与状态</td><td>Axios 统一封装；异步操作一律以 taskId / traceId 追踪，页面状态与后端权威状态分离</td></tr>
+</tbody></table>
+
+<h4>2.4.1 主题 token 化</h4>
+<p>颜色不写在组件里，而是定义一层语义变量：表面（页面 / 卡片 / 次级 / 凹陷）、文字（主 / 次 / 弱）、边框（细 / 常规 / 悬浮）、强调色、状态色。深色与浅色各提供一组取值，切换主题只切换变量作用域，组件零改动；新增主题只需新增一组变量。</p>
+<table><thead><tr><th>状态</th><th>深色（字 / 底 / 边）</th><th>浅色（字 / 底 / 边）</th></tr></thead><tbody>
+<tr><td>成功</td><td>#34d399 / #12352a / #1f5c48</td><td>#047857 / #d1fae5 / #a7f3d0</td></tr>
+<tr><td>警告</td><td>#fbbf24 / #3b2f14 / #5a4718</td><td>#b45309 / #fef3c7 / #fcd34d</td></tr>
+<tr><td>失败</td><td>#f87171 / #3a1626 / #5c2130</td><td>#dc2626 / #fee2e2 / #fecaca</td></tr>
+<tr><td>信息</td><td>#60a5fa / #1d3f8c / #2a4f9c</td><td>#1d4ed8 / #dbeafe / #bfdbfe</td></tr>
+<tr><td>中性</td><td>#aab7cc / #1a2440 / #27355a</td><td>#475569 / #eef2f9 / #e2e8f0</td></tr>
+</tbody></table>
+<div class="note">状态色采用“三件套”（字色 + 底色 + 边框）而非单一色值，保证在深色与浅色下都落在可读区间；列表状态列、日志运行列表、详情头部、结果卡片共用同一枚状态胶囊，避免同一状态在不同页面出现不同绿/红。</div>
+
+<h4>2.4.2 与组件库的一致性</h4>
+<p>Element Plus 自带浅色皮肤，深色主题下会露出白底组件。做法是把组件库的 CSS 变量（背景、文字、边框、填充、状态色及其浅色变体）整体接到本套 token 上，使表格、标签、按钮、进度条、弹窗在两种主题下自动跟随，而不必为每个组件写主题分支。收益是“自绘组件与组件库不会出现两种绿”。</p>
+
+<h4>2.4.3 构建与交付</h4>
+<p>Vite 构建为静态资源，由 Nginx 容器提供；前端、后端、AI 服务统一打同一版本标签，与编排文件一起交付（见第 10 章）。主题、样式与前端资源全部打包进镜像，运行环境无需额外构建。</p>
 </section>
 
 <section id="a3"><h2>3. 知识全生命周期技术设计</h2>
@@ -234,8 +260,8 @@ GraphRAG ─────┘                                      ↓
 <table><thead><tr><th>存储</th><th>权威职责</th><th>典型数据</th><th>原则</th></tr></thead><tbody>
 <tr><td>MySQL</td><td>业务权威状态</td><td>Knowledge、Card、Version、Judgment、ACL、Task、Audit</td><td>强一致、可审计</td></tr>
 <tr><td>MinIO / OSS</td><td>不可变原始与解析产物</td><td>源文件、页面图、解析 JSON、快照</td><td>checksum + version</td></tr>
-<tr><td>Elasticsearch / OpenSearch</td><td>全文检索视图</td><td>Chunk/Card/Entity 文本与过滤字段</td><td>可重建</td></tr>
-<tr><td>Milvus / pgvector / FAISS</td><td>语义向量视图</td><td>Chunk/Card/Assertion/Entity embeddings</td><td>Milvus/pgvector 用于服务化检索；FAISS 仅建议研发/离线；ACL/version 必须作为可过滤元数据或在召回前形成允许集合</td></tr>
+<tr><td><b>Elasticsearch（当前实现）</b></td><td>全文 / BM25 检索视图</td><td>Chunk/Card/Entity 文本与过滤字段（ACL、version、source 作为可过滤元数据）</td><td>可重建；索引按 generation 蓝绿切换，不承载向量职责</td></tr>
+<tr><td><b>Milvus（当前实现）</b></td><td>语义向量视图</td><td>Chunk/Card/Assertion/Entity embeddings</td><td>独立扩缩容；ACL/version 必须作为可过滤元数据或在召回前形成允许集合；换 Embedding 模型必须新建 generation</td></tr>
 <tr><td>Neo4j</td><td>图关系与图计算视图</td><td>Entity、Relation、Triple、Evidence link、Derivation path</td><td>图增强，不做唯一真相源</td></tr>
 <tr><td>Redis</td><td>缓存与短状态</td><td>热点查询、锁、任务状态</td><td>可丢失可恢复</td></tr></tbody></table>
 
@@ -357,6 +383,17 @@ Derived Knowledge 发布</div>
 <tr><td>Phase 3</td><td>Computable Knowledge</td><td>Neo4j、Graph Traversal、Path、Text2Cypher、Derived Knowledge、GraphRAG</td></tr>
 <tr><td>Phase 4</td><td>Knowledge Operations</td><td>Quality Evaluation、Knowledge Gap、Feedback Loop、运营驾驶舱、自动再生产</td></tr>
 <tr><td>Phase 5</td><td>Knowledge-Native AI</td><td>Agent/业务系统集成、复杂 Query Planner、主动知识服务、领域智能</td></tr></tbody></table>
+
+<h3>10.4 工程交付形态与镜像发布</h3>
+<p>当前工程以容器化交付为主：应用（前端 / 后端 / AI 服务）与中间件统一由编排文件拉起，镜像按版本标签发布。编排分两套——开发编排面向本地与联调（可连接外部模型服务），发布编排面向试点与生产（包含索引 Worker 等附加组件）。</p>
+<table><thead><tr><th>项</th><th>约定</th></tr></thead><tbody>
+<tr><td>应用镜像</td><td><code>knowledge-os/frontend</code>、<code>knowledge-os/backend</code>、<code>knowledge-os/ai-service</code>，统一使用同一 <code>VERSION</code> 标签；前端镜像内为 Vite 构建产物 + Nginx</td></tr>
+<tr><td>镜像前缀</td><td>支持 <code>IMAGE_PREFIX</code> 覆盖，用于指向内网或私有镜像仓库，编排文件无需改写</td></tr>
+<tr><td>中间件</td><td>MySQL、Redis、Elasticsearch、Milvus（含 etcd/minio 依赖）、Neo4j、Prometheus、Grafana 使用官方镜像与固定版本</td></tr>
+<tr><td>离线交付</td><td>目标机无外网时，从内网镜像仓库拉取后以「不构建」方式启动；需将仓库加入 <code>insecure-registries</code>（HTTP 私有仓库）</td></tr>
+<tr><td>环境分层</td><td>开发编排可接入外部模型服务（Ollama / Model Gateway）；生产环境模型服务独立部署，不与应用同机</td></tr>
+</tbody></table>
+<div class="note">升级方式：重建变更服务的镜像并推送同版本或新版本标签 → 目标机拉取 → 以「不构建」方式重建容器。<b>只改前端时只需重推前端镜像</b>，后端与 AI 服务镜像无需变动。</div>
 
 <div class="note ok"><strong>最终技术基线：</strong>以 Knowledge Card + Assertion + Evidence + Entity/Relation/Graph 作为统一知识模型；以 MySQL 保存权威状态；以 FullText + Vector + Graph 构建多路检索；以 Query Planner + RRF + Reranker + Context Assembly 构建统一知识消费引擎；以 Conflict/Judgment + Version + ACL + Trace + Evaluation 构建可信治理闭环。</div>
 </section>
@@ -532,12 +569,12 @@ Answer + Citation + Trace</div>
 
 <h3>12.6 向量技术选型决策</h3>
 <table><thead><tr><th>场景</th><th>推荐</th><th>原因</th></tr></thead><tbody>
-<tr><td>本地开发 / 单机 Demo</td><td>FAISS 或 OpenSearch 内置向量</td><td>组件少、部署简单；FAISS 不承担生产级分布式服务职责。</td></tr>
-<tr><td>中小规模、强结构过滤</td><td>pgvector（若允许 PostgreSQL）或 OpenSearch</td><td>减少独立向量基础设施；但需针对过滤后的 ANN Recall 做压测。</td></tr>
-<tr><td>大规模独立向量服务</td><td>Milvus</td><td>独立扩缩容、向量与标量过滤能力更完整。</td></tr>
-<tr><td>现有 MySQL 技术栈且希望少组件</td><td>MySQL 继续做权威库 + OpenSearch 同时承担 BM25/Vector</td><td>第一阶段避免 MySQL + OpenSearch + Milvus + Neo4j 全量堆叠；待向量规模/吞吐达到阈值再拆 Milvus。</td></tr>
+<tr><td>本地开发 / 单机 Demo</td><td>Elasticsearch（BM25）+ Milvus（向量）最小规格</td><td>与生产保持同一套检索语义，避免 Demo 与生产行为不一致；单机可用 Docker Compose 一键起。</td></tr>
+<tr><td>中小规模、强结构过滤</td><td>Elasticsearch 承担过滤与全文；Milvus 承担向量</td><td>过滤后 ANN 的 Recall 需压测校准；过滤条件必须落在两侧（ES 过滤 + Milvus 标量过滤或召回前允许集合）。</td></tr>
+<tr><td>大规模独立向量服务</td><td>Milvus 独立集群</td><td>向量规模与吞吐独立扩缩，与全文链路解耦。</td></tr>
+<tr><td>引擎故障 / 降级</td><td>单路降级：ES 或 Milvus 任一不可用时降级为单路召回</td><td>双路召回天然支持降级；需在 Profile 中标记降级状态并在 Trace 中体现。</td></tr>
 </tbody></table>
-<div class="decision"><b>建议默认路线：</b>你的产品第一阶段采用 <b>MySQL + MinIO + OpenSearch + Redis/MQ</b>，Neo4j 在知识图谱进入可用阶段启用；Milvus 作为规模化向量检索的演进选项，而不是 MVP 强制依赖。</div>
+<div class="decision"><b>当前落地基线（已实现）：</b>MySQL + MinIO + <b>Elasticsearch</b> + <b>Milvus</b> + Neo4j + Redis/MQ 的组合已在工程中实现并用于开发/试点环境：<b>全文与向量拆分为两路独立召回</b>，由融合层统一汇总。选型理由不是“组件越多越好”，而是两类检索的相关性特征、过滤语义与扩容节奏不同，拆分后可独立调优、独立重建、独立降级；代价是多一套引擎的运维成本，因此通过编排文件与镜像仓库统一交付以降低部署复杂度。</div>
 
 <h3>12.7 LLM、Embedding、Reranker 的版本治理</h3>
 <p>Model Gateway 除 endpoint/modelName 外，至少记录 <code>provider、modelId、modelVersion、promptTemplateVersion、parameters、embeddingDimension、distanceMetric、tokenizerVersion</code>。Embedding 模型切换必须触发新索引 generation；新旧 generation 可并存切流，不允许把不同模型生成的向量直接放入同一可比较空间。</p>

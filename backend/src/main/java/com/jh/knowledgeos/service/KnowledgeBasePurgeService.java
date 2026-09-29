@@ -2,6 +2,7 @@ package com.jh.knowledgeos.service;
 
 import com.jh.knowledgeos.common.PlatformEventTypes;
 import com.jh.knowledgeos.mapper.KnowledgeMapper;
+import com.jh.knowledgeos.mapper.IndexMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -37,9 +38,17 @@ public class KnowledgeBasePurgeService {
      * objects it describes. The schema has no foreign keys, so the order documents intent rather
      * than satisfying a constraint.
      */
-    private static final List<String> PURGE_TABLES = Collections.unmodifiableList(Arrays.asList("t_index_outbox", "t_index_outbox_archive", "t_index_schema_release", "t_index_schema_snapshot_audit", "t_index_acl_manifest", "t_index_graph_manifest", "t_index_graph_facet_manifest", "t_index_graph_evidence_manifest", "t_adjudication_assessment", "t_answer_evidence_assessment", "t_answer_qualification", "t_query_trace", "t_acl_access_audit", "t_acl_change", "t_acl_rebuild_job", "t_ingestion_run", "t_knowledge_version", "t_knowledge_conflict", "t_entity_acl_scope", "t_relation_acl_scope", "t_entity_facet", "t_relation_facet", "t_exact_evidence_binding", "t_entity_alias", "t_relation", "t_entity", "t_evidence", "t_claim", "t_knowledge_card", "t_source"));
+    private static final List<String> PURGE_TABLES = Collections.unmodifiableList(Arrays.asList("t_index_outbox", "t_index_outbox_archive",
+        "t_index_schema_release", "t_index_schema_snapshot_audit", "t_index_acl_manifest", "t_index_graph_manifest", "t_index_graph_facet_manifest",
+        "t_index_graph_evidence_manifest", "t_adjudication_assessment", "t_answer_evidence_assessment", "t_answer_qualification", "t_query_trace",
+        "t_acl_access_audit", "t_acl_change", "t_acl_rebuild_job", "t_ingestion_run", "t_knowledge_version", "t_knowledge_conflict",
+        "t_entity_acl_scope", "t_relation_acl_scope", "t_entity_facet", "t_relation_facet", "t_exact_evidence_binding", "t_entity_alias",
+        "t_relation", "t_entity", "t_evidence", "t_claim", "t_knowledge_card", "t_source"));
 
     private final KnowledgeMapper mapper;
+
+    private final IndexMapper indexMapper;
+
 
     private final SourceFileStorageService sourceFileStorage;
 
@@ -47,7 +56,9 @@ public class KnowledgeBasePurgeService {
 
     private final PlatformEventPublisher publisher;
 
-    public KnowledgeBasePurgeService(KnowledgeMapper mapper, SourceFileStorageService sourceFileStorage, AiClient aiClient, PlatformEventPublisher publisher) {
+    public KnowledgeBasePurgeService(KnowledgeMapper mapper, SourceFileStorageService sourceFileStorage, AiClient aiClient, PlatformEventPublisher
+        publisher, IndexMapper indexMapper) {
+        this.indexMapper = indexMapper;
         this.mapper = mapper;
         this.sourceFileStorage = sourceFileStorage;
         this.aiClient = aiClient;
@@ -81,8 +92,8 @@ public class KnowledgeBasePurgeService {
         // Paths must be read before t_source is deleted, otherwise the uploads they point at
         // become unreachable garbage on disk.
         result.put("sourceStoragePaths", new ArrayList<String>(mapper.listSourceStoragePaths(kb)));
-        mapper.purgeIndexDeliveryAttempts(kb);
-        mapper.purgeArchivedIndexDeliveryAttempts(kb);
+        indexMapper.purgeIndexDeliveryAttempts(kb);
+        indexMapper.purgeArchivedIndexDeliveryAttempts(kb);
         mapper.purgeAnswerClaimAssessments(kb);
         mapper.purgeIngestionEvents(kb);
         mapper.purgeEntityFacetEvidence(kb);
@@ -101,7 +112,8 @@ public class KnowledgeBasePurgeService {
         // Purging a base is the most destructive action an operator can take, so it has to be
         // announced: subscribers holding materialized views or caches need to drop them.
         Map<String, Object> detail = new LinkedHashMap<String, Object>(result);
-        publisher.emitUser(PlatformEventTypes.KNOWLEDGE_BASE_PURGED, kb, PlatformEventPublisher.SOURCE_UI, "KNOWLEDGE_BASE", String.valueOf(kb), "清空知识库：" + kb, detail);
+        publisher.emitUser(PlatformEventTypes.KNOWLEDGE_BASE_PURGED, kb, PlatformEventPublisher.SOURCE_UI, "KNOWLEDGE_BASE", String.valueOf(kb),
+            "清空知识库：" + kb, detail);
         return result;
     }
 

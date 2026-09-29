@@ -57,7 +57,7 @@
           <li v-for="row in caseRows" :key="String(row.caseCode)" class="flex items-start gap-2 py-2">
             <div class="min-w-0 flex-1">
               <div class="truncate text-xs text-ink-700">{{ row.question }}</div>
-              <div class="text-[11px] text-ink-400">期望：{{ codes(row.expectedObjectCodesJson) }}</div>
+              <div class="text-[11px] text-ink-500">期望：{{ codes(row.expectedObjectCodesJson) }}</div>
             </div>
             <button class="kb-btn-outline text-[11px]" @click="removeCase(row.id)">删除</button>
           </li>
@@ -80,7 +80,7 @@
           <div v-for="card in metricCards" :key="card.label" class="rounded-lg border border-ink-100 px-3 py-2">
             <div class="kb-muted">{{ card.label }}</div>
             <div class="text-lg font-semibold text-ink-800">{{ card.value }}</div>
-            <div v-if="card.delta" class="text-[11px]" :class="card.delta.startsWith('-') ? 'text-rose-500' : 'text-emerald-600'">
+            <div v-if="card.delta" class="text-[11px]" :class="card.delta.startsWith('-') ? 'text-[color:var(--danger)]' : 'text-[color:var(--ok)]'">
               基线 {{ card.delta }}
             </div>
           </div>
@@ -105,7 +105,7 @@
           </el-table-column>
           <el-table-column label="状态" width="80">
             <template #default="{ row }">
-              <span :class="row.status === 'SUCCESS' ? 'text-emerald-600' : 'text-rose-500'">{{ statusLabel(row.status) }}</span>
+              <span :class="row.status === 'SUCCESS' ? 'text-[color:var(--ok)]' : 'text-[color:var(--danger)]'">{{ statusLabel(row.status) }}</span>
             </template>
           </el-table-column>
           <el-table-column label="命中率@1" width="70">
@@ -138,8 +138,8 @@
         </el-table>
 
         <!-- 知识缺口：未召回期望知识的问题，直接指向要补的内容。 -->
-        <div v-if="gapCount" class="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2">
-          <b class="text-xs text-amber-700">知识缺口：{{ gapCount }} 题未召回期望知识</b>
+        <div v-if="gapCount" class="mt-3 rounded-lg border border-[color:var(--warn-bd)] bg-[color:var(--warn-bg)] px-3 py-2">
+          <b class="text-xs text-[color:var(--warn)]">知识缺口：{{ gapCount }} 题未召回期望知识</b>
           <div class="mt-1 flex flex-wrap gap-1">
             <span v-for="code in gapCodes" :key="code" class="kb-badge">{{ code.slice(0, 12) }}</span>
           </div>
@@ -176,7 +176,7 @@
             </el-table-column>
             <el-table-column label="结论" width="90">
               <template #default="{ row }">
-                <span :class="verdictOf(row) === 'REGRESSED' ? 'text-rose-500' : verdictOf(row) === 'IMPROVED' ? 'text-emerald-600' : 'text-ink-400'">
+                <span :class="verdictOf(row) === 'REGRESSED' ? 'text-[color:var(--danger)]' : verdictOf(row) === 'IMPROVED' ? 'text-[color:var(--ok)]' : 'text-ink-500'">
                   {{ verdictOf(row) === 'REGRESSED' ? '回归' : verdictOf(row) === 'IMPROVED' ? '改善' : '持平' }}
                 </span>
               </template>
@@ -237,7 +237,7 @@ const verdictLabel = computed(() =>
   verdictOf(current.value ?? {}) === 'REGRESSED' ? '回归' :
   verdictOf(current.value ?? {}) === 'IMPROVED' ? '改善' : '与基线持平')
 const verdictClass = computed(() =>
-  verdictOf(current.value ?? {}) === 'REGRESSED' ? 'text-rose-500' : 'text-emerald-600')
+  verdictOf(current.value ?? {}) === 'REGRESSED' ? 'text-[color:var(--danger)]' : 'text-[color:var(--ok)]')
 const results = computed<Row[]>(() => {
   const list = (current.value as Row | null)?.results
   return Array.isArray(list) ? list as Row[] : []

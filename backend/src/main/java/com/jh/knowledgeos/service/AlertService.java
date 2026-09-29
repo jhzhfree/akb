@@ -51,7 +51,8 @@ public class AlertService {
     /**
      * Metrics the console offers when a rule is created or edited.
      */
-    public static final List<String> METRICS = Collections.unmodifiableList(Arrays.asList(METRIC_TASK_FAILURE_COUNT, METRIC_TASK_FAILURE_RATE, METRIC_DLQ_BACKLOG, METRIC_DOCUMENT_FAILED, METRIC_DERIVED_STALE, METRIC_SCHEMA_VIOLATION));
+    public static final List<String> METRICS = Collections.unmodifiableList(Arrays.asList(METRIC_TASK_FAILURE_COUNT, METRIC_TASK_FAILURE_RATE,
+        METRIC_DLQ_BACKLOG, METRIC_DOCUMENT_FAILED, METRIC_DERIVED_STALE, METRIC_SCHEMA_VIOLATION));
 
     private static final Map<String, String> METRIC_LABELS;
 
@@ -78,7 +79,8 @@ public class AlertService {
 
     private final PlatformEventPublisher publisher;
 
-    public AlertService(KnowledgeMapper mapper, IdGenerator ids, ObjectMapper objectMapper, TaskCenterService tasks, KnowledgeSchemaService schema, PlatformEventPublisher publisher) {
+    public AlertService(KnowledgeMapper mapper, IdGenerator ids, ObjectMapper objectMapper, TaskCenterService tasks, KnowledgeSchemaService schema,
+        PlatformEventPublisher publisher) {
         this.mapper = mapper;
         this.ids = ids;
         this.objectMapper = objectMapper;
@@ -111,7 +113,8 @@ public class AlertService {
         int window = toInt(body.get("windowMinutes"), 60);
         String severity = severity(body.get("severity"));
         String ruleCode = ids.next("AR");
-        mapper.insertAlertRule(ruleCode, kb, name, metric, severity, threshold, window, text(body.get("channels")).isEmpty() ? "IN_APP" : text(body.get("channels")), currentUser());
+        mapper.insertAlertRule(ruleCode, kb, name, metric, severity, threshold, window, text(body.get("channels")).isEmpty() ? "IN_APP" :
+            text(body.get("channels")), currentUser());
         return rule(ruleCode);
     }
 
@@ -124,7 +127,11 @@ public class AlertService {
         if (!METRICS.contains(metric)) {
             throw new IllegalArgumentException("不支持的告警指标：" + metric);
         }
-        mapper.updateAlertRule(ruleCode, body.get("name") == null ? text(existing.get("name")) : text(body.get("name")).trim(), metric, severity(body.get("severity") == null ? existing.get("severity") : body.get("severity")), toDouble(body.get("threshold"), toDouble(existing.get("threshold"), 1)), toInt(body.get("windowMinutes"), toInt(existing.get("windowMinutes"), 60)), body.get("channels") == null ? text(existing.get("channels")) : text(body.get("channels")), body.get("enabled") == null ? toBoolean(existing.get("enabled")) : toBoolean(body.get("enabled")));
+        mapper.updateAlertRule(ruleCode, body.get("name") == null ? text(existing.get("name")) : text(body.get("name")).trim(), metric,
+            severity(body.get("severity") == null ? existing.get("severity") : body.get("severity")), toDouble(body.get("threshold"),
+            toDouble(existing.get("threshold"), 1)), toInt(body.get("windowMinutes"), toInt(existing.get("windowMinutes"), 60)), body.get("channels")
+            == null ? text(existing.get("channels")) : text(body.get("channels")), body.get("enabled") == null ? toBoolean(existing.get("enabled")) :
+            toBoolean(body.get("enabled")));
         return rule(ruleCode);
     }
 
@@ -291,7 +298,8 @@ public class AlertService {
         if (announce) {
             Map<String, Object> current = mapper.getAlertEventByDedup(dedupKey);
             detail.put("severity", severity);
-            publisher.emitSystem(PlatformEventTypes.KNOWLEDGE_GAP_DETECTED, scope, "ALERT", text(current == null ? null : current.get("alertCode")), title, detail);
+            publisher.emitSystem(PlatformEventTypes.KNOWLEDGE_GAP_DETECTED, scope, "ALERT", text(current == null ? null : current.get("alertCode")),
+                title, detail);
         }
     }
 

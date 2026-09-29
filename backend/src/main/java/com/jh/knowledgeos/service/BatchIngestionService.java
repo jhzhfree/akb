@@ -70,7 +70,9 @@ public class BatchIngestionService {
 
     private final ConcurrentHashMap<String, BatchJob> jobs = new ConcurrentHashMap<String, BatchJob>();
 
-    public BatchIngestionService(DocumentIngestionService ingestion, TaskCenterService taskCenter, IdGenerator ids, @Qualifier(BatchIngestionExecutorConfig.BEAN_NAME) Executor executor, @Value("${knowledge.batch.max-files:50}") int maxFiles, @Value("${knowledge.batch.max-file-mb:20}") int maxFileMb, @Value("${knowledge.batch.max-tracked:200}") int maxTracked) {
+    public BatchIngestionService(DocumentIngestionService ingestion, TaskCenterService taskCenter, IdGenerator ids,
+        @Qualifier(BatchIngestionExecutorConfig.BEAN_NAME) Executor executor, @Value("${knowledge.batch.max-files:50}") int maxFiles,
+        @Value("${knowledge.batch.max-file-mb:20}") int maxFileMb, @Value("${knowledge.batch.max-tracked:200}") int maxTracked) {
         this.ingestion = ingestion;
         this.taskCenter = taskCenter;
         this.ids = ids;
@@ -122,7 +124,8 @@ public class BatchIngestionService {
         payload.put("authorityScore", authorityScore);
         payload.put("permissionTags", permissionTags);
         payload.put("concurrencyHint", Thread.currentThread().getName());
-        Map<String, Object> task = taskCenter.enqueue(knowledgeBaseId, TaskCenterService.TYPE_INGESTION, "批量文档接入：" + files.size() + " 个文件", BATCH_TARGET_TYPE, batchCode, TaskCenterService.TRIGGER_MANUAL, payload);
+        Map<String, Object> task = taskCenter.enqueue(knowledgeBaseId, TaskCenterService.TYPE_INGESTION, "批量文档接入：" + files.size() + " 个文件",
+            BATCH_TARGET_TYPE, batchCode, TaskCenterService.TRIGGER_MANUAL, payload);
         job.taskCode = String.valueOf(task.get("taskCode"));
         taskCenter.start(job.taskCode, RUNNING);
         jobs.put(batchCode, job);

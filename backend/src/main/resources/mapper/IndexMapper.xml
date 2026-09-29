@@ -1,0 +1,261 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.jh.knowledgeos.mapper.IndexMapper">
+
+<insert id="incrementIndexAggregateVersion">
+  INSERT INTO t_index_aggregate_version(aggregate_key,current_version) VALUES(#{aggregateKey},1)
+  ON DUPLICATE KEY UPDATE current_version=current_version+1
+</insert>
+
+
+<select id="getIndexAggregateVersion" resultType="long">
+  SELECT current_version FROM t_index_aggregate_version WHERE aggregate_key=#{aggregateKey}
+</select>
+
+
+<insert id="insertIndexOutbox" parameterType="com.jh.knowledgeos.domain.IndexOutboxEvent" useGeneratedKeys="true" keyProperty="id">
+  INSERT IGNORE INTO t_index_outbox(event_id,idempotency_key,knowledge_base_id,aggregate_type,aggregate_key,event_type,object_version,target_path,payload_json,status,attempt_count,max_attempts,next_attempt_at)
+  VALUES(#{eventId},#{idempotencyKey},#{knowledgeBaseId},#{aggregateType},#{aggregateKey},#{eventType},#{objectVersion},#{targetPath},CAST(#{payloadJson} AS JSON),#{status},#{attemptCount},#{maxAttempts},CURRENT_TIMESTAMP)
+</insert>
+
+
+<select id="findOutboxByIdempotencyKey" resultType="com.jh.knowledgeos.domain.IndexOutboxEvent">
+  SELECT * FROM t_index_outbox WHERE idempotency_key=#{idempotencyKey}
+</select>
+
+
+<select id="findOutboxByEventId" resultType="com.jh.knowledgeos.domain.IndexOutboxEvent">
+  SELECT * FROM t_index_outbox WHERE event_id=#{eventId}
+</select>
+
+
+<select id="selectDueIndexOutbox" resultType="com.jh.knowledgeos.domain.IndexOutboxEvent">
+  SELECT o.* FROM t_index_outbox o
+  WHERE o.status IN ('PENDING','RETRY') AND o.next_attempt_at&lt;=CURRENT_TIMESTAMP
+    AND NOT EXISTS (
+      SELECT 1 FROM t_index_outbox older
+      WHERE older.aggregate_key=o.aggregate_key
+        AND older.object_version&lt;o.object_version
+        AND older.status NOT IN ('SUCCEEDED','SKIPPED')
+    )
+  ORDER BY o.id LIMIT #{limit} FOR UPDATE SKIP LOCKED
+</select>
+
+
+<update id="claimIndexOutbox">
+  UPDATE t_index_outbox SET status='PROCESSING',attempt_count=attempt_count+1,locked_by=#{workerId},locked_at=CURRENT_TIMESTAMP
+  WHERE id=#{id} AND status IN ('PENDING','RETRY')
+</update>
+
+
+<update id="markIndexOutboxSucceeded">
+  UPDATE t_index_outbox SET status='SUCCEEDED',result_json=CAST(#{resultJson} AS JSON),last_error=NULL,locked_by=NULL,locked_at=NULL,processed_time=CURRENT_TIMESTAMP
+  WHERE id=#{id} AND status='PROCESSING'
+</update>
+
+
+<update id="markIndexOutboxRetry">
+  UPDATE t_index_outbox SET status='RETRY',last_error=#{error},next_attempt_at=#{nextAttemptAt},locked_by=NULL,locked_at=NULL
+  WHERE id=#{id} AND status='PROCESSING'
+</update>
+
+
+<update id="markIndexOutboxDead">
+  UPDATE t_index_outbox SET status='DEAD',last_error=#{error},locked_by=NULL,locked_at=NULL,processed_time=CURRENT_TIMESTAMP
+  WHERE id=#{id} AND status='PROCESSING'
+</update>
+
+
+<update id="recoverStaleIndexOutbox">
+  UPDATE t_index_outbox SET status='RETRY',next_attempt_at=CURRENT_TIMESTAMP,locked_by=NULL,locked_at=NULL,last_error=CONCAT('Recovered stale lock; ',COALESCE(last_error,''))
+  WHERE status='PROCESSING' AND locked_at&lt;#{threshold}
+</update>
+
+
+<insert id="insertIndexDeliveryAttempt">
+  INSERT IGNORE INTO t_index_delivery_attempt(event_id,attempt_no,status,duration_ms,response_json,error_text)
+  VALUES(#{eventId},#{attemptNo},#{status},#{durationMs},CASE WHEN #{responseJson} IS NULL THEN NULL ELSE CAST(#{responseJson} AS JSON) END,#{errorText})
+</insert>
+
+
+<select id="listIndexOutbox" resultType="com.jh.knowledgeos.domain.IndexOutboxEvent">
+  SELECT * FROM t_index_outbox WHERE knowledge_base_id=#{kb}
+  <if test="status != null and status != ''">AND status=#{status}</if>
+  ORDER BY id DESC LIMIT #{limit} OFFSET #{offset}
+</select>
+
+
+<select id="countIndexOutbox" resultType="java.lang.Long">
+  SELECT COUNT(*) FROM t_index_outbox WHERE knowledge_base_id=#{kb}
+  <if test="status != null and status != ''">AND status=#{status}</if>
+</select>
+
+
+<select id="indexOutboxStats" resultType="map">
+  SELECT COUNT(*) total,
+    SUM(status='PENDING') pending, SUM(status='PROCESSING') processing, SUM(status='RETRY') retryCount,
+    SUM(status='SUCCEEDED') succeeded, SUM(status='DEAD') dead, SUM(status='SKIPPED') skipped,
+    TIMESTAMPDIFF(SECOND,MIN(CASE WHEN status IN ('PENDING','RETRY','PROCESSING') THEN created_time END),CURRENT_TIMESTAMP) oldestLagSeconds
+  FROM t_index_outbox WHERE knowledge_base_id=#{kb}
+</select>
+
+
+<update id="replayIndexOutbox">
+  UPDATE t_index_outbox SET status='RETRY',attempt_count=0,next_attempt_at=CURRENT_TIMESTAMP,locked_by=NULL,locked_at=NULL,last_error=NULL,processed_time=NULL
+  WHERE event_id=#{eventId} AND status IN ('DEAD','RETRY')
+</update>
+
+
+<update id="skipIndexOutbox">
+  UPDATE t_index_outbox SET status='SKIPPED',locked_by=NULL,locked_at=NULL,processed_time=CURRENT_TIMESTAMP
+  WHERE event_id=#{eventId} AND status IN ('DEAD','RETRY','PENDING')
+</update>
+
+
+<select id="countIndexableObjects" resultType="long">
+  SELECT
+    (SELECT COUNT(*) FROM t_content_unit cu JOIN t_document d ON d.id=cu.document_id JOIN t_source_version sv ON sv.id=d.source_version_id JOIN t_source s ON s.id=sv.source_id WHERE s.knowledge_base_id=#{kb})
+    +(SELECT COUNT(*) FROM t_knowledge_card WHERE knowledge_base_id=#{kb} AND status IN ('APPROVED','EFFECTIVE'))
+    +(SELECT COUNT(*) FROM t_claim WHERE knowledge_base_id=#{kb} AND status IN ('APPROVED','EFFECTIVE'))
+</select>
+
+
+<select id="getDocumentIndexHeader" resultType="map">
+  SELECT d.id documentId,s.id sourceId,s.knowledge_base_id knowledgeBaseId,s.name sourceName,s.source_uri sourceUri,s.authority_score authorityScore
+  FROM t_document d JOIN t_source_version sv ON sv.id=d.source_version_id JOIN t_source s ON s.id=sv.source_id
+  WHERE d.id=#{documentId}
+</select>
+
+
+<select id="listDocumentIndexChunks" resultType="map">
+  SELECT cu.id content_unit_id,cu.page_no,cu.heading_path,cu.content,cu.content_hash,
+         (SELECT e.evidence_code FROM t_evidence e WHERE e.content_unit_id=cu.id ORDER BY e.id ASC LIMIT 1) evidence_code,
+         cu.content_hash evidence_hash
+  FROM t_content_unit cu WHERE cu.document_id=#{documentId} ORDER BY cu.id
+</select>
+
+
+<select id="indexOutboxGlobalStats" resultType="map">
+ SELECT SUM(status='PENDING') pending,SUM(status='RETRY') retryCount,SUM(status='DEAD') dead,
+ TIMESTAMPDIFF(SECOND,MIN(CASE WHEN status IN ('PENDING','RETRY','PROCESSING') THEN created_time END),CURRENT_TIMESTAMP) oldestLagSeconds FROM t_index_outbox
+</select>
+
+
+<insert id="archiveCompletedIndexOutbox">
+ INSERT IGNORE INTO t_index_outbox_archive(id,event_id,idempotency_key,knowledge_base_id,aggregate_type,aggregate_key,event_type,object_version,target_path,payload_json,status,attempt_count,max_attempts,result_json,last_error,created_time,processed_time)
+ SELECT id,event_id,idempotency_key,knowledge_base_id,aggregate_type,aggregate_key,event_type,object_version,target_path,payload_json,status,attempt_count,max_attempts,result_json,last_error,created_time,processed_time
+ FROM t_index_outbox WHERE status IN ('SUCCEEDED','SKIPPED') AND processed_time&lt;#{cutoff} ORDER BY id LIMIT #{limit}
+</insert>
+
+
+<insert id="archiveIndexDeliveryAttempts">
+ INSERT IGNORE INTO t_index_delivery_attempt_archive(id,event_id,attempt_no,status,duration_ms,response_json,error_text,created_time)
+ SELECT a.id,a.event_id,a.attempt_no,a.status,a.duration_ms,a.response_json,a.error_text,a.created_time
+ FROM t_index_delivery_attempt a JOIN t_index_outbox_archive o ON o.event_id=a.event_id WHERE o.processed_time&lt;#{cutoff}
+</insert>
+
+
+<delete id="deleteArchivedIndexDeliveryAttempts">
+ DELETE a FROM t_index_delivery_attempt a JOIN t_index_outbox_archive o ON o.event_id=a.event_id WHERE o.processed_time&lt;#{cutoff}
+</delete>
+
+
+<delete id="deleteArchivedIndexOutbox">
+ DELETE FROM t_index_outbox WHERE id IN (SELECT id FROM (SELECT o.id FROM t_index_outbox o JOIN t_index_outbox_archive a ON a.id=o.id WHERE o.status IN ('SUCCEEDED','SKIPPED') AND o.processed_time&lt;#{cutoff} ORDER BY o.id LIMIT #{limit}) x)
+</delete>
+
+
+<insert id="insertIndexSchemaRelease" parameterType="com.jh.knowledgeos.domain.IndexSchemaRelease">
+ INSERT INTO t_index_schema_release(release_id,knowledge_base_id,schema_version,state,expected_count) VALUES(#{releaseId},#{knowledgeBaseId},#{schemaVersion},#{state},#{expectedCount})
+</insert>
+
+
+<select id="findIndexSchemaRelease" resultType="com.jh.knowledgeos.domain.IndexSchemaRelease">SELECT * FROM t_index_schema_release WHERE release_id=#{releaseId}</select>
+
+
+<select id="listIndexSchemaReleases" resultType="com.jh.knowledgeos.domain.IndexSchemaRelease">SELECT * FROM t_index_schema_release WHERE knowledge_base_id=#{kb} ORDER BY id DESC LIMIT #{limit}</select>
+
+
+<update id="completeIndexSchemaRelease">UPDATE t_index_schema_release SET state=#{state},elasticsearch_count=#{elasticsearchCount},milvus_count=#{milvusCount},elasticsearch_target=#{elasticsearchTarget},milvus_target=#{milvusTarget},validation_json=CASE WHEN #{validationJson} IS NULL THEN NULL ELSE CAST(#{validationJson} AS JSON) END,error_text=#{errorText} WHERE release_id=#{releaseId}</update>
+
+
+<update id="activateIndexSchemaRelease">
+ UPDATE t_index_schema_release SET state=CASE WHEN release_id=#{releaseId} THEN 'ACTIVE' WHEN state='ACTIVE' THEN 'RETIRED' ELSE state END,
+ activated_time=CASE WHEN release_id=#{releaseId} THEN CURRENT_TIMESTAMP ELSE activated_time END,retired_time=CASE WHEN state='ACTIVE' AND release_id&lt;&gt;#{releaseId} THEN CURRENT_TIMESTAMP ELSE retired_time END
+ WHERE knowledge_base_id=#{kb} AND (release_id=#{releaseId} OR state='ACTIVE')
+</update>
+
+
+<insert id="insertAclManifest">
+ INSERT INTO t_index_acl_manifest(release_id,knowledge_base_id,generation_id,manifest_hash,object_count,source_high_watermark)
+ VALUES(#{releaseId},#{kb},#{generationId},#{manifestHash},#{objectCount},#{sourceHighWatermark})
+</insert>
+
+
+<update id="updateSchemaManifest">
+ UPDATE t_index_schema_release SET generation_id=#{generationId},acl_manifest_hash=#{manifestHash},acl_manifest_count=#{objectCount}
+ WHERE release_id=#{releaseId}
+</update>
+
+
+<select id="maxIndexOutboxId" resultType="long">
+ SELECT COALESCE(MAX(id),0) FROM t_index_outbox WHERE knowledge_base_id=#{kb}
+</select>
+
+
+<select id="listAuthoritativeIndexSnapshot" resultType="com.jh.knowledgeos.projection.AuthoritativeIndexSnapshotRow">
+ SELECT * FROM (
+   SELECT CONCAT('CONTENT_UNIT:',cu.id) objectKey,CAST(cu.id AS CHAR) objectId,'CONTENT_UNIT' objectType,
+          s.knowledge_base_id knowledgeBaseId,d.id documentId,cu.id contentUnitId,
+          COALESCE(cu.heading_path,s.name) title,cu.content content,s.name sourceName,s.source_uri sourceUri,
+          cu.page_no pageNo,cu.heading_path headingPath,NULL status,cu.content_hash contentHash,COALESCE(CAST(s.permission_tags AS CHAR),'[]') permissionTags,
+          (SELECT e.evidence_code FROM t_evidence e WHERE e.content_unit_id=cu.id ORDER BY e.id ASC LIMIT 1) evidenceCode,cu.content_hash evidenceHash
+   FROM t_content_unit cu JOIN t_document d ON d.id=cu.document_id
+   JOIN t_source_version sv ON sv.id=d.source_version_id JOIN t_source s ON s.id=sv.source_id
+   WHERE s.knowledge_base_id=#{kb}
+   UNION ALL
+   SELECT CONCAT('CARD:',c.knowledge_code),c.knowledge_code,'CARD',c.knowledge_base_id,NULL,NULL,
+          c.title,COALESCE(c.content,c.summary),'知识卡片','',NULL,'',c.status,
+          SHA2(CONCAT_WS('|',c.knowledge_code,COALESCE(c.title,''),COALESCE(c.content,c.summary,''),COALESCE(c.status,''),COALESCE(c.version,0)),256),COALESCE(CAST(c.permission_tags AS CHAR),'[]') permissionTags,
+          (SELECT e.evidence_code FROM t_knowledge_evidence k JOIN t_evidence e ON e.id=k.evidence_id
+           WHERE k.knowledge_code=c.knowledge_code ORDER BY e.id ASC LIMIT 1) evidenceCode,
+          (SELECT COALESCE(cu.content_hash,'') FROM t_knowledge_evidence k JOIN t_evidence e ON e.id=k.evidence_id
+           LEFT JOIN t_content_unit cu ON cu.id=e.content_unit_id
+           WHERE k.knowledge_code=c.knowledge_code ORDER BY e.id ASC LIMIT 1) evidenceHash
+   FROM t_knowledge_card c WHERE c.knowledge_base_id=#{kb} AND c.status IN ('APPROVED','EFFECTIVE')
+   UNION ALL
+   SELECT CONCAT('CLAIM:',cl.claim_code),cl.claim_code,'CLAIM',cl.knowledge_base_id,NULL,NULL,
+          CONCAT('断言：',COALESCE(cl.subject,'')),CONCAT_WS(' ',COALESCE(cl.subject,''),COALESCE(cl.predicate,''),COALESCE(cl.object_value,'')),
+          '断言','',NULL,'',cl.status,
+          SHA2(CONCAT_WS('|',cl.claim_code,COALESCE(cl.subject,''),COALESCE(cl.predicate,''),COALESCE(cl.object_value,''),COALESCE(cl.status,'')),256),COALESCE(CAST(cl.permission_tags AS CHAR),'[]') permissionTags,
+          (SELECT e.evidence_code FROM t_claim_evidence ce JOIN t_evidence e ON e.id=ce.evidence_id
+           WHERE ce.claim_code=cl.claim_code ORDER BY e.id ASC LIMIT 1) evidenceCode,
+          (SELECT COALESCE(cu.content_hash,'') FROM t_claim_evidence ce JOIN t_evidence e ON e.id=ce.evidence_id
+           LEFT JOIN t_content_unit cu ON cu.id=e.content_unit_id
+           WHERE ce.claim_code=cl.claim_code ORDER BY e.id ASC LIMIT 1) evidenceHash
+   FROM t_claim cl WHERE cl.knowledge_base_id=#{kb} AND cl.status IN ('APPROVED','EFFECTIVE')
+ ) x ORDER BY objectKey LIMIT #{limit} OFFSET #{offset}
+</select>
+
+
+<insert id="insertIndexSnapshotAudit">
+ INSERT INTO t_index_schema_snapshot_audit(
+   release_id,knowledge_base_id,page_no,row_count,page_checksum,first_object_key,last_object_key)
+ VALUES(#{releaseId},#{kb},#{pageNo},#{rowCount},#{pageChecksum},#{firstObjectKey},#{lastObjectKey})
+</insert>
+
+
+<update id="updateIndexSchemaIntegrity">
+ UPDATE t_index_schema_release SET snapshot_checksum=#{snapshotChecksum},
+ source_high_watermark=#{sourceHighWatermark},source_end_watermark=#{sourceEndWatermark},
+ snapshot_count=#{snapshotCount},integrity_state=#{integrityState}
+ WHERE release_id=#{releaseId}
+</update>
+
+
+<delete id="purgeIndexDeliveryAttempts">DELETE FROM t_index_delivery_attempt WHERE event_id IN (SELECT event_id FROM t_index_outbox WHERE knowledge_base_id=#{kb}) OR event_id IN (SELECT event_id FROM t_index_outbox_archive WHERE knowledge_base_id=#{kb})</delete>
+
+
+<delete id="purgeArchivedIndexDeliveryAttempts">DELETE FROM t_index_delivery_attempt_archive WHERE event_id IN (SELECT event_id FROM t_index_outbox WHERE knowledge_base_id=#{kb}) OR event_id IN (SELECT event_id FROM t_index_outbox_archive WHERE knowledge_base_id=#{kb})</delete>
+
+</mapper>

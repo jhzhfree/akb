@@ -22,7 +22,6 @@ class MilvusProvider:
     """Dense-vector provider backed by Milvus REST v2."""
 
     def __init__(self) -> None:
-        self.enabled = settings.milvus_enabled
         headers = {"Authorization": "Bearer %s" % settings.milvus_token} if settings.milvus_token else {}
         self.client = httpx.AsyncClient(
             base_url=settings.milvus_url,
@@ -32,6 +31,11 @@ class MilvusProvider:
         self.collection = settings.milvus_collection
         self.read_alias = settings.milvus_read_alias
         self._active_read_collection: str | None = None
+
+    @property
+    def enabled(self) -> bool:
+        """Read the switch on every use, so a console edit needs no restart."""
+        return settings.milvus_enabled
 
     async def _post(self, path: str, body: dict[str, Any]) -> dict[str, Any]:
         response = await self.client.post(path, json=body)
@@ -55,13 +59,43 @@ class MilvusProvider:
         payload = await self._post("/v2/vectordb/collections/list", {})
         return list(payload.get("data") or [])
 
-    async def ensure_collection(self, target: str | None = None) -> None:
-        name = target or self.collection
-        if name in await self.list_collections():
-            return
-        body = {
+    # Object ids are "knowledge_base_id:object_id"; 256 leaves room if a deployment
+    # prefixes them further, and VarChar primaries need the cap up front.
+    PRIMARY_MAX_LENGTH = 256
+
+    @staticmethod
+    def _create_body(name: str, dimension: int) -> dict[str, Any]:
+        """Schema form understood by Milvus 3.x: explicit fields with typed params."""
+        return {
             "collectionName": name,
-            "dimension": settings.embedding_dim,
+            "schema": {
+                "autoID": False,
+                "enableDynamicField": True,
+                "fields": [
+                    {
+                        "fieldName": "id",
+                        "dataType": "VarChar",
+                        "isPrimary": True,
+                        "elementTypeParams": {"max_length": str(MilvusProvider.PRIMARY_MAX_LENGTH)},
+                    },
+                    {
+                        "fieldName": "vector",
+                        "dataType": "FloatVector",
+                        "elementTypeParams": {"dim": str(dimension)},
+                    },
+                ],
+            },
+            "indexParams": [
+                {"fieldName": "vector", "indexName": "vector_idx", "metricType": "COSINE"},
+            ],
+        }
+
+    @staticmethod
+    def _legacy_create_body(name: str, dimension: int) -> dict[str, Any]:
+        """Flat quick-create form used by Milvus 2.x REST."""
+        return {
+            "collectionName": name,
+            "dimension": dimension,
             "metricType": "COSINE",
             "primaryFieldName": "id",
             "vectorFieldName": "vector",
@@ -69,7 +103,55 @@ class MilvusProvider:
             "autoID": False,
             "enableDynamicField": True,
         }
-        await self._post("/v2/vectordb/collections/create", body)
+
+    async def _collection_dimension(self, name: str) -> int | None:
+        """Read the vector width of an existing collection, if it can be described."""
+        try:
+            payload = await self._post(
+                "/v2/vectordb/collections/describe", {"collectionName": name}
+            )
+        except Exception as exc:
+            logger.debug("Milvus describe failed for %s: %s", name, exc)
+            return None
+        for field in (payload.get("data") or {}).get("fields") or []:
+            if field.get("name") != "vector":
+                continue
+            for param in field.get("params") or []:
+                if param.get("key") == "dim":
+                    try:
+                        return int(param.get("value"))
+                    except (TypeError, ValueError):
+                        return None
+        return None
+
+    async def ensure_collection(self, target: str | None = None, dim: int | None = None) -> None:
+        """Create the collection, tolerating both REST dialects.
+
+        Milvus 3.x rejects the flat form outright (``idType`` makes it reply
+        ``strconv.ParseInt: parsing "<nil>"``), while 2.x does not know the schema
+        form, so the schema form is tried first and the flat one is the fallback.
+
+        ``dim`` comes from the vectors actually being written: the configured
+        embedding dimension is only a default, and a collection created at the
+        wrong width rejects every insert with "size N doesn't equal dimension M".
+        """
+        name = target or self.collection
+        dimension = int(dim or settings.embedding_dim)
+        if name in await self.list_collections():
+            # An existing collection keeps its original width; saying so beats the
+            # opaque "size N doesn't equal dimension M" Milvus returns on insert.
+            existing = await self._collection_dimension(name)
+            if existing and existing != dimension:
+                raise RuntimeError(
+                    "Milvus collection %s was created with dimension %d but the current "
+                    "embeddings are %d wide; drop the collection or re-index it before "
+                    "writing." % (name, existing, dimension)
+                )
+            return
+        try:
+            await self._post("/v2/vectordb/collections/create", self._create_body(name, dimension))
+        except Exception:
+            await self._post("/v2/vectordb/collections/create", self._legacy_create_body(name, dimension))
 
     def schema_target(self, schema_version: str) -> str:
         return "%s__%s" % (self.collection, schema_version.lower())
@@ -79,7 +161,7 @@ class MilvusProvider:
         if not self.enabled or not vector_docs:
             return {"provider": "milvus", "indexed": 0, "skipped": True}
         name = target or self.collection
-        await self.ensure_collection(name)
+        await self.ensure_collection(name, dim=len(vector_docs[0]["vector"]))
         total = 0
         batch_size = max(1, settings.retrieval_batch_size)
         for start in range(0, len(vector_docs), batch_size):
@@ -101,7 +183,8 @@ class MilvusProvider:
         target = self.schema_target(schema_version)
         if target in await self.list_collections():
             await self._post("/v2/vectordb/collections/drop", {"collectionName": target})
-        await self.ensure_collection(target)
+        dimension = len(next((doc["vector"] for doc in docs if doc.get("vector")), [])) or None
+        await self.ensure_collection(target, dim=dimension)
         result = await self.upsert(docs, target)
         result["target"] = target
         return result
@@ -203,7 +286,25 @@ class MilvusProvider:
         return {"provider": "milvus", "alias": self.read_alias, "target": target, "activated": True}
 
     async def read_collection(self) -> str:
-        return self._active_read_collection or self.read_alias or self.collection
+        """Resolve the active read alias, falling back to the base collection.
+
+        The alias only exists once a blue/green generation has been activated.
+        Reading through it unconditionally would make every count and query fail
+        with "can't find collection" on a deployment that never activated one —
+        the same reason Elasticsearch checks the alias before using it.
+        """
+        if self._active_read_collection:
+            return self._active_read_collection
+        target = self.collection
+        if self.read_alias:
+            try:
+                payload = await self._post("/v2/vectordb/aliases/list", {})
+                if self.read_alias in (payload.get("data") or []):
+                    target = self.read_alias
+            except Exception as exc:
+                logger.debug("Milvus alias lookup failed: %s", exc)
+        self._active_read_collection = target
+        return target
 
     def _filter_expr(self, kb: int, tags: Iterable[str] | None, object_type: str | None) -> str:
         clauses = ["knowledge_base_id == %d" % kb]
@@ -287,6 +388,10 @@ class MilvusProvider:
         }
 
     async def count(self, kb: int) -> dict[str, Any]:
+        # A switched-off engine must not be dialled: the drift view would otherwise
+        # report a connection error for something that was disabled on purpose.
+        if not self.enabled:
+            return {"provider": "milvus", "count": 0, "skipped": True}
         payload = await self._post(
             "/v2/vectordb/entities/query",
             {

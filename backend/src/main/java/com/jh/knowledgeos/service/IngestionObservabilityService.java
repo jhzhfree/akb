@@ -37,7 +37,8 @@ public class IngestionObservabilityService {
 
     private final int detailLimit;
 
-    public IngestionObservabilityService(KnowledgeMapper mapper, IdGenerator ids, ObjectMapper json, @Value("${knowledge.ingestion.event-detail-chars:12000}") int detailChars) {
+    public IngestionObservabilityService(KnowledgeMapper mapper, IdGenerator ids, ObjectMapper json,
+        @Value("${knowledge.ingestion.event-detail-chars:12000}") int detailChars) {
         this.mapper = mapper;
         this.ids = ids;
         this.json = json;

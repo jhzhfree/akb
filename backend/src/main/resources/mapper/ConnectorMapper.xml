@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.jh.knowledgeos.mapper.ConnectorMapper">
+
+<sql id="columns">id,connector_code AS connectorCode,knowledge_base_id AS knowledgeBaseId,name,connector_type AS type,base_url AS baseUrl,auth_type AS authType,username,secret,config_json AS configJson,status,last_test_status AS lastTestStatus,last_test_message AS lastTestMessage,last_test_time AS lastTestTime,created_by AS createdBy,created_time AS createdTime</sql>
+
+<insert id="insert" parameterType="com.jh.knowledgeos.domain.ConnectorSource" useGeneratedKeys="true" keyProperty="id">INSERT INTO t_connector_source(connector_code,knowledge_base_id,name,connector_type,base_url,auth_type,username,secret,config_json,status,created_by) VALUES(#{connectorCode},#{knowledgeBaseId},#{name},#{type},#{baseUrl},#{authType},#{username},#{secret},#{configJson},#{status},#{createdBy})</insert>
+
+<!-- secret 只在表单真的填了新值时覆盖：留空表示「沿用已保存的凭据」。 -->
+<update id="update" parameterType="com.jh.knowledgeos.domain.ConnectorSource">UPDATE t_connector_source SET name=#{name},connector_type=#{type},base_url=#{baseUrl},auth_type=#{authType},username=#{username},config_json=#{configJson},status=#{status}<if test="secret != null">,secret=#{secret}</if> WHERE id=#{id}</update>
+
+<delete id="delete">DELETE FROM t_connector_source WHERE id=#{id}</delete>
+
+<select id="get" resultType="com.jh.knowledgeos.domain.ConnectorSource">SELECT <include refid="columns"/> FROM t_connector_source WHERE id=#{id}</select>
+
+<select id="list" resultType="com.jh.knowledgeos.domain.ConnectorSource">SELECT <include refid="columns"/> FROM t_connector_source WHERE knowledge_base_id=#{kb} ORDER BY id DESC</select>
+
+<update id="updateTestResult">UPDATE t_connector_source SET last_test_status=#{status},last_test_message=#{message},last_test_time=CURRENT_TIMESTAMP WHERE id=#{id}</update>
+
+</mapper>

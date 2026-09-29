@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.jh.knowledgeos.mapper.KnowledgeBaseMapper">
+
+<select id="listKnowledgeBases" resultType="com.jh.knowledgeos.domain.KnowledgeBase">SELECT b.*,u.display_name AS created_by_name,g.name AS owner_group_name FROM t_knowledge_base b LEFT JOIN t_user u ON u.id=b.created_by LEFT JOIN t_user_group g ON g.id=b.owner_group_id WHERE b.status&lt;&gt;'ARCHIVED'<choose><when test="all"></when><when test="userId != null"> AND (b.visibility='PUBLIC' OR b.created_by=#{userId} OR (b.owner_group_id IS NOT NULL AND EXISTS(SELECT 1 FROM t_user_group_member m WHERE m.group_id=b.owner_group_id AND m.user_id=#{userId})))</when><otherwise> AND b.visibility='PUBLIC'</otherwise></choose> ORDER BY b.created_time DESC</select>
+
+<select id="getKnowledgeBase" resultType="com.jh.knowledgeos.domain.KnowledgeBase">SELECT b.*,u.display_name AS created_by_name,g.name AS owner_group_name FROM t_knowledge_base b LEFT JOIN t_user u ON u.id=b.created_by LEFT JOIN t_user_group g ON g.id=b.owner_group_id WHERE b.id=#{id}</select>
+
+<insert id="insertKnowledgeBase" parameterType="com.jh.knowledgeos.domain.KnowledgeBase" useGeneratedKeys="true" keyProperty="id">INSERT INTO t_knowledge_base(base_code,name,description,status,created_by,visibility,owner_group_id) VALUES(#{baseCode},#{name},#{description},#{status},#{createdBy},#{visibility},#{ownerGroupId})</insert>
+
+<update id="updateKnowledgeBaseStatus">UPDATE t_knowledge_base SET status=#{status} WHERE id=#{id}</update>
+
+<update id="updateKnowledgeBaseAccess">UPDATE t_knowledge_base SET visibility=#{visibility},owner_group_id=#{ownerGroupId} WHERE id=#{id}</update>
+
+<update id="updateKnowledgeBaseOwner">UPDATE t_knowledge_base SET created_by=#{createdBy} WHERE id=#{id} AND created_by IS NULL</update>
+
+</mapper>

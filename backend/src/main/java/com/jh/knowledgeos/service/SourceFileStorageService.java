@@ -36,9 +36,11 @@ public class SourceFileStorageService {
 
     private static final int TEXT_SNIFF_BUFFER = 4096;
 
-    private static final Set<String> TEXT_EXTENSIONS = new HashSet<String>(Arrays.asList("md", "markdown", "txt", "text", "csv", "tsv", "json", "yaml", "yml", "xml", "html", "htm", "log", "ini", "properties", "sql", "rst", "tex"));
+    private static final Set<String> TEXT_EXTENSIONS = new HashSet<String>(Arrays.asList("md", "markdown", "txt", "text", "csv", "tsv", "json",
+        "yaml", "yml", "xml", "html", "htm", "log", "ini", "properties", "sql", "rst", "tex"));
 
-    private static final Set<String> BINARY_EXTENSIONS = new HashSet<String>(Arrays.asList("pdf", "doc", "docx", "xls", "xlsx", "ppt", "pptx", "odt", "rtf", "png", "jpg", "jpeg", "gif", "bmp", "svg", "webp", "zip", "gz", "tar", "tgz", "7z", "rar", "jar", "class"));
+    private static final Set<String> BINARY_EXTENSIONS = new HashSet<String>(Arrays.asList("pdf", "doc", "docx", "xls", "xlsx", "ppt", "pptx", "odt",
+        "rtf", "png", "jpg", "jpeg", "gif", "bmp", "svg", "webp", "zip", "gz", "tar", "tgz", "7z", "rar", "jar", "class"));
 
     private final Path root;
 

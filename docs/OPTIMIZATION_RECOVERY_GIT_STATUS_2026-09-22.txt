@@ -1,0 +1,168 @@
+ M ai-service/app/core/knowledge_schema.py
+ M ai-service/app/core/query_policy.py
+ M ai-service/app/query_policy_routes.py
+ M ai-service/app/services/query_engine.py
+ M backend/src/main/java/com/jh/knowledgeos/common/Permissions.java
+ M backend/src/main/java/com/jh/knowledgeos/common/PlatformEventTypes.java
+ M backend/src/main/java/com/jh/knowledgeos/common/ScheduleExpression.java
+ M backend/src/main/java/com/jh/knowledgeos/common/UserRole.java
+ M backend/src/main/java/com/jh/knowledgeos/config/AuthInterceptor.java
+ M backend/src/main/java/com/jh/knowledgeos/config/BatchIngestionExecutorConfig.java
+ M backend/src/main/java/com/jh/knowledgeos/config/ExternalCallPayloadFilter.java
+ M backend/src/main/java/com/jh/knowledgeos/config/JsonParameterSanitizer.java
+ M backend/src/main/java/com/jh/knowledgeos/config/RestConfig.java
+ M backend/src/main/java/com/jh/knowledgeos/config/WebMvcSecurityConfig.java
+ M backend/src/main/java/com/jh/knowledgeos/controller/AclAdministrationController.java
+ M backend/src/main/java/com/jh/knowledgeos/controller/DerivationController.java
+ M backend/src/main/java/com/jh/knowledgeos/controller/EvaluationController.java
+ M backend/src/main/java/com/jh/knowledgeos/controller/ExternalApiController.java
+ M backend/src/main/java/com/jh/knowledgeos/controller/ExternalServiceAdminController.java
+ M backend/src/main/java/com/jh/knowledgeos/controller/ExternalStreamController.java
+ M backend/src/main/java/com/jh/knowledgeos/controller/GovernanceInsightController.java
+ M backend/src/main/java/com/jh/knowledgeos/controller/IntegrationInsightController.java
+ M backend/src/main/java/com/jh/knowledgeos/controller/KnowledgeController.java
+ M backend/src/main/java/com/jh/knowledgeos/controller/KnowledgeSchemaController.java
+ M backend/src/main/java/com/jh/knowledgeos/controller/McpController.java
+ M backend/src/main/java/com/jh/knowledgeos/controller/PlatformEventController.java
+ M backend/src/main/java/com/jh/knowledgeos/controller/TaskCenterController.java
+ M backend/src/main/java/com/jh/knowledgeos/controller/UserController.java
+ M backend/src/main/java/com/jh/knowledgeos/mapper/GovernanceMapper.java
+ M backend/src/main/java/com/jh/knowledgeos/mapper/KnowledgeMapper.java
+ M backend/src/main/java/com/jh/knowledgeos/mapper/PlatformEventMapper.java
+ M backend/src/main/java/com/jh/knowledgeos/service/AclAdministrationService.java
+ M backend/src/main/java/com/jh/knowledgeos/service/AclContextResolver.java
+ M backend/src/main/java/com/jh/knowledgeos/service/AclRebuildOrchestrator.java
+ M backend/src/main/java/com/jh/knowledgeos/service/AlertService.java
+ M backend/src/main/java/com/jh/knowledgeos/service/ApiKeyService.java
+ M backend/src/main/java/com/jh/knowledgeos/service/AuthoritativeGraphGenerationService.java
+ M backend/src/main/java/com/jh/knowledgeos/service/AuthoritativeGraphNeighborhoodService.java
+ M backend/src/main/java/com/jh/knowledgeos/service/BatchIngestionService.java
+ M backend/src/main/java/com/jh/knowledgeos/service/ChunkPolicyService.java
+ M backend/src/main/java/com/jh/knowledgeos/service/DashboardService.java
+ M backend/src/main/java/com/jh/knowledgeos/service/DocumentIngestionService.java
+ M backend/src/main/java/com/jh/knowledgeos/service/EntityGovernanceService.java
+ M backend/src/main/java/com/jh/knowledgeos/service/EntityResolutionService.java
+ M backend/src/main/java/com/jh/knowledgeos/service/EvaluationService.java
+ M backend/src/main/java/com/jh/knowledgeos/service/ExternalAuditService.java
+ M backend/src/main/java/com/jh/knowledgeos/service/ExternalStreamService.java
+ M backend/src/main/java/com/jh/knowledgeos/service/IndexOutboxArchiveService.java
+ M backend/src/main/java/com/jh/knowledgeos/service/IndexOutboxService.java
+ M backend/src/main/java/com/jh/knowledgeos/service/IndexOutboxWorker.java
+ M backend/src/main/java/com/jh/knowledgeos/service/IndexSchemaService.java
+ M backend/src/main/java/com/jh/knowledgeos/service/IngestionObservabilityService.java
+ M backend/src/main/java/com/jh/knowledgeos/service/IntegrationInsightService.java
+ M backend/src/main/java/com/jh/knowledgeos/service/KnowledgeBasePurgeService.java
+ M backend/src/main/java/com/jh/knowledgeos/service/KnowledgeBaseService.java
+ M backend/src/main/java/com/jh/knowledgeos/service/KnowledgeDerivationService.java
+ M backend/src/main/java/com/jh/knowledgeos/service/KnowledgeExtractionService.java
+ M backend/src/main/java/com/jh/knowledgeos/service/KnowledgeGovernanceService.java
+ M backend/src/main/java/com/jh/knowledgeos/service/KnowledgeLifecycleService.java
+ M backend/src/main/java/com/jh/knowledgeos/service/KnowledgeQueryService.java
+ M backend/src/main/java/com/jh/knowledgeos/service/KnowledgeReadService.java
+ M backend/src/main/java/com/jh/knowledgeos/service/KnowledgeSchemaService.java
+ M backend/src/main/java/com/jh/knowledgeos/service/KnowledgeService.java
+ M backend/src/main/java/com/jh/knowledgeos/service/McpServerService.java
+ M backend/src/main/java/com/jh/knowledgeos/service/PlatformEventHub.java
+ M backend/src/main/java/com/jh/knowledgeos/service/PlatformEventPublisher.java
+ M backend/src/main/java/com/jh/knowledgeos/service/PlatformEventStore.java
+ M backend/src/main/java/com/jh/knowledgeos/service/PlatformEventVisibilityService.java
+ M backend/src/main/java/com/jh/knowledgeos/service/SourceFileStorageService.java
+ M backend/src/main/java/com/jh/knowledgeos/service/SourcePreviewService.java
+ M backend/src/main/java/com/jh/knowledgeos/service/TaskCenterService.java
+ M backend/src/main/resources/mapper/GovernanceMapper.xml
+ M backend/src/main/resources/mapper/KnowledgeMapper.xml
+ M backend/src/test/java/com/jh/knowledgeos/integration/DatabaseMigrationIT.java
+ D "dataset/bastion-audit/01-\345\240\241\345\236\222\344\270\273\346\234\272\350\264\246\345\217\267\344\270\216\346\216\210\346\235\203\347\256\241\347\220\206\350\247\204\350\214\203.md"
+ D "dataset/bastion-audit/02-\345\240\241\345\236\222\344\270\273\346\234\272\351\253\230\345\215\261\345\221\275\344\273\244\346\270\205\345\215\225\344\270\216\345\244\204\347\275\256\350\247\204\350\214\203.md"
+ D "dataset/bastion-audit/03-\345\240\241\345\236\222\344\270\273\346\234\272\346\223\215\344\275\234\345\256\241\350\256\241\346\272\257\346\272\220SOP.md"
+ D "dataset/bastion-audit/04-\350\277\220\347\273\264\346\223\215\344\275\234\346\225\205\351\232\234\345\244\204\347\275\256\346\211\213\345\206\214.md"
+ D "dataset/bastion-audit/05-\345\240\241\345\236\222\344\270\273\346\234\272\347\233\221\346\216\247\345\221\212\350\255\246\344\270\216\351\243\216\351\231\251\350\257\204\345\210\206\345\217\243\345\276\204.md"
+ D "dataset/bastion-audit/06-\344\274\232\350\257\235\345\256\241\350\256\241\350\256\260\345\275\225-AUD-2026-07-31-007-rm\350\257\257\345\210\240\346\224\257\344\273\230\345\272\224\347\224\250\347\233\256\345\275\225.md"
+ D "dataset/bastion-audit/07-\344\274\232\350\257\235\345\256\241\350\256\241\350\256\260\345\275\225-AUD-2026-08-06-012-chmod\345\205\250\345\237\237\345\274\200\346\224\276\346\235\203\351\231\220.md"
+ D "dataset/bastion-audit/08-\344\274\232\350\257\235\345\256\241\350\256\241\350\256\260\345\275\225-AUD-2026-08-12-003-MySQL\350\256\242\345\215\225\350\241\250\350\257\257\345\210\240\344\270\216\346\201\242\345\244\215.md"
+ D "dataset/bastion-audit/09-\344\274\232\350\257\235\345\256\241\350\256\241\350\256\260\345\275\225-AUD-2026-08-18-021-\345\275\261\345\255\220\350\264\246\345\217\267\344\270\216\350\256\241\345\210\222\344\273\273\345\212\241\345\220\216\351\227\250.md"
+ D "dataset/bastion-audit/10-\344\274\232\350\257\235\345\256\241\350\256\241\350\256\260\345\275\225-AUD-2026-08-22-009-K8s\346\224\257\344\273\230\346\234\215\345\212\241\350\257\257\347\274\251\345\256\271\350\207\263\351\233\266.md"
+ D "dataset/bastion-audit/11-\350\277\220\347\273\264\351\227\256\347\255\224FAQ.md"
+ D "dataset/bastion-audit/12-\345\240\241\345\236\222\344\270\273\346\234\272\350\277\220\347\273\264\345\256\241\350\256\241\346\234\210\346\212\245-2026\345\271\2648\346\234\210.md"
+ D "dataset/bastion-audit/13-\345\217\243\345\276\204\345\217\230\346\233\264\351\200\232\347\237\245-2026\345\271\2649\346\234\210\351\253\230\345\215\261\345\221\275\344\273\244\347\255\226\347\225\245\350\260\203\346\225\264.md"
+ D "dataset/bastion-audit/retrieval-eval/\346\243\200\347\264\242\350\264\250\351\207\217\350\257\204\346\265\213\347\224\250\344\276\213\351\233\206.md"
+ M deploy/package/install.sh
+ M deploy/package/logs.sh
+ M deploy/package/start.sh
+ M deploy/package/status.sh
+ M deploy/package/stop.sh
+ M deploy/package/uninstall.sh
+ D "docs/AI_\345\216\237\347\224\237\344\274\201\344\270\232\347\237\245\350\257\206\345\272\223\345\271\263\345\217\260_\344\272\247\345\223\201\345\216\237\345\236\213_V1.0.html"
+ D "docs/AI_\345\216\237\347\224\237\344\274\201\344\270\232\347\237\245\350\257\206\345\272\223\345\271\263\345\217\260_\344\272\247\345\223\201\346\212\200\346\234\257\350\247\204\346\240\274\350\257\264\346\230\216\344\271\246_V1.2.html"
+ D "docs/AI_\345\216\237\347\224\237\344\274\201\344\270\232\347\237\245\350\257\206\345\272\223\345\271\263\345\217\260_\344\272\247\345\223\201\346\212\200\346\234\257\350\256\276\350\256\241\350\257\264\346\230\216\344\271\246_V1.1.html"
+ D "docs/AI_\345\216\237\347\224\237\344\274\201\344\270\232\347\237\245\350\257\206\345\272\223\345\271\263\345\217\260_\346\212\200\346\234\257\346\236\266\346\236\204\350\257\264\346\230\216_V1.2.html"
+ D "docs/\344\274\201\344\270\232\347\272\247\346\231\272\350\203\275\347\237\245\350\257\206\345\272\223_\344\272\247\345\223\201\346\212\200\346\234\257\350\247\243\345\206\263\346\226\271\346\241\210_V1.0.html"
+ D "docs/\344\274\201\344\270\232\347\272\247\346\231\272\350\203\275\347\237\245\350\257\206\345\272\223_\344\272\247\345\223\201\346\212\200\346\234\257\350\247\243\345\206\263\346\226\271\346\241\210_V1.1.html"
+ D "docs/\344\274\201\344\270\232\347\272\247\346\231\272\350\203\275\347\237\245\350\257\206\345\272\223_\344\272\247\345\223\201\346\212\200\346\234\257\350\247\243\345\206\263\346\226\271\346\241\210_V1.2.html"
+ D "docs/\344\274\201\344\270\232\347\272\247\346\231\272\350\203\275\347\237\245\350\257\206\345\272\223\345\271\263\345\217\260__\347\253\236\345\223\201\346\213\206\350\247\243V3.html"
+ D "docs/\344\274\201\344\270\232\347\272\247\346\231\272\350\203\275\347\237\245\350\257\206\345\272\223\345\271\263\345\217\260_\344\272\247\345\223\201\350\247\204\346\240\274\350\257\264\346\230\216\344\271\246_PRD_V2.2.html"
+ D "docs/\344\274\201\344\270\232\347\272\247\346\231\272\350\203\275\347\237\245\350\257\206\345\272\223\345\271\263\345\217\260_\344\272\247\345\223\201\350\257\246\347\273\206\350\256\276\350\256\241\350\257\264\346\230\216\344\271\246_V2.1.html"
+ D "docs/\344\274\201\344\270\232\347\272\247\346\231\272\350\203\275\347\237\245\350\257\206\345\272\223\345\271\263\345\217\260_\345\216\237\345\236\213_V2.2.html"
+ M frontend/src/App.vue
+ M frontend/src/api/knowledge.ts
+ M frontend/src/components/ApiCallTracePanel.vue
+ M frontend/src/components/CallLogPanel.vue
+ M frontend/src/components/DerivationPanel.vue
+ M frontend/src/components/ExternalServiceLab.vue
+ M frontend/src/components/GraphCanvas.vue
+ M frontend/src/components/OverviewPanel.vue
+ M frontend/src/components/QualityPanel.vue
+ M frontend/src/components/VersionGovernancePanel.vue
+ M frontend/src/permissions.ts
+ M frontend/src/tailwind.css
+ M frontend/src/types.ts
+ M scripts/check-mapper-contract.py
+ M scripts/package-release.sh
+?? ai-service/app/services/query_pipeline.py
+?? ai-service/app/services/query_presentation.py
+?? ai-service/app/services/query_response.py
+?? ai-service/app/services/query_trace.py
+?? ai-service/app/services/query_understanding.py
+?? backend/src/main/java/com/jh/knowledgeos/mapper/DocumentMapper.java
+?? backend/src/main/java/com/jh/knowledgeos/mapper/EvidenceMapper.java
+?? backend/src/main/java/com/jh/knowledgeos/mapper/GraphMapper.java
+?? backend/src/main/java/com/jh/knowledgeos/mapper/IndexMapper.java
+?? backend/src/main/java/com/jh/knowledgeos/service/DerivationRuleCatalog.java
+?? backend/src/main/resources/db/migration/V38__derivation_rule_preset.sql
+?? backend/src/main/resources/mapper/DocumentMapper.xml
+?? backend/src/main/resources/mapper/EvidenceMapper.xml
+?? backend/src/main/resources/mapper/GraphMapper.xml
+?? backend/src/main/resources/mapper/IndexMapper.xml
+?? backend/src/test/java/com/jh/knowledgeos/service/DerivationPresetServiceTest.java
+?? backend/src/test/java/com/jh/knowledgeos/service/DerivationRuleCatalogTest.java
+?? dataset/bastion-audit/01-#U5821#U5792#U4e3b#U673a#U8d26#U53f7#U4e0e#U6388#U6743#U7ba1#U7406#U89c4#U8303.md
+?? dataset/bastion-audit/02-#U5821#U5792#U4e3b#U673a#U9ad8#U5371#U547d#U4ee4#U6e05#U5355#U4e0e#U5904#U7f6e#U89c4#U8303.md
+?? dataset/bastion-audit/03-#U5821#U5792#U4e3b#U673a#U64cd#U4f5c#U5ba1#U8ba1#U6eaf#U6e90SOP.md
+?? dataset/bastion-audit/04-#U8fd0#U7ef4#U64cd#U4f5c#U6545#U969c#U5904#U7f6e#U624b#U518c.md
+?? dataset/bastion-audit/05-#U5821#U5792#U4e3b#U673a#U76d1#U63a7#U544a#U8b66#U4e0e#U98ce#U9669#U8bc4#U5206#U53e3#U5f84.md
+?? dataset/bastion-audit/06-#U4f1a#U8bdd#U5ba1#U8ba1#U8bb0#U5f55-AUD-2026-07-31-007-rm#U8bef#U5220#U652f#U4ed8#U5e94#U7528#U76ee#U5f55.md
+?? dataset/bastion-audit/07-#U4f1a#U8bdd#U5ba1#U8ba1#U8bb0#U5f55-AUD-2026-08-06-012-chmod#U5168#U57df#U5f00#U653e#U6743#U9650.md
+?? dataset/bastion-audit/08-#U4f1a#U8bdd#U5ba1#U8ba1#U8bb0#U5f55-AUD-2026-08-12-003-MySQL#U8ba2#U5355#U8868#U8bef#U5220#U4e0e#U6062#U590d.md
+?? dataset/bastion-audit/09-#U4f1a#U8bdd#U5ba1#U8ba1#U8bb0#U5f55-AUD-2026-08-18-021-#U5f71#U5b50#U8d26#U53f7#U4e0e#U8ba1#U5212#U4efb#U52a1#U540e#U95e8.md
+?? dataset/bastion-audit/10-#U4f1a#U8bdd#U5ba1#U8ba1#U8bb0#U5f55-AUD-2026-08-22-009-K8s#U652f#U4ed8#U670d#U52a1#U8bef#U7f29#U5bb9#U81f3#U96f6.md
+?? dataset/bastion-audit/11-#U8fd0#U7ef4#U95ee#U7b54FAQ.md
+?? dataset/bastion-audit/12-#U5821#U5792#U4e3b#U673a#U8fd0#U7ef4#U5ba1#U8ba1#U6708#U62a5-2026#U5e748#U6708.md
+?? dataset/bastion-audit/13-#U53e3#U5f84#U53d8#U66f4#U901a#U77e5-2026#U5e749#U6708#U9ad8#U5371#U547d#U4ee4#U7b56#U7565#U8c03#U6574.md
+?? dataset/bastion-audit/retrieval-eval/#U68c0#U7d22#U8d28#U91cf#U8bc4#U6d4b#U7528#U4f8b#U96c6.md
+?? docs/#U4f01#U4e1a#U7ea7#U667a#U80fd#U77e5#U8bc6#U5e93#U5e73#U53f0_#U4ea7#U54c1#U89c4#U683c#U8bf4#U660e#U4e66_PRD_V2.2.html
+?? docs/#U4f01#U4e1a#U7ea7#U667a#U80fd#U77e5#U8bc6#U5e93#U5e73#U53f0_#U4ea7#U54c1#U8be6#U7ec6#U8bbe#U8ba1#U8bf4#U660e#U4e66_V2.1.html
+?? docs/#U4f01#U4e1a#U7ea7#U667a#U80fd#U77e5#U8bc6#U5e93#U5e73#U53f0_#U539f#U578b_V2.2.html
+?? docs/#U4f01#U4e1a#U7ea7#U667a#U80fd#U77e5#U8bc6#U5e93#U5e73#U53f0__#U7ade#U54c1#U62c6#U89e3V3.html
+?? docs/#U4f01#U4e1a#U7ea7#U667a#U80fd#U77e5#U8bc6#U5e93_#U4ea7#U54c1#U6280#U672f#U89e3#U51b3#U65b9#U6848_V1.0.html
+?? docs/#U4f01#U4e1a#U7ea7#U667a#U80fd#U77e5#U8bc6#U5e93_#U4ea7#U54c1#U6280#U672f#U89e3#U51b3#U65b9#U6848_V1.1.html
+?? docs/#U4f01#U4e1a#U7ea7#U667a#U80fd#U77e5#U8bc6#U5e93_#U4ea7#U54c1#U6280#U672f#U89e3#U51b3#U65b9#U6848_V1.2.html
+?? docs/AI_#U539f#U751f#U4f01#U4e1a#U77e5#U8bc6#U5e93#U5e73#U53f0_#U4ea7#U54c1#U539f#U578b_V1.0.html
+?? docs/AI_#U539f#U751f#U4f01#U4e1a#U77e5#U8bc6#U5e93#U5e73#U53f0_#U4ea7#U54c1#U6280#U672f#U89c4#U683c#U8bf4#U660e#U4e66_V1.2.html
+?? docs/AI_#U539f#U751f#U4f01#U4e1a#U77e5#U8bc6#U5e93#U5e73#U53f0_#U4ea7#U54c1#U6280#U672f#U8bbe#U8ba1#U8bf4#U660e#U4e66_V1.1.html
+?? docs/AI_#U539f#U751f#U4f01#U4e1a#U77e5#U8bc6#U5e93#U5e73#U53f0_#U6280#U672f#U67b6#U6784#U8bf4#U660e_V1.2.html
+?? docs/OPTIMIZATION_RECOVERY_2026-09-22.md
+?? docs/OPTIMIZATION_RECOVERY_GIT_STATUS_2026-09-22.txt
+?? frontend/src/components/AppHeader.vue
+?? frontend/src/components/AppSidebar.vue
+?? frontend/src/composables/
+?? frontend/src/role-experience.ts

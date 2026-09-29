@@ -34,7 +34,7 @@
                 <template #default="{ row }">
                   <div>
                     <b class="text-[13px]">{{ row.canonicalName || row.entityCode }}</b>
-                    <div class="text-[11px] text-ink-400">{{ row.entityCode }}</div>
+                    <div class="text-[11px] text-ink-500">{{ row.entityCode }}</div>
                   </div>
                 </template>
               </el-table-column>
@@ -112,8 +112,8 @@
                     :key="item.alias"
                     class="inline-flex items-center gap-1 rounded-md border border-ink-200 bg-white px-2 py-1 text-[11px]">
                     <span>{{ item.alias }}</span>
-                    <small class="text-ink-400">{{ item.aliasType || 'SURFACE' }}</small>
-                    <button class="text-rose-400 hover:text-rose-600" title="解绑该别名" @click="unbind(item.alias)">✕</button>
+                    <small class="text-ink-500">{{ item.aliasType || 'SURFACE' }}</small>
+                    <button class="text-[color:var(--danger)] hover:text-[color:var(--danger)]" title="解绑该别名" @click="unbind(item.alias)">✕</button>
                   </span>
                 </div>
                 <p v-else class="kb-muted">暂无别名：该实体的表面形式尚未沉淀为词典条目。</p>

@@ -56,7 +56,8 @@ public class PlatformEventController {
 
     @GetMapping(value = "/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     @Operation(summary = "平台事件 SSE 订阅：知识库生命周期、知识对象变更、检索调用、权限变更")
-    public SseEmitter stream(HttpServletRequest request, @RequestParam(value = "knowledgeBaseId", required = false) Long knowledgeBaseId, @RequestParam(value = "types", required = false) String types, @RequestParam(value = "sinceId", required = false) Long sinceId) {
+    public SseEmitter stream(HttpServletRequest request, @RequestParam(value = "knowledgeBaseId", required = false) Long knowledgeBaseId,
+        @RequestParam(value = "types", required = false) String types, @RequestParam(value = "sinceId", required = false) Long sinceId) {
         User user = requireUser();
         Long since = sinceId != null ? sinceId : lastEventId(request);
         return hub.subscribe("user:" + user.getId(), knowledgeBaseId, parseTypes(types), since, visibility.forSession(user, knowledgeBaseId));
@@ -64,7 +65,8 @@ public class PlatformEventController {
 
     @GetMapping
     @Operation(summary = "事件历史：按知识库与类型回放，Same visibility rules as the stream")
-    public ApiResponse<Object> history(@RequestParam(value = "knowledgeBaseId", required = false) Long knowledgeBaseId, @RequestParam(value = "types", required = false) String types, @RequestParam(value = "limit", required = false) Integer limit) {
+    public ApiResponse<Object> history(@RequestParam(value = "knowledgeBaseId", required = false) Long knowledgeBaseId, @RequestParam(value = "types",
+        required = false) String types, @RequestParam(value = "limit", required = false) Integer limit) {
         User user = requireUser();
         int size = Math.max(1, Math.min(limit == null ? 50 : limit, MAX_LIMIT));
         PlatformEventHub.Visibility audit = visibility.forSession(user, knowledgeBaseId);

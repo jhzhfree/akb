@@ -3,14 +3,14 @@
     <div class="kb-section-head">
       <div><small>模型配置</small><h3>模型设置</h3></div>
       <div class="flex items-center gap-2">
-        <span class="kb-badge bg-slate-100 text-ink-600">来源：{{ settings?.source==='file'?'配置文件':'环境变量' }}</span>
+        <span class="kb-badge bg-[color:var(--bg-sub)] text-ink-600">来源：{{ settings?.source==='file'?'配置文件':'环境变量' }}</span>
         <el-button size="small" @click="load">刷新</el-button>
         <el-button size="small" type="primary" :loading="saving" @click="save">保存配置</el-button>
       </div>
     </div>
 
-    <div v-if="message" class="mb-3 rounded-lg bg-emerald-50 px-3 py-2 text-[11px] leading-5 text-emerald-700">{{ message }}</div>
-    <div v-if="error" class="mb-3 rounded-lg bg-rose-50 px-3 py-2 text-[11px] leading-5 text-rose-700">{{ error }}</div>
+    <div v-if="message" class="mb-3 rounded-lg bg-[color:var(--ok-bg)] px-3 py-2 text-[11px] leading-5 text-[color:var(--ok)]">{{ message }}</div>
+    <div v-if="error" class="mb-3 rounded-lg bg-[color:var(--danger-bg)] px-3 py-2 text-[11px] leading-5 text-[color:var(--danger)]">{{ error }}</div>
 
     <div v-if="settings" class="grid gap-4 lg:grid-cols-2">
       <div class="rounded-lg border border-ink-100 p-4">
@@ -84,9 +84,9 @@
         </div>
       </div>
     </div>
-    <div v-else class="py-10 text-center text-xs text-ink-400">加载配置中…</div>
+    <div v-else class="py-10 text-center text-xs text-ink-500">加载配置中…</div>
 
-    <p class="mt-3 text-[10px] leading-5 text-ink-400">
+    <p class="mt-3 text-[10px] leading-5 text-ink-500">
       配置持久化到 <b>{{ settings?.settingsFile || 'ai-service/data/settings.json' }}</b>（含密钥、不入版本库、文件权限 600），保存后立即生效，无需重启服务。
       切换向量模型或调整维度后，历史索引维度不一致，需执行索引重建。
     </p>
@@ -167,5 +167,5 @@ onMounted(load)
 </script>
 <style scoped>
 .field{display:block}
-.field>span{display:block;margin-bottom:4px;font-size:11px;color:#66738e}
+.field>span{display:block;margin-bottom:4px;font-size:11px;color:var(--ink-3)}
 </style>

@@ -45,13 +45,14 @@ public class DerivationController {
      */
     @GetMapping
     @Operation(summary = "衍生总览：规则、候选、运行记录与统计")
-    public ApiResponse<Object> overview(@RequestParam(value = "kb", required = false) Long kb, @RequestParam(value = "status", required = false) String status, @RequestParam(value = "ruleCode", required = false) String ruleCode, @RequestParam(value = "limit", required = false) Integer limit) {
+    public ApiResponse<Object> overview(@RequestParam(value = "kb", required = false) Long kb, @RequestParam(value = "status", required = false)
+        String status, @RequestParam(value = "ruleCode", required = false) String ruleCode, @RequestParam(value = "limit", required = false) Integer limit) {
         Map<String, Object> payload = new LinkedHashMap<String, Object>();
         payload.put("rules", derivation.rules(kb));
         payload.put("candidates", derivation.candidates(kb, status, ruleCode, limit));
         payload.put("runs", derivation.runs(kb, null, 20));
         payload.put("stats", derivation.stats(kb));
-        payload.put("schema", derivation.schema());
+        payload.put("schema", derivation.schema(kb));
         return ApiResponse.ok(payload);
     }
 
@@ -59,6 +60,50 @@ public class DerivationController {
     @Operation(summary = "衍生规则列表")
     public ApiResponse<Object> rules(@RequestParam(value = "kb", required = false) Long kb) {
         return ApiResponse.ok(derivation.rules(kb));
+    }
+
+    /**
+     * The rules almost every knowledge base wants, with their default definitions and the range
+     * each field may be edited within — the answer to "what should I derive?" on day one.
+     */
+    @GetMapping("/presets")
+    @Operation(summary = "常用衍生规则目录：默认定义与可修改边界")
+    public ApiResponse<Object> presets(@RequestParam(value = "kb", required = false) Long kb) {
+        return ApiResponse.ok(derivation.presets(kb));
+    }
+
+    /**
+     * Install the common rules, or a chosen few. Running it twice adds nothing.
+     */
+    @PostMapping("/rules/seed")
+    @Operation(summary = "一键启用常用衍生规则（按预设编码幂等，缺省全部）")
+    public ApiResponse<Object> seed(@RequestParam(value = "kb", required = false) Long kb, @RequestBody(required = false) Map<String, Object> payload) {
+        List<String> codes = new ArrayList<String>();
+        if (payload != null && payload.get("presetCodes") instanceof List) {
+            for (Object item : (List<?>) payload.get("presetCodes")) {
+                codes.add(String.valueOf(item));
+            }
+        }
+        return ApiResponse.ok(derivation.seed(kb, codes));
+    }
+
+    @PostMapping("/rules/from-preset")
+    @Operation(summary = "按预设创建一条衍生规则")
+    public ApiResponse<Object> createFromPreset(@RequestParam(value = "kb", required = false) Long kb, @RequestBody(required = false) Map<String,
+        Object> payload) {
+        Map<String, Object> body = payload == null ? new LinkedHashMap<String, Object>() : payload;
+        Object presetCode = body.get("presetCode");
+        return ApiResponse.ok(derivation.createFromPreset(kb, presetCode == null ? null : String.valueOf(presetCode), body));
+    }
+
+    /**
+     * A preset rule that was bent too far can be put back; a hand written rule has nothing to
+     * go back to, and says so.
+     */
+    @PostMapping("/rules/{ruleCode}/reset")
+    @Operation(summary = "将预设衍生规则恢复为默认定义")
+    public ApiResponse<Object> reset(@PathVariable String ruleCode) {
+        return ApiResponse.ok(derivation.resetRule(ruleCode));
     }
 
     @PostMapping("/rules")
@@ -98,7 +143,8 @@ public class DerivationController {
 
     @GetMapping("/candidates")
     @Operation(summary = "候选衍生知识列表：草稿、失效、待审、已批准与驳回")
-    public ApiResponse<Object> candidates(@RequestParam(value = "kb", required = false) Long kb, @RequestParam(value = "status", required = false) String status, @RequestParam(value = "ruleCode", required = false) String ruleCode, @RequestParam(value = "limit", required = false) Integer limit) {
+    public ApiResponse<Object> candidates(@RequestParam(value = "kb", required = false) Long kb, @RequestParam(value = "status", required = false)
+        String status, @RequestParam(value = "ruleCode", required = false) String ruleCode, @RequestParam(value = "limit", required = false) Integer limit) {
         return ApiResponse.ok(derivation.candidates(kb, status, ruleCode, limit));
     }
 
@@ -133,13 +179,14 @@ public class DerivationController {
 
     @GetMapping("/runs")
     @Operation(summary = "衍生运行记录：手动与计划的执行历史")
-    public ApiResponse<Object> runs(@RequestParam(value = "kb", required = false) Long kb, @RequestParam(value = "ruleCode", required = false) String ruleCode, @RequestParam(value = "limit", required = false) Integer limit) {
+    public ApiResponse<Object> runs(@RequestParam(value = "kb", required = false) Long kb, @RequestParam(value = "ruleCode", required = false) String
+        ruleCode, @RequestParam(value = "limit", required = false) Integer limit) {
         return ApiResponse.ok(derivation.runs(kb, ruleCode, limit));
     }
 
     @GetMapping("/schema")
-    @Operation(summary = "衍生类型、计划与默认定义字典")
-    public ApiResponse<Object> schema() {
-        return ApiResponse.ok(derivation.schema());
+    @Operation(summary = "衍生类型、计划、预设规则与可修改边界字典")
+    public ApiResponse<Object> schema(@RequestParam(value = "kb", required = false) Long kb) {
+        return ApiResponse.ok(derivation.schema(kb));
     }
 }

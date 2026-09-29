@@ -9,14 +9,14 @@
       </div>
       <div class="flex shrink-0 items-center gap-2">
         <span v-if="detail?.latencyMs != null" class="kb-badge">{{ detail.latencyMs }} ms</span>
-        <span v-if="detail" class="kb-badge" :class="failed ? 'text-rose-600' : 'text-emerald-600'">
+        <span v-if="detail" class="kb-badge" :class="failed ? 'text-[color:var(--danger)]' : 'text-[color:var(--ok)]'">
           {{ detail.status ?? '—' }}
         </span>
       </div>
     </header>
 
-    <div v-if="loading" class="kb-card p-12 text-center text-sm text-ink-400">正在读取这次调用的请求与返回…</div>
-    <div v-else-if="!detail" class="kb-card p-12 text-center text-sm text-ink-400">
+    <div v-if="loading" class="kb-card p-12 text-center text-sm text-ink-500">正在读取这次调用的请求与返回…</div>
+    <div v-else-if="!detail" class="kb-card p-12 text-center text-sm text-ink-500">
       没有找到这次调用的明细，可能已超出调用日志的保留窗口。
     </div>
     <template v-else>
@@ -28,15 +28,15 @@
         <div class="kb-metric"><span>调用方法</span><b class="truncate text-sm" :title="detail.method||''">{{ detail.method || '—' }}</b></div>
       </div>
       <div class="mb-4 grid gap-3 md:grid-cols-4">
-        <div class="kb-metric"><span>响应状态</span><b :class="failed ? 'text-rose-600' : 'text-emerald-600'">{{ detail.status ?? '—' }}</b></div>
+        <div class="kb-metric"><span>响应状态</span><b :class="failed ? 'text-[color:var(--danger)]' : 'text-[color:var(--ok)]'">{{ detail.status ?? '—' }}</b></div>
         <div class="kb-metric"><span>耗时</span><b>{{ detail.latencyMs ?? 0 }} ms</b></div>
         <div class="kb-metric"><span>知识库</span><b class="text-sm">{{ detail.knowledgeBaseId ?? '—' }}</b></div>
         <div class="kb-metric"><span>调用时间</span><b class="text-sm">{{ detail.time ? String(detail.time).slice(0,19) : '—' }}</b></div>
       </div>
 
-      <div v-if="detail.message" class="kb-card mb-4 border-l-4 border-rose-400 p-4">
+      <div v-if="detail.message" class="kb-card mb-4 border-l-4 border-[color:var(--danger)] p-4">
         <div class="kb-section-head"><div><small>错误信息</small><h3>调用失败原因</h3></div></div>
-        <div class="whitespace-pre-wrap break-all text-[12px] leading-relaxed text-rose-700">{{ detail.message }}</div>
+        <div class="whitespace-pre-wrap break-all text-[12px] leading-relaxed text-[color:var(--danger)]">{{ detail.message }}</div>
       </div>
 
       <!-- 排障真正要看的两块：对方发了什么，我们回了什么。 -->
@@ -45,7 +45,9 @@
           <div><small>{{ item.hint }}</small><h3>{{ item.title }}</h3></div>
           <button class="kb-btn-outline" :disabled="!item.raw" @click="copy(item.raw)">复制</button>
         </div>
-        <pre class="mt-2 max-h-96 overflow-auto whitespace-pre-wrap break-all rounded-lg border border-black/10 bg-black/[0.03] p-3 text-[12px] leading-relaxed">{{ pretty(item.raw) }}</pre>
+        <pre
+          class="mt-2 max-h-96 overflow-auto whitespace-pre-wrap break-all rounded-lg border border-black/10 bg-black/[0.03] p-3 text-[12px] leading-relaxed">
+          {{ pretty(item.raw) }}</pre>
       </section>
 
       <!-- 原始行：调用留给运维的每一个字段，一个都不少。 -->
@@ -54,7 +56,9 @@
           <div class="flex justify-end pb-2">
             <button class="kb-btn-outline" @click="copy(JSON.stringify(detail,null,2))">复制全部</button>
           </div>
-          <pre class="max-h-[28rem] overflow-auto whitespace-pre-wrap break-all rounded-lg border border-black/10 bg-black/[0.03] p-3 text-[12px] leading-relaxed">{{ allProps }}</pre>
+          <pre
+            class="max-h-[28rem] overflow-auto whitespace-pre-wrap break-all rounded-lg border border-black/10 bg-black/[0.03] p-3 text-[12px] leading-relaxed">
+          {{ allProps }}</pre>
         </el-collapse-item>
       </el-collapse>
 

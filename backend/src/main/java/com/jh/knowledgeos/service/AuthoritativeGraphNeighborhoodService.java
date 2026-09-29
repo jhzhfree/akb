@@ -4,6 +4,8 @@ import com.jh.knowledgeos.mapper.KnowledgeMapper;
 import org.springframework.stereotype.Service;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.Deque;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -133,6 +135,82 @@ public class AuthoritativeGraphNeighborhoodService {
         return result;
     }
 
+    /**
+     * The whole knowledge base as one bounded picture, for the workbench.
+     *
+     * <p>A neighborhood needs a seed, and the workbench has none to offer: it wants to show what
+     * the space is made of before anyone picks an object. So the most connected objects are taken
+     * as the frame and the relations between them as the picture. The counts of the full graph
+     * travel along, so "20 of 137 objects" stays honest instead of implying this is everything.</p>
+     */
+    public Map<String, Object> overview(Long kb, int limit) {
+        Map<String, Object> result = new LinkedHashMap<String, Object>();
+        result.put("provider", "authoritative");
+        int cap = limit < 5 ? 5 : (limit > 120 ? 120 : limit);
+        List<Edge> edges = loadEdges(kb);
+        Map<String, Integer> globalDegree = new HashMap<String, Integer>();
+        for (Edge edge : edges) {
+            degree(globalDegree, edge.source);
+            degree(globalDegree, edge.target);
+        }
+        List<String> ranked = new ArrayList<String>(globalDegree.keySet());
+        Collections.sort(ranked, new Comparator<String>() {
+            @Override
+            public int compare(String left, String right) {
+                int byDegree = Integer.compare(globalDegree.get(right) == null ? 0 : globalDegree.get(right), globalDegree.get(left) == null ? 0 :
+                    globalDegree.get(left));
+                return byDegree != 0 ? byDegree : left.compareTo(right);
+            }
+        });
+        Set<String> selected = new LinkedHashSet<String>();
+        for (String node : ranked) {
+            if (selected.size() >= cap) {
+                break;
+            }
+            selected.add(node);
+        }
+        Map<String, Integer> degree = new HashMap<String, Integer>();
+        List<Map<String, Object>> visibleEdges = new ArrayList<Map<String, Object>>();
+        for (Edge edge : edges) {
+            if (!selected.contains(edge.source) || !selected.contains(edge.target)) {
+                continue;
+            }
+            degree(degree, edge.source);
+            degree(degree, edge.target);
+            Map<String, Object> item = new LinkedHashMap<String, Object>();
+            item.put("source", code(edge.source));
+            item.put("sourceType", type(edge.source));
+            item.put("target", code(edge.target));
+            item.put("targetType", type(edge.target));
+            item.put("type", edge.type);
+            item.put("semanticType", edge.semanticType);
+            item.put("confidence", edge.confidence);
+            visibleEdges.add(item);
+        }
+        Map<String, Map<String, Object>> meta = loadNodeMetadata(kb, selected);
+        List<Map<String, Object>> nodes = new ArrayList<Map<String, Object>>();
+        for (String node : selected) {
+            Map<String, Object> item = new LinkedHashMap<String, Object>();
+            item.put("code", code(node));
+            item.put("type", type(node));
+            Map<String, Object> found = meta.get(node);
+            item.put("title", found == null ? code(node) : text(found.get("title")));
+            item.put("status", found == null ? "" : text(found.get("status")));
+            item.put("objectType", found == null ? "" : text(found.get("objectType")));
+            item.put("confidence", found == null ? null : found.get("confidence"));
+            item.put("degree", degree.get(node) == null ? 0 : degree.get(node));
+            nodes.add(item);
+        }
+        result.put("available", true);
+        result.put("nodes", nodes);
+        result.put("edges", visibleEdges);
+        result.put("totalNodes", globalDegree.size());
+        result.put("totalEdges", edges.size());
+        result.put("limit", cap);
+        result.put("truncated", globalDegree.size() > selected.size());
+        return result;
+    }
+
     private List<Edge> loadEdges(Long kb) {
         List<Edge> edges = new ArrayList<Edge>();
         add(edges, mapper.listGraphCardEvidenceEdges(kb), "CARD", "EVIDENCE");
@@ -194,7 +272,8 @@ public class AuthoritativeGraphNeighborhoodService {
                 continue;
             }
             Object confidence = row.get("confidence");
-            edges.add(new Edge(key(sourceType, source), key(targetType, target), text(row.get("edgeType")), text(row.get("semanticType")), confidence instanceof Number ? ((Number) confidence).doubleValue() : null));
+            edges.add(new Edge(key(sourceType, source), key(targetType, target), text(row.get("edgeType")), text(row.get("semanticType")), confidence
+                instanceof Number ? ((Number) confidence).doubleValue() : null));
         }
     }
 

@@ -4,12 +4,12 @@
   <div class="space-y-3">
     <div v-for="row in rows" :key="row.name" class="grid grid-cols-[100px_1fr_70px] items-center gap-3 text-xs">
       <span class="font-medium text-ink-600">{{ row.name }}</span>
-      <div class="h-2 overflow-hidden rounded bg-ink-100"><div class="h-full rounded bg-indigo-500" :style="{width:width(row.ms)}"></div></div>
+      <div class="h-2 overflow-hidden rounded bg-ink-100"><div class="h-full rounded bg-[color:var(--info-bg)]" :style="{width:width(row.ms)}"></div></div>
       <span class="text-right font-mono text-ink-500">{{ row.ms }} ms</span>
     </div>
   </div>
   <div v-if="Object.keys(channelLatency).length" class="mt-4 border-t border-ink-100 pt-3">
-    <div class="mb-2 text-[10px] font-semibold uppercase text-ink-400">召回通道耗时分解</div>
+    <div class="mb-2 text-[10px] font-semibold uppercase text-ink-500">召回通道耗时分解</div>
     <div class="flex flex-wrap gap-2"><span v-for="(ms,name) in channelLatency" :key="name" class="kb-badge">{{ name }} {{ ms }}ms</span></div>
   </div>
 </section>

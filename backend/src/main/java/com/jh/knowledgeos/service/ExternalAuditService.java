@@ -52,7 +52,8 @@ public class ExternalAuditService {
      * {@code X-API-Key} all resolve to the same entry. Anything a caller could use to authenticate
      * belongs here: the audit table is readable by the whole operations surface.</p>
      */
-    private static final Set<String> SECRET_KEYS = new HashSet<String>(Arrays.asList("apikey", "apikeyid", "authorization", "token", "accesstoken", "refreshtoken", "secret", "secretkey", "accesskey", "password", "passwd", "credential", "credentialsecret", "privatekey", "cookie", "sessionid"));
+    private static final Set<String> SECRET_KEYS = new HashSet<String>(Arrays.asList("apikey", "apikeyid", "authorization", "token", "accesstoken",
+        "refreshtoken", "secret", "secretkey", "accesskey", "password", "passwd", "credential", "credentialsecret", "privatekey", "cookie", "sessionid"));
 
     private final ExternalApiMapper mapper;
 
@@ -76,7 +77,8 @@ public class ExternalAuditService {
      * <p>Both extra arguments are accepted as objects and serialised here, so a caller hands over
      * whatever it already has — a map, a DTO, a raw query string — instead of assembling text.</p>
      */
-    public void record(ApiKey key, String channel, String method, Long knowledgeBaseId, int statusCode, long durationMillis, String message, Object requestParams, Object responseData) {
+    public void record(ApiKey key, String channel, String method, Long knowledgeBaseId, int statusCode, long durationMillis, String message, Object
+        requestParams, Object responseData) {
         ApiCallAudit audit = new ApiCallAudit();
         audit.setKeyId(key == null ? null : key.getId());
         audit.setKeyCode(key == null ? null : key.getKeyCode());

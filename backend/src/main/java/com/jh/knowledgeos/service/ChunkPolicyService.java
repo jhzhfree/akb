@@ -35,7 +35,8 @@ public class ChunkPolicyService {
 
     public static final String DEFAULT_MEASURE = "CHAR";
 
-    private static final Set<String> STRATEGIES = Collections.unmodifiableSet(new HashSet<String>(Arrays.asList("SEMANTIC", "FIXED", "SENTENCE", "STRUCTURE", "PARENT_CHILD")));
+    private static final Set<String> STRATEGIES = Collections.unmodifiableSet(new HashSet<String>(Arrays.asList("SEMANTIC", "FIXED", "SENTENCE",
+        "STRUCTURE", "PARENT_CHILD")));
 
     private static final Set<String> MEASURES = Collections.unmodifiableSet(new HashSet<String>(Arrays.asList("CHAR", "TOKEN")));
 
@@ -93,7 +94,10 @@ public class ChunkPolicyService {
         Map<String, Object> policy = normalize(request);
         User current = AuthContext.get();
         String updatedBy = current == null ? "" : String.valueOf(current.getUsername());
-        mapper.saveChunkPolicy(kb, String.valueOf(policy.get("strategy")), intValue(policy.get("chunkSize"), DEFAULT_CHUNK_SIZE), intValue(policy.get("chunkOverlap"), DEFAULT_CHUNK_OVERLAP), intValue(policy.get("minChunkSize"), DEFAULT_MIN_CHUNK_SIZE), String.valueOf(policy.get("measure")), boolValue(policy.get("keepStructure"), true), boolValue(policy.get("respectSentence"), true), boolValue(policy.get("parentChild"), false), updatedBy);
+        mapper.saveChunkPolicy(kb, String.valueOf(policy.get("strategy")), intValue(policy.get("chunkSize"), DEFAULT_CHUNK_SIZE),
+            intValue(policy.get("chunkOverlap"), DEFAULT_CHUNK_OVERLAP), intValue(policy.get("minChunkSize"), DEFAULT_MIN_CHUNK_SIZE),
+            String.valueOf(policy.get("measure")), boolValue(policy.get("keepStructure"), true), boolValue(policy.get("respectSentence"), true),
+            boolValue(policy.get("parentChild"), false), updatedBy);
         return policy(kb);
     }
 

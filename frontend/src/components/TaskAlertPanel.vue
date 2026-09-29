@@ -54,8 +54,8 @@
         </div>
       </div>
       <div class="p-4">
-        <div v-if="loading && !tasks.length" class="py-6 text-center text-sm text-ink-400">正在读取任务...</div>
-        <div v-else-if="!tasks.length" class="py-6 text-center text-sm text-ink-400">当前没有任务记录</div>
+        <div v-if="loading && !tasks.length" class="py-6 text-center text-sm text-ink-500">正在读取任务...</div>
+        <div v-else-if="!tasks.length" class="py-6 text-center text-sm text-ink-500">当前没有任务记录</div>
         <table v-else class="kb-table">
           <thead>
             <tr><th>任务</th><th>类型</th><th>触发</th><th>状态</th><th>重试</th><th>时间</th><th></th></tr>
@@ -65,7 +65,7 @@
               <td>
                 <b class="text-ink-700">{{ task.taskName || task.taskCode }}</b>
                 <div class="kb-muted text-[11px]">{{ task.targetType || '-' }} {{ task.targetCode || '' }}</div>
-                <div v-if="task.errorMessage" class="mt-1 text-[11px] text-rose-600">{{ task.errorMessage }}</div>
+                <div v-if="task.errorMessage" class="mt-1 text-[11px] text-[color:var(--danger)]">{{ task.errorMessage }}</div>
               </td>
               <td>{{ task.taskType }}</td>
               <td>{{ triggerLabel(task.triggerType) }}</td>
@@ -90,7 +90,7 @@
         <span class="kb-muted">条件再次命中只累计次数，不刷屏；指标恢复后自动关闭</span>
       </div>
       <div class="p-4">
-        <div v-if="!alerts.length" class="py-6 text-center text-sm text-ink-400">当前没有告警事件</div>
+        <div v-if="!alerts.length" class="py-6 text-center text-sm text-ink-500">当前没有告警事件</div>
         <table v-else class="kb-table">
           <thead>
             <tr><th>级别</th><th>告警</th><th>次数</th><th>首次 / 最近</th><th>状态</th><th></th></tr>
@@ -127,7 +127,7 @@
         <button class="kb-btn-outline" @click="openRule()">新增规则</button>
       </div>
       <div class="p-4">
-        <div v-if="!rules.length" class="py-6 text-center text-sm text-ink-400">当前没有告警规则</div>
+        <div v-if="!rules.length" class="py-6 text-center text-sm text-ink-500">当前没有告警规则</div>
         <table v-else class="kb-table">
           <thead>
             <tr><th>规则</th><th>指标</th><th>阈值 / 窗口</th><th>级别</th><th>范围</th><th>状态</th><th></th></tr>
@@ -147,7 +147,7 @@
               <td class="whitespace-nowrap text-right">
                 <button class="kb-link" @click="openRule(rule)">编辑</button>
                 <button class="kb-link ml-2" @click="toggleRule(rule)">{{ rule.enabled ? '停用' : '启用' }}</button>
-                <button class="kb-link ml-2 text-rose-600" @click="removeRule(rule)">删除</button>
+                <button class="kb-link ml-2 text-[color:var(--danger)]" @click="removeRule(rule)">删除</button>
               </td>
             </tr>
           </tbody>
@@ -169,7 +169,7 @@
             <div><span class="kb-muted">开始</span><div>{{ detail.startedTime || '-' }}</div></div>
             <div><span class="kb-muted">结束</span><div>{{ detail.finishedTime || '-' }}</div></div>
           </div>
-          <div v-if="detail.errorMessage" class="mt-3 rounded bg-rose-50 p-2 text-rose-700">{{ detail.errorMessage }}</div>
+          <div v-if="detail.errorMessage" class="mt-3 rounded bg-[color:var(--danger-bg)] p-2 text-[color:var(--danger)]">{{ detail.errorMessage }}</div>
         </div>
         <div>
           <b>结果报文</b>

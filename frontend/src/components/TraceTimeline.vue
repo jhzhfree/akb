@@ -4,15 +4,15 @@
     <div><small>流水线时序</small><h3>流水线时间轴</h3></div>
     <span class="kb-badge">{{ stages.length }} stages · {{ measured }} ms</span>
   </div>
-  <div v-if="!stages.length" class="p-6 text-center text-xs text-ink-400">当前链路未记录分层耗时</div>
+  <div v-if="!stages.length" class="p-6 text-center text-xs text-ink-500">当前链路未记录分层耗时</div>
   <ol v-else class="mt-3 space-y-2">
     <li v-for="(stage,i) in stages" :key="`${stage.key}-${i}`">
-      <div class="rounded-lg border border-ink-100 px-3 py-2" :class="errorCount(stage) ? 'border-rose-200 bg-rose-50/40' : ''">
+      <div class="rounded-lg border border-ink-100 px-3 py-2" :class="errorCount(stage) ? 'border-[color:var(--danger-bd)] bg-[color:var(--danger-bg)]/40' : ''">
         <div class="flex flex-wrap items-center justify-between gap-2">
           <div class="flex min-w-0 items-center gap-2">
-            <span class="grid h-5 w-5 shrink-0 place-items-center rounded-full bg-indigo-50 text-[10px] font-bold text-indigo-700">{{ i + 1 }}</span>
+            <span class="grid h-5 w-5 shrink-0 place-items-center rounded-full bg-[color:var(--info-bg)] text-[10px] font-bold text-accent">{{ i + 1 }}</span>
             <b class="text-xs text-ink-800">{{ stage.label || stage.key }}</b>
-            <span class="font-mono text-[10px] uppercase text-ink-400">{{ stage.key }}</span>
+            <span class="font-mono text-[10px] uppercase text-ink-500">{{ stage.key }}</span>
           </div>
           <div class="flex items-center gap-2 text-[11px]">
             <span class="text-ink-500">{{ countText(stage) }}</span>
@@ -20,13 +20,13 @@
           </div>
         </div>
         <div class="mt-1.5 h-1.5 overflow-hidden rounded bg-ink-100">
-          <div class="h-full rounded" :class="errorCount(stage) ? 'bg-rose-400' : 'bg-indigo-500'" :style="{width:width(stage.latencyMs)}"></div>
+          <div class="h-full rounded" :class="errorCount(stage) ? 'bg-[color:var(--danger-bg)]' : 'bg-[color:var(--info-bg)]'" :style="{width:width(stage.latencyMs)}"></div>
         </div>
         <div v-if="detailEntries(stage).length" class="mt-1.5 flex flex-wrap gap-1">
           <span v-for="entry in detailEntries(stage)" :key="entry[0]" class="kb-badge">{{ entry[0] }}: {{ entry[1] }}</span>
         </div>
         <div v-if="errorList(stage).length" class="mt-1.5 space-y-0.5">
-          <p v-for="(msg,idx) in errorList(stage)" :key="idx" class="text-[11px] text-rose-600">⚠ {{ msg }}</p>
+          <p v-for="(msg,idx) in errorList(stage)" :key="idx" class="text-[11px] text-[color:var(--danger)]">⚠ {{ msg }}</p>
         </div>
       </div>
     </li>

@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.jh.knowledgeos.mapper.AclPersistenceMapper">
+
+<select id="resolveAclPermissionTags" resultType="string">
+SELECT DISTINCT permission_tag FROM (
+ SELECT st.permission_tag FROM t_acl_subject s JOIN t_acl_subject_tag st ON st.subject_id=s.id WHERE s.subject_code=#{subjectCode} AND s.status='ACTIVE'
+ UNION ALL SELECT rt.permission_tag FROM t_acl_subject s JOIN t_acl_subject_role sr ON sr.subject_id=s.id JOIN t_acl_role r ON r.id=sr.role_id AND r.status='ACTIVE' JOIN t_acl_role_tag rt ON rt.role_id=r.id WHERE s.subject_code=#{subjectCode} AND s.status='ACTIVE'
+ UNION ALL SELECT dt.permission_tag FROM t_acl_subject s JOIN t_acl_department_tag dt ON dt.department_code=s.department_code WHERE s.subject_code=#{subjectCode} AND s.status='ACTIVE'
+) x ORDER BY permission_tag
+</select>
+
+<select id="listAclSubjects" resultType="map">SELECT subject_code subjectCode,display_name displayName,department_code departmentCode,status FROM t_acl_subject ORDER BY subject_code</select>
+
+<select id="listAclRoles" resultType="map">SELECT role_code roleCode,role_name roleName,status FROM t_acl_role ORDER BY role_code</select>
+
+<select id="listAclAudits" resultType="map">SELECT id,subject_code subjectCode,knowledge_base_id knowledgeBaseId,resource_type resourceType,resource_code resourceCode,action_name actionName,decision,permission_tags permissionTags,reason,trace_id traceId,request_uri requestUri,created_time createdTime FROM t_acl_access_audit WHERE (#{kb} IS NULL OR knowledge_base_id=#{kb}) ORDER BY id DESC LIMIT #{limit}</select>
+
+<select id="listAclChanges" resultType="map">SELECT id,change_code changeCode,knowledge_base_id knowledgeBaseId,resource_type resourceType,resource_code resourceCode,old_permission_tags oldPermissionTags,new_permission_tags newPermissionTags,changed_by changedBy,propagation_state propagationState,impact_json impactJson,propagation_result propagationResult,last_error lastError,
+completed_time completedTime,created_time createdTime FROM t_acl_change WHERE (#{kb} IS NULL OR knowledge_base_id=#{kb}) ORDER BY id DESC LIMIT #{limit}</select>
+
+<select id="getResourcePermissionTags" resultType="string">SELECT CASE WHEN #{type}='SOURCE' THEN (SELECT CAST(permission_tags AS CHAR) FROM t_source WHERE knowledge_base_id=#{kb} AND source_code=#{code}) WHEN #{type}='CARD' THEN (SELECT CAST(permission_tags AS CHAR) FROM t_knowledge_card WHERE knowledge_base_id=#{kb} AND knowledge_code=#{code}) WHEN #{type}='CLAIM' THEN (SELECT CAST(permission_tags AS CHAR) FROM t_claim WHERE knowledge_base_id=#{kb} AND claim_code=#{code}) END</select>
+
+<update id="updateResourcePermissionTags"><choose><when test="type == 'SOURCE'">UPDATE t_source SET permission_tags=CAST(#{tagsJson} AS JSON) WHERE knowledge_base_id=#{kb} AND source_code=#{code}</when><when test="type == 'CARD'">UPDATE t_knowledge_card SET permission_tags=CAST(#{tagsJson} AS JSON) WHERE knowledge_base_id=#{kb} AND knowledge_code=#{code}</when><when test="type == 'CLAIM'">UPDATE t_claim SET permission_tags=CAST(#{tagsJson} AS JSON) WHERE knowledge_base_id=#{kb} AND claim_code=#{code}</when><otherwise>UPDATE t_source SET permission_tags=permission_tags WHERE 1=0</otherwise></choose></update>
+
+<insert id="insertAclChange">INSERT INTO t_acl_change(change_code,knowledge_base_id,resource_type,resource_code,old_permission_tags,new_permission_tags,changed_by,impact_json) VALUES(#{changeCode},#{kb},#{type},#{code},CAST(#{oldTags} AS JSON),CAST(#{newTags} AS JSON),#{changedBy},CAST(#{impactJson} AS JSON))</insert>
+
+<update id="updateAclChangePropagation">
+UPDATE t_acl_change SET propagation_state=#{state},
+ propagation_result=CASE WHEN #{resultJson} IS NULL THEN propagation_result ELSE CAST(#{resultJson} AS JSON) END,
+ last_error=#{lastError}, completed_time=CASE WHEN #{state} IN ('COMPLETED','FAILED') THEN CURRENT_TIMESTAMP ELSE completed_time END
+WHERE change_code=#{changeCode}
+</update>
+
+<insert id="insertAclAudit">INSERT INTO t_acl_access_audit(subject_code,knowledge_base_id,resource_type,resource_code,action_name,decision,permission_tags,reason,trace_id,request_uri) VALUES(#{subjectCode},#{kb},#{resourceType},#{resourceCode},#{actionName},#{decision},CAST(#{tagsJson} AS JSON),#{reason},#{traceId},#{requestUri})</insert>
+
+<select id="getAclChange" resultType="map">SELECT change_code changeCode,knowledge_base_id knowledgeBaseId,resource_type resourceType,resource_code resourceCode,propagation_state propagationState FROM t_acl_change WHERE change_code=#{changeCode}</select>
+
+<insert id="insertAclRebuildJob">INSERT INTO t_acl_rebuild_job(job_code,change_code,knowledge_base_id,schema_version) VALUES(#{jobCode},#{changeCode},#{kb},#{schemaVersion})</insert>
+
+<select id="getAclRebuildJob" resultType="map">SELECT id,job_code jobCode,change_code changeCode,knowledge_base_id knowledgeBaseId,schema_version schemaVersion,release_id releaseId,state,qualification_state qualificationState,qualification_json qualificationJson,error_text errorText,created_time createdTime,updated_time updatedTime,completed_time completedTime FROM t_acl_rebuild_job WHERE job_code=#{jobCode}</select>
+
+<select id="listAclRebuildJobs" resultType="map">SELECT id,job_code jobCode,change_code changeCode,knowledge_base_id knowledgeBaseId,schema_version schemaVersion,release_id releaseId,state,qualification_state qualificationState,error_text errorText,created_time createdTime,updated_time updatedTime,completed_time completedTime FROM t_acl_rebuild_job WHERE knowledge_base_id=#{kb} ORDER BY id DESC LIMIT #{limit}</select>
+
+<update id="updateAclRebuildJob">UPDATE t_acl_rebuild_job SET state=#{state},release_id=COALESCE(#{releaseId},release_id),qualification_state=COALESCE(#{qualificationState},qualification_state),qualification_json=CASE WHEN #{qualificationJson} IS NULL THEN qualification_json ELSE CAST(#{qualificationJson} AS JSON) END,error_text=#{errorText},completed_time=CASE WHEN #{state} IN ('COMPLETED','FAILED') THEN CURRENT_TIMESTAMP ELSE completed_time END WHERE job_code=#{jobCode}</update>
+
+</mapper>

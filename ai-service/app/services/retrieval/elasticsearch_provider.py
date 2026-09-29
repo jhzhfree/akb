@@ -91,7 +91,6 @@ class ElasticsearchProvider:
     """
 
     def __init__(self) -> None:
-        self.enabled = settings.elasticsearch_enabled
         auth = None
         if settings.elasticsearch_username:
             auth = (settings.elasticsearch_username, settings.elasticsearch_password)
@@ -104,6 +103,15 @@ class ElasticsearchProvider:
         self.index = settings.elasticsearch_index
         self.read_alias = settings.elasticsearch_read_alias
         self._active_read_index: str | None = None
+
+    @property
+    def enabled(self) -> bool:
+        """Read the switch on every use, so a console edit needs no restart.
+
+        The url and credentials are baked into the HTTP client, so changing those
+        rebuilds the singleton instead; only the on/off switch is read live.
+        """
+        return settings.elasticsearch_enabled
 
     async def available(self) -> bool:
         """Return whether Elasticsearch responds without a server-side failure."""
@@ -195,8 +203,12 @@ class ElasticsearchProvider:
             body["object_id"] = str(doc.get("id"))
             lines.append(json.dumps(body, ensure_ascii=False))
 
+        # ``wait_for`` rather than ``false``: a blue/green rebuild is followed by ACL
+        # qualification and alias activation, and both read the target immediately. With
+        # ``false`` those reads can legitimately see zero documents and reject a valid
+        # generation — the one-second refresh window is not worth that ambiguity.
         response = await self.client.post(
-            "/_bulk?refresh=false",
+            "/_bulk?refresh=wait_for",
             content=("\n".join(lines) + "\n").encode("utf-8"),
             headers={"Content-Type": "application/x-ndjson"},
         )

@@ -19,15 +19,33 @@
       <el-col :span="7">
         <el-card shadow="never" class="judge-col">
           <template #header>
-            <div class="judge-head"><span>知识冲突</span><el-tag size="small" type="danger">{{ openConflicts.length }}</el-tag></div>
+            <div class="judge-head">
+              <span>知识冲突</span>
+              <el-tag size="small" type="danger">{{ openConflicts.length }}</el-tag>
+              <el-select v-model="conflictFilter" size="small" class="!w-24" placeholder="全部">
+                <el-option label="全部" value="" />
+                <el-option label="卡片" value="CARD" />
+                <el-option label="断言" value="CLAIM" />
+              </el-select>
+            </div>
+            <!-- 冲突里到底是谁跟谁：卡片还是断言，一眼看得见，不用点开对照才知道 -->
+            <div class="judge-head-sub">
+              涉及对象：卡片 {{ conflictObjectMix.CARD }} · 断言 {{ conflictObjectMix.CLAIM }}
+            </div>
           </template>
           <el-table
-            :data="openConflicts" height="232" :row-class-name="conflictRowClass"
+            :data="filteredConflicts" height="232" :row-class-name="conflictRowClass"
             @row-click="(row:ConflictRow)=>emit('selectConflict',row.id)">
-            <el-table-column label="冲突双方" min-width="200">
+            <el-table-column label="冲突双方" min-width="250">
               <template #default="{ row }">
-                <div class="judge-cell">{{ row.objectATitle || row.objectACode }}</div>
-                <div class="judge-cell judge-cell-sub">↔ {{ row.objectBTitle || row.objectBCode }}</div>
+                <div class="judge-cell">
+                  <span class="judge-obj-tag" :class="objectTagClass(row.objectAType)">{{ objectTypeLabel(row.objectAType) }}</span>
+                  <span>{{ row.objectATitle || row.objectACode }}</span>
+                </div>
+                <div class="judge-cell judge-cell-sub">
+                  <span class="judge-obj-tag" :class="objectTagClass(row.objectBType)">{{ objectTypeLabel(row.objectBType) }}</span>
+                  <span>{{ row.objectBTitle || row.objectBCode }}</span>
+                </div>
               </template>
             </el-table-column>
             <el-table-column prop="conflictScore" label="冲突分" width="76" />
@@ -85,11 +103,12 @@
               <article v-for="(side,i) in conflictDetail.sides" :key="i" class="judge-side">
                 <header>
                   <span class="judge-side-tag" :class="i===0?'is-a':'is-b'">{{ i===0?'A':'B' }}</span>
+                  <span class="judge-obj-tag" :class="objectTagClass(sideType(i))">{{ objectTypeLabel(sideType(i)) }}</span>
                   <b>{{ sideTitle(i) }}</b>
                 </header>
                 <div class="judge-side-value">{{ side.content || '—' }}</div>
                 <div class="judge-side-meta">
-                  {{ statusLabel(side.status) }} · 版本 v{{ side.versionNo ?? 1 }} · 置信度 {{ score(side.confidence) }} · 证据 {{ side.evidenceCount ?? 0 }}
+                  {{ side.objectCode || '—' }} · {{ statusLabel(side.status) }} · 版本 v{{ side.versionNo ?? 1 }} · 置信度 {{ score(side.confidence) }} · 证据 {{ side.evidenceCount ?? 0 }}
                 </div>
                 <div v-if="conditionText(side)" class="judge-side-cond">条件：{{ conditionText(side) }}</div>
               </article>
@@ -222,6 +241,38 @@ const selectedReviewCode=computed(()=>String(props.selectedReview?.objectCode||'
 const conflictRowClass=({row}:{row:ConflictRow}):string=>row.id===props.selectedConflictId?'is-selected':''
 const reviewRowClass=({row}:{row:ReviewRow}):string=>String(row.objectCode)===selectedReviewCode.value?'is-selected':''
 
+/**
+ * 冲突双方是"卡片"还是"断言"必须一眼可辨：两者裁决方式不同（卡片看版本与状态，
+ * 断言看条件与证据），混在一栏里评审者只能靠编码猜。
+ */
+const conflictFilter=ref('')
+const objectTagClass=(type?:unknown):string=>String(type||'').toUpperCase()==='CLAIM'?'is-claim':'is-card'
+const filteredConflicts=computed(()=>{
+  const key=conflictFilter.value
+  if(!key)return openConflicts.value
+  return openConflicts.value.filter(row=>
+    String(row.objectAType||'').toUpperCase()===key||String(row.objectBType||'').toUpperCase()===key)
+})
+/** 冲突队列里两类对象各占多少，回答"这些冲突主要发生在卡片还是断言上"。 */
+const conflictObjectMix=computed(()=>{
+  const mix={CARD:0,CLAIM:0}
+  for(const row of openConflicts.value){
+    for(const type of [row.objectAType,row.objectBType]){
+      const key=String(type||'').toUpperCase()
+      if(key==='CARD')mix.CARD+=1
+      else if(key==='CLAIM')mix.CLAIM+=1
+    }
+  }
+  return mix
+})
+/** A/B 两侧的对象类型：优先取冲突行，退回对照详情自带的类型。 */
+const sideType=(index:number):string=>{
+  const row=selectedRow.value
+  const fromRow=index===0?row?.objectAType:row?.objectBType
+  if(fromRow)return String(fromRow)
+  return String(props.conflictDetail?.sides?.[index]?.objectType||'')
+}
+
 /** 并排比对时优先用冲突行带出的对象标题，退回对象编码，避免只看到编码。 */
 const sideTitle=(index:number):string=>{
   const row=selectedRow.value
@@ -302,7 +353,7 @@ const submitReview=(decision:string):void=>{
 .section-header{display:flex;justify-content:space-between;align-items:center}
 .review-alert{margin-bottom:12px}
 .review-metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-bottom:12px}
-.review-metric{border:1px solid var(--el-border-color-lighter);border-radius:8px;padding:10px 12px;background:#fff}
+.review-metric{border:1px solid var(--el-border-color-lighter);border-radius:8px;padding:10px 12px;background:var(--bg-sub)}
 .review-metric span{display:block;font-size:12px;color:var(--el-text-color-secondary)}
 .review-metric b{font-size:20px;color:var(--el-text-color-primary)}
 .judge-row{align-items:stretch}
@@ -317,9 +368,13 @@ const submitReview=(decision:string):void=>{
 .judge-advice-body{display:flex;flex-wrap:wrap;gap:12px;font-size:12px;color:var(--el-text-color-regular)}
 .judge-advice-reason{margin:6px 0 0;font-size:12px;line-height:20px;color:var(--el-text-color-secondary)}
 .judge-sides{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
-.judge-side{border:1px solid var(--el-border-color-lighter);border-radius:8px;padding:10px 12px;background:#fff}
+.judge-side{border:1px solid var(--el-border-color-lighter);border-radius:8px;padding:10px 12px;background:var(--bg-sub)}
 .judge-side header{display:flex;align-items:center;gap:6px;margin-bottom:6px;font-size:13px}
 .judge-side-tag{display:inline-flex;width:20px;height:20px;align-items:center;justify-content:center;border-radius:4px;font-size:11px;font-weight:700;color:#fff}
+.judge-obj-tag{display:inline-flex;align-items:center;padding:0 6px;margin-right:6px;border-radius:4px;font-size:11px;line-height:18px;font-weight:600;white-space:nowrap}
+.judge-obj-tag.is-card{background:var(--el-color-primary-light-8);color:var(--el-color-primary)}
+.judge-obj-tag.is-claim{background:var(--el-color-warning-light-8);color:var(--el-color-warning)}
+.judge-head-sub{margin-top:6px;font-size:11px;color:var(--el-text-color-secondary)}
 .judge-side-tag.is-a{background:var(--el-color-primary)}
 .judge-side-tag.is-b{background:var(--el-color-warning)}
 .judge-side-value{font-size:13px;line-height:20px;color:var(--el-text-color-primary);word-break:break-word}
@@ -329,7 +384,7 @@ const submitReview=(decision:string):void=>{
 .judge-comment{margin-top:4px}
 .judge-evidence-group{margin-bottom:12px}
 .judge-evidence-label{font-size:11px;font-weight:600;color:var(--el-text-color-secondary);margin-bottom:6px}
-.judge-evidence{border:1px solid var(--el-border-color-lighter);border-radius:8px;padding:8px 10px;margin-bottom:8px;cursor:pointer;background:#fff;transition:border-color .15s}
+.judge-evidence{border:1px solid var(--el-border-color-lighter);border-radius:8px;padding:8px 10px;margin-bottom:8px;cursor:pointer;background:var(--bg-sub);transition:border-color .15s}
 .judge-evidence:hover{border-color:var(--el-color-primary-light-5)}
 .judge-evidence-quote{margin:0;font-size:12px;line-height:19px;color:var(--el-text-color-regular)}
 .judge-evidence-meta{display:flex;flex-wrap:wrap;gap:10px;margin-top:6px;font-size:11px;color:var(--el-text-color-secondary)}

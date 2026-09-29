@@ -4,6 +4,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.jh.knowledgeos.common.IndexOutboxStatus;
 import com.jh.knowledgeos.domain.IndexOutboxEvent;
 import com.jh.knowledgeos.mapper.KnowledgeMapper;
+import com.jh.knowledgeos.mapper.DocumentMapper;
+import com.jh.knowledgeos.mapper.IndexMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -26,6 +28,11 @@ public class IndexOutboxWorker {
 
     private final KnowledgeMapper mapper;
 
+    private final IndexMapper indexMapper;
+
+    private final DocumentMapper documentMapper;
+
+
     private final IndexOutboxService outboxService;
 
     private final AiClient aiClient;
@@ -46,7 +53,12 @@ public class IndexOutboxWorker {
 
     private final String workerId;
 
-    public IndexOutboxWorker(KnowledgeMapper mapper, IndexOutboxService outboxService, AiClient aiClient, ObjectMapper objectMapper, TransactionRunner transactionRunner, IndexOutboxMetrics metrics, @Value("${indexing.outbox.enabled:true}") boolean enabled, @Value("${indexing.outbox.batch-size:20}") int batchSize, @Value("${indexing.outbox.lock-timeout-seconds:300}") int lockTimeoutSeconds, @Value("${indexing.outbox.retry-base-seconds:2}") long retryBaseSeconds) {
+    public IndexOutboxWorker(KnowledgeMapper mapper, IndexOutboxService outboxService, AiClient aiClient, ObjectMapper objectMapper, TransactionRunner
+        transactionRunner, IndexOutboxMetrics metrics, @Value("${indexing.outbox.enabled:true}") boolean enabled,
+        @Value("${indexing.outbox.batch-size:20}") int batchSize, @Value("${indexing.outbox.lock-timeout-seconds:300}") int lockTimeoutSeconds,
+        @Value("${indexing.outbox.retry-base-seconds:2}") long retryBaseSeconds, IndexMapper indexMapper, DocumentMapper documentMapper) {
+        this.indexMapper = indexMapper;
+        this.documentMapper = documentMapper;
         this.mapper = mapper;
         this.outboxService = outboxService;
         this.aiClient = aiClient;
@@ -70,7 +82,7 @@ public class IndexOutboxWorker {
             return;
         }
         recoverStaleLocks();
-        metrics.updateBacklog(mapper.indexOutboxGlobalStats());
+        metrics.updateBacklog(indexMapper.indexOutboxGlobalStats());
         List<IndexOutboxEvent> events = claimBatch();
         for (IndexOutboxEvent event : events) {
             deliver(event);
@@ -79,10 +91,10 @@ public class IndexOutboxWorker {
 
     private List<IndexOutboxEvent> claimBatch() {
         return transactionRunner.required(() -> {
-            List<IndexOutboxEvent> due = mapper.selectDueIndexOutbox(batchSize);
+            List<IndexOutboxEvent> due = indexMapper.selectDueIndexOutbox(batchSize);
             List<IndexOutboxEvent> claimed = new ArrayList<IndexOutboxEvent>(due.size());
             for (IndexOutboxEvent event : due) {
-                int updated = mapper.claimIndexOutbox(event.getId(), workerId);
+                int updated = indexMapper.claimIndexOutbox(event.getId(), workerId);
                 if (updated == 1) {
                     event.setStatus(IndexOutboxStatus.PROCESSING.name());
                     event.setAttemptCount((event.getAttemptCount() == null ? 0 : event.getAttemptCount()) + 1);
@@ -101,9 +113,9 @@ public class IndexOutboxWorker {
             long duration = System.currentTimeMillis() - started;
             String responseJson = objectMapper.writeValueAsString(response);
             transactionRunner.required(() -> {
-                mapper.markIndexOutboxSucceeded(event.getId(), responseJson);
+                indexMapper.markIndexOutboxSucceeded(event.getId(), responseJson);
                 updateAclPropagationAfterSuccess(event, response, responseJson);
-                mapper.insertIndexDeliveryAttempt(event.getEventId(), event.getAttemptCount(), "SUCCEEDED", duration, responseJson, null);
+                indexMapper.insertIndexDeliveryAttempt(event.getEventId(), event.getAttemptCount(), "SUCCEEDED", duration, responseJson, null);
                 metrics.deliverySucceeded(duration);
             });
         } catch (Exception ex) {
@@ -121,19 +133,20 @@ public class IndexOutboxWorker {
         String message = abbreviate(ex.getMessage(), 4000);
         transactionRunner.required(() -> {
             if (dead) {
-                mapper.markIndexOutboxDead(event.getId(), message);
+                indexMapper.markIndexOutboxDead(event.getId(), message);
                 updateAclPropagation(event, "FAILED", null, message);
                 // An index failure must not touch the authoritative model: the document is only
                 // flagged DIRTY so a rebuild can pick it up, and the knowledge it produced stays
                 // queryable from the relational store (design §16.3).
                 markDocumentDirty(event, message);
             } else {
-                mapper.markIndexOutboxRetry(event.getId(), message, nextAttempt);
+                indexMapper.markIndexOutboxRetry(event.getId(), message, nextAttempt);
             }
-            mapper.insertIndexDeliveryAttempt(event.getEventId(), attempt, dead ? "DEAD" : "RETRY", duration, null, message);
+            indexMapper.insertIndexDeliveryAttempt(event.getEventId(), attempt, dead ? "DEAD" : "RETRY", duration, null, message);
             metrics.deliveryFailed(duration, dead);
         });
-        log.warn("Index outbox delivery failed eventId={} attempt={}/{} status={}: {}", event.getEventId(), attempt, maxAttempts, dead ? "DEAD" : "RETRY", message);
+        log.warn("Index outbox delivery failed eventId={} attempt={}/{} status={}: {}", event.getEventId(), attempt, maxAttempts, dead ? "DEAD" :
+            "RETRY", message);
     }
 
     private void updateAclPropagationAfterSuccess(IndexOutboxEvent event, Map<String, Object> response, String responseJson) {
@@ -160,7 +173,7 @@ public class IndexOutboxWorker {
         if (documentId == null) {
             return;
         }
-        mapper.updateDocumentState(documentId, "DIRTY", "INDEX", abbreviate(message, 900), 0);
+        documentMapper.updateDocumentState(documentId, "DIRTY", "INDEX", abbreviate(message, 900), 0);
     }
 
     /**
@@ -185,7 +198,7 @@ public class IndexOutboxWorker {
 
     private void recoverStaleLocks() {
         LocalDateTime threshold = LocalDateTime.now().minusSeconds(lockTimeoutSeconds);
-        int recovered = mapper.recoverStaleIndexOutbox(threshold);
+        int recovered = indexMapper.recoverStaleIndexOutbox(threshold);
         if (recovered > 0) {
             metrics.staleRecovered(recovered);
             log.warn("Recovered {} stale index outbox locks older than {}", recovered, threshold);

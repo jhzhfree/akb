@@ -1,0 +1,84 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.jh.knowledgeos.mapper.GraphReadMapper">
+
+<select id="listSourceImpactRows" resultType="map">
+SELECT 'CARD' objectType,kc.knowledge_code objectCode,'EVIDENCE_LINK' impactType,kc.status status FROM t_knowledge_evidence ke JOIN t_knowledge_card kc ON kc.knowledge_code=ke.knowledge_code JOIN t_evidence e ON e.id=ke.evidence_id WHERE e.source_id=#{sourceId}
+UNION ALL
+SELECT 'CLAIM',c.claim_code,'EVIDENCE_LINK',c.status FROM t_claim_evidence ce JOIN t_claim c ON c.claim_code=ce.claim_code JOIN t_evidence e ON e.id=ce.evidence_id WHERE e.source_id=#{sourceId}
+UNION ALL
+SELECT 'ENTITY',e.entity_code,'GRAPH_NODE',e.status FROM t_entity e WHERE e.source_id=#{sourceId}
+</select>
+
+<select id="resolveGraphNode" resultType="map">
+SELECT 'CARD' nodeType,kc.knowledge_code code,kc.title title,kc.status status FROM t_knowledge_card kc WHERE kc.knowledge_base_id=#{kb} AND kc.knowledge_code=#{code}
+UNION ALL SELECT 'CLAIM',c.claim_code,CONCAT_WS(' ',c.subject,c.predicate,c.object_value),c.status FROM t_claim c WHERE c.knowledge_base_id=#{kb} AND c.claim_code=#{code}
+UNION ALL SELECT 'EVIDENCE',e.evidence_code,LEFT(COALESCE(e.quote_text,''),80),e.status FROM t_evidence e WHERE e.knowledge_base_id=#{kb} AND e.evidence_code=#{code}
+UNION ALL SELECT 'ENTITY',en.entity_code,en.canonical_name,en.status FROM t_entity en WHERE en.knowledge_base_id=#{kb} AND en.entity_code=#{code}
+UNION ALL SELECT 'SOURCE',s.source_code,s.name,s.status FROM t_source s WHERE s.knowledge_base_id=#{kb} AND s.source_code=#{code}
+LIMIT 1
+</select>
+
+<select id="listGraphCardEvidenceEdges" resultType="map">
+SELECT ke.knowledge_code sourceCode,e.evidence_code targetCode,'SUPPORTED_BY' edgeType,COALESCE(ke.support_type,'SUPPORT') semanticType,ke.support_score confidence
+FROM t_knowledge_evidence ke JOIN t_evidence e ON e.id=ke.evidence_id JOIN t_knowledge_card kc ON kc.knowledge_code=ke.knowledge_code
+WHERE e.knowledge_base_id=#{kb}
+</select>
+
+<select id="listGraphClaimEvidenceEdges" resultType="map">
+SELECT ce.claim_code sourceCode,e.evidence_code targetCode,'SUPPORTED_BY' edgeType,COALESCE(ce.support_type,'SUPPORT') semanticType,ce.support_score confidence
+FROM t_claim_evidence ce JOIN t_evidence e ON e.id=ce.evidence_id JOIN t_claim c ON c.claim_code=ce.claim_code
+WHERE e.knowledge_base_id=#{kb}
+</select>
+
+<select id="listGraphEvidenceSourceEdges" resultType="map">
+SELECT e.evidence_code sourceCode,s.source_code targetCode,'EXTRACTED_FROM' edgeType,'PROVENANCE' semanticType,e.authority_score confidence
+FROM t_evidence e JOIN t_source s ON s.id=e.source_id WHERE e.knowledge_base_id=#{kb}
+</select>
+
+<select id="listGraphClaimEntityEdges" resultType="map">
+SELECT ce.claim_code sourceCode,ce.entity_code targetCode,'MENTIONS' edgeType,COALESCE(ce.relation_role,'SUBJECT') semanticType,NULL confidence
+FROM t_claim_entity ce JOIN t_claim c ON c.claim_code=ce.claim_code WHERE c.knowledge_base_id=#{kb}
+</select>
+
+<select id="listGraphCardEntityEdges" resultType="map">
+SELECT ce.knowledge_code sourceCode,ce.entity_code targetCode,'MENTIONS' edgeType,COALESCE(ce.relation_role,'SUBJECT') semanticType,NULL confidence
+FROM t_card_entity ce JOIN t_knowledge_card k ON k.knowledge_code=ce.knowledge_code WHERE k.knowledge_base_id=#{kb}
+</select>
+
+<select id="listGraphEntityRelationEdges" resultType="map">
+SELECT se.entity_code sourceCode,te.entity_code targetCode,r.relation_type edgeType,r.relation_type semanticType,r.confidence confidence
+FROM t_relation r JOIN t_entity se ON se.id=r.source_entity_id JOIN t_entity te ON te.id=r.target_entity_id WHERE r.knowledge_base_id=#{kb}
+</select>
+
+<select id="listGraphCards" resultType="map">
+SELECT knowledge_code code,title title,status status,type objectType,confidence FROM t_knowledge_card
+WHERE knowledge_base_id=#{kb} AND knowledge_code IN
+<foreach collection="codes" item="c" open="(" separator="," close=")">#{c}</foreach>
+</select>
+
+<select id="listGraphClaims" resultType="map">
+SELECT claim_code code,CONCAT_WS(' ',subject,predicate,object_value) title,status status,subject,predicate,object_value objectValue,confidence,polarity,certainty FROM t_claim
+WHERE knowledge_base_id=#{kb} AND claim_code IN
+<foreach collection="codes" item="c" open="(" separator="," close=")">#{c}</foreach>
+</select>
+
+<select id="listGraphEvidence" resultType="map">
+SELECT evidence_code code,LEFT(COALESCE(quote_text,''),120) title,status status,authority_score confidence FROM t_evidence
+WHERE knowledge_base_id=#{kb} AND evidence_code IN
+<foreach collection="codes" item="c" open="(" separator="," close=")">#{c}</foreach>
+</select>
+
+<select id="listGraphEntities" resultType="map">
+SELECT entity_code code,canonical_name title,status status,entity_type objectType,confidence FROM t_entity
+WHERE knowledge_base_id=#{kb} AND entity_code IN
+<foreach collection="codes" item="c" open="(" separator="," close=")">#{c}</foreach>
+</select>
+
+<select id="listGraphSources" resultType="map">
+SELECT source_code code,name title,status status,source_type objectType,authority_score confidence FROM t_source
+WHERE knowledge_base_id=#{kb} AND source_code IN
+<foreach collection="codes" item="c" open="(" separator="," close=")">#{c}</foreach>
+</select>
+
+</mapper>

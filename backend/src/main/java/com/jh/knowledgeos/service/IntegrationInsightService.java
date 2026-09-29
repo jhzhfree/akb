@@ -144,7 +144,10 @@ public class IntegrationInsightService {
      */
     private List<Map<String, Object>> services() {
         String base = "/api/v1/external";
-        return new ArrayList<Map<String, Object>>(java.util.Arrays.asList(service("search", "Search Service", "搜索知识对象", "POST " + base + "/search", properties.isEnabled()), service("retrieve", "Retrieve Service", "为外部 LLM/Agent 提供 Context", "POST " + base + "/query", properties.isEnabled()), service("answer", "Answer Service", "检索 + 生成一体化回答", "POST " + base + "/query", properties.isEnabled()), service("knowledge-object", "Knowledge Object Service", "读取知识对象与血缘", "GET " + base + "/cards/{code}", properties.isEnabled())));
+        return new ArrayList<Map<String, Object>>(java.util.Arrays.asList(service("search", "Search Service", "搜索知识对象", "POST " + base + "/search",
+            properties.isEnabled()), service("retrieve", "Retrieve Service", "为外部 LLM/Agent 提供 Context", "POST " + base + "/query",
+            properties.isEnabled()), service("answer", "Answer Service", "检索 + 生成一体化回答", "POST " + base + "/query", properties.isEnabled()),
+            service("knowledge-object", "Knowledge Object Service", "读取知识对象与血缘", "GET " + base + "/cards/{code}", properties.isEnabled())));
     }
 
     private Map<String, Object> service(String code, String name, String purpose, String endpoint, boolean enabled) {

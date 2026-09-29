@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.jh.knowledgeos.mapper.DocumentMapper">
+
+<insert id="insertSource" parameterType="com.jh.knowledgeos.domain.KnowledgeSource" useGeneratedKeys="true" keyProperty="id">INSERT INTO t_source(source_code,knowledge_base_id,name,source_type,source_uri,storage_path,authority_score,status,permission_tags)VALUES(#{sourceCode},#{knowledgeBaseId},#{name},#{sourceType},#{sourceUri},#{storagePath},#{authorityScore},#{status},CAST(#{permissionTags} AS JSON))</insert>
+
+
+<insert id="insertSourceVersion">INSERT INTO t_source_version(source_id,version_no,source_hash,object_uri,status)VALUES(#{sourceId},#{versionNo},#{sourceHash},#{objectUri},'ACTIVE')</insert>
+
+
+<select id="findSourceVersionId" resultType="long">SELECT id FROM t_source_version WHERE source_id=#{sourceId} AND version_no=#{versionNo}</select>
+
+
+<insert id="insertDocument" parameterType="com.jh.knowledgeos.domain.KnowledgeDocument" useGeneratedKeys="true" keyProperty="id">INSERT INTO t_document(source_version_id,document_code,title,mime_type,parse_status,status,current_stage,chunk_count)VALUES(#{sourceVersionId},#{documentCode},#{title},#{mimeType},#{parseStatus},#{status},#{currentStage},0)</insert>
+
+
+<update id="updateDocumentParsed">UPDATE t_document SET raw_text=#{rawText},chunk_count=#{chunkCount},parse_status=#{status} WHERE id=#{id}</update>
+
+
+<update id="updateDocumentState">UPDATE t_document SET status=#{status},current_stage=#{stage},error_message=#{error},retry_count=#{retryCount},updated_time=NOW() WHERE id=#{id}</update>
+
+
+<select id="findDocumentRetryContext" resultType="map">SELECT d.id,d.document_code documentCode,d.title,d.status,d.retry_count retryCount,s.id sourceId,s.name sourceName,s.storage_path storagePath,s.authority_score authorityScore,s.permission_tags permissionTags,s.source_type sourceType,sv.version_no sourceVersion,sv.id sourceVersionId,s.knowledge_base_id knowledgeBaseId,COALESCE((SELECT MAX(cu.revision) FROM t_content_unit cu WHERE cu.document_id=d.id),1) chunkRevision FROM t_document d JOIN t_source_version sv ON sv.id=d.source_version_id JOIN t_source s ON s.id=sv.source_id WHERE d.id=#{id}</select>
+
+
+<select id="listSources" resultType="com.jh.knowledgeos.domain.KnowledgeSource">SELECT id,source_code sourceCode,knowledge_base_id knowledgeBaseId,name,source_type sourceType,source_uri sourceUri,authority_score authorityScore,status,permission_tags permissionTags,created_time createdTime FROM t_source WHERE knowledge_base_id=#{kb}<choose><when test="permissionTags != null and permissionTags.size() > 0"> AND (permission_tags IS NULL OR JSON_LENGTH(permission_tags)=0 OR <foreach collection="permissionTags" item="tag" open="(" separator=" OR " close=")">JSON_CONTAINS(permission_tags, JSON_QUOTE(#{tag}))</foreach>)</when><otherwise> AND (permission_tags IS NULL OR JSON_LENGTH(permission_tags)=0)</otherwise></choose> ORDER BY created_time DESC</select>
+
+
+<select id="getSourcePreview" resultType="map">
+SELECT s.id sourceId,s.source_code sourceCode,s.name name,s.source_type sourceType,s.source_uri sourceUri,
+       s.storage_path storagePath,s.authority_score authorityScore,s.status status,s.created_time createdTime,
+       d.id documentId,d.document_code documentCode,d.title documentTitle,d.mime_type mimeType,
+       d.parse_status parseStatus,d.chunk_count chunkCount,d.raw_text rawText
+FROM t_source s
+LEFT JOIN t_source_version sv ON sv.source_id=s.id AND sv.version_no=1
+LEFT JOIN t_document d ON d.source_version_id=sv.id
+WHERE s.knowledge_base_id=#{kb} AND s.id=#{sourceId} AND (s.permission_tags IS NULL OR JSON_LENGTH(s.permission_tags)=0
+ <if test="permissionTags != null and permissionTags.size() > 0">
+ OR (<foreach collection="permissionTags" item="tag" separator=" OR ">JSON_CONTAINS(s.permission_tags, JSON_QUOTE(#{tag}))</foreach>)
+ </if>)
+LIMIT 1
+</select>
+
+
+<select id="listDocuments" resultType="map">SELECT d.id,d.document_code documentCode,d.title,d.mime_type mimeType,d.parse_status parseStatus,d.status,d.current_stage currentStage,d.error_message errorMessage,d.retry_count retryCount,d.chunk_count chunkCount,s.name sourceName,s.id sourceId,d.created_time createdTime FROM t_document d JOIN t_source_version sv ON sv.id=d.source_version_id JOIN t_source s ON s.id=sv.source_id WHERE s.knowledge_base_id=#{kb} ORDER BY d.created_time DESC</select>
+
+
+<update id="supersedeDocumentChunks">UPDATE t_content_unit SET status='SUPERSEDED' WHERE document_id=#{documentId} AND status='ACTIVE'</update>
+
+
+<select id="nextChunkRevision" resultType="int">SELECT COALESCE(MAX(revision),0)+1 FROM t_content_unit WHERE document_id=#{documentId}</select>
+
+
+<update id="batchUpdateContentUnitParents">UPDATE t_content_unit SET parent_id = CASE unit_code <foreach collection="rows" item="row" separator=" ">WHEN #{row.unitCode} THEN #{row.parentId}</foreach> END WHERE unit_code IN <foreach collection="rows" item="row" open="(" separator="," close=")">#{row.unitCode}</foreach></update>
+
+
+<select id="listDocumentChunks" resultType="map">SELECT id,unit_code unitCode,chunk_type chunkType,heading_path headingPath,page_no pageNo,page_end pageEnd,char_start charStart,char_end charEnd,token_count tokenCount,status,source_version sourceVersion,revision,parent_id parentId,LEFT(content,200) excerpt,CHAR_LENGTH(content) contentLength,created_time createdTime FROM t_content_unit WHERE document_id=#{documentId} ORDER BY id</select>
+
+
+<insert id="insertContentUnit">INSERT INTO t_content_unit(document_id,unit_code,heading_path,page_no,content,content_hash)VALUES(#{documentId},#{unitCode},#{headingPath},#{pageNo},#{content},#{contentHash})</insert>
+
+
+<select id="findContentUnitId" resultType="long">SELECT id FROM t_content_unit WHERE unit_code=#{unitCode}</select>
+
+
+<insert id="batchInsertContentUnits">INSERT INTO t_content_unit(document_id,unit_code,parent_id,heading_path,chunk_type,page_no,page_end,char_start,char_end,content,content_hash,token_count,status,acl_tags,source_version,revision) VALUES <foreach collection="rows" item="row" separator=",">(#{row.documentId},#{row.unitCode},#{row.parentId},#{row.headingPath},#{row.chunkType},#{row.pageNo},#{row.pageEnd},#{row.charStart},#{row.charEnd},#{row.content},#{row.contentHash},#{row.tokenCount},'ACTIVE',CAST(#{row.aclTags} AS JSON),#{row.sourceVersion},#{row.revision})</foreach></insert>
+
+
+<select id="findContentUnitIdsByCodes" resultType="map">SELECT id,unit_code unitCode FROM t_content_unit WHERE unit_code IN <foreach collection="codes" item="code" open="(" separator="," close=")">#{code}</foreach></select>
+
+</mapper>

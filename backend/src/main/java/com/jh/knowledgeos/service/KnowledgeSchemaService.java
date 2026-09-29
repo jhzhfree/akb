@@ -29,6 +29,7 @@ import java.util.regex.Pattern;
  * stay put.</p>
  */
 @Service
+/** Application service for knowledge schema lifecycle and type governance. */
 public class KnowledgeSchemaService {
 
     public static final String KIND_KNOWLEDGE = "KNOWLEDGE_TYPE";
@@ -94,7 +95,9 @@ public class KnowledgeSchemaService {
         if (!errors.isEmpty()) {
             throw new IllegalArgumentException(errors.get(0));
         }
-        mapper.upsertSchemaType(scope, kind, code, text(body.get("label")).trim().isEmpty() ? code : text(body.get("label")).trim(), text(body.get("description")), write(properties), DEPRECATED.equals(text(body.get("status")).toUpperCase(Locale.ROOT)) ? DEPRECATED : ACTIVE, currentUser());
+        mapper.upsertSchemaType(scope, kind, code, text(body.get("label")).trim().isEmpty() ? code : text(body.get("label")).trim(),
+            text(body.get("description")), write(properties), DEPRECATED.equals(text(body.get("status")).toUpperCase(Locale.ROOT)) ? DEPRECATED :
+            ACTIVE, currentUser());
         return mapper.getSchemaType(scope, kind, code);
     }
 
@@ -107,7 +110,8 @@ public class KnowledgeSchemaService {
         if (existing == null) {
             throw new IllegalArgumentException("类型不存在：" + typeCode);
         }
-        mapper.upsertSchemaType(scope, kindOf(kind), typeCode, text(existing.get("label")), text(existing.get("description")), text(existing.get("propertiesJson")), DEPRECATED, currentUser());
+        mapper.upsertSchemaType(scope, kindOf(kind), typeCode, text(existing.get("label")), text(existing.get("description")),
+            text(existing.get("propertiesJson")), DEPRECATED, currentUser());
         return mapper.getSchemaType(scope, kindOf(kind), typeCode);
     }
 

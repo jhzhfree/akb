@@ -5,6 +5,11 @@ import com.jh.knowledgeos.domain.Claim;
 import com.jh.knowledgeos.domain.KnowledgeCard;
 import com.jh.knowledgeos.domain.KnowledgeSource;
 import com.jh.knowledgeos.mapper.KnowledgeMapper;
+import com.jh.knowledgeos.mapper.CardClaimMapper;
+import com.jh.knowledgeos.mapper.TraceMapper;
+import com.jh.knowledgeos.mapper.DocumentMapper;
+import com.jh.knowledgeos.mapper.GovernanceMapper;
+import com.jh.knowledgeos.mapper.EvidenceMapper;
 import org.springframework.stereotype.Service;
 import java.util.ArrayList;
 import java.util.List;
@@ -19,13 +24,30 @@ public class KnowledgeReadService {
 
     private final KnowledgeMapper mapper;
 
+    private final CardClaimMapper cardClaimMapper;
+
+    private final TraceMapper traceMapper;
+
+    private final EvidenceMapper evidenceMapper;
+
+    private final GovernanceMapper governanceMapper;
+
+    private final DocumentMapper documentMapper;
+
+
     private final AiClient aiClient;
 
     private final AuthoritativeGraphNeighborhoodService authoritativeGraph;
 
     private final ObjectMapper objectMapper;
 
-    public KnowledgeReadService(KnowledgeMapper mapper, AiClient aiClient, AuthoritativeGraphNeighborhoodService authoritativeGraph, ObjectMapper objectMapper) {
+    public KnowledgeReadService(KnowledgeMapper mapper, AiClient aiClient, AuthoritativeGraphNeighborhoodService authoritativeGraph, ObjectMapper
+        objectMapper, EvidenceMapper evidenceMapper, GovernanceMapper governanceMapper, DocumentMapper documentMapper, CardClaimMapper cardClaimMapper, TraceMapper traceMapper) {
+        this.cardClaimMapper = cardClaimMapper;
+        this.traceMapper = traceMapper;
+        this.evidenceMapper = evidenceMapper;
+        this.governanceMapper = governanceMapper;
+        this.documentMapper = documentMapper;
         this.mapper = mapper;
         this.aiClient = aiClient;
         this.authoritativeGraph = authoritativeGraph;
@@ -63,6 +85,20 @@ public class KnowledgeReadService {
         return fallback;
     }
 
+    /**
+     * Workbench overview of the graph: one bounded picture of the whole knowledge base.
+     *
+     * <p>It is read from the authoritative model on purpose. The workbench counts entities and
+     * relations from that same model, so a picture taken from a different store would disagree
+     * with the numbers printed next to it. Neo4j stays the serving view for neighborhoods, where
+     * traversal depth is what matters.</p>
+     */
+    public Map<String, Object> graphOverview(Long kb, Integer limit) {
+        Map<String, Object> result = authoritativeGraph.overview(kb, limit == null ? 24 : limit);
+        result.put("source", "authoritative");
+        return result;
+    }
+
     private static boolean isEmpty(Object value) {
         if (value == null) {
             return true;
@@ -83,10 +119,10 @@ public class KnowledgeReadService {
         }
         Map<String, Object> result = new LinkedHashMap<String, Object>();
         result.put("object", object);
-        result.put("evidence", mapper.listEvidenceForObject(objectType, objectCode));
-        result.put("conflicts", mapper.listObjectConflicts(objectCode));
-        result.put("reviews", mapper.listReviewsForObject(objectType, objectCode));
-        result.put("assessments", mapper.listAssessmentsForObject(kb, objectType, objectCode));
+        result.put("evidence", evidenceMapper.listEvidenceForObject(objectType, objectCode));
+        result.put("conflicts", governanceMapper.listObjectConflicts(objectCode));
+        result.put("reviews", governanceMapper.listReviewsForObject(objectType, objectCode));
+        result.put("assessments", governanceMapper.listAssessmentsForObject(kb, objectType, objectCode));
         result.put("versions", mapper.listKnowledgeVersions(kb, type, objectCode));
         try {
             result.put("graph", graph(kb, objectCode, permissionTags, null, null));
@@ -142,19 +178,19 @@ public class KnowledgeReadService {
     }
 
     public List<KnowledgeCard> cards(Long kb, List<String> permissionTags) {
-        return mapper.listCards(kb, permissionTags);
+        return cardClaimMapper.listCards(kb, permissionTags);
     }
 
     public List<Claim> claims(Long kb, List<String> permissionTags) {
-        return mapper.listClaims(kb, permissionTags);
+        return cardClaimMapper.listClaims(kb, permissionTags);
     }
 
     public List<KnowledgeSource> sources(Long kb, List<String> permissionTags) {
-        return mapper.listSources(kb, permissionTags);
+        return documentMapper.listSources(kb, permissionTags);
     }
 
     public List<Map<String, Object>> documents(Long kb) {
-        return mapper.listDocuments(kb);
+        return documentMapper.listDocuments(kb);
     }
 
     /**
@@ -163,13 +199,13 @@ public class KnowledgeReadService {
      * another denormalized dashboard table.
      */
     public Map<String, Object> overview(Long kb, List<String> permissionTags) {
-        List<KnowledgeSource> sources = mapper.listSources(kb, permissionTags);
-        List<Map<String, Object>> documents = mapper.listDocuments(kb);
-        List<KnowledgeCard> cards = mapper.listCards(kb, permissionTags);
-        List<Claim> claims = mapper.listClaims(kb, permissionTags);
-        List<Map<String, Object>> pending = mapper.listPendingReviews(kb);
-        List<Map<String, Object>> conflicts = mapper.listConflicts(kb, "OPEN");
-        List<Map<String, Object>> assessments = mapper.listAssessments(kb, 20);
+        List<KnowledgeSource> sources = documentMapper.listSources(kb, permissionTags);
+        List<Map<String, Object>> documents = documentMapper.listDocuments(kb);
+        List<KnowledgeCard> cards = cardClaimMapper.listCards(kb, permissionTags);
+        List<Claim> claims = cardClaimMapper.listClaims(kb, permissionTags);
+        List<Map<String, Object>> pending = governanceMapper.listPendingReviews(kb);
+        List<Map<String, Object>> conflicts = governanceMapper.listConflicts(kb, "OPEN");
+        List<Map<String, Object>> assessments = governanceMapper.listAssessments(kb, 20);
         long chunks = 0L;
         long effectiveCards = 0L;
         for (Map<String, Object> document : documents) {
@@ -199,18 +235,18 @@ public class KnowledgeReadService {
     }
 
     public Map<String, Object> contentUnitDetail(Long kb, Long contentUnitId, List<String> permissionTags) {
-        return mapper.getContentUnitDetail(kb, contentUnitId, permissionTags);
+        return evidenceMapper.getContentUnitDetail(kb, contentUnitId, permissionTags);
     }
 
     public Map<String, Object> evidenceDetail(Long kb, String evidenceCode, List<String> permissionTags) {
-        return mapper.getEvidenceDetail(kb, evidenceCode, permissionTags);
+        return evidenceMapper.getEvidenceDetail(kb, evidenceCode, permissionTags);
     }
 
     /**
      * Chunk list of one document, including the metadata that explains each chunk's boundaries.
      */
     public List<Map<String, Object>> documentChunks(Long documentId) {
-        return mapper.listDocumentChunks(documentId);
+        return documentMapper.listDocumentChunks(documentId);
     }
 
     /**
@@ -220,10 +256,10 @@ public class KnowledgeReadService {
      */
     public Map<String, Object> lineage(Long kb, String objectType, String objectCode) {
         String type = objectType == null || objectType.trim().isEmpty() ? "CARD" : objectType.trim().toUpperCase();
-        List<Map<String, Object>> nodes = mapper.listLineageForObject(kb, type, objectCode);
+        List<Map<String, Object>> nodes = evidenceMapper.listLineageForObject(kb, type, objectCode);
         if (nodes.isEmpty() && !"CLAIM".equals(type)) {
             type = "CLAIM";
-            nodes = mapper.listLineageForObject(kb, type, objectCode);
+            nodes = evidenceMapper.listLineageForObject(kb, type, objectCode);
         }
         Map<String, Object> result = new LinkedHashMap<String, Object>();
         result.put("knowledgeBaseId", kb);
@@ -235,7 +271,7 @@ public class KnowledgeReadService {
     }
 
     public Map<String, Object> trace(String queryId) {
-        Map<String, Object> trace = mapper.getTrace(queryId);
+        Map<String, Object> trace = traceMapper.getTrace(queryId);
         if (trace == null) {
             return new LinkedHashMap<String, Object>();
         }
@@ -263,13 +299,38 @@ public class KnowledgeReadService {
     }
 
     public Map<String, Object> answerQualification(String queryId) {
-        Map<String, Object> qualification = mapper.getAnswerQualification(queryId);
+        Map<String, Object> qualification = traceMapper.getAnswerQualification(queryId);
         if (qualification == null) {
             return new LinkedHashMap<String, Object>();
         }
         Map<String, Object> result = new LinkedHashMap<String, Object>(qualification);
-        result.put("claims", mapper.listAnswerClaimAssessments(queryId));
+        result.put("claims", traceMapper.listAnswerClaimAssessments(queryId));
+        Object reasons = blockReasons(queryId);
+        if (reasons != null) {
+            result.put("blockReasons", reasons);
+        }
         return result;
+    }
+
+    /**
+     * Why the evidence gate withheld sentences: no citation, a citation without an exact
+     * evidence binding, or a faithfulness score under the threshold. Without this split,
+     * "the answer was blocked" leaves nothing to tune.
+     */
+    @SuppressWarnings("unchecked")
+    private Object blockReasons(String queryId) {
+        try {
+            Map<String, Object> row = traceMapper.getAnswerVerificationJson(queryId);
+            Object raw = row == null ? null : row.get("verificationJson");
+            if (raw == null) {
+                return null;
+            }
+            Map<String, Object> verification = objectMapper.readValue(String.valueOf(raw), Map.class);
+            return verification.get("blockReasons");
+        } catch (Exception ignored) {
+            // A missing or malformed verification document must not break the qualification view.
+            return null;
+        }
     }
 
     public Map<String, Object> answerQualificationSummary(Long kb, Integer hours) {
@@ -277,13 +338,13 @@ public class KnowledgeReadService {
         Map<String, Object> result = new LinkedHashMap<String, Object>();
         result.put("knowledgeBaseId", kb);
         result.put("windowHours", safeHours);
-        result.put("summary", mapper.summarizeAnswerQualifications(kb, safeHours));
-        result.put("policies", mapper.listAnswerQualificationPolicyStats(kb, safeHours));
+        result.put("summary", traceMapper.summarizeAnswerQualifications(kb, safeHours));
+        result.put("policies", traceMapper.listAnswerQualificationPolicyStats(kb, safeHours));
         return result;
     }
 
     public List<Map<String, Object>> queryHistory(Long kb, Integer limit) {
         int safeLimit = limit == null ? 30 : Math.max(1, Math.min(limit, 100));
-        return mapper.listQueryTraces(kb, safeLimit);
+        return traceMapper.listQueryTraces(kb, safeLimit);
     }
 }

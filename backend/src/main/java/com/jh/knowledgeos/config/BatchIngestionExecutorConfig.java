@@ -28,7 +28,8 @@ public class BatchIngestionExecutorConfig {
     public static final String BEAN_NAME = "batchIngestionExecutor";
 
     @Bean(BEAN_NAME)
-    public ThreadPoolTaskExecutor batchIngestionExecutor(@Value("${knowledge.batch.concurrency:3}") int concurrency, @Value("${knowledge.batch.queue-capacity:200}") int queueCapacity) {
+    public ThreadPoolTaskExecutor batchIngestionExecutor(@Value("${knowledge.batch.concurrency:3}") int concurrency,
+        @Value("${knowledge.batch.queue-capacity:200}") int queueCapacity) {
         int size = Math.max(1, concurrency);
         ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
         executor.setCorePoolSize(size);

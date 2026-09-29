@@ -20,8 +20,8 @@
         :key="tab.type"
         class="rounded-lg border px-3 py-1.5 text-[13px] transition"
         :class="type===tab.type
-          ? 'border-indigo-300 bg-indigo-50 text-indigo-700'
-          : 'border-ink-200 bg-white text-ink-600 hover:border-indigo-200'"
+          ? 'border-[color:var(--info-bd)] kb-state-info'
+          : 'border-ink-200 bg-white text-ink-600 hover:border-[color:var(--info-bd)]'"
         @click="$emit('update:type',tab.type)">
         {{ tab.label }}
       </button>
@@ -79,7 +79,7 @@
             <el-table-column v-if="type==='relation'" prop="code" label="关系编码" min-width="200" show-overflow-tooltip />
             <el-table-column label="操作" width="120" fixed="right">
               <template #default="{ row }">
-                <span class="text-[12px] text-indigo-600">
+                <span class="text-[12px] text-accent">
                   {{ actionable(row) ? '查看详情' : '—' }}
                 </span>
               </template>

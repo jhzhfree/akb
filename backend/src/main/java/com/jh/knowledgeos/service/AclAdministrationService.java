@@ -29,7 +29,8 @@ AclAdministrationService {
 
     private final PlatformEventPublisher publisher;
 
-    public AclAdministrationService(KnowledgeMapper mapper, ObjectMapper objectMapper, IndexOutboxService outbox, AclContextResolver resolver, PlatformEventPublisher publisher) {
+    public AclAdministrationService(KnowledgeMapper mapper, ObjectMapper objectMapper, IndexOutboxService outbox, AclContextResolver resolver,
+        PlatformEventPublisher publisher) {
         this.mapper = mapper;
         this.objectMapper = objectMapper;
         this.outbox = outbox;
@@ -71,14 +72,16 @@ AclAdministrationService {
             impact.put("requiresRetrievalPropagation", true);
             impact.put("sourceCascade", "SOURCE".equals(normalizedType));
             impact.put("reason", reason);
-            mapper.insertAclChange(changeCode, kb, normalizedType, code, oldTags, newTags, resolver.currentSubjectCode(), objectMapper.writeValueAsString(impact));
+            mapper.insertAclChange(changeCode, kb, normalizedType, code, oldTags, newTags, resolver.currentSubjectCode(),
+                objectMapper.writeValueAsString(impact));
             Map<String, Object> payload = new LinkedHashMap<String, Object>();
             payload.put("knowledgeBaseId", kb);
             payload.put("objectType", normalizedType);
             payload.put("objectId", code);
             payload.put("permissionTags", clean);
             payload.put("sourceCascade", "SOURCE".equals(normalizedType));
-            Map<String, Object> event = outbox.enqueue(kb, normalizedType, "KB:" + kb + ":" + normalizedType + ":" + code, "ACL_CHANGED", AiApiPaths.INDEX_OBJECT_ACL, payload, changeCode);
+            Map<String, Object> event = outbox.enqueue(kb, normalizedType, "KB:" + kb + ":" + normalizedType + ":" + code, "ACL_CHANGED",
+                AiApiPaths.INDEX_OBJECT_ACL, payload, changeCode);
             Map<String, Object> detail = new LinkedHashMap<String, Object>();
             detail.put("changeCode", changeCode);
             detail.put("previousTags", oldTags);
@@ -86,7 +89,8 @@ AclAdministrationService {
             detail.put("sourceCascade", "SOURCE".equals(normalizedType));
             detail.put("requiresRetrievalPropagation", true);
             detail.put("reason", reason);
-            publisher.emitUser(PlatformEventTypes.ACL_CHANGED, kb, PlatformEventPublisher.SOURCE_UI, normalizedType, code, "权限标签变更：" + normalizedType + " " + code, detail);
+            publisher.emitUser(PlatformEventTypes.ACL_CHANGED, kb, PlatformEventPublisher.SOURCE_UI, normalizedType, code, "权限标签变更：" + normalizedType
+                + " " + code, detail);
             Map<String, Object> result = new LinkedHashMap<String, Object>();
             result.put("changeCode", changeCode);
             result.put("permissionTags", clean);

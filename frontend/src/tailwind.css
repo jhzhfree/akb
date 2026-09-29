@@ -6,46 +6,86 @@
   html, body, #app { height: 100%; }
   body { @apply bg-ink-50 text-ink-900 antialiased; }
   ::-webkit-scrollbar { width: 9px; height: 9px; }
-  ::-webkit-scrollbar-thumb { @apply rounded-full bg-ink-300; }
+  ::-webkit-scrollbar-thumb { @apply rounded-full bg-ink-500; }
   ::-webkit-scrollbar-thumb:hover { @apply bg-ink-400; }
 }
 
 @layer components {
   /* Padding belongs to .kos-main, so pages only constrain nothing and keep full width. */
   .kb-page { @apply w-full; }
-  .kb-card { @apply rounded-xl border border-[#dfe5ee] bg-white shadow-sm; }
-  .kb-card-head { @apply flex items-center justify-between border-b border-[#eef2f7] px-4 py-3; }
+
+  /* 深色运维主题下的 kb-* 组件库：卡片 / 按钮 / 输入 / 指标 / 上下文条统一走深色表面。 */
+  .kb-card { @apply rounded-xl border border-ink-300 bg-ink-100 shadow-sm; }
+  .kb-card-head { @apply flex items-center justify-between border-b border-ink-300 px-4 py-3; }
   .kb-card-body { @apply p-4; }
-  .kb-field-label { @apply block text-[12px] font-medium text-ink-600; }
-  .kb-eyebrow { @apply text-[10px] font-bold uppercase tracking-[.18em] text-[#2563eb]; }
+  /* 弱化文字统一走 ink-500：ink-400 在色阶里属于「弱边框」，当文字用两个主题下都过淡 */
+  .kb-field-label { @apply block text-[12px] font-medium text-ink-500; }
+  .kb-eyebrow { @apply text-[10px] font-bold uppercase tracking-[.18em] text-accent; }
   .kb-title { @apply text-xl font-semibold tracking-tight text-ink-950; }
   .kb-muted { @apply text-xs leading-5 text-ink-500; }
-  .kb-btn { @apply inline-flex items-center justify-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50; }
-  .kb-btn-primary { @apply kb-btn bg-[#2563eb] text-white hover:bg-[#1d4ed8]; }
-  .kb-btn-outline { @apply kb-btn border border-[#dfe5ee] bg-white text-ink-700 hover:border-[#c3d3ee] hover:bg-[#f7faff]; }
-  .kb-btn-ghost { @apply kb-btn text-ink-600 hover:bg-ink-100 hover:text-ink-900; }
-  .kb-btn-danger { @apply kb-btn bg-[#dc2626] text-white hover:bg-[#b91c1c]; }
+  /* ---- 按钮三档：主操作=实心品牌 / 次操作=描边 / 弱操作=无框文字 ----
+     两主题下形态完全一致，只有取色不同。次按钮的边框必须看得见（深色用 line-soft，
+     浅色用 line），否则深色里会剩下一块没有边界的深色，看不出是按钮。 */
+  /* 顺序有讲究：切换按钮常写成 class="kb-btn-outline" :class="{'kb-btn-primary':selected}"，
+     同特异度下后定义者胜，因此实心档（primary / danger）必须排在描边档之后，
+     否则「选中」会被引擎后写的描边样式盖掉，选中态永远显示不出来。 */
+  .kb-btn { @apply inline-flex items-center justify-center gap-1.5 rounded-lg border border-transparent px-3 py-1.5 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50; }
+  .kb-btn-outline { @apply kb-btn; background:var(--bg-raised); border-color:var(--line-soft); color:var(--ink-1); }
+  .kb-btn-outline:hover:not(:disabled) { background:var(--bg-sub); border-color:var(--brand-400); color:var(--ink-950); }
+  .kb-btn-ghost { @apply kb-btn; color:var(--ink-2); }
+  .kb-btn-ghost:hover:not(:disabled) { background:var(--bg-sub); color:var(--ink-1); }
+  .kb-btn-danger { @apply kb-btn; background:var(--danger); color:#fff; border-color:var(--danger); }
+  .kb-btn-danger:hover:not(:disabled) { filter:brightness(1.08); }
+  .kb-btn-primary { @apply kb-btn; background:var(--brand-600); color:var(--on-brand); border-color:var(--brand-600); }
+  .kb-btn-primary:hover:not(:disabled) { background:var(--brand-500); border-color:var(--brand-500); }
+
   .kb-badge { @apply inline-flex items-center rounded-md px-1.5 py-0.5 text-[11px] font-medium; }
-  .kb-input { @apply w-full rounded-lg border border-[#dfe5ee] bg-white px-3 py-2 text-sm outline-none transition focus:border-[#93b4fd] focus:ring-2 focus:ring-[#dbeafe]; }
+
+  /* ---- 状态胶囊：全站「状态文字」的唯一形态 ----
+     规则：任何地方显示成功/警告/失败/进行中/中性，都用 .kb-state-*，
+     不再手写 bg-emerald-50 text-emerald-700 这类固定色（深色下会变成亮底深字，很脏）。
+     配色 = theme.css 的「字色 / 底色 / 边框」三件套，深浅主题各自成对。 */
+  .kb-state { @apply inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[11px] font-medium leading-4; }
+  .kb-state-ok { background:var(--ok-bg); color:var(--ok); border-color:var(--ok-bd); }
+  .kb-state-warn { background:var(--warn-bg); color:var(--warn); border-color:var(--warn-bd); }
+  .kb-state-danger { background:var(--danger-bg); color:var(--danger); border-color:var(--danger-bd); }
+  .kb-state-info { background:var(--info-bg); color:var(--info); border-color:var(--info-bd); }
+  .kb-state-neutral { background:var(--neutral-bg); color:var(--neutral-fg); border-color:var(--neutral-bd); }
+  /* 状态点：列表与时间线里的圆点，与胶囊同色系 */
+  .kb-dot { @apply inline-block h-2 w-2 flex-none rounded-full; }
+  .kb-dot-ok { background:var(--ok); }
+  .kb-dot-warn { background:var(--warn); }
+  .kb-dot-danger { background:var(--danger); }
+  .kb-dot-info { background:var(--info); }
+  .kb-dot-neutral { background:var(--neutral-fg); }
+  .kb-input { @apply w-full rounded-lg border border-ink-300 bg-ink-50 px-3 py-2 text-sm text-ink-900 outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-500/30; }
   .kb-metric { @apply kb-card flex min-h-[112px] flex-col justify-between p-4; }
   .kb-metric-label { @apply text-xs font-medium text-ink-500; }
   .kb-metric-value { @apply text-3xl font-semibold tracking-tight text-ink-950; }
-  .kb-metric-hint { @apply text-[11px] text-ink-400; }
+  .kb-metric-hint { @apply text-[11px] text-ink-500; }
   .kb-section-head { @apply mb-4 flex items-end justify-between gap-4; }
+  /* 页头入口统一为一枚胶囊：健康度 / 生成 / 搜索 / 版本 / 质量 同高、同圆角、同间距，
+     差异只体现在语义色与是否可点，避免同一行里出现卡片、主按钮、文字链接三种形态。 */
+  .kb-entry { @apply inline-flex h-9 shrink-0 items-center gap-1.5 rounded-lg border border-ink-300 bg-ink-100 px-3 text-[13px] font-medium text-ink-700 transition-colors hover:border-ink-400 hover:bg-ink-200 disabled:cursor-not-allowed disabled:opacity-50; }
+  .kb-entry-primary { @apply kb-entry border-transparent bg-brand-600 text-white hover:border-transparent hover:bg-brand-500; }
+  /* 指标型入口：与按钮同形但不可点，用于「知识健康度」这类只读数字。 */
+  .kb-entry-stat { @apply kb-entry cursor-default hover:border-ink-300 hover:bg-ink-100; }
+  .kb-entry-label { @apply text-[11px] font-normal text-ink-500; }
 
   /* 第 4 章空间上下文条：当前空间 + 环境 + 索引状态 */
-  .kb-context-bar { @apply mb-4 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 rounded-xl border border-[#dfe5ee] bg-white px-4 py-2.5 shadow-sm; }
-  .kb-ctx-label { @apply text-[11px] font-semibold uppercase tracking-[.12em] text-ink-400; }
-  .kb-ctx-space { @apply inline-flex max-w-[300px] items-center gap-2 rounded-lg border border-[#dfe5ee] px-2.5 py-1 text-sm font-medium text-ink-900 hover:border-[#c3d3ee] hover:bg-[#f7faff]; }
-  .kb-ctx-chip { @apply kb-badge bg-[#eff6ff] text-[#1d4ed8]; }
+  .kb-context-bar { @apply mb-4 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 rounded-xl border border-ink-300 bg-ink-100 px-4 py-2.5 shadow-sm; }
+  .kb-ctx-label { @apply text-[11px] font-semibold uppercase tracking-[.12em] text-ink-500; }
+  .kb-ctx-space { @apply inline-flex max-w-[300px] items-center gap-2 rounded-lg border border-ink-300 px-2.5 py-1 text-sm font-medium text-ink-900 hover:border-ink-400 hover:bg-ink-200; }
+  .kb-ctx-chip { @apply kb-badge; background:var(--accent-bg); color:var(--accent-text); }
   .kb-ctx-sep { @apply text-ink-300; }
   .kb-ctx-item { @apply text-[12px] text-ink-500; }
   .kb-ctx-index { @apply inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-[12px] font-medium; }
   /* 状态点复用文字色，避免为每个状态再写一条嵌套规则 */
   .kb-ctx-dot { @apply h-1.5 w-1.5 rounded-full bg-current; }
-  .kb-ctx-index-ok { @apply bg-[#e8f7f0] text-[#15803d]; }
-  .kb-ctx-index-pending { @apply bg-[#eff6ff] text-[#1d4ed8]; }
-  .kb-ctx-index-drift { @apply bg-[#fff7e6] text-[#b45309]; }
-  .kb-ctx-index-dead { @apply bg-[#fef2f2] text-[#b91c1c]; }
-  .kb-ctx-index-loading { @apply bg-ink-100 text-ink-500; }
+  /* 状态胶囊：底色与字色成对取自状态变量，浅色主题下自动变成「浅底深字」 */
+  .kb-ctx-index-ok { background:var(--ok-bg); color:var(--ok); }
+  .kb-ctx-index-pending { background:var(--accent-bg); color:var(--accent-text); }
+  .kb-ctx-index-drift { background:var(--warn-bg); color:var(--warn); }
+  .kb-ctx-index-dead { background:var(--danger-bg); color:var(--danger); }
+  .kb-ctx-index-loading { @apply bg-ink-200 text-ink-500; }
 }

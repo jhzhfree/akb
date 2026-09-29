@@ -64,7 +64,7 @@
       <article class="kb-card">
         <div class="kb-card-head">
           <b class="text-sm">集成服务</b>
-          <button class="text-xs font-medium text-indigo-600 hover:text-indigo-700" @click="$emit('navigate','integration.services')">
+          <button class="text-xs font-medium text-accent hover:text-accent" @click="$emit('navigate','integration.services')">
             服务与 API →
           </button>
         </div>
@@ -77,9 +77,9 @@
               </el-tag>
             </div>
             <div class="mt-1 text-[11px] text-ink-500">{{ service.purpose }}</div>
-            <code class="mt-1 block truncate text-[11px] text-indigo-600">{{ service.endpoint }}</code>
+            <code class="mt-1 block truncate text-[11px] text-accent">{{ service.endpoint }}</code>
           </div>
-          <div v-if="!overview?.services?.length" class="py-6 text-center text-[12px] text-ink-400">暂无集成服务</div>
+          <div v-if="!overview?.services?.length" class="py-6 text-center text-[12px] text-ink-500">暂无集成服务</div>
         </div>
       </article>
 
@@ -94,12 +94,12 @@
             </div>
             <div class="mt-1 flex h-1.5 overflow-hidden rounded bg-ink-100">
               <span
-                class="bg-emerald-400"
+                class="bg-[color:var(--ok-bg)]"
                 :style="{ width:ratio(row.successCount,row.calls) }"></span>
-              <span class="bg-rose-400" :style="{ width:ratio(row.errorCount,row.calls) }"></span>
+              <span class="bg-[color:var(--danger-bg)]" :style="{ width:ratio(row.errorCount,row.calls) }"></span>
             </div>
           </div>
-          <div v-if="!overview?.protocolDistribution?.length" class="text-[12px] text-ink-400">
+          <div v-if="!overview?.protocolDistribution?.length" class="text-[12px] text-ink-500">
             窗口内暂无调用记录
           </div>
         </div>
@@ -110,7 +110,7 @@
               v-for="row in overview?.health || []"
               :key="row.name"
               class="rounded-lg border border-ink-200 px-2 py-1 text-[11px]"
-              :class="row.status==='正常' ? 'text-emerald-700' : 'text-amber-700'">
+              :class="row.status==='正常' ? 'text-[color:var(--ok)]' : 'text-[color:var(--warn)]'">
               {{ row.name }}：{{ row.status }}
             </span>
           </div>
@@ -121,7 +121,7 @@
       <article class="kb-card">
         <div class="kb-card-head">
           <b class="text-sm">最近调用</b>
-          <button class="text-xs font-medium text-indigo-600 hover:text-indigo-700" @click="$emit('navigate','integration.logs')">
+          <button class="text-xs font-medium text-accent hover:text-accent" @click="$emit('navigate','integration.logs')">
             调用日志 →
           </button>
         </div>
@@ -129,23 +129,23 @@
           <div v-for="(row,i) in overview?.recentCalls || []" :key="i" class="px-4 py-2.5 text-[12px]">
             <div class="flex items-center justify-between">
               <span class="truncate text-ink-700">{{ row.client || '匿名调用' }}</span>
-              <span :class="row.status && row.status >= 400 ? 'text-rose-600' : 'text-emerald-600'">
+              <span :class="row.status && row.status >= 400 ? 'text-[color:var(--danger)]' : 'text-[color:var(--ok)]'">
                 {{ row.status ?? '—' }}
               </span>
             </div>
-            <div class="mt-0.5 flex items-center gap-2 text-[11px] text-ink-400">
+            <div class="mt-0.5 flex items-center gap-2 text-[11px] text-ink-500">
               <span>{{ row.protocol }}</span>
               <span>{{ row.method }}</span>
               <span>{{ row.latencyMs ?? 0 }} ms</span>
               <button
                 v-if="row.traceId"
-                class="text-indigo-600 hover:text-indigo-700"
+                class="text-accent hover:text-accent"
                 @click="$emit('open-trace',String(row.traceId))">
                 traceId →
               </button>
             </div>
           </div>
-          <div v-if="!overview?.recentCalls?.length" class="px-4 py-6 text-center text-[12px] text-ink-400">
+          <div v-if="!overview?.recentCalls?.length" class="px-4 py-6 text-center text-[12px] text-ink-500">
             暂无调用记录
           </div>
         </div>
@@ -182,7 +182,7 @@ const healthSummary = computed(() => {
   if (!abnormal) return '正常'
   return `${abnormal} 项异常`
 })
-const healthClass = computed(() => healthSummary.value === '正常' ? 'text-emerald-600' : 'text-amber-600')
+const healthClass = computed(() => healthSummary.value === '正常' ? 'text-[color:var(--ok)]' : 'text-[color:var(--warn)]')
 
 function pct(value:number|null|undefined):string {
   if (value == null) return '—'

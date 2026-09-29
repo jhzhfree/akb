@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.jh.knowledgeos.mapper.CardClaimMapper">
+<insert id="insertCard" parameterType="com.jh.knowledgeos.domain.KnowledgeCard">INSERT INTO t_knowledge_card(knowledge_code,knowledge_base_id,type,title,summary,content,confidence,status,version,permission_tags)VALUES(#{knowledgeCode},#{knowledgeBaseId},#{type},#{title},#{summary},#{content},#{confidence},#{status},#{version},CAST(#{permissionTags} AS JSON))</insert>
+<insert id="insertClaim" parameterType="com.jh.knowledgeos.domain.Claim">INSERT INTO t_claim(claim_code,knowledge_base_id,subject,predicate,object_value,condition_json,qualifier_json,polarity,confidence,certainty,status,permission_tags,valid_from,valid_to,version)VALUES(#{claimCode},#{knowledgeBaseId},#{subject},#{predicate},#{objectValue},CAST(#{conditionJson} AS JSON),CAST(#{qualifierJson} AS JSON),#{polarity},#{confidence},#{certainty},#{status},CAST(#{permissionTags} AS JSON),#{validFrom},#{validTo},#{version})</insert>
+<insert id="linkCardEvidenceFromDocument">INSERT IGNORE INTO t_knowledge_evidence(knowledge_code,evidence_id,support_type,support_score) SELECT #{knowledgeCode},e.id,'SUPPORT',0.80 FROM t_evidence e JOIN t_content_unit cu ON cu.id=e.content_unit_id WHERE cu.document_id=#{documentId}</insert>
+<insert id="linkClaimEvidenceFromDocument">INSERT IGNORE INTO t_claim_evidence(claim_code,evidence_id,support_type,support_score) SELECT #{claimCode},e.id,'SUPPORT',0.80 FROM t_evidence e JOIN t_content_unit cu ON cu.id=e.content_unit_id WHERE cu.document_id=#{documentId}</insert>
+<select id="listCards" resultType="com.jh.knowledgeos.domain.KnowledgeCard">SELECT * FROM t_knowledge_card WHERE knowledge_base_id=#{kb}<choose><when test="permissionTags != null and permissionTags.size() > 0"> AND (permission_tags IS NULL OR JSON_LENGTH(permission_tags)=0 OR <foreach collection="permissionTags" item="tag" open="(" separator=" OR " close=")">JSON_CONTAINS(permission_tags, JSON_QUOTE(#{tag}))</foreach>)</when><otherwise> AND (permission_tags IS NULL OR JSON_LENGTH(permission_tags)=0)</otherwise></choose> ORDER BY updated_time DESC</select>
+<select id="listClaims" resultType="com.jh.knowledgeos.domain.Claim">SELECT * FROM t_claim WHERE knowledge_base_id=#{kb}<choose><when test="permissionTags != null and permissionTags.size() > 0"> AND (permission_tags IS NULL OR JSON_LENGTH(permission_tags)=0 OR <foreach collection="permissionTags" item="tag" open="(" separator=" OR " close=")">JSON_CONTAINS(permission_tags, JSON_QUOTE(#{tag}))</foreach>)</when><otherwise> AND (permission_tags IS NULL OR JSON_LENGTH(permission_tags)=0)</otherwise></choose> ORDER BY updated_time DESC</select>
+<select id="listClaimsBySubjects" resultType="com.jh.knowledgeos.domain.Claim">SELECT * FROM t_claim WHERE knowledge_base_id=#{kb}<choose><when test="subjects != null and subjects.size() > 0"> AND subject IN <foreach collection="subjects" item="subject" open="(" separator="," close=")">#{subject}</foreach></when><otherwise> AND 1=0</otherwise></choose></select>
+<select id="countCardEvidence" resultType="long">SELECT COUNT(*) FROM t_knowledge_evidence WHERE knowledge_code=#{code}</select>
+<select id="countClaimEvidence" resultType="long">SELECT COUNT(*) FROM t_claim_evidence WHERE claim_code=#{code}</select>
+<select id="listClaimsWithValidity" resultType="map">SELECT claim_code claimCode,valid_from validFrom,valid_to validTo,status FROM t_claim WHERE knowledge_base_id=#{kb} AND (valid_from IS NOT NULL OR valid_to IS NOT NULL)</select>
+<select id="countClaimsByStatus" resultType="map">SELECT status,COUNT(*) total FROM t_claim WHERE knowledge_base_id=#{kb} GROUP BY status</select>
+<select id="countCardsByStatus" resultType="map">SELECT status,COUNT(*) total FROM t_knowledge_card WHERE knowledge_base_id=#{kb} GROUP BY status</select>
+<select id="listExpiringClaims" resultType="map">
+SELECT claim_code claimCode,subject,predicate,object_value objectValue,status,valid_from validFrom,valid_to validTo,version,confidence
+FROM t_claim WHERE knowledge_base_id=#{kb} AND valid_to IS NOT NULL AND valid_to &gt;= NOW() AND valid_to &lt;= #{horizon}
+AND (status IS NULL OR status NOT IN ('EXPIRED','SUPERSEDED','REJECTED')) ORDER BY valid_to
+</select>
+</mapper>

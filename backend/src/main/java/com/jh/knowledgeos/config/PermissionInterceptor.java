@@ -35,11 +35,13 @@ public class PermissionInterceptor implements HandlerInterceptor {
     new Rule("/api/knowledge/schema", Permissions.SYSTEM_SCHEMA, ALL_METHODS), // 裁决结果（assessments）是工作台与资产浏览的只读投影，所有角色都要能看；
     new Rule("/api/knowledge/settings/query-policy", Permissions.SEARCH_POLICY, ALL_METHODS), // 裁决结果（assessments）是工作台与资产浏览的只读投影，所有角色都要能看；
     new Rule("/api/knowledge/settings/model", Permissions.SYSTEM_MODEL, WRITE_ONLY), // 裁决结果（assessments）是工作台与资产浏览的只读投影，所有角色都要能看；
+    new Rule("/api/knowledge/settings/retrieval", Permissions.SYSTEM_INDEX, WRITE_ONLY), // 检索引擎开关属于存储与索引运维，读写同 /api/knowledge/index/ 一档。
     new Rule("/api/knowledge/evaluations", Permissions.SEARCH_EVALUATE, WRITE_ONLY), // 只有「跑一轮裁决」这类写操作才要求裁决权限。
     // 任务与告警属于平台运维：只有系统管理员能看告警、改规则。
     new Rule("/api/knowledge/adjudication", Permissions.GENERATE_JUDGE, WRITE_ONLY), // 任务与告警属于平台运维：只有系统管理员能看告警、改规则。
     new Rule("/api/knowledge/conflicts", Permissions.GENERATE_JUDGE, WRITE_ONLY), // 任务与告警属于平台运维：只有系统管理员能看告警、改规则。
     new Rule("/api/knowledge/documents", Permissions.GENERATE_IMPORT, WRITE_ONLY), // 任务与告警属于平台运维：只有系统管理员能看告警、改规则。
+    new Rule("/api/knowledge/connectors", Permissions.GENERATE_CONNECTOR, WRITE_ONLY), // 连接器配置属于「导入知识」一档，读取列表供其他页面复用。
     new Rule("/api/knowledge/extract", Permissions.GENERATE_IMPORT, WRITE_ONLY), // 任务与告警属于平台运维：只有系统管理员能看告警、改规则。
     new Rule("/api/knowledge/entities", Permissions.GENERATE_IMPORT, WRITE_ONLY), // 任务与告警属于平台运维：只有系统管理员能看告警、改规则。
     new Rule("/api/knowledge/index/", Permissions.SYSTEM_INDEX, WRITE_ONLY), // 任务与告警属于平台运维：只有系统管理员能看告警、改规则。

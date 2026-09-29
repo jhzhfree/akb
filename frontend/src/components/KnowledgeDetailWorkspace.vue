@@ -1,11 +1,11 @@
 <template>
   <el-drawer :model-value="visible" size="min(1120px, 96vw)" :with-header="false" @close="$emit('close')">
     <div class="min-h-full bg-ink-50 p-5 md:p-7">
-      <div v-if="loading" class="kb-card p-10 text-center text-sm text-ink-400">正在装配知识证据链...</div>
+      <div v-if="loading" class="kb-card p-10 text-center text-sm text-ink-500">正在装配知识证据链...</div>
       <template v-else-if="detail">
         <header class="mb-5 flex flex-wrap items-start justify-between gap-4">
           <div>
-            <div class="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-indigo-600">
+            <div class="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-accent">
               <span>{{ mode }}</span><span>·</span><span>{{ code }}</span>
             </div>
             <h2 class="text-2xl font-bold text-ink-900">{{ title }}</h2>
@@ -35,7 +35,7 @@
                 <button class="kb-btn kb-btn-outline" @click="copy(rawText)">复制原文</button>
               </div>
               <div class="max-h-[46vh] overflow-auto whitespace-pre-wrap break-words rounded-lg bg-ink-50 p-4 text-[13px] leading-7 text-ink-700">{{ rawText }}</div>
-              <div class="mt-3 flex flex-wrap gap-3 text-[11px] text-ink-400">
+              <div class="mt-3 flex flex-wrap gap-3 text-[11px] text-ink-500">
                 <span>字符 {{ rawText.length }}</span>
                 <span>估算 Token {{ estimateTokens(rawText) }}</span>
                 <span v-if="obj.charStart!=null">原文区间 {{ obj.charStart }} – {{ obj.charEnd }}</span>
@@ -47,7 +47,7 @@
               <article
                 v-for="n in neighbors" :key="String(n.unitCode)"
                 class="mb-2 rounded-lg border p-3 text-xs"
-                :class="String(n.unitCode)===String(obj.unitCode||code)?'border-indigo-200 bg-indigo-50':'border-ink-100 bg-white'">
+                :class="String(n.unitCode)===String(obj.unitCode||code)?'border-[color:var(--info-bd)] bg-[color:var(--info-bg)]':'border-ink-100 bg-white'">
                 <div class="mb-1 font-semibold text-ink-700">
                   {{ n.pos==='PREV'?'上文':(n.pos==='NEXT'?'下文':'本块') }} · {{ n.headingPath || '—' }}
                 </div>
@@ -85,17 +85,17 @@
                   :key="String(node.code)"
                   class="flex items-center justify-between rounded-lg border border-ink-100 bg-white px-3 py-2 text-[12px]">
                   <span class="truncate text-ink-700">{{ String(node.title || node.code) }}</span>
-                  <span class="ml-3 shrink-0 text-ink-400">{{ String(node.type || node.objectType || '') }}</span>
+                  <span class="ml-3 shrink-0 text-ink-500">{{ String(node.type || node.objectType || '') }}</span>
                 </div>
               </div>
-              <div v-else class="py-8 text-center text-sm text-ink-400">暂无关联对象</div>
+              <div v-else class="py-8 text-center text-sm text-ink-500">暂无关联对象</div>
             </section>
-            <section v-if="detail.conflicts.length" class="kb-card mt-4 border-amber-200 p-5">
+            <section v-if="detail.conflicts.length" class="kb-card mt-4 border-[color:var(--warn-bd)] p-5">
               <div class="kb-section-head"><div><small>知识知识冲突</small><h3>知识冲突</h3></div></div>
               <div
                 v-for="(c,i) in detail.conflicts"
                 :key="i"
-                class="mb-2 rounded-lg bg-amber-50 p-3 text-xs text-amber-800">
+                class="mb-2 rounded-lg bg-[color:var(--warn-bg)] p-3 text-xs text-[color:var(--warn)]">
                 {{ c.conflictType || 'CONFLICT' }} · {{ c.objectACode }} ↔ {{ c.objectBCode }}
               </div>
             </section>
@@ -106,23 +106,23 @@
               <div class="kb-section-head"><div><small>证据链</small><h3>证据与来源</h3></div></div>
               <div class="space-y-3">
                 <article v-for="e in detail.evidence" :key="e.evidenceCode"
-                  class="cursor-pointer rounded-lg border border-ink-100 bg-white p-4 transition hover:border-indigo-200 hover:shadow-sm"
+                  class="cursor-pointer rounded-lg border border-ink-100 bg-white p-4 transition hover:border-[color:var(--info-bd)] hover:shadow-sm"
                   @click="$emit('open-evidence',e.evidenceCode)">
                   <div
     class="mb-2 flex items-center justify-between gap-3"><b
     class="text-sm text-ink-800">{{ e.sourceName }}</b><span
-    class="text-xs text-ink-400">{{ e.evidenceCode }}</span></div>
+    class="text-xs text-ink-500">{{ e.evidenceCode }}</span></div>
                   <p class="text-sm leading-6 text-ink-600">{{ e.quoteText }}</p>
-                  <div v-if="e.documentTitle || e.contentUnitCode" class="mt-3 rounded-md bg-indigo-50 px-3 py-2 text-[11px] text-indigo-700">
+                  <div v-if="e.documentTitle || e.contentUnitCode" class="mt-3 rounded-md bg-[color:var(--info-bg)] px-3 py-2 text-[11px] text-accent">
                     📍 {{ e.documentTitle || e.documentCode }}<span v-if="e.pageNo"> · P{{ e.pageNo }}</span>
                     <span v-if="e.headingPath"> · {{ e.headingPath }}</span><span v-if="e.contentUnitCode"> · {{ e.contentUnitCode }}</span>
                   </div>
-                  <div class="mt-3 flex items-center justify-between gap-3 text-xs text-ink-400">
+                  <div class="mt-3 flex items-center justify-between gap-3 text-xs text-ink-500">
                     <div class="flex gap-3"><span>权威 {{ score(e.authorityScore) }}</span><span>新鲜度 {{ score(e.freshnessScore) }}</span></div>
-                    <span class="font-medium text-indigo-600">查看原文 →</span>
+                    <span class="font-medium text-accent">查看原文 →</span>
                   </div>
                 </article>
-                <div v-if="!detail.evidence.length" class="py-8 text-center text-sm text-ink-400">暂无证据关联</div>
+                <div v-if="!detail.evidence.length" class="py-8 text-center text-sm text-ink-500">暂无证据关联</div>
               </div>
             </section>
           </el-tab-pane>
@@ -142,11 +142,11 @@
                 <div>
                   <div class="mb-1 text-[11px] text-ink-500">权限标签</div>
                   <div v-if="permissionTags.length" class="flex flex-wrap gap-2">
-                    <span v-for="tag in permissionTags" :key="tag" class="rounded bg-indigo-50 px-2 py-1 text-[11px] text-indigo-700">
+                    <span v-for="tag in permissionTags" :key="tag" class="rounded bg-[color:var(--info-bg)] px-2 py-1 text-[11px] text-accent">
                       {{ tag }}
                     </span>
                   </div>
-                  <div v-else class="text-sm text-ink-400">未设置权限标签，按知识库默认可见范围继承</div>
+                  <div v-else class="text-sm text-ink-500">未设置权限标签，按知识库默认可见范围继承</div>
                 </div>
                 <p class="kb-muted">权限变更会写入传播队列并重建索引，可在「系统配置 / 权限与审计」查看变更记录。</p>
               </div>
@@ -160,7 +160,7 @@
                 <div><small>原始报文</small><h3>接口原生报文</h3></div>
                 <button class="kb-btn kb-btn-outline" @click="copy(jsonText)">复制报文</button>
               </div>
-              <pre class="max-h-[60vh] overflow-auto rounded-lg bg-ink-900 p-4 text-[12px] leading-6 text-emerald-200">{{ jsonText }}</pre>
+              <pre class="max-h-[60vh] overflow-auto rounded-lg bg-ink-900 p-4 text-[12px] leading-6 text-[color:var(--ok)]">{{ jsonText }}</pre>
               <p class="kb-muted">与 GET /api/knowledge/objects/{kb}/{type}/{code} 返回一致，用于对照接口契约核对字段。</p>
             </section>
           </el-tab-pane>
@@ -174,7 +174,7 @@
                 class="mb-3 rounded-lg bg-ink-50 p-3 text-xs"><b
                 class="text-ink-800">{{ a.decision }}</b><p
                 class="mt-1 text-ink-500">{{ a.reasonText }}</p></div>
-              <div v-if="!detail.assessments.length" class="text-sm text-ink-400">暂无智能裁决记录</div>
+              <div v-if="!detail.assessments.length" class="text-sm text-ink-500">暂无智能裁决记录</div>
             </section>
             <section class="kb-card mt-4 p-5">
               <div class="kb-section-head"><div><small>复核记录</small><h3>人工复核历史</h3></div></div>
@@ -183,8 +183,8 @@
                 :key="r.id"
                 class="review-line"><b>{{ r.decision }}</b><p
                 class="mt-1 text-ink-500">{{ r.comment || '—' }}</p><small
-                class="text-ink-400">{{ r.reviewer }} · {{ time(r.createdTime) }}</small></div>
-              <div v-if="!detail.reviews.length" class="text-sm text-ink-400">暂无人工复核</div>
+                class="text-ink-500">{{ r.reviewer }} · {{ time(r.createdTime) }}</small></div>
+              <div v-if="!detail.reviews.length" class="text-sm text-ink-500">暂无人工复核</div>
             </section>
           </el-tab-pane>
         </el-tabs>
@@ -263,6 +263,6 @@ const score=(v?:number)=>Number(v||0).toFixed(2)
 const time=(v?:string)=>v?new Date(v).toLocaleString():'—'
 </script>
 <style scoped>
-.review-line{position:relative;border-left:1px solid #e2e8f0;padding:0 0 1rem 1rem;font-size:.75rem}
-.review-line:before{content:"";position:absolute;left:-4px;top:4px;width:8px;height:8px;border-radius:999px;background:#6366f1}
+.review-line{position:relative;border-left:1px solid var(--line-d);padding:0 0 1rem 1rem;font-size:.75rem}
+.review-line:before{content:"";position:absolute;left:-4px;top:4px;width:8px;height:8px;border-radius:999px;background:var(--accent-text)}
 </style>

@@ -16,7 +16,8 @@ public class WebMvcSecurityConfig implements WebMvcConfigurer {
 
     private final PermissionInterceptor permissionInterceptor;
 
-    public WebMvcSecurityConfig(AuthInterceptor authInterceptor, KnowledgeBaseAccessInterceptor accessInterceptor, PermissionInterceptor permissionInterceptor) {
+    public WebMvcSecurityConfig(AuthInterceptor authInterceptor, KnowledgeBaseAccessInterceptor accessInterceptor, PermissionInterceptor
+        permissionInterceptor) {
         this.authInterceptor = authInterceptor;
         this.accessInterceptor = accessInterceptor;
         this.permissionInterceptor = permissionInterceptor;

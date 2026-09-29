@@ -1,0 +1,130 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.jh.knowledgeos.mapper.GraphMapper">
+
+<select id="listAuthoritativeGraphSnapshot" resultType="com.jh.knowledgeos.projection.AuthoritativeGraphSnapshotRow">
+ SELECT CONCAT('ENTITY:',e.entity_code) graphKey,'ENTITY' graphType,e.entity_code code,NULL sourceCode,NULL targetCode,e.entity_type semanticType,e.canonical_name name,e.description description,e.status,COALESCE(CAST(e.permission_tags AS CHAR),'[]') permissionTags,SHA2(CONCAT_WS('|',e.entity_code,COALESCE(e.entity_type,''),COALESCE(e.canonical_name,''),COALESCE(e.description,''),COALESCE(e.status,''),COALESCE(CAST(e.permission_tags AS CHAR),'[]')),256) contentHash FROM t_entity e WHERE e.knowledge_base_id=#{kb} AND (e.status IS NULL OR e.status IN ('APPROVED','EFFECTIVE','ACTIVE'))
+ UNION ALL
+ SELECT CONCAT('RELATION:',r.relation_code),'RELATION',r.relation_code,se.entity_code,te.entity_code,r.relation_type,NULL,NULL,r.status,COALESCE(CAST(r.permission_tags AS CHAR),'[]'),SHA2(CONCAT_WS('|',r.relation_code,se.entity_code,r.relation_type,te.entity_code,COALESCE(r.status,''),COALESCE(CAST(r.permission_tags AS CHAR),'[]')),256) FROM t_relation r JOIN t_entity se ON se.id=r.source_entity_id JOIN t_entity te ON te.id=r.target_entity_id WHERE r.knowledge_base_id=#{kb} AND (r.status IS NULL OR r.status IN ('APPROVED','EFFECTIVE','ACTIVE'))
+ UNION ALL SELECT CONCAT('CLAIM_ENTITY:',ce.claim_code,':',ce.entity_code),'CLAIM_ENTITY',CONCAT(ce.claim_code,':',ce.entity_code),ce.claim_code,ce.entity_code,ce.relation_role,NULL,NULL,c.status,COALESCE(CAST(ce.permission_tags AS CHAR),CAST(c.permission_tags AS CHAR),'[]'),SHA2(CONCAT_WS('|',ce.claim_code,ce.entity_code,ce.relation_role,COALESCE(CAST(ce.permission_tags AS CHAR),CAST(c.permission_tags AS CHAR),'[]')),256) FROM t_claim_entity ce JOIN t_claim c ON c.claim_code=ce.claim_code WHERE c.knowledge_base_id=#{kb} AND c.status IN ('APPROVED','EFFECTIVE')
+ UNION ALL SELECT CONCAT('CARD_ENTITY:',ce.knowledge_code,':',ce.entity_code),'CARD_ENTITY',CONCAT(ce.knowledge_code,':',ce.entity_code),ce.knowledge_code,ce.entity_code,ce.relation_role,NULL,NULL,c.status,COALESCE(CAST(ce.permission_tags AS CHAR),CAST(c.permission_tags AS CHAR),'[]'),SHA2(CONCAT_WS('|',ce.knowledge_code,ce.entity_code,ce.relation_role,COALESCE(CAST(ce.permission_tags AS CHAR),CAST(c.permission_tags AS CHAR),'[]')),256) FROM t_card_entity ce JOIN t_knowledge_card c ON c.knowledge_code=ce.knowledge_code WHERE c.knowledge_base_id=#{kb} AND c.status IN ('APPROVED','EFFECTIVE') UNION ALL SELECT CONCAT('ENTITY_FACET:',f.facet_code),'ENTITY_FACET',f.facet_code,f.entity_code,NULL,f.entity_type,f.facet_name,f.facet_description,f.status,COALESCE(CAST(f.permission_tags AS CHAR),'[]'),SHA2(CONCAT_WS('|',f.facet_code,f.entity_code,COALESCE(f.facet_name,''),COALESCE(f.facet_description,''),COALESCE(CAST(f.permission_tags AS CHAR),'[]')),256) FROM t_entity_facet f WHERE f.knowledge_base_id=#{kb} AND f.status='ACTIVE' UNION ALL SELECT CONCAT('RELATION_FACET:',f.facet_code),'RELATION_FACET',f.facet_code,f.source_entity_code,f.target_entity_code,f.relation_type,NULL,NULL,f.status,COALESCE(CAST(f.permission_tags AS CHAR),'[]'),SHA2(CONCAT_WS('|',f.facet_code,f.relation_code,f.source_entity_code,f.target_entity_code,COALESCE(CAST(f.permission_tags AS CHAR),'[]')),256) FROM t_relation_facet f WHERE f.knowledge_base_id=#{kb} AND f.status='ACTIVE' ORDER BY graphKey
+</select>
+
+
+<select id="listAuthoritativeGraphEvidenceBindings" resultType="map">
+SELECT f.facet_code facetCode,e.evidence_code evidenceCode,s.source_code sourceCode,sv.version_no sourceVersion,COALESCE(CAST(s.permission_tags AS CHAR),'[]') permissionTags,SHA2(CONCAT_WS('|',e.evidence_code,COALESCE(e.quote_text,''),COALESCE(CAST(e.location_json AS CHAR),'')),256) evidenceHash,COALESCE(CAST(e.location_json AS CHAR),'{}') locator
+FROM t_entity_facet f JOIN t_source s ON s.id=f.source_id JOIN t_evidence e ON e.source_id=f.source_id LEFT JOIN t_source_version sv ON sv.source_id=s.id AND sv.status IN ('ACTIVE','EFFECTIVE') WHERE f.knowledge_base_id=#{kb} AND f.status='ACTIVE' AND e.status IN ('APPROVED','EFFECTIVE','ACTIVE')
+UNION ALL
+SELECT f.facet_code,e.evidence_code,s.source_code,sv.version_no,COALESCE(CAST(s.permission_tags AS CHAR),'[]'),SHA2(CONCAT_WS('|',e.evidence_code,COALESCE(e.quote_text,''),COALESCE(CAST(e.location_json AS CHAR),'')),256),COALESCE(CAST(e.location_json AS CHAR),'{}')
+FROM t_relation_facet f JOIN t_source s ON s.id=f.source_id JOIN t_evidence e ON e.source_id=f.source_id LEFT JOIN t_source_version sv ON sv.source_id=s.id AND sv.status IN ('ACTIVE','EFFECTIVE') WHERE f.knowledge_base_id=#{kb} AND f.status='ACTIVE' AND e.status IN ('APPROVED','EFFECTIVE','ACTIVE')
+ORDER BY facetCode,evidenceCode
+</select>
+
+
+<select id="countAuthoritativeGraphEntities" resultType="long">SELECT COUNT(*) FROM t_entity WHERE knowledge_base_id=#{kb} AND (status IS NULL OR status IN ('APPROVED','EFFECTIVE','ACTIVE'))</select>
+
+
+<select id="countAuthoritativeGraphRelations" resultType="long">SELECT COUNT(*) FROM t_relation WHERE knowledge_base_id=#{kb} AND (status IS NULL OR status IN ('APPROVED','EFFECTIVE','ACTIVE'))</select>
+
+
+<select id="findEntityId" resultType="long">SELECT id FROM t_entity WHERE knowledge_base_id=#{kb} AND entity_code=#{code} LIMIT 1</select>
+
+
+<select id="findEntityRef" resultType="map">SELECT id id,entity_code entityCode FROM t_entity WHERE knowledge_base_id=#{kb} AND (entity_code=#{value} OR canonical_name=#{value}) ORDER BY CASE WHEN status='MERGED' THEN 1 ELSE 0 END,id LIMIT 1</select>
+
+
+<select id="listEntityNames" resultType="map">SELECT entity_code entityCode,canonical_name canonicalName,entity_type entityType FROM t_entity WHERE knowledge_base_id=#{kb} AND (status IS NULL OR status IN ('APPROVED','EFFECTIVE','ACTIVE'))</select>
+
+<select id="listEntityAliasIndex" resultType="map">SELECT entity_code entityCode,alias FROM t_entity_alias WHERE knowledge_base_id=#{kb}</select>
+
+
+<select id="getGraphManifest" resultType="map">SELECT release_id releaseId,knowledge_base_id knowledgeBaseId,generation_id generationId,manifest_hash manifestHash,entity_count entityCount,relation_count relationCount FROM t_index_graph_manifest WHERE release_id=#{releaseId}</select>
+
+
+<insert id="insertGraphManifest">INSERT INTO t_index_graph_manifest(release_id,knowledge_base_id,generation_id,manifest_hash,entity_count,relation_count) VALUES(#{releaseId},#{kb},#{generationId},#{manifestHash},#{entityCount},#{relationCount})</insert>
+
+
+<insert id="upsertExtractedEntity">INSERT INTO t_entity(entity_code,knowledge_base_id,source_id,entity_type,canonical_name,description,confidence,status,permission_tags,acl_inherited_from) VALUES(#{code},#{kb},#{sourceId},#{type},#{name},#{description},#{confidence},#{status},CAST(#{tagsJson} AS JSON),#{aclFrom}) ON DUPLICATE KEY UPDATE source_id=VALUES(source_id),entity_type=VALUES(entity_type),canonical_name=VALUES(canonical_name),description=VALUES(description),confidence=VALUES(confidence),status=VALUES(status),permission_tags=VALUES(permission_tags),acl_inherited_from=VALUES(acl_inherited_from)</insert>
+
+
+<insert id="upsertExtractedRelation">INSERT INTO t_relation(relation_code,knowledge_base_id,source_id,source_entity_id,relation_type,target_entity_id,confidence,status,permission_tags,acl_inherited_from) VALUES(#{code},#{kb},#{sourceId},#{sourceEntityId},#{type},#{targetEntityId},#{confidence},#{status},CAST(#{tagsJson} AS JSON),#{aclFrom}) ON DUPLICATE KEY UPDATE source_id=VALUES(source_id),source_entity_id=VALUES(source_entity_id),relation_type=VALUES(relation_type),target_entity_id=VALUES(target_entity_id),confidence=VALUES(confidence),status=VALUES(status),permission_tags=VALUES(permission_tags),acl_inherited_from=VALUES(acl_inherited_from)</insert>
+
+
+<insert id="linkClaimEntityAcl">INSERT INTO t_claim_entity(claim_code,entity_code,relation_role,permission_tags) VALUES(#{claimCode},#{entityCode},#{role},CAST(#{tagsJson} AS JSON)) ON DUPLICATE KEY UPDATE permission_tags=VALUES(permission_tags)</insert>
+
+
+<insert id="linkCardEntityAcl">INSERT INTO t_card_entity(knowledge_code,entity_code,relation_role,permission_tags) VALUES(#{knowledgeCode},#{entityCode},#{role},CAST(#{tagsJson} AS JSON)) ON DUPLICATE KEY UPDATE permission_tags=VALUES(permission_tags)</insert>
+
+
+<insert id="insertEntityAclScope">INSERT INTO t_entity_acl_scope(knowledge_base_id,entity_code,source_id,document_id,permission_tags,scope_hash,evidence_origin) VALUES(#{kb},#{entityCode},#{sourceId},#{documentId},CAST(#{tagsJson} AS JSON),#{scopeHash},#{origin}) ON DUPLICATE KEY UPDATE document_id=VALUES(document_id),evidence_origin=VALUES(evidence_origin)</insert>
+
+
+<update id="recomputeEntityAclMergePolicy">UPDATE t_entity e SET e.acl_merge_policy=CASE WHEN (SELECT COUNT(DISTINCT scope_hash) FROM t_entity_acl_scope s WHERE s.knowledge_base_id=#{kb} AND s.entity_code=#{entityCode}) &gt; 1 THEN 'EVIDENCE_SCOPED' ELSE 'SINGLE_SCOPE' END,e.permission_tags=CASE WHEN (SELECT COUNT(DISTINCT scope_hash) FROM t_entity_acl_scope s WHERE s.knowledge_base_id=#{kb} AND s.entity_code=#{entityCode}) &gt; 1 THEN JSON_ARRAY('__evidence_scoped__') ELSE COALESCE((SELECT permission_tags FROM t_entity_acl_scope s WHERE s.knowledge_base_id=#{kb} AND s.entity_code=#{entityCode} ORDER BY id DESC LIMIT 1),JSON_ARRAY()) END WHERE e.knowledge_base_id=#{kb} AND e.entity_code=#{entityCode}</update>
+
+
+<insert id="insertRelationAclScope">INSERT INTO t_relation_acl_scope(knowledge_base_id,relation_code,source_id,document_id,permission_tags,scope_hash,evidence_origin) VALUES(#{kb},#{relationCode},#{sourceId},#{documentId},CAST(#{tagsJson} AS JSON),#{scopeHash},#{origin}) ON DUPLICATE KEY UPDATE document_id=VALUES(document_id),evidence_origin=VALUES(evidence_origin)</insert>
+
+
+<update id="recomputeRelationAclMergePolicy">UPDATE t_relation r SET r.acl_merge_policy=CASE WHEN (SELECT COUNT(DISTINCT scope_hash) FROM t_relation_acl_scope s WHERE s.knowledge_base_id=#{kb} AND s.relation_code=#{relationCode}) &gt; 1 THEN 'EVIDENCE_SCOPED' ELSE 'SINGLE_SCOPE' END,r.permission_tags=CASE WHEN (SELECT COUNT(DISTINCT scope_hash) FROM t_relation_acl_scope s WHERE s.knowledge_base_id=#{kb} AND s.relation_code=#{relationCode}) &gt; 1 THEN JSON_ARRAY('__evidence_scoped__') ELSE COALESCE((SELECT permission_tags FROM t_relation_acl_scope s WHERE s.knowledge_base_id=#{kb} AND s.relation_code=#{relationCode} ORDER BY id DESC LIMIT 1),JSON_ARRAY()) END WHERE r.knowledge_base_id=#{kb} AND r.relation_code=#{relationCode}</update>
+
+
+<insert id="upsertEntityFacet">INSERT INTO t_entity_facet(knowledge_base_id,entity_code,facet_code,source_id,document_id,entity_type,facet_name,facet_description,permission_tags,scope_hash,evidence_origin) VALUES(#{kb},#{entityCode},#{facetCode},#{sourceId},#{documentId},#{type},#{name},#{description},CAST(#{tagsJson} AS JSON),#{scopeHash},#{origin}) ON DUPLICATE KEY UPDATE facet_name=VALUES(facet_name),facet_description=VALUES(facet_description),permission_tags=VALUES(permission_tags),evidence_origin=VALUES(evidence_origin),status='ACTIVE'</insert>
+
+
+<insert id="upsertRelationFacet">INSERT INTO t_relation_facet(knowledge_base_id,relation_code,facet_code,source_id,document_id,source_entity_code,target_entity_code,relation_type,permission_tags,scope_hash,evidence_origin) VALUES(#{kb},#{relationCode},#{facetCode},#{sourceId},#{documentId},#{sourceCode},#{targetCode},#{type},CAST(#{tagsJson} AS JSON),#{scopeHash},#{origin}) ON DUPLICATE KEY UPDATE source_entity_code=VALUES(source_entity_code),target_entity_code=VALUES(target_entity_code),relation_type=VALUES(relation_type),permission_tags=VALUES(permission_tags),evidence_origin=VALUES(evidence_origin),status='ACTIVE'</insert>
+
+
+<insert id="insertGraphFacetManifest">INSERT INTO t_index_graph_facet_manifest(release_id,knowledge_base_id,generation_id,manifest_hash,entity_facet_count,relation_facet_count) VALUES(#{releaseId},#{kb},#{generationId},#{manifestHash},#{entityFacetCount},#{relationFacetCount})</insert>
+
+
+<insert id="insertEntityFacetEvidence">INSERT IGNORE INTO t_entity_facet_evidence(facet_code,evidence_id,evidence_hash) VALUES(#{facetCode},#{evidenceId},#{evidenceHash})</insert>
+
+
+<insert id="insertRelationFacetEvidence">INSERT IGNORE INTO t_relation_facet_evidence(facet_code,evidence_id,evidence_hash) VALUES(#{facetCode},#{evidenceId},#{evidenceHash})</insert>
+
+
+<insert id="insertGraphEvidenceManifest">INSERT INTO t_index_graph_evidence_manifest(release_id,knowledge_base_id,generation_id,manifest_hash,evidence_count,binding_count) VALUES(#{releaseId},#{kb},#{generationId},#{manifestHash},#{evidenceCount},#{bindingCount})</insert>
+
+
+<insert id="upsertEntityAlias">INSERT INTO t_entity_alias(knowledge_base_id,entity_code,alias,alias_type,confidence) VALUES(#{kb},#{entityCode},#{alias},#{aliasType},#{confidence}) ON DUPLICATE KEY UPDATE alias_type=VALUES(alias_type),confidence=VALUES(confidence)</insert>
+
+
+<select id="selectCardEntityLinkIds" resultType="long">SELECT ce.id FROM t_card_entity ce JOIN t_knowledge_card c ON c.knowledge_code=ce.knowledge_code WHERE c.knowledge_base_id=#{kb} AND ce.entity_code=#{fromCode} ORDER BY ce.id</select>
+
+
+<update id="updateCardEntityLinkTargets">UPDATE IGNORE t_card_entity SET entity_code=#{toCode} WHERE entity_code=#{fromCode} AND id IN <foreach collection="ids" item="id" open="(" separator="," close=")">#{id}</foreach></update>
+
+
+<select id="selectClaimEntityLinkIds" resultType="long">SELECT ce.id FROM t_claim_entity ce JOIN t_claim c ON c.claim_code=ce.claim_code WHERE c.knowledge_base_id=#{kb} AND ce.entity_code=#{fromCode} ORDER BY ce.id</select>
+
+
+<update id="updateClaimEntityLinkTargets">UPDATE IGNORE t_claim_entity SET entity_code=#{toCode} WHERE entity_code=#{fromCode} AND id IN <foreach collection="ids" item="id" open="(" separator="," close=")">#{id}</foreach></update>
+
+
+<update id="updateEntityStatus">UPDATE t_entity SET status=#{status} WHERE knowledge_base_id=#{kb} AND entity_code=#{code}</update>
+
+
+<select id="listEntitiesWithUsage" resultType="map">
+SELECT e.entity_code entityCode,e.entity_type entityType,e.canonical_name canonicalName,e.description,e.confidence,e.status,
+(SELECT COUNT(*) FROM t_entity_alias a WHERE a.knowledge_base_id=e.knowledge_base_id AND a.entity_code=e.entity_code) aliasCount,
+(SELECT COUNT(*) FROM t_claim_entity ce JOIN t_claim c ON c.claim_code=ce.claim_code WHERE ce.entity_code=e.entity_code AND c.knowledge_base_id=e.knowledge_base_id) claimCount,
+(SELECT COUNT(*) FROM t_card_entity ce JOIN t_knowledge_card k ON k.knowledge_code=ce.knowledge_code WHERE ce.entity_code=e.entity_code AND k.knowledge_base_id=e.knowledge_base_id) cardCount
+FROM t_entity e WHERE e.knowledge_base_id=#{kb} ORDER BY claimCount DESC,e.canonical_name
+</select>
+
+
+<select id="getEntity" resultType="map">SELECT entity_code entityCode,entity_type entityType,canonical_name canonicalName,description,confidence,status,source_id sourceId FROM t_entity WHERE knowledge_base_id=#{kb} AND entity_code=#{code}</select>
+
+
+<select id="listEntityAliases" resultType="map">SELECT alias,alias_type aliasType,confidence,created_time createdTime FROM t_entity_alias WHERE knowledge_base_id=#{kb} AND entity_code=#{entityCode} ORDER BY created_time</select>
+
+
+<delete id="deleteEntityAlias">DELETE FROM t_entity_alias WHERE knowledge_base_id=#{kb} AND entity_code=#{entityCode} AND alias=#{alias}</delete>
+
+
+<delete id="deleteConflictingAliases">DELETE src FROM t_entity_alias src JOIN t_entity_alias tgt ON tgt.knowledge_base_id=src.knowledge_base_id AND tgt.entity_code=#{toCode} AND tgt.alias=src.alias WHERE src.knowledge_base_id=#{kb} AND src.entity_code=#{fromCode}</delete>
+
+
+<update id="moveEntityAliases">UPDATE t_entity_alias SET entity_code=#{toCode} WHERE knowledge_base_id=#{kb} AND entity_code=#{fromCode}</update>
+
+</mapper>

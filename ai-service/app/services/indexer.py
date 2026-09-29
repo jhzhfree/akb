@@ -16,6 +16,7 @@ from app.services.retrieval.external import (
     get_elasticsearch_provider,
     get_milvus_provider,
 )
+from app.storage.graph_store import graph_store
 from app.storage.index_store import store
 
 
@@ -274,6 +275,9 @@ class KnowledgeIndexer:
         )
 
         graph = get_graph_provider()
+        # The local graph view is what graph traversal walks when no graph engine is deployed;
+        # writing it here keeps it aligned with the authoritative graph without a second call.
+        graph_view = graph_store.upsert(knowledge_base_id, entities, relations)
         if not rows:
             graph_result = await asyncio.to_thread(
                 graph.upsert_knowledge,
@@ -287,6 +291,7 @@ class KnowledgeIndexer:
                 "indexed": 0,
                 "total": len(store.load(knowledge_base_id)),
                 "graph": graph_result,
+                "graphView": graph_view,
             }
 
         vectors = await get_embedding_provider().embed([row["content"] for row in rows])
@@ -307,6 +312,7 @@ class KnowledgeIndexer:
             "indexed": len(rows),
             "total": total,
             "graph": graph_result,
+            "graphView": graph_view,
             "external": external,
         }
 

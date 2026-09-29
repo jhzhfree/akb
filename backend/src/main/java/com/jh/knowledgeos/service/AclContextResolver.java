@@ -23,7 +23,8 @@ public class AclContextResolver {
 
     private final boolean trustedHeaderEnabled;
 
-    public AclContextResolver(KnowledgeMapper mapper, @Value("${knowledge.acl.identity-db-enabled:true}") boolean identityDbEnabled, @Value("${knowledge.acl.trusted-header-enabled:false}") boolean trustedHeaderEnabled) {
+    public AclContextResolver(KnowledgeMapper mapper, @Value("${knowledge.acl.identity-db-enabled:true}") boolean identityDbEnabled,
+        @Value("${knowledge.acl.trusted-header-enabled:false}") boolean trustedHeaderEnabled) {
         this.mapper = mapper;
         this.identityDbEnabled = identityDbEnabled;
         this.trustedHeaderEnabled = trustedHeaderEnabled;

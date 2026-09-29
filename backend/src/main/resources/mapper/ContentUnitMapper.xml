@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.jh.knowledgeos.mapper.ContentUnitMapper">
+
+<delete id="purgeContentUnits">DELETE FROM t_content_unit WHERE document_id IN (SELECT d.id FROM t_document d JOIN t_source_version v ON v.id=d.source_version_id JOIN t_source s ON s.id=v.source_id WHERE s.knowledge_base_id=#{kb})</delete>
+
+<select id="getChunkPolicy" resultType="map">SELECT knowledge_base_id knowledgeBaseId,strategy,
+  chunk_size chunkSize,chunk_overlap chunkOverlap,min_chunk_size minChunkSize,measure,
+  keep_structure keepStructure,respect_sentence respectSentence,parent_child parentChild,
+  updated_by updatedBy,updated_time updatedTime
+FROM t_chunk_policy WHERE knowledge_base_id=#{kb}</select>
+
+<insert id="saveChunkPolicy">INSERT INTO t_chunk_policy(knowledge_base_id,strategy,chunk_size,chunk_overlap,
+  min_chunk_size,measure,keep_structure,respect_sentence,parent_child,updated_by)
+VALUES(#{kb},#{strategy},#{chunkSize},#{chunkOverlap},#{minChunkSize},#{measure},
+  #{keepStructure},#{respectSentence},#{parentChild},#{updatedBy})
+ON DUPLICATE KEY UPDATE strategy=VALUES(strategy),chunk_size=VALUES(chunk_size),
+  chunk_overlap=VALUES(chunk_overlap),min_chunk_size=VALUES(min_chunk_size),measure=VALUES(measure),
+  keep_structure=VALUES(keep_structure),respect_sentence=VALUES(respect_sentence),
+  parent_child=VALUES(parent_child),updated_by=VALUES(updated_by),updated_time=CURRENT_TIMESTAMP</insert>
+
+<delete id="resetChunkPolicy">DELETE FROM t_chunk_policy WHERE knowledge_base_id=#{kb}</delete>
+
+<select id="getContentUnitObject" resultType="map">SELECT c.id,c.document_id documentId,
+  c.unit_code unitCode,c.parent_id parentId,c.heading_path headingPath,
+  c.chunk_type chunkType,c.page_no pageNo,c.page_end pageEnd,c.char_start charStart,
+  c.char_end charEnd,c.token_count tokenCount,c.content,c.content_hash contentHash,
+  c.status,c.revision,
+  (SELECT COUNT(*) FROM t_content_unit x
+    WHERE x.document_id=c.document_id AND x.id&lt;=c.id) seq,
+  doc.title documentTitle,doc.document_code documentCode,
+  (SELECT COUNT(*) FROM t_evidence e WHERE e.content_unit_id=c.id) evidenceCount
+FROM t_content_unit c LEFT JOIN t_document doc ON doc.id=c.document_id
+WHERE c.unit_code=#{code} AND EXISTS(SELECT 1 FROM t_source_version sv
+  JOIN t_source s ON s.id=sv.source_id
+  WHERE sv.id=doc.source_version_id AND s.knowledge_base_id=#{kb})</select>
+
+<select id="listEvidenceForContentUnit" resultType="map">SELECT e.evidence_code evidenceCode,
+  e.quote_text quoteText,e.location_json locationJson,e.authority_score authorityScore,
+  e.freshness_score freshnessScore,e.created_time createdTime,
+  s.name sourceName,s.source_code sourceCode,
+  doc.title documentTitle,doc.document_code documentCode
+FROM t_evidence e JOIN t_content_unit c ON c.id=e.content_unit_id
+LEFT JOIN t_source s ON s.id=e.source_id
+LEFT JOIN t_document doc ON doc.id=c.document_id
+WHERE c.unit_code=#{code} AND e.knowledge_base_id=#{kb}
+ORDER BY e.id</select>
+
+<select id="listNeighborContentUnits" resultType="map">(SELECT unit_code unitCode,'PREV' pos,
+  heading_path headingPath,page_no pageNo,chunk_type chunkType,LEFT(content,180) excerpt
+FROM t_content_unit WHERE document_id=#{documentId} AND id&lt;#{id} ORDER BY id DESC LIMIT 1)
+UNION ALL (SELECT unit_code unitCode,'NEXT' pos,
+  heading_path headingPath,page_no pageNo,chunk_type chunkType,LEFT(content,180) excerpt
+FROM t_content_unit WHERE document_id=#{documentId} AND id&gt;#{id} ORDER BY id ASC LIMIT 1)</select>
+
+</mapper>

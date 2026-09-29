@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.jh.knowledgeos.mapper.AlertMapper">
+
+<select id="countDocumentFailed" resultType="int">SELECT COUNT(*) FROM t_document
+WHERE source_version_id IN (SELECT sv.id FROM t_source_version sv JOIN t_source s ON s.id=sv.source_id
+  WHERE s.knowledge_base_id=#{kb}) AND status='FAILED'</select>
+
+<select id="countOutboxDead" resultType="int">SELECT COUNT(*) FROM t_index_outbox
+WHERE (knowledge_base_id=#{kb} OR #{kb} IS NULL) AND status='DEAD'</select>
+
+<insert id="insertAlertRule">INSERT INTO t_alert_rule(rule_code,knowledge_base_id,name,metric,severity,
+  threshold,window_minutes,channels,created_by)
+VALUES(#{ruleCode},#{kb},#{name},#{metric},#{severity},#{threshold},#{windowMinutes},#{channels},#{createdBy})</insert>
+
+<update id="updateAlertRule">UPDATE t_alert_rule SET name=#{name},metric=#{metric},severity=#{severity},
+  threshold=#{threshold},window_minutes=#{windowMinutes},channels=#{channels},enabled=#{enabled}
+WHERE rule_code=#{ruleCode}</update>
+
+<delete id="deleteAlertRule">DELETE FROM t_alert_rule WHERE rule_code=#{ruleCode}</delete>
+
+<select id="getAlertRule" resultType="map">SELECT rule_code ruleCode,knowledge_base_id knowledgeBaseId,name,
+  metric,severity,threshold,window_minutes windowMinutes,enabled,channels,created_by createdBy,
+  created_time createdTime,updated_time updatedTime
+FROM t_alert_rule WHERE rule_code=#{ruleCode}</select>
+
+<select id="listAlertRules" resultType="map">SELECT rule_code ruleCode,knowledge_base_id knowledgeBaseId,name,
+  metric,severity,threshold,window_minutes windowMinutes,enabled,channels,created_by createdBy,
+  updated_time updatedTime
+FROM t_alert_rule WHERE knowledge_base_id IS NULL OR knowledge_base_id=#{kb}
+ORDER BY knowledge_base_id IS NULL DESC,id</select>
+
+<insert id="upsertAlertEvent">INSERT INTO t_alert_event(alert_code,rule_code,knowledge_base_id,severity,status,
+  title,detail_json,metric_value,dedup_key,first_seen,last_seen)
+VALUES(#{alertCode},#{ruleCode},#{kb},#{severity},'OPEN',#{title},CAST(#{detailJson} AS JSON),#{metricValue},
+  #{dedupKey},CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)
+ON DUPLICATE KEY UPDATE occur_count=occur_count+1,last_seen=CURRENT_TIMESTAMP,metric_value=VALUES(metric_value),
+  severity=VALUES(severity),title=VALUES(title),detail_json=VALUES(detail_json),
+  status=IF(status='RESOLVED','OPEN',status)</insert>
+
+<select id="getAlertEvent" resultType="map">SELECT alert_code alertCode,rule_code ruleCode,
+  knowledge_base_id knowledgeBaseId,severity,status,title,detail_json detailJson,metric_value metricValue,
+  dedup_key dedupKey,occur_count occurCount,first_seen firstSeen,last_seen lastSeen,acked_by ackedBy,
+  acked_time ackedTime,resolved_by resolvedBy,resolved_time resolvedTime,resolve_note resolveNote,
+  created_time createdTime
+FROM t_alert_event WHERE alert_code=#{alertCode}</select>
+
+<select id="getAlertEventByDedup" resultType="map">SELECT alert_code alertCode,status FROM t_alert_event
+WHERE dedup_key=#{dedupKey}</select>
+
+<select id="listAlertEvents" resultType="map">SELECT alert_code alertCode,rule_code ruleCode,
+  knowledge_base_id knowledgeBaseId,severity,status,title,detail_json detailJson,metric_value metricValue,
+  dedup_key dedupKey,occur_count occurCount,first_seen firstSeen,last_seen lastSeen,acked_by ackedBy,
+  created_time createdTime
+FROM t_alert_event
+WHERE (knowledge_base_id=#{kb} OR knowledge_base_id IS NULL OR #{kb} IS NULL)
+<if test="status != null and status != ''">AND status=#{status}</if>
+<if test="severity != null and severity != ''">AND severity=#{severity}</if>
+ORDER BY FIELD(status,'OPEN','ACKED','RESOLVED'),last_seen DESC LIMIT #{limit}</select>
+
+<update id="updateAlertStatus">UPDATE t_alert_event SET status=#{status},
+  acked_by=IF(#{status}='ACKED',#{operator},acked_by),acked_time=IF(#{status}='ACKED',CURRENT_TIMESTAMP,acked_time),
+  resolved_by=IF(#{status}='RESOLVED',#{operator},resolved_by),
+  resolved_time=IF(#{status}='RESOLVED',CURRENT_TIMESTAMP,resolved_time),
+  resolve_note=IF(#{status}='RESOLVED',#{note},resolve_note)
+WHERE alert_code=#{alertCode}</update>
+
+<update id="resolveAlertByDedup">UPDATE t_alert_event SET status='RESOLVED',resolved_by='system',
+  resolved_time=CURRENT_TIMESTAMP,resolve_note=#{note}
+WHERE dedup_key=#{dedupKey} AND status!='RESOLVED'</update>
+
+<select id="countOpenAlerts" resultType="int">SELECT COUNT(*) FROM t_alert_event
+WHERE (knowledge_base_id=#{kb} OR knowledge_base_id IS NULL OR #{kb} IS NULL)
+  AND status IN ('OPEN','ACKED')</select>
+
+</mapper>

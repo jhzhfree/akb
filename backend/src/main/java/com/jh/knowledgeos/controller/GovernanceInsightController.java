@@ -38,7 +38,10 @@ public class GovernanceInsightController {
 
     @GetMapping("/versions/{kb}")
     @Operation(summary = "版本快照列表：按对象类型 / 变更类型 / 关键字筛选（设计 §9.4 Lineage）")
-    public ApiResponse<Map<String, Object>> versions(@PathVariable Long kb, @RequestParam(value = "objectType", required = false) String objectType, @RequestParam(value = "changeType", required = false) String changeType, @RequestParam(value = "keyword", required = false) String keyword, @RequestParam(value = "limit", required = false, defaultValue = "50") int limit, @RequestParam(value = "offset", required = false, defaultValue = "0") int offset) {
+    public ApiResponse<Map<String, Object>> versions(@PathVariable Long kb, @RequestParam(value = "objectType", required = false) String objectType,
+        @RequestParam(value = "changeType", required = false) String changeType, @RequestParam(value = "keyword", required = false) String keyword,
+        @RequestParam(value = "limit", required = false, defaultValue = "50") int limit, @RequestParam(value = "offset", required = false,
+        defaultValue = "0") int offset) {
         accessService.assertRead(kb);
         return ApiResponse.ok(service.versions(kb, objectType, changeType, keyword, limit, offset));
     }
@@ -52,7 +55,8 @@ public class GovernanceInsightController {
 
     @GetMapping("/quality/{kb}")
     @Operation(summary = "知识质量概览：可信覆盖率 / 引用准确率 / 检索命中 / 新鲜度 / 待办健康度（设计 §5.1）")
-    public ApiResponse<Map<String, Object>> quality(@PathVariable Long kb, @RequestParam(value = "withinDays", required = false, defaultValue = "30") int withinDays) {
+    public ApiResponse<Map<String, Object>> quality(@PathVariable Long kb, @RequestParam(value = "withinDays", required = false, defaultValue = "30")
+        int withinDays) {
         accessService.assertRead(kb);
         return ApiResponse.ok(service.quality(kb, withinDays));
     }

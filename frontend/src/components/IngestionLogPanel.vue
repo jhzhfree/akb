@@ -10,7 +10,7 @@
 <b>{{run.sourceName}}</b>
 <small>{{run.currentStage}} · {{formatTime(run.startedTime)}}</small>
 </span>
-      <el-tag size="small" :type="tagType(run.status)">{{run.status}}</el-tag>
+      <span class="kb-state" :class="stateClass(run.status)">{{stateText(run.status)}}</span>
     </button>
     <div v-if="!runs.length" class="empty-run">还没有摄入记录</div>
   </div>
@@ -53,7 +53,17 @@ watch(()=>props.detail?.events?.length,()=>{
   void nextTick(()=>{const el=timeline.value;
 if(el)el.scrollTop=el.scrollHeight})
 })
-const tagType=(s:string):'success'|'danger'|'warning'|'info'=>s==='SUCCEEDED'?'success':s==='FAILED'?'danger':s==='RUNNING'?'warning':'info'
+/* 运行状态：全站统一用 .kb-state-* 胶囊，配色由主题三件套给出；
+   同时把后端枚举翻译成中文，列表里不再出现 SUCCEEDED 这类原始值。 */
+const RUN_STATE:Record<string,{cls:string;text:string}>={
+  SUCCEEDED:{cls:'kb-state-ok',text:'成功'},
+  FAILED:{cls:'kb-state-danger',text:'失败'},
+  RUNNING:{cls:'kb-state-warn',text:'进行中'},
+  CANCELED:{cls:'kb-state-neutral',text:'已取消'},
+  PENDING:{cls:'kb-state-neutral',text:'排队中'}
+}
+const stateClass=(s:string)=>RUN_STATE[s]?.cls||'kb-state-neutral'
+const stateText=(s:string)=>RUN_STATE[s]?.text||s
 </script>
 <style scoped>
 .ingestion-log{
@@ -61,20 +71,20 @@ display:flex;
 align-items:stretch;
 align-content:stretch;
 min-height:330px;
-border:1px solid #e5e7eb;
+border:1px solid var(--line-d);
 border-radius:10px;
-background:#fff;
+background:var(--bg-raised);
 overflow:hidden}
 /* 已上传文件列表：弹性定宽一列，自身独立滚动，不与右侧时间线互相挤压。 */
 .run-list{flex:0 0 clamp(220px,32%,300px);
 min-width:0;
 min-height:0;
-border-right:1px solid #e5e7eb;
-background:#fafafa;
+border-right:1px solid var(--line-d);
+background:var(--bg-sub);
 overflow:auto}
 .run-list button{width:100%;
 border:0;
-border-bottom:1px solid #eee;
+border-bottom:1px solid var(--line-d);
 background:transparent;
 padding:10px;
 display:flex;
@@ -82,15 +92,17 @@ align-items:center;
 gap:8px;
 text-align:left;
 cursor:pointer}
-.run-list button:hover,.run-list button.active{background:#eef2ff}
+/* 选中行：左侧强调条 + 强调底色，深色下也不会和 hover 混成同一块深色 */
+.run-list button:hover,.run-list button.active{background:var(--accent-bg)}
+.run-list button.active{box-shadow:inset 3px 0 0 var(--accent-text);color:var(--ink-950)}
 .run-dot,.event-node{width:8px;
 height:8px;
 border-radius:50%;
-background:#94a3b8;
+background:var(--ink-3);
 flex:none}
-.run-dot.succeeded,.event-node.success{background:#10b981}
-.run-dot.failed,.event-node.failed{background:#ef4444}
-.run-dot.running,.event-node.running{background:#f59e0b}
+.run-dot.succeeded,.event-node.success{background:var(--ok)}
+.run-dot.failed,.event-node.failed{background:var(--danger)}
+.run-dot.running,.event-node.running{background:var(--warn)}
 .run-copy{display:flex;
 flex:1;
 min-width:0;
@@ -100,7 +112,7 @@ overflow:hidden;
 text-overflow:ellipsis;
 white-space:nowrap}
 .run-copy small{font-size:10px;
-color:#94a3b8}
+color:var(--ink-3)}
 /* 日志时间线：吃掉剩余宽度，min-width/min-height:0 保证内容只在自身内部滚动。 */
 .event-timeline{flex:1;
 min-width:0;
@@ -109,14 +121,14 @@ padding:18px 22px;
 overflow:auto}
 .run-summary{display:flex;
 justify-content:space-between;
-border-bottom:1px solid #e5e7eb;
+border-bottom:1px solid var(--line-d);
 padding-bottom:12px;
 margin-bottom:12px}
 .run-summary-meta{display:flex;
 align-items:center;
 gap:6px;
 font-size:11px;
-color:#64748b}
+color:var(--ink-3)}
 .live-tag{animation:live-pulse 1.4s ease-in-out infinite}
 @keyframes live-pulse{0%,100%{opacity:1}50%{opacity:.45}}
 .event{display:grid;
@@ -129,14 +141,14 @@ position:absolute;
 left:3px;
 top:18px;
 bottom:-8px;
-border-left:1px solid #e2e8f0}
+border-left:1px solid var(--line-d)}
 .event:last-child:after{display:none}
 .event b{font-size:12px}
 .event p{margin:3px 0;
 font-size:12px;
-color:#475569}
+color:var(--ink-2)}
 .event small,.event-empty,.empty-run{font-size:11px;
-color:#94a3b8}
+color:var(--ink-3)}
 .empty-run,.event-empty{padding:24px;
 text-align:center}
 /* 固定高度模式：高度由宿主的 --log-h 决定，容器不再被内容撑长，两栏各自内部滚动。 */
@@ -148,7 +160,7 @@ height:var(--log-h,330px)}
 .run-list{flex:none;
 width:auto;
 border-right:0;
-border-bottom:1px solid #e5e7eb;
+border-bottom:1px solid var(--line-d);
 max-height:180px}
 .event-timeline{max-height:320px}
 }

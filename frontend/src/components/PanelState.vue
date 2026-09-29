@@ -1,14 +1,14 @@
 <template>
   <div v-if="loading" class="flex items-center gap-2 px-1 py-6 text-xs text-ink-500">
-    <span class="inline-block h-2 w-2 animate-pulse rounded-full bg-indigo-500" />
+    <span class="inline-block h-2 w-2 animate-pulse rounded-full bg-[color:var(--info-bg)]" />
     载入中…
   </div>
   <div
     v-else-if="error"
-    class="flex items-start gap-2 rounded-lg border border-rose-200 bg-rose-50 px-4 py-3">
-    <span class="text-[13px] leading-5 text-rose-500">⚠</span>
-    <div class="min-w-0 flex-1 text-xs leading-5 text-rose-700">{{ error }}</div>
-    <button v-if="retryable" class="shrink-0 text-xs text-rose-500 hover:text-rose-700" @click="$emit('retry')">重试</button>
+    class="flex items-start gap-2 rounded-lg border border-[color:var(--danger-bd)] bg-[color:var(--danger-bg)] px-4 py-3">
+    <span class="text-[13px] leading-5 text-[color:var(--danger)]">⚠</span>
+    <div class="min-w-0 flex-1 text-xs leading-5 text-[color:var(--danger)]">{{ error }}</div>
+    <button v-if="retryable" class="shrink-0 text-xs text-[color:var(--danger)] hover:text-[color:var(--danger)]" @click="$emit('retry')">重试</button>
   </div>
   <div v-else-if="empty" class="flex flex-col items-center gap-1 px-4 py-10 text-center">
     <span class="text-lg text-ink-300">◌</span>

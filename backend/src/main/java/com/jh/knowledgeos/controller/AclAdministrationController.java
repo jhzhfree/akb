@@ -53,6 +53,7 @@ AclAdministrationController {
     @PostMapping("/resources/{kb}")
     @Operation(summary = "修改知识资源 ACL 并通过 Transactional Outbox 传播")
     public ApiResponse<Object> change(@PathVariable Long kb, @Valid @RequestBody AclResourceChangeRequest request) {
-        return ApiResponse.ok(admin.changeResourceAcl(kb, request.getResourceType(), request.getResourceCode(), request.getPermissionTags(), request.getReason()));
+        return ApiResponse.ok(admin.changeResourceAcl(kb, request.getResourceType(), request.getResourceCode(), request.getPermissionTags(),
+            request.getReason()));
     }
 }

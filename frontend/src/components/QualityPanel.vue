@@ -1,24 +1,26 @@
 <template>
-  <section class="kb-card p-5">
-    <div class="kb-section-head">
+  <section class="kb-page">
+    <header class="kb-section-head">
       <div>
-        <small>知识质量</small>
-        <h3>知识质量</h3>
+        <div class="kb-eyebrow">知识工作台</div>
+        <h1 class="kb-title mt-1">知识质量</h1>
         <p class="kb-muted mt-1">
           可信覆盖率、引用准确率、检索命中、新鲜度。每个数字都能追到表里的数据；没有跑过的评测显示未测，不用 0 假装测过。
         </p>
       </div>
-      <div class="flex items-center gap-2">
+      <div class="flex shrink-0 items-center gap-2">
         <select v-model.number="withinDays" class="kb-input w-32" @change="load">
           <option :value="7">近 7 天</option>
           <option :value="30">近 30 天</option>
           <option :value="90">近 90 天</option>
         </select>
-        <button class="kb-btn-outline text-[12px]" @click="load">刷新</button>
+        <button class="kb-btn-outline" @click="load">刷新</button>
       </div>
-    </div>
+    </header>
 
-    <PanelState class="mt-4" :loading="loading" :error="error" :empty="!data" empty-text="暂无质量数据" retryable @retry="load">
+    <!-- 页头之后收进一张卡片：与工作台概览、资产浏览同构，不再整页包在卡片里 -->
+    <div class="kb-card p-4">
+    <PanelState :loading="loading" :error="error" :empty="!data" empty-text="暂无质量数据" retryable @retry="load">
       <div v-if="data" class="space-y-5">
         <div class="grid grid-cols-2 gap-3 md:grid-cols-4">
           <div class="kb-metric">
@@ -58,7 +60,7 @@
               :title="canGo('create.judgment') ? '' : '当前角色无权访问该页面'"
               @click="go('create.judgment')">
               <span>待审核知识</span>
-              <b :class="data.health.pendingReview + data.health.pendingCardReview ? 'text-amber-600' : ''">
+              <b :class="data.health.pendingReview + data.health.pendingCardReview ? 'text-[color:var(--warn)]' : ''">
                 {{ data.health.pendingReview + data.health.pendingCardReview }}
               </b>
             </button>
@@ -68,7 +70,7 @@
               :title="canGo('create.judgment') ? '' : '当前角色无权访问该页面'"
               @click="go('create.judgment')">
               <span>开放冲突</span>
-              <b :class="data.health.openConflict ? 'text-rose-600' : ''">{{ data.health.openConflict }}</b>
+              <b :class="data.health.openConflict ? 'text-[color:var(--danger)]' : ''">{{ data.health.openConflict }}</b>
             </button>
             <button
               class="health-tile disabled:cursor-not-allowed disabled:opacity-60"
@@ -76,7 +78,7 @@
               :title="canGo('create.jobs') ? '' : '当前角色无权访问该页面'"
               @click="go('create.jobs')">
               <span>解析失败任务</span>
-              <b :class="data.health.failedIngestion ? 'text-rose-600' : ''">{{ data.health.failedIngestion }}</b>
+              <b :class="data.health.failedIngestion ? 'text-[color:var(--danger)]' : ''">{{ data.health.failedIngestion }}</b>
             </button>
             <button
               class="health-tile disabled:cursor-not-allowed disabled:opacity-60"
@@ -84,7 +86,7 @@
               :title="canGo('create.judgment') ? '' : '当前角色无权访问该页面'"
               @click="go('create.judgment')">
               <span>不确定声明</span>
-              <b :class="data.health.uncertainClaim ? 'text-amber-600' : ''">{{ data.health.uncertainClaim }}</b>
+              <b :class="data.health.uncertainClaim ? 'text-[color:var(--warn)]' : ''">{{ data.health.uncertainClaim }}</b>
             </button>
             <button
               class="health-tile disabled:cursor-not-allowed disabled:opacity-60"
@@ -92,7 +94,7 @@
               :title="canGo('create.judgment') ? '' : '当前角色无权访问该页面'"
               @click="go('create.judgment')">
               <span>冲突中声明</span>
-              <b :class="data.health.conflictedClaim ? 'text-rose-600' : ''">{{ data.health.conflictedClaim }}</b>
+              <b :class="data.health.conflictedClaim ? 'text-[color:var(--danger)]' : ''">{{ data.health.conflictedClaim }}</b>
             </button>
             <button
               class="health-tile disabled:cursor-not-allowed disabled:opacity-60"
@@ -100,7 +102,7 @@
               :title="canGo('search.benchmark') ? '' : '当前角色无权访问该页面'"
               @click="go('search.benchmark')">
               <span>已过期声明</span>
-              <b :class="data.freshness.expiredCount ? 'text-amber-600' : ''">{{ data.freshness.expiredCount }}</b>
+              <b :class="data.freshness.expiredCount ? 'text-[color:var(--warn)]' : ''">{{ data.freshness.expiredCount }}</b>
             </button>
           </div>
         </div>
@@ -113,7 +115,7 @@
                 <span class="w-24 shrink-0 text-[11px] text-ink-500">{{ labelOf(row.objectType) }}</span>
                 <span class="kb-badge w-32">{{ statusLabel(row.status) }}</span>
                 <span class="h-2 flex-1 overflow-hidden rounded bg-ink-100">
-                  <span class="block h-full rounded bg-indigo-400" :style="{ width: barWidth(row.total) + '%' }" />
+                  <span class="block h-full rounded bg-[color:var(--info-bg)]" :style="{ width: barWidth(row.total) + '%' }" />
                 </span>
                 <span class="w-10 shrink-0 text-right text-[11px] text-ink-600">{{ row.total }}</span>
               </li>
@@ -137,6 +139,7 @@
         </div>
       </div>
     </PanelState>
+    </div>
   </section>
 </template>
 
@@ -187,7 +190,7 @@ load()
 
 <style scoped>
 .health-tile {
-  @apply flex flex-col items-start rounded-lg border border-ink-100 bg-white px-3 py-2 text-left transition hover:border-indigo-200 hover:bg-indigo-50;
+  @apply flex flex-col items-start rounded-lg border border-ink-100 bg-white px-3 py-2 text-left transition hover:border-[color:var(--info-bd)] hover:bg-[color:var(--info-bg)];
 }
 .health-tile span { @apply text-[11px] text-ink-500; }
 .health-tile b { @apply text-lg font-semibold text-ink-800; }

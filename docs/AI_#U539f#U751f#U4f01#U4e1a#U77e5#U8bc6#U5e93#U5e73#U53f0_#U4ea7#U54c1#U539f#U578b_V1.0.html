@@ -1,0 +1,705 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>AI 原生企业知识库平台 · 产品原型 V1.0</title>
+<style>
+:root{--ink:#172033;--muted:#5b667a;--line:#dfe5ee;--bg:#f5f7fb;--card:#fff;--accent:#2563eb;--accent2:#0f766e;--warn:#b45309;--danger:#b91c1c;--ok:#15803d}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI","Microsoft YaHei",Arial,sans-serif}
+a{color:var(--accent);text-decoration:none}
+/* ---------- 顶部 ---------- */
+.topbar{position:sticky;top:0;z-index:20;display:flex;align-items:center;gap:16px;padding:10px 22px;background:linear-gradient(90deg,#172554,#1e40af 55%,#0f766e);color:#fff;box-shadow:0 4px 16px #17255433}
+.brand{display:flex;align-items:center;gap:10px;font-weight:700;font-size:15px;letter-spacing:.3px}
+.logo{width:26px;height:26px;border-radius:8px;background:#ffffff26;display:grid;place-items:center;font-size:14px}
+.pill{padding:3px 9px;border-radius:999px;background:#ffffff22;font-size:11px;border:1px solid #ffffff33}
+.grow{flex:1}
+.kbswitch{display:flex;align-items:center;gap:8px;font-size:12px;background:#ffffff1f;border:1px solid #ffffff33;border-radius:9px;padding:5px 11px}
+.avatar{width:28px;height:28px;border-radius:50%;background:#ffffff2e;display:grid;place-items:center;font-size:12px}
+/* ---------- 布局 ---------- */
+.shell{display:flex;min-height:calc(100vh - 47px)}
+.side{width:196px;flex:none;background:#fff;border-right:1px solid var(--line);padding:14px 10px}
+.nav-title{font-size:11px;color:var(--muted);letter-spacing:1px;margin:8px 10px 6px}
+.nav-item{display:flex;align-items:center;gap:9px;padding:8px 11px;border-radius:9px;font-size:13.5px;color:#2b3648;cursor:pointer;user-select:none;margin-bottom:2px;border:1px solid transparent}
+.nav-item:hover{background:#f1f5fd}
+.nav-item.active{background:#eaf1ff;color:#1d4ed8;font-weight:600;border-color:#cfe0ff}
+.nav-item .ic{width:18px;text-align:center;font-size:14px}
+.nav-item .dot{margin-left:auto;font-size:10px;padding:1px 6px;border-radius:999px;background:#e8f7f0;color:var(--ok)}
+main{flex:1;min-width:0;padding:22px 26px 60px}
+.screen{display:none}
+.screen.active{display:block;animation:fade .18s ease}
+@keyframes fade{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+/* ---------- 通用 ---------- */
+h1{font-size:21px;margin:0 0 4px}
+h2{font-size:16px;margin:26px 0 10px}
+.sub{color:var(--muted);font-size:13px;margin:0 0 18px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px 18px;box-shadow:0 3px 12px #17203308}
+.card+.card{margin-top:14px}
+.grid{display:grid;gap:13px}
+.g4{grid-template-columns:repeat(4,1fr)}
+.g3{grid-template-columns:repeat(3,1fr)}
+.g2{grid-template-columns:repeat(2,1fr)}
+.kpi .l{font-size:12px;color:var(--muted)}
+.kpi .v{font-size:24px;font-weight:700;margin:3px 0 2px;letter-spacing:.5px}
+.kpi .h{font-size:11.5px;color:var(--muted)}
+.tag{display:inline-block;font-size:11px;padding:2px 8px;border-radius:999px;background:#eff6ff;color:#1d4ed8;border:1px solid #dbeafe;white-space:nowrap}
+.tag.ok{background:#e8f7f0;color:var(--ok);border-color:#cceadd}
+.tag.new{background:#fff7e6;color:var(--warn);border-color:#fbe0b4}
+.tag.warn{background:#fef2f2;color:var(--danger);border-color:#fbd5d5}
+.tag.gray{background:#f1f5f9;color:var(--muted);border-color:#e2e8f0}
+table{width:100%;border-collapse:collapse;font-size:13px;background:#fff}
+th,td{border-bottom:1px solid var(--line);padding:9px 10px;text-align:left;vertical-align:middle}
+th{background:#f7f9fd;color:#3c4a61;font-weight:600;font-size:12.5px}
+tbody tr:hover{background:#fbfcff}
+.mono{font-family:Consolas,Monaco,monospace;font-size:12.5px}
+.btn{display:inline-block;padding:6px 13px;border-radius:8px;font-size:12.5px;border:1px solid var(--line);background:#fff;color:#2b3648;cursor:pointer}
+.btn:hover{border-color:#c3d3ee;background:#f7faff}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+.btn.primary:hover{background:#1d4ed8}
+.btn.ghost{border-style:dashed;color:var(--muted)}
+.btn.danger{color:var(--danger);border-color:#f3cccc}
+.row{display:flex;align-items:center;gap:9px;flex-wrap:wrap}
+.between{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.field{background:#fbfcfe;border:1px solid var(--line);border-radius:10px;padding:9px 12px;font-size:12.5px;color:#3c4a61}
+.flow{display:flex;gap:7px;align-items:stretch;flex-wrap:wrap;margin:4px 0}
+.flow span{flex:1;min-width:104px;background:#fff;border:1px solid var(--line);border-radius:9px;padding:9px;text-align:center;font-size:12.5px;font-weight:600}
+.flow span.on{background:#eef4ff;border-color:#cfe0ff;color:#1d4ed8}
+.flow i{align-self:center;font-style:normal;color:#94a3b8}
+.timeline{border-left:2px solid var(--line);margin:6px 0 0 6px;padding-left:15px}
+.tl{position:relative;padding:7px 0;font-size:12.5px}
+.tl:before{content:"";position:absolute;left:-21px;top:13px;width:8px;height:8px;border-radius:50%;background:var(--accent)}
+.tl.ok:before{background:var(--ok)}.tl.err:before{background:var(--danger)}.tl.warn:before{background:var(--warn)}
+.tl .t{color:var(--muted);font-size:11.5px;margin-left:8px}
+.note{border-left:4px solid var(--accent);background:#eff6ff;padding:10px 14px;border-radius:0 8px 8px 0;font-size:12.5px;margin:12px 0}
+.note.warn{border-left-color:var(--warn);background:#fffbeb}
+.note.ok{border-left-color:var(--ok);background:#f0fdf6}
+.answer{background:#fff;border:1px solid var(--line);border-radius:12px;padding:16px 18px}
+.answer .q{border-bottom:1px dashed var(--line);padding-bottom:10px;margin-bottom:12px;font-weight:600}
+.cite{display:inline-block;font-size:11px;padding:1px 6px;border-radius:5px;background:#eef2ff;color:#3730a3;border:1px solid #e0e7ff;margin:0 2px;vertical-align:super}
+.lgd{display:flex;gap:8px;flex-wrap:wrap;align-items:center;font-size:11.5px;color:var(--muted)}
+.legend{position:sticky;bottom:0;margin-top:26px;background:#fffdf5;border:1px solid #f2e3bd;border-radius:10px;padding:10px 14px;font-size:12px}
+.legend b{color:var(--warn)}
+.split{display:grid;grid-template-columns:1.35fr 1fr;gap:14px}
+.bar{height:7px;border-radius:999px;background:#eef2f7;overflow:hidden;margin-top:6px}
+.bar>i{display:block;height:100%;background:linear-gradient(90deg,#2563eb,#0f766e)}
+.chip{display:inline-block;font-size:11px;padding:2px 8px;border-radius:6px;background:#f1f5f9;color:#41506b;margin:2px 3px 2px 0}
+.upload{border:2px dashed #c8d6ee;border-radius:12px;background:#fbfdff;padding:26px;text-align:center;color:var(--muted)}
+.upload b{display:block;color:var(--ink);font-size:14px;margin-bottom:5px}
+.mocklabel{font-size:11px;color:#94a3b8;text-align:right;margin-bottom:-6px}
+@media(max-width:1080px){.g4,.g3,.g2,.split{grid-template-columns:1fr 1fr}.side{width:60px}.nav-item span.tx{display:none}.nav-title{display:none}}
+@media(max-width:720px){.g4,.g3,.g2,.split{grid-template-columns:1fr}.side{display:none}}
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand"><div class="logo">◈</div>AI 原生企业知识库平台</div>
+  <span class="pill">原型 V1.0</span>
+  <div class="grow"></div>
+  <div class="kbswitch">知识库：运维故障处置知识库 ▾</div>
+  <div class="avatar">运</div>
+</header>
+
+<div class="shell">
+  <aside class="side">
+    <div class="nav-title">知识工作台</div>
+    <div class="nav-item active" data-s="overview"><span class="ic">▣</span><span class="tx">概览</span></div>
+    <div class="nav-item" data-s="ingest"><span class="ic">⇪</span><span class="tx">资料与摄入</span></div>
+    <div class="nav-item" data-s="cards"><span class="ic">▤</span><span class="tx">知识卡片</span></div>
+    <div class="nav-item" data-s="claims"><span class="ic">≡</span><span class="tx">断言与实体</span><span class="dot">新</span></div>
+    <div class="nav-item" data-s="review"><span class="ic">✓</span><span class="tx">知识裁决</span></div>
+    <div class="nav-item" data-s="graph"><span class="ic">❖</span><span class="tx">知识图谱</span></div>
+    <div class="nav-item" data-s="query"><span class="ic">⌕</span><span class="tx">智能问答</span></div>
+    <div class="nav-title">运营与治理</div>
+    <div class="nav-item" data-s="lifecycle"><span class="ic">◷</span><span class="tx">生命周期</span><span class="dot">新</span></div>
+    <div class="nav-item" data-s="ops"><span class="ic">⚙</span><span class="tx">索引与发布</span></div>
+    <div class="nav-item" data-s="acl"><span class="ic">⚿</span><span class="tx">权限与审计</span></div>
+  </aside>
+
+  <main>
+
+  <!-- ================= 概览 ================= -->
+  <section class="screen active" id="overview">
+    <div class="between">
+      <div><h1>知识工作台概览</h1><p class="sub">运维故障处置知识库 · 最近一次索引发布：2026-09-16 14:20</p></div>
+      <div class="row">
+        <span class="tag ok">✅ 已实现</span>
+        <button class="btn">导出运营周报</button>
+        <button class="btn primary">发起索引发布</button>
+      </div>
+    </div>
+
+    <div class="grid g4">
+      <div class="card kpi"><div class="l">数据源 / 文档</div><div class="v">12 / 486</div><div class="h">近 7 天新增 34 份</div></div>
+      <div class="card kpi"><div class="l">知识卡片</div><div class="v">1,284</div><div class="h">已发布 1,096 · 待裁决 188</div></div>
+      <div class="card kpi"><div class="l">断言（Claim）</div><div class="v">3,517</div><div class="h">生效 3,240 · 已过期 152 · 已替代 125</div></div>
+      <div class="card kpi"><div class="l">未解决冲突</div><div class="v" style="color:var(--danger)">7</div><div class="h">其中时态演进类 4（非真冲突）</div></div>
+    </div>
+
+    <h2>知识生命周期链路</h2>
+    <div class="card">
+      <div class="flow">
+        <span class="on">源数据<br><b>486</b></span><i>→</i>
+        <span class="on">解析清洗<br><b>480</b></span><i>→</i>
+        <span class="on">知识抽取<br><b>4,801</b></span><i>→</i>
+        <span class="on">裁决<br><b>4,613</b></span><i>→</i>
+        <span class="on">发布<br><b>1,096</b></span><i>→</i>
+        <span class="on">索引<br><b>一致</b></span><i>→</i>
+        <span class="on">查询<br><b>2,310 次</b></span><i>→</i>
+        <span class="on">反馈<br><b>36</b></span><i>→</i>
+        <span class="on">退役<br><b>277</b></span>
+      </div>
+      <div class="note ok" style="margin-bottom:0"><b>一致性：</b>MySQL 权威状态与 Elasticsearch / Milvus / Neo4j 派生索引无漂移（Checksum 校验通过，Outbox Dead Letter = 0）。</div>
+    </div>
+
+    <div class="split" style="margin-top:14px">
+      <div class="card">
+        <div class="between"><h2 style="margin:0">待办与异常</h2><span class="tag warn">需要处理</span></div>
+        <table style="margin-top:10px">
+          <tr><th>事项</th><th>数量</th><th>建议动作</th></tr>
+          <tr><td>待人工裁决</td><td>188</td><td><a href="#">进入裁决工作台</a></td></tr>
+          <tr><td>未解决冲突</td><td>7</td><td><a href="#">查看冲突详情</a></td></tr>
+          <tr><td>断言即将过期（30 天内）</td><td>23</td><td><a href="#">安排复核</a></td></tr>
+          <tr><td>已过期断言未退役</td><td>5</td><td><a href="#">执行过期扫描</a></td></tr>
+          <tr><td>实体归一疑似错误</td><td>3</td><td><a href="#">实体纠错</a></td></tr>
+        </table>
+      </div>
+      <div class="card">
+        <h2 style="margin:0 0 10px">检索基础设施</h2>
+        <table>
+          <tr><th>组件</th><th>状态</th><th>说明</th></tr>
+          <tr><td>Elasticsearch</td><td><span class="tag ok">正常</span></td><td>BM25 索引 486 文档</td></tr>
+          <tr><td>Milvus</td><td><span class="tag ok">正常</span></td><td>向量 5,801 条 · dim 1024</td></tr>
+          <tr><td>Neo4j</td><td><span class="tag ok">正常</span></td><td>实体 2,140 · 关系 6,302</td></tr>
+          <tr><td>Reranker</td><td><span class="tag gray">未启用</span></td><td>已降级为 RRF 排序</td></tr>
+          <tr><td>LLM Provider</td><td><span class="tag ok">正常</span></td><td>qwen2.5-72b-instruct</td></tr>
+        </table>
+        <div class="note warn" style="margin-bottom:0"><b>降级提示：</b>多跳问题当前使用有界图遍历，未启用 Personalized PageRank 与社区摘要（设计文档 §8.1.1）。</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= 资料与摄入 ================= -->
+  <section class="screen" id="ingest">
+    <div class="between">
+      <div><h1>资料与摄入</h1><p class="sub">上传原始资料 → 解析清洗 → 生成可追溯的内容单元（ContentUnit）</p></div>
+      <span class="tag ok">✅ 已实现</span>
+    </div>
+
+    <div class="split">
+      <div>
+        <div class="upload">
+          <b>拖拽文件到此处，或点击上传</b>
+          支持 PDF / Word / Markdown / HTML，单文件 ≤ 50MB
+          <div class="row" style="justify-content:center;margin-top:14px">
+            <button class="btn primary">选择文件</button>
+            <span class="tag gray">自动识别重复文件（Hash）</span>
+          </div>
+        </div>
+
+        <div class="card" style="margin-top:14px">
+          <div class="between"><h2 style="margin:0">来源列表</h2><span class="sub" style="margin:0">共 12 个来源</span></div>
+          <table style="margin-top:8px">
+            <tr><th>来源</th><th>类型</th><th>权威分</th><th>ACL 标签</th><th>文档</th><th>状态</th></tr>
+            <tr><td>《订单中心故障处置手册》V3.2</td><td>PDF</td><td>0.95</td><td><span class="chip">ops-team</span></td><td>1</td><td><span class="tag ok">已索引</span></td></tr>
+            <tr><td>《中间件配置基线》2026Q3</td><td>Markdown</td><td>0.90</td><td><span class="chip">infra</span></td><td>1</td><td><span class="tag ok">已索引</span></td></tr>
+            <tr><td>运维周会纪要汇编</td><td>Word</td><td>0.60</td><td><span class="chip">ops-team</span></td><td>18</td><td><span class="tag ok">已索引</span></td></tr>
+            <tr><td>历史故障复盘（2024—2025）</td><td>PDF</td><td>0.55</td><td><span class="chip">public</span></td><td>264</td><td><span class="tag new">解析中</span></td></tr>
+            <tr><td>厂商补丁公告归档</td><td>HTML</td><td>0.85</td><td><span class="chip">infra</span></td><td>202</td><td><span class="tag ok">已索引</span></td></tr>
+          </table>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="between"><h2 style="margin:0">摄入运行日志</h2><span class="tag gray">run #4821</span></div>
+        <div class="timeline" style="margin-top:12px">
+          <div class="tl ok">Source 落库完成 · 哈希 <span class="mono">a91f…3c7d</span><span class="t">14:02:11</span></div>
+          <div class="tl ok">解析与版面还原（PDF 12 页）<span class="t">14:02:19</span></div>
+          <div class="tl ok">清洗：去页眉页脚 34 处、噪声段落 6 处<span class="t">14:02:21</span></div>
+          <div class="tl ok">层级切分完成：Chapter 3 / Section 14 / Paragraph 96<span class="t">14:02:23</span></div>
+          <div class="tl ok">LLM 抽取：Card 22 / Claim 68 / Entity 41 / Relation 57<span class="t">14:03:02</span></div>
+          <div class="tl warn">实体归一：合并 5 个重复实体，新增别名 9 条<span class="t">14:03:04</span></div>
+          <div class="tl warn">裁决：APPROVED 54 / UNCERTAIN 9 / CONFLICTED 5<span class="t">14:03:06</span></div>
+          <div class="tl ok">索引投递完成 · Outbox 事件 96 条<span class="t">14:03:09</span></div>
+          <div class="tl ok">全链路完成，耗时 58s<span class="t">14:03:09</span></div>
+        </div>
+        <div class="note warn">低置信度与强冲突候选未自动发布，已进入人工裁决队列（设计原则：AI 候选不得未经裁决进入正式知识库）。</div>
+      </div>
+    </div>
+    <div class="legend">图例：<b>本屏为已实现能力</b>；标 <span class="tag gray">Hash 去重</span> 的提示为 V1.0 待补齐项（目前仅检测未提示）。</div>
+  </section>
+
+  <!-- ================= 知识卡片 ================= -->
+  <section class="screen" id="cards">
+    <div class="between">
+      <div><h1>知识卡片</h1><p class="sub">已裁决、结构化、可直接引用的正式知识</p></div>
+      <div class="row"><span class="tag ok">✅ 已实现</span><button class="btn">按分类筛选</button></div>
+    </div>
+    <div class="card">
+      <table>
+        <tr><th>卡片编码</th><th>标题</th><th>分类</th><th>适用场景</th><th>置信度</th><th>证据</th><th>版本</th><th>状态</th><th>操作</th></tr>
+        <tr><td class="mono">KC-1042</td><td>订单服务 E1024 错误处置步骤</td><td>故障处置</td><td>生产 / 订单域</td><td>0.94</td><td>3</td><td>v3</td><td><span class="tag ok">已发布</span></td><td><a href="#">详情</a> · <a href="#">图谱</a></td></tr>
+        <tr><td class="mono">KC-1043</td><td>数据库连接池耗尽的判定与扩容</td><td>故障处置</td><td>生产 / 数据库</td><td>0.91</td><td>5</td><td>v2</td><td><span class="tag ok">已发布</span></td><td><a href="#">详情</a> · <a href="#">图谱</a></td></tr>
+        <tr><td class="mono">KC-1044</td><td>灰度发布回滚标准动作</td><td>变更管理</td><td>预发 / 全业务</td><td>0.88</td><td>2</td><td>v1</td><td><span class="tag ok">已发布</span></td><td><a href="#">详情</a> · <a href="#">图谱</a></td></tr>
+        <tr><td class="mono">KC-1051</td><td>短信通道限流阈值调整说明</td><td>配置管理</td><td>生产 / 消息域</td><td>0.72</td><td>1</td><td>v1</td><td><span class="tag new">待裁决</span></td><td><a href="#">详情</a></td></tr>
+        <tr><td class="mono">KC-0987</td><td>旧版支付网关超时参数说明</td><td>配置管理</td><td>生产 / 支付域</td><td>0.85</td><td>2</td><td>v1</td><td><span class="tag gray">已替代</span></td><td><a href="#">详情</a> · <a href="#">被谁替代</a></td></tr>
+        <tr><td class="mono">KC-0902</td><td>2025 年大促限流预案</td><td>容量预案</td><td>生产 / 全业务</td><td>0.80</td><td>4</td><td>v1</td><td><span class="tag warn">已过期</span></td><td><a href="#">详情</a> · <a href="#">复核实效</a></td></tr>
+      </table>
+    </div>
+    <div class="card">
+      <h2 style="margin:0 0 8px">知识卡片详情（节选）</h2>
+      <div class="split">
+        <div>
+          <div class="field" style="margin-bottom:9px"><b>KC-1042 · 订单服务 E1024 错误处置步骤</b><br><span class="mono">status=APPROVED · confidence=0.94 · version=3 · authority=0.95</span></div>
+          <div class="field" style="margin-bottom:9px"><b>适用条件</b><br>环境=生产；业务域=订单；组件=order-service ≥ 2.4.0</div>
+          <div class="field" style="margin-bottom:9px"><b>处置步骤</b><br>1. 确认 E1024 出现在 <span class="mono">order-service</span> 日志<br>2. 检查 <span class="mono">timeout.ms</span> 是否低于 800<br>3. 调用预案接口切换降级开关<br>4. 观察 5 分钟成功率恢复情况</div>
+          <div class="field"><b>有效期</b><br>2026-01-01 ～ 2026-12-31</div>
+        </div>
+        <div>
+          <div class="field" style="margin-bottom:9px"><b>证据链（3）</b><br><span class="cite">E-1</span> 订单中心故障处置手册 V3.2 · P14 · §4.2.1<br><span class="cite">E-2</span> 中间件配置基线 2026Q3 · §7<br><span class="cite">E-3</span> 故障复盘 #20260713 · 根因段</div>
+          <div class="field" style="margin-bottom:9px"><b>关联断言（4）</b><br>order-service —SUPPORTS→ 降级开关热生效<br>order-service —DEPENDS_ON→ config-center<br>timeout.ms &lt; 800 —CAUSES→ E1024</div>
+          <div class="field"><b>版本差异 v2 → v3</b><br>+ 新增步骤 4（观察窗口）<br>~ 修改 timeout 阈值 500 → 800</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= 断言与实体 ================= -->
+  <section class="screen" id="claims">
+    <div class="between">
+      <div><h1>断言与实体</h1><p class="sub">断言携带限定词、极性、确定性与有效期；实体经归一后只暴露规范节点</p></div>
+      <div class="row"><span class="tag new">＋ V1.0 新增</span><span class="tag ok">后端已就绪</span></div>
+    </div>
+
+    <h2>断言列表</h2>
+    <div class="card">
+      <table>
+        <tr><th>断言</th><th>主体 → 客体</th><th>限定词</th><th>极性</th><th>确定性</th><th>置信度</th><th>有效期</th><th>版本</th><th>状态</th></tr>
+        <tr><td class="mono">CL-30112</td><td>order-service -SUPPORTS→ PKCS12</td><td>JDK≥8</td><td><span class="tag ok">POSITIVE</span></td><td>0.92</td><td>0.91</td><td>—</td><td>v1</td><td><span class="tag ok">生效</span></td></tr>
+        <tr><td class="mono">CL-30118</td><td>order-service -SUPPORTS→ 降级开关热生效</td><td>环境=生产</td><td><span class="tag ok">POSITIVE</span></td><td>0.88</td><td>0.90</td><td>2026-01-01 ~ 2026-12-31</td><td>v3</td><td><span class="tag ok">生效</span></td></tr>
+        <tr><td class="mono">CL-30125</td><td>payment-gateway -NOT_SUPPORTS→ TLS1.0</td><td>环境=生产</td><td><span class="tag warn">NEGATIVE</span></td><td>0.95</td><td>0.93</td><td>—</td><td>v2</td><td><span class="tag ok">生效</span></td></tr>
+        <tr><td class="mono">CL-30131</td><td>timeout.ms &lt; 500 -CAUSES→ E1024</td><td>版本=v2</td><td><span class="tag ok">POSITIVE</span></td><td>0.70</td><td>0.66</td><td>2025-01-01 ~ 2026-03-31</td><td>v2</td><td><span class="tag gray">已替代</span></td></tr>
+        <tr><td class="mono">CL-30138</td><td>timeout.ms &lt; 800 -CAUSES→ E1024</td><td>版本=v3</td><td><span class="tag ok">POSITIVE</span></td><td>0.86</td><td>0.89</td><td>2026-04-01 ~ 2026-12-31</td><td>v3</td><td><span class="tag ok">生效</span></td></tr>
+        <tr><td class="mono">CL-30144</td><td>短信通道 -SUPPORTS→ 5000 QPS</td><td>环境=生产</td><td><span class="tag ok">POSITIVE</span></td><td>0.55</td><td>0.52</td><td>2026-06-01 ~ 2026-09-30</td><td>v1</td><td><span class="tag warn">冲突</span></td></tr>
+      </table>
+      <div class="note ok" style="margin-bottom:0">
+        <b>时态语义已生效：</b>CL-30131（v2 窗口 2025-01-01~2026-03-31）与 CL-30138（v3 窗口 2026-04-01~2026-12-31）<b>有效期不重叠，判定为版本演进而非冲突</b>；仅 CL-30144 与其他来源结论互斥且窗口重叠，才计入真冲突。
+      </div>
+    </div>
+
+    <h2>实体与别名（V1.0 新增管理能力）</h2>
+    <div class="split">
+      <div class="card">
+        <div class="between"><h2 style="margin:0">规范实体</h2><span class="sub" style="margin:0">共 2,140 个</span></div>
+        <table style="margin-top:8px">
+          <tr><th>实体</th><th>类型</th><th>别名数</th><th>提及</th><th>归一来源</th><th>状态</th><th>操作</th></tr>
+          <tr><td>order-service</td><td>服务</td><td>4</td><td>126</td><td>词典 3 / 向量 1</td><td><span class="tag ok">规范</span></td><td><a href="#">编辑</a></td></tr>
+          <tr><td>config-center</td><td>服务</td><td>3</td><td>88</td><td>词典 3</td><td><span class="tag ok">规范</span></td><td><a href="#">编辑</a></td></tr>
+          <tr><td>E1024</td><td>错误码</td><td>2</td><td>64</td><td>词典 2</td><td><span class="tag ok">规范</span></td><td><a href="#">编辑</a></td></tr>
+          <tr><td>Baymax-pay</td><td>服务</td><td>5</td><td>41</td><td>向量 2（相似度 0.91）</td><td><span class="tag new">待确认</span></td><td><a href="#">确认</a> · <a href="#">拆解</a></td></tr>
+          <tr><td>pay-gateway-legacy</td><td>服务</td><td>2</td><td>9</td><td>向量 1</td><td><span class="tag gray">已合并</span></td><td><a href="#">查看合并去向</a></td></tr>
+        </table>
+      </div>
+      <div class="card">
+        <h2 style="margin:0 0 8px">Baymax-pay · 别名与归一依据</h2>
+        <div class="field" style="margin-bottom:9px"><b>别名词典</b><br><span class="chip">Baymax支付</span><span class="chip">baymax_pay_service</span><span class="chip">百马支付服务</span><span class="chip">Baymax 支付服务</span></div>
+        <div class="field" style="margin-bottom:9px"><b>归一判定</b><br>① 词典命中 3 条（confidence 1.0）<br>② 向量相似度命中 2 条（cosine 0.91 / 0.87，阈值 0.86）</div>
+        <div class="field" style="margin-bottom:9px"><b>影响面</b><br>关联断言 12 条 · 知识卡片 4 张 · 关系 9 条</div>
+        <div class="row">
+          <button class="btn primary">确认为同一实体</button>
+          <button class="btn">标记为误合并并拆解</button>
+          <button class="btn danger">解绑该别名</button>
+        </div>
+        <div class="note warn">若误合并，拆解将回滚提及链接并保留操作审计（不物理删除实体）。</div>
+      </div>
+    </div>
+    <div class="legend">图例：<b>本屏为 V1.0 新增</b> —— 后端接口（断言字段 / `/ai/entity-resolve` / 别名表）已就绪，当前缺口在前端展示与纠错入口。</div>
+  </section>
+
+  <!-- ================= 知识裁决 ================= -->
+  <section class="screen" id="review">
+    <div class="between">
+      <div><h1>知识裁决工作台</h1><p class="sub">AI 智能裁决 + 人工兜底，低置信度与强冲突强制人工</p></div>
+      <span class="tag ok">✅ 已实现</span>
+    </div>
+
+    <div class="grid g4">
+      <div class="card kpi"><div class="l">待人工裁决</div><div class="v">188</div><div class="h">高风险 12</div></div>
+      <div class="card kpi"><div class="l">未解决冲突</div><div class="v" style="color:var(--danger)">7</div><div class="h">真冲突 3 · 时态演进 4</div></div>
+      <div class="card kpi"><div class="l">AI 自动通过率</div><div class="v">82%</div><div class="h">近 7 天</div></div>
+      <div class="card kpi"><div class="l">人工驳回率</div><div class="v">9%</div><div class="h">驳回原因以"证据不足"为主</div></div>
+    </div>
+
+    <div class="split" style="margin-top:14px">
+      <div class="card">
+        <h2 style="margin:0 0 8px">待审核知识</h2>
+        <table>
+          <tr><th>候选</th><th>标题</th><th>置信度</th><th>裁决策略</th><th>操作</th></tr>
+          <tr><td class="mono">C-2081</td><td>短信通道限流阈值调整为 8000 QPS</td><td>0.55</td><td>低置信度 → 强制人工</td><td><button class="btn primary">批准</button> <button class="btn danger">驳回</button></td></tr>
+          <tr><td class="mono">C-2082</td><td>订单服务需开启 TLS1.3</td><td>0.88</td><td>证据 2 条一致</td><td><button class="btn primary">批准</button> <button class="btn danger">驳回</button></td></tr>
+          <tr><td class="mono">C-2083</td><td>数据库连接池上限改为 200</td><td>0.79</td><td>关键生产配置 → 双证据校验</td><td><button class="btn primary">批准</button> <button class="btn danger">驳回</button></td></tr>
+        </table>
+      </div>
+      <div class="card">
+        <h2 style="margin:0 0 8px">冲突列表</h2>
+        <table>
+          <tr><th>冲突</th><th>双方</th><th>类型</th><th>操作</th></tr>
+          <tr><td class="mono">CF-118</td><td>CL-30144 ↔ CL-30152</td><td><span class="tag warn">真冲突</span></td><td><a href="#">对比</a></td></tr>
+          <tr><td class="mono">CF-119</td><td>CL-30131 ↔ CL-30138</td><td><span class="tag gray">时态演进</span></td><td><a href="#">确认替代</a></td></tr>
+          <tr><td class="mono">CF-120</td><td>KC-1051 ↔ 手册 V3.2</td><td><span class="tag warn">真冲突</span></td><td><a href="#">对比</a></td></tr>
+        </table>
+        <div class="note">时态演进类不消耗人工成本，可由管理员一键「确认替代」；这使冲突率指标保持可信。</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2 style="margin:0 0 8px">AI 裁决记录（含策略说明）</h2>
+      <table>
+        <tr><th>时间</th><th>对象</th><th>裁决</th><th>分量明细</th><th>策略</th></tr>
+        <tr><td>14:03:06</td><td class="mono">C-2080</td><td><span class="tag ok">APPROVED 0.94</span></td><td>抽取 0.91 · 证据 0.96 · 权威 0.95 · 时效 0.88 · 冲突 -0.02</td><td>加权置信度 ≥ 0.85 自动通过</td></tr>
+        <tr><td>14:03:06</td><td class="mono">C-2081</td><td><span class="tag new">UNCERTAIN 0.55</span></td><td>抽取 0.62 · 证据 0.40 · 权威 0.60 · 时效 0.71</td><td>&lt; 0.70 转人工</td></tr>
+        <tr><td>14:03:06</td><td class="mono">CF-118</td><td><span class="tag warn">CONFLICTED 0.41</span></td><td>冲突惩罚 -0.35（窗口重叠 · 结论互斥）</td><td>强冲突禁止自动发布</td></tr>
+      </table>
+    </div>
+  </section>
+
+  <!-- ================= 知识图谱 ================= -->
+  <section class="screen" id="graph">
+    <div class="between">
+      <div><h1>知识图谱</h1><p class="sub">从知识卡片或断言出发，探索实体邻域与依赖路径</p></div>
+      <div class="row"><span class="tag ok">✅ 已实现</span><span class="tag new">＋ 可视化增强</span></div>
+    </div>
+
+    <div class="row" style="margin-bottom:12px">
+      <div class="field">起点：<span class="mono">KC-1042</span></div>
+      <div class="field">跳数：1—2 hop ▾</div>
+      <div class="field">关系类型：全部 ▾</div>
+      <button class="btn primary">查询邻域</button>
+      <span class="tag gray">Neo4j 正常</span>
+    </div>
+
+    <div class="split">
+      <div class="card">
+        <h2 style="margin:0 0 6px">关系图谱（示意）</h2>
+        <svg viewBox="0 0 520 300" style="width:100%;height:auto">
+          <defs>
+            <marker id="ar" markerWidth="9" markerHeight="9" refX="8" refY="4" orient="auto">
+              <path d="M0,0 L8,4 L0,8 z" fill="#94a3b8"></path>
+            </marker>
+          </defs>
+          <line x1="260" y1="70" x2="140" y2="150" stroke="#cbd5e1" stroke-width="1.6" marker-end="url(#ar)"></line>
+          <line x1="260" y1="70" x2="380" y2="150" stroke="#cbd5e1" stroke-width="1.6" marker-end="url(#ar)"></line>
+          <line x1="140" y1="150" x2="150" y2="240" stroke="#cbd5e1" stroke-width="1.6" marker-end="url(#ar)"></line>
+          <line x1="380" y1="150" x2="360" y2="240" stroke="#cbd5e1" stroke-width="1.6" marker-end="url(#ar)"></line>
+          <line x1="140" y1="150" x2="380" y2="150" stroke="#e2e8f0" stroke-width="1.4" stroke-dasharray="4 4"></line>
+          <circle cx="260" cy="70" r="34" fill="#2563eb"></circle>
+          <text x="260" y="75" text-anchor="middle" fill="#fff" font-size="11">order-service</text>
+          <circle cx="140" cy="150" r="32" fill="#0f766e"></circle>
+          <text x="140" y="154" text-anchor="middle" fill="#fff" font-size="11">config-center</text>
+          <circle cx="380" cy="150" r="32" fill="#0f766e"></circle>
+          <text x="380" y="154" text-anchor="middle" fill="#fff" font-size="11">E1024</text>
+          <circle cx="150" cy="240" r="30" fill="#b45309"></circle>
+          <text x="150" y="244" text-anchor="middle" fill="#fff" font-size="10">timeout.ms</text>
+          <circle cx="360" cy="240" r="30" fill="#7c3aed"></circle>
+          <text x="360" y="244" text-anchor="middle" fill="#fff" font-size="10">KC-1042</text>
+          <text x="196" y="118" font-size="10" fill="#64748b">DEPENDS_ON</text>
+          <text x="300" y="118" font-size="10" fill="#64748b">CAUSES</text>
+        </svg>
+        <div class="legend" style="position:static;background:none;border:none;padding:0;margin:6px 0 0">粗实线=已裁决关系；虚线=候选/低置信度关系（默认不参与检索）</div>
+      </div>
+      <div class="card">
+        <h2 style="margin:0 0 8px">节点与关系明细</h2>
+        <table>
+          <tr><th>主体</th><th>关系</th><th>客体</th><th>置信度</th><th>来源</th></tr>
+          <tr><td>order-service</td><td>DEPENDS_ON</td><td>config-center</td><td>0.93</td><td>手册 V3.2</td></tr>
+          <tr><td>order-service</td><td>CAUSES</td><td>E1024</td><td>0.89</td><td>复盘 #20260713</td></tr>
+          <tr><td>timeout.ms</td><td>CAUSES</td><td>E1024</td><td>0.86</td><td>V3.2 §4.2.1</td></tr>
+          <tr><td>KC-1042</td><td>SUPPORTED_BY</td><td>E-1 / E-2 / E-3</td><td>1.00</td><td>证据链</td></tr>
+          <tr><td>KC-0987</td><td>SUPERSEDES</td><td>KC-1042（旧）</td><td>0.90</td><td>版本治理</td></tr>
+        </table>
+        <div class="note warn">多跳问题当前使用有界图遍历（最多 2 hop），未启用 Personalized PageRank；路径结果会标注为降级模式。</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= 智能问答 ================= -->
+  <section class="screen" id="query">
+    <div class="between">
+      <div><h1>智能问答</h1><p class="sub">路由 → 改写 → 多路召回 → 加权融合 → 重排 → 上下文装配 → 生成</p></div>
+      <span class="tag ok">✅ 已实现</span>
+    </div>
+
+    <div class="card">
+      <div class="row">
+        <div class="field" style="flex:1">订单服务出现 E1024 错误码，应该怎么处理？</div>
+        <button class="btn primary">提问</button>
+      </div>
+      <div class="row" style="margin-top:9px;font-size:12px;color:var(--muted)">
+        路由：<span class="tag">EXACT（错误码）</span>
+        改写：<span class="chip">订单服务出现 E1024 错误码，应该怎么处理？</span><span class="chip">… 报错 E1024 如何处理</span>
+        召回：BM25 24 · Vector 30 · Card 12 · Claim 18 · Graph 9
+      </div>
+    </div>
+
+    <div class="answer" style="margin-top:14px">
+      <div class="q">订单服务出现 E1024 错误码，应该怎么处理？</div>
+      <div>
+        按《订单中心故障处置手册》V3.2，E1024 表示订单服务调用下游超时。处置顺序如下：<br>
+        1. 确认日志中 E1024 出现在 <span class="mono">order-service</span> <span class="cite">1</span>；<br>
+        2. 检查 <span class="mono">timeout.ms</span> 是否低于 800（当前版本阈值为 800）<span class="cite">1</span><span class="cite">2</span>；<br>
+        3. 调用预案接口切换降级开关，开关支持热生效，无需重启 <span class="cite">1</span>；<br>
+        4. 观察 5 分钟成功率恢复情况，未恢复则升级至订单域值班 <span class="cite">1</span>。
+        <div style="margin-top:10px;font-size:12.5px;color:var(--muted)">
+          <b>适用条件：</b>环境=生产、组件 order-service ≥ 2.4.0 ｜ <b>有效期：</b>2026-01-01 ~ 2026-12-31（当前有效）<br>
+          <b>置信度：</b>0.94（抽取 0.91 · 证据 0.96 · 权威 0.95 · 时效 0.88）
+        </div>
+      </div>
+      <div style="margin-top:14px;border-top:1px dashed var(--line);padding-top:11px">
+        <b>引用证据</b>
+        <div style="margin-top:7px;font-size:12.5px">
+          <span class="cite">1</span> 订单中心故障处置手册 V3.2 · P14 · §4.2.1 · 权威 0.95 ·
+          <a href="#">查看原文片段</a><br>
+          <span class="cite">2</span> 中间件配置基线 2026Q3 · §7 超时阈值 · 权威 0.90 ·
+          <a href="#">查看原文片段</a>
+        </div>
+      </div>
+      <div style="margin-top:12px">
+        <b>可解释链路</b>
+        <div class="flow" style="margin-top:8px">
+          <span>路由<br><small>EXACT</small></span><i>→</i>
+          <span>改写<br><small>2 变体</small></span><i>→</i>
+          <span>召回<br><small>5 通道</small></span><i>→</i>
+          <span>加权 RRF<br><small>质量提权</small></span><i>→</i>
+          <span>Rerank<br><small>降级</small></span><i>→</i>
+          <span>上下文<br><small>L1+L2</small></span><i>→</i>
+          <span class="on">生成<br><small>含引用</small></span>
+        </div>
+        <div class="row" style="margin-top:9px"><button class="btn">查看完整 Trace</button><button class="btn">查看答案资格</button><button class="btn ghost">反馈：引用不准确</button></div>
+      </div>
+    </div>
+
+    <div class="grid g2" style="margin-top:14px">
+      <div class="card">
+        <h2 style="margin:0 0 8px">问答历史</h2>
+        <table>
+          <tr><th>时间</th><th>问题</th><th>路由</th><th>引用</th></tr>
+          <tr><td>14:31</td><td>订单服务 E1024 怎么处理？</td><td><span class="tag">EXACT</span></td><td>2</td></tr>
+          <tr><td>14:12</td><td>timeout.v2 和 v3 哪个还在生效？</td><td><span class="tag">CONFLICT</span></td><td>3</td></tr>
+          <tr><td>11:48</td><td>订单服务依赖哪些组件？</td><td><span class="tag">RELATION</span></td><td>4</td></tr>
+          <tr><td>10:20</td><td>近三个月故障趋势总结</td><td><span class="tag">GLOBAL</span></td><td>6</td></tr>
+        </table>
+      </div>
+      <div class="card">
+        <h2 style="margin:0 0 8px">回答质量（近 24 小时）</h2>
+        <div class="grid g2">
+          <div class="field"><b>引用准确率</b><div class="v" style="font-size:20px;font-weight:700">92%</div></div>
+          <div class="field"><b>无答案率</b><div class="v" style="font-size:20px;font-weight:700">7%</div><div class="h" style="font-size:11px;color:var(--muted)">拒答均因证据不足</div></div>
+        </div>
+        <div class="note ok" style="margin-bottom:0">无证据不结论：当召回证据不足以支撑结论时，系统返回「证据不足」而非推测，避免幻觉进入生产决策。</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= 生命周期 ================= -->
+  <section class="screen" id="lifecycle">
+    <div class="between">
+      <div><h1>知识生命周期治理</h1><p class="sub">让知识自然衰减：到期失效、版本替代、来源撤销影响分析</p></div>
+      <div class="row"><span class="tag new">＋ V1.0 新增</span><span class="tag ok">后端已就绪</span></div>
+    </div>
+
+    <div class="grid g4">
+      <div class="card kpi"><div class="l">生效中</div><div class="v">3,240</div><div class="h">占 92.1%</div></div>
+      <div class="card kpi"><div class="l">已过期</div><div class="v">152</div><div class="h">过期率 4.3%</div></div>
+      <div class="card kpi"><div class="l">已替代</div><div class="v">125</div><div class="h">版本演进，非质量事故</div></div>
+      <div class="card kpi"><div class="l">30 天内即将过期</div><div class="v" style="color:var(--warn)">23</div><div class="h">建议提前复核</div></div>
+    </div>
+
+    <div class="split" style="margin-top:14px">
+      <div class="card">
+        <h2 style="margin:0 0 8px">治理操作</h2>
+        <div class="field" style="margin-bottom:10px">
+          <b>① 到期失效扫描</b><br>
+          扫描 <span class="mono">valid_to &lt; now</span> 且非终态的断言，置为 EXPIRED 并保留版本快照。
+          <div class="row" style="margin-top:8px">
+            <span class="tag gray">预计影响 5 条</span>
+            <button class="btn primary">执行扫描</button>
+            <button class="btn">仅预览</button>
+          </div>
+        </div>
+        <div class="field" style="margin-bottom:10px">
+          <b>② 版本替代</b><br>
+          用新版本替代旧对象，旧对象置 SUPERSEDED 并建立 SUPERSEDES 关系，历史不丢失。
+          <div class="row" style="margin-top:8px">
+            <div class="field" style="flex:1">旧：<span class="mono">KC-0987</span></div>
+            <div class="field" style="flex:1">新：<span class="mono">KC-1042</span></div>
+            <button class="btn primary">执行替代</button>
+          </div>
+        </div>
+        <div class="field">
+          <b>③ 来源撤销影响分析</b><br>
+          撤回来源前先看清会影响哪些知识对象，再决定是否退役。
+          <div class="row" style="margin-top:8px">
+            <div class="field" style="flex:1">来源：运维周会纪要汇编</div>
+            <button class="btn primary">分析影响面</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2 style="margin:0 0 8px">来源影响分析结果</h2>
+        <div class="field" style="margin-bottom:10px">来源 <span class="mono">SRC-0007</span>（运维周会纪要汇编）撤销后影响面</div>
+        <table>
+          <tr><th>对象类型</th><th>受影响数量</th><th>建议</th></tr>
+          <tr><td>知识卡片 CARD</td><td>14</td><td>复核后决定是否退役</td></tr>
+          <tr><td>断言 CLAIM</td><td>31</td><td>证据减少，置信度需重算</td></tr>
+          <tr><td>实体 ENTITY</td><td>6</td><td>提及下降，可能失去规范地位</td></tr>
+        </table>
+        <div class="note warn">影响分析只做计算与呈现，<b>不执行级联物理删除</b>；是否退役由知识管理员决定。</div>
+        <div class="row"><button class="btn danger">导出影响清单</button><button class="btn">加入复核队列</button></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2 style="margin:0 0 8px">即将过期（30 天内）</h2>
+      <table>
+        <tr><th>知识对象</th><th>类型</th><th>有效期至</th><th>剩余</th><th>负责人</th><th>操作</th></tr>
+        <tr><td class="mono">CL-30144</td><td>断言</td><td>2026-09-30</td><td>14 天</td><td>消息域值班</td><td><a href="#">复核续期</a> · <a href="#">确认失效</a></td></tr>
+        <tr><td class="mono">KC-0902</td><td>卡片</td><td>2026-10-05</td><td>19 天</td><td>容量组</td><td><a href="#">复核续期</a> · <a href="#">确认失效</a></td></tr>
+        <tr><td class="mono">CL-30201</td><td>断言</td><td>2026-10-11</td><td>25 天</td><td>支付域值班</td><td><a href="#">复核续期</a> · <a href="#">确认失效</a></td></tr>
+      </table>
+    </div>
+    <div class="legend">图例：<b>本屏为 V1.0 新增</b> —— 三个操作对应后端 <span class="mono">/api/knowledge/lifecycle/*</span> 端点，当前缺口在前端操作入口与状态看板。</div>
+  </section>
+
+  <!-- ================= 索引与发布 ================= -->
+  <section class="screen" id="ops">
+    <div class="between">
+      <div><h1>索引与发布</h1><p class="sub">元数据先发布、索引异步构建；蓝绿切换保证可发布可回滚</p></div>
+      <div class="row"><span class="tag ok">✅ 指标已实现</span><span class="tag new">＋ 操作入口</span></div>
+    </div>
+
+    <div class="grid g4">
+      <div class="card kpi"><div class="l">Outbox Pending</div><div class="v">0</div><div class="h">无堆积</div></div>
+      <div class="card kpi"><div class="l">Retry</div><div class="v">2</div><div class="h">自动重试中</div></div>
+      <div class="card kpi"><div class="l">Dead Letter</div><div class="v" style="color:var(--ok)">0</div><div class="h">需人工介入为 0</div></div>
+      <div class="card kpi"><div class="l">索引漂移</div><div class="v" style="color:var(--ok)">0</div><div class="h">Checksum 校验一致</div></div>
+    </div>
+
+    <div class="split" style="margin-top:14px">
+      <div class="card">
+        <h2 style="margin:0 0 8px">蓝绿索引版本</h2>
+        <table>
+          <tr><th>Release</th><th>Schema</th><th>创建时间</th><th>状态</th><th>操作</th></tr>
+          <tr><td class="mono">rel-2026-09-16-02</td><td>v7</td><td>14:15</td><td><span class="tag ok">ACTIVE</span></td><td>—</td></tr>
+          <tr><td class="mono">rel-2026-09-10-01</td><td>v7</td><td>09-10</td><td><span class="tag gray">INACTIVE</span></td><td><button class="btn">回滚到该版本</button></td></tr>
+          <tr><td class="mono">rel-2026-09-01-01</td><td>v6</td><td>09-01</td><td><span class="tag gray">INACTIVE</span></td><td><button class="btn">回滚到该版本</button></td></tr>
+        </table>
+        <div class="row" style="margin-top:11px">
+          <button class="btn primary">重建索引（蓝绿）</button>
+          <button class="btn">激活指定版本</button>
+          <button class="btn">查看漂移明细</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2 style="margin:0 0 8px">索引事件（Outbox）</h2>
+        <table>
+          <tr><th>事件</th><th>对象</th><th>状态</th><th>重试</th><th>操作</th></tr>
+          <tr><td class="mono">EV-90123</td><td>CLAIM CL-30138</td><td><span class="tag ok">DONE</span></td><td>0</td><td>—</td></tr>
+          <tr><td class="mono">EV-90124</td><td>CARD KC-1042</td><td><span class="tag ok">DONE</span></td><td>0</td><td>—</td></tr>
+          <tr><td class="mono">EV-90125</td><td>VECTOR KC-1051</td><td><span class="tag new">RETRY</span></td><td>2</td><td><button class="btn">立即重放</button> <button class="btn ghost">跳过</button></td></tr>
+          <tr><td class="mono">EV-90126</td><td>GRAPH 关系 57 条</td><td><span class="tag ok">DONE</span></td><td>0</td><td>—</td></tr>
+        </table>
+        <div class="note warn" style="margin-bottom:0">
+          <b>运维 RBAC 保护：</b>重放/跳过需要运维操作员角色，重建/激活/回滚需要运维管理员角色（<span class="mono">X-Ops-Token</span>），当前原型以角色徽标示意。
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2 style="margin:0 0 8px">发布流程（一次完整发布）</h2>
+      <div class="flow">
+        <span class="on">裁决通过<br><small>1,096 卡片</small></span><i>→</i>
+        <span class="on">元数据发布<br><small>MySQL</small></span><i>→</i>
+        <span class="on">Outbox 投递<br><small>96 事件</small></span><i>→</i>
+        <span class="on">索引构建<br><small>ES/Milvus/Neo4j</small></span><i>→</i>
+        <span class="on">校验<br><small>Checksum</small></span><i>→</i>
+        <span class="on">蓝绿激活<br><small>原子切换</small></span>
+      </div>
+      <div class="legend" style="position:static;background:none;border:none;padding:0;margin:8px 0 0">索引失败不影响知识版本本身，可重放恢复；任一阶段异常可回滚至上一 ACTIVE 版本。</div>
+    </div>
+    <div class="legend">图例：<b>指标与列表已实现</b>（当前 Ops 面板仅展示），<b>操作按钮为 V1.0 待补齐</b>。</div>
+  </section>
+
+  <!-- ================= 权限与审计 ================= -->
+  <section class="screen" id="acl">
+    <div class="between">
+      <div><h1>权限与审计</h1><p class="sub">ACL 向下继承到证据、断言与卡片；回答只引用当前用户有权访问的证据</p></div>
+      <div class="row"><span class="tag ok">✅ 已实现</span><span class="tag new">＋ 身份认证待决策</span></div>
+    </div>
+
+    <div class="grid g4">
+      <div class="card kpi"><div class="l">主体 Subjects</div><div class="v">38</div><div class="h">团队 12 · 服务账号 6 · 个人 20</div></div>
+      <div class="card kpi"><div class="l">角色 Roles</div><div class="v">6</div><div class="h">管理员/专家/运营/只读/运维/审计</div></div>
+      <div class="card kpi"><div class="l">ACL 变更（7 天）</div><div class="v">17</div><div class="h">全部已传播</div></div>
+      <div class="card kpi"><div class="l">越权拦截</div><div class="v">4</div><div class="h">检索侧过滤，不计入答案</div></div>
+    </div>
+
+    <div class="split" style="margin-top:14px">
+      <div class="card">
+        <h2 style="margin:0 0 8px">资源权限</h2>
+        <table>
+          <tr><th>资源</th><th>可见范围</th><th>操作</th></tr>
+          <tr><td>运维故障处置知识库</td><td><span class="chip">ops-team</span><span class="chip">infra</span></td><td><button class="btn">修改</button></td></tr>
+          <tr><td>《订单中心故障处置手册》V3.2</td><td><span class="chip">ops-team</span></td><td><button class="btn">修改</button></td></tr>
+          <tr><td>KC-0902 大促限流预案</td><td><span class="chip">public</span></td><td><button class="btn">修改</button></td></tr>
+          <tr><td>历史故障复盘（2024—2025）</td><td><span class="chip">ops-team</span><span class="chip">审计组</span></td><td><button class="btn">修改</button></td></tr>
+        </table>
+        <div class="note ok" style="margin-bottom:0">ACL 变更即时生效于权威库，并通过 Outbox 异步传播到 ES / Milvus / Neo4j 过滤字段。</div>
+      </div>
+      <div class="card">
+        <h2 style="margin:0 0 8px">访问与变更审计</h2>
+        <table>
+          <tr><th>时间</th><th>主体</th><th>动作</th><th>对象</th></tr>
+          <tr><td>14:22</td><td>张*</td><td>授予可见</td><td>KC-1051 → ops-team</td></tr>
+          <tr><td>13:40</td><td>李*</td><td>裁决批准</td><td>C-2080</td></tr>
+          <tr><td>11:05</td><td>系统</td><td>越权过滤</td><td>query #8871 命中 2 条无权证据</td></tr>
+          <tr><td>09:31</td><td>王*</td><td>索引发布</td><td>rel-2026-09-16-02</td></tr>
+        </table>
+        <div class="note warn" style="margin-bottom:0">
+          <b>待决策（Q1）：</b>当前仅有运维接口 Token 鉴权与内网部署假设，<b>尚无普通用户登录体系</b>。V1.0 建议采用「反向代理 / 企业 SSO 统一鉴权 + 网关下发角色声明」，避免自研认证。
+        </div>
+        <div class="row"><button class="btn">导出审计流水</button><button class="btn ghost">配置 SSO（规划中）</button></div>
+      </div>
+    </div>
+    <div class="legend">图例：<b>ACL 与审计已实现</b>；<b>登录身份认证为 V1.0 待决策项</b>，需在 S1 前确认方案，否则阻塞发布验收。</div>
+  </section>
+
+  </main>
+</div>
+
+<script>
+(function () {
+  var items = document.querySelectorAll('.nav-item');
+  var screens = document.querySelectorAll('.screen');
+  function show(id) {
+    for (var i = 0; i < screens.length; i++) {
+      screens[i].classList.toggle('active', screens[i].id === id);
+    }
+    for (var j = 0; j < items.length; j++) {
+      items[j].classList.toggle('active', items[j].getAttribute('data-s') === id);
+    }
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+  for (var k = 0; k < items.length; k++) {
+    items[k].addEventListener('click', function () { show(this.getAttribute('data-s')); });
+  }
+  var links = document.querySelectorAll('a[href="#"]');
+  for (var m = 0; m < links.length; m++) {
+    links[m].addEventListener('click', function (e) { e.preventDefault(); });
+  }
+})();
+</script>
+</body>
+</html>

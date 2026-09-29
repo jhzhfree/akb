@@ -24,19 +24,29 @@
     :uploading="uploading"
     :ingest-live="ingestLive" :ingest-stage="ingestStage" :ingest-message="ingestMessage"
     :reset-token="resetToken"
-    @navigate="shell.navigate"
-    @pick="shell.pick" @remove="shell.remove" @upload="shell.upload"
+    :batch-status="batchStatus" :batch-running="batchRunning"
+    :preview="preview" :preview-loading="previewLoading" :preview-error="previewError" :preview-id="previewId"
+    @upload-files="shell.uploadFiles" @remove="shell.remove"
+    @cancel-batch="shell.cancelBatch" @retry-batch="shell.retryBatch"
+    @preview="shell.previewSource"
     @select-run="shell.selectRun" @refresh="shell.refresh" @reloaded="shell.reloadAfterRetry"
     @open-graph="shell.openGraph" />
 
-  <!-- 文档导入 / 连接器 / 生成任务：同一面板按 focus 切换区块（设计 §4.1 / §4.2）。 -->
+  <!-- 设计 §6.1：连接数据源有自己的面板——Jira / Confluence / REST 读的是外部系统的知识列表，
+       和「把文件拖进来」是两条链路，共用面板只会让两边都不好懂。 -->
+  <ConnectorPanel
+    v-else-if="active==='create.connector'"
+    :knowledge-base-id="knowledgeBaseId" />
+
+  <!-- 文档导入 / 生成任务：同一面板按 focus 切换区块（设计 §4.1 / §4.2）。 -->
   <DataCenterPanel
     v-else-if="dcFocus"
     :focus="dcFocus"
+    :knowledge-base-id="knowledgeBaseId"
     :authority="authority" :permission-tags="permissionTags"
     @update:authority="$emit('update:authority',$event)"
     @update:permission-tags="$emit('update:permission-tags',$event)"
-    :sources="sources" :documents="documents"
+    :documents="documents"
     :runs="runs" :run-detail="runDetail" :selected-run-id="selectedRunId"
     :uploading="uploading"
     :ingest-live="ingestLive" :ingest-stage="ingestStage" :ingest-message="ingestMessage"
@@ -44,7 +54,7 @@
     :reset-token="resetToken"
     :batch-status="batchStatus" :batch-running="batchRunning"
     @preview="shell.previewSource"
-    @pick="shell.pick" @remove="shell.remove" @upload="shell.upload"
+    @remove="shell.remove"
     @upload-files="shell.uploadFiles"
     @cancel-batch="shell.cancelBatch" @retry-batch="shell.retryBatch"
     @select-run="shell.selectRun" @reloaded="shell.reloadAfterRetry" />
@@ -82,6 +92,7 @@ import { PERM } from '../permissions'
 import ModuleTabs from './ModuleTabs.vue'
 import GenerateHomePanel from './GenerateHomePanel.vue'
 import DataCenterPanel from './DataCenterPanel.vue'
+import ConnectorPanel from './ConnectorPanel.vue'
 import ReviewPanel from './ReviewPanel.vue'
 import PanelState from './PanelState.vue'
 import DerivationPanel from './DerivationPanel.vue'
@@ -142,10 +153,9 @@ const actions = computed(() => [
 const badges = computed<Record<string, number | string>>(() => ({
   'create.judgment': props.pendingReviews.length + props.conflicts.length || '',
 }))
-/** 资料类 Tab 复用同一面板：文档导入 / 连接器 / 生成任务。 */
-const dcFocus = computed<'sources' | 'documents' | 'ingestion' | ''>(() => {
+/** 资料类 Tab 复用同一面板：文档导入 / 生成任务（连接器已独立成面板）。 */
+const dcFocus = computed<'documents' | 'ingestion' | ''>(() => {
   if (props.active === 'create.import') return 'documents'
-  if (props.active === 'create.connector') return 'sources'
   if (props.active === 'create.jobs') return 'ingestion'
   return ''
 })
@@ -155,12 +165,12 @@ const dcFocus = computed<'sources' | 'documents' | 'ingestion' | ''>(() => {
 /* 动作卡数量随角色变化，用 auto-fit 保证 1~4 张卡都排得下。 */
 .gen-hero{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}
 .gen-action{
-  position:relative;padding:16px 18px;text-align:left;background:#fff;
-  border:1px solid #e2e9f2;border-radius:11px;box-shadow:0 2px 9px #1d35570a;cursor:pointer}
-.gen-action:hover{border-color:#77aff8}
-.gen-action:disabled{cursor:not-allowed;color:#9aa4b5}
-.gen-action b{display:block;font-size:15px;color:#164e8b}
-.gen-action small{display:block;margin-top:4px;font-size:11.5px;color:#748399}
-.gen-action em{position:absolute;right:14px;top:14px;font-size:11px;font-style:normal;color:#9aa4b5}
+  position:relative;padding:16px 18px;text-align:left;background:var(--bg-raised);
+  border:1px solid var(--line-d);border-radius:11px;box-shadow:0 2px 9px #1d35570a;cursor:pointer}
+.gen-action:hover{border-color:var(--brand-400)}
+.gen-action:disabled{cursor:not-allowed;color:var(--ink-3)}
+.gen-action b{display:block;font-size:15px;color:var(--ink-1)}
+.gen-action small{display:block;margin-top:4px;font-size:11.5px;color:var(--ink-2)}
+.gen-action em{position:absolute;right:14px;top:14px;font-size:11px;font-style:normal;color:var(--ink-3)}
 @media(max-width:1100px){.gen-hero{grid-template-columns:repeat(2,minmax(0,1fr))}}
 </style>

@@ -61,13 +61,13 @@ grid-template-columns:1fr 1.4fr auto;
 gap:8px;
 margin-bottom:14px}
 .kb-vis{width:170px}
-.kb-list{border:1px solid #e5e7eb;
+.kb-list{border:1px solid var(--line-d);
 border-radius:10px;
 overflow:hidden}
 .kb-row{width:100%;
 border:0;
-border-bottom:1px solid #f1f5f9;
-background:#fff;
+border-bottom:1px solid var(--line-d);
+background:var(--bg-raised);
 padding:11px 12px;
 display:flex;
 align-items:center;
@@ -75,21 +75,21 @@ gap:10px;
 text-align:left;
 cursor:pointer}
 .kb-row:last-child{border-bottom:0}
-.kb-row:hover,.kb-row.active{background:#f5f7ff}
+.kb-row:hover,.kb-row.active{background:var(--bg-sub)}
 .kb-icon{font-size:18px}
 .kb-copy{display:flex;
 flex-direction:column;
 min-width:0;
 flex:1}
 .kb-copy b{font-size:13px;
-color:#1e293b}
+color:var(--ink-1)}
 .kb-copy small,.kb-code{font-size:11px;
-color:#94a3b8}
+color:var(--ink-3)}
 .kb-meta{display:flex;
 align-items:center;
 gap:8px}
 .kb-owner{font-size:11px;
-color:#64748b;
+color:var(--ink-3);
 font-style:normal}
 .kb-code{margin-left:auto}
 @media(max-width:650px){.kb-create{grid-template-columns:1fr}

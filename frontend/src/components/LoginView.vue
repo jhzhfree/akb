@@ -62,31 +62,33 @@ async function submit() {
 /* 登录页是全站唯一无框架页：背景用品牌色双光斑，突出中间的卡片 */
 .lv-mask{
   min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;
+  /* 光斑与底都用主题表面：浅色主题下整页跟着变浅，文字色（--ink-*）才会自动反向 */
   background:
-    radial-gradient(1000px 520px at 12% -8%,rgba(91,139,247,.28),transparent 60%),
-    radial-gradient(760px 460px at 105% 110%,rgba(20,184,166,.22),transparent 62%),
-    linear-gradient(180deg,#111a3c,#172554 45%,#0f172a);
+    radial-gradient(1000px 520px at 12% -8%,color-mix(in srgb,var(--brand-400) 30%,transparent),transparent 60%),
+    radial-gradient(760px 460px at 105% 110%,color-mix(in srgb,var(--teal-500) 22%,transparent),transparent 62%),
+    linear-gradient(180deg,var(--bg-base),var(--bg-sub) 45%,var(--bg-base));
 }
 .lv-card{
   width:400px;max-width:100%;padding:30px 28px 22px;border-radius:20px;
-  background:#fff;box-shadow:0 24px 60px rgba(8,15,40,.32);
-  border:1px solid rgba(255,255,255,.6);
+  background:linear-gradient(180deg,var(--bg-sub),var(--bg-raised));
+  box-shadow:var(--sd-3);
+  border:1px solid var(--line);
 }
 .lv-brand{display:flex;align-items:center;gap:12px}
 .lv-brand-copy{display:flex;flex-direction:column;line-height:1.2}
-.lv-brand-copy b{font-size:16px;font-weight:700;color:#0f172a;letter-spacing:.3px}
-.lv-brand-copy small{font-size:9.5px;font-weight:600;letter-spacing:.16em;color:#8591a9;text-transform:uppercase}
-.lv-title{margin:18px 0 0;font-size:20px;font-weight:700;letter-spacing:-.01em;color:#0f172a}
-.lv-sub{margin:6px 0 18px;font-size:12px;color:#5b667a}
+.lv-brand-copy b{font-size:16px;font-weight:700;color:var(--ink-1);letter-spacing:.3px}
+.lv-brand-copy small{font-size:9.5px;font-weight:600;letter-spacing:.16em;color:var(--ink-3);text-transform:uppercase}
+.lv-title{margin:18px 0 0;font-size:20px;font-weight:700;letter-spacing:-.01em;color:var(--ink-1)}
+.lv-sub{margin:6px 0 18px;font-size:12px;color:var(--ink-2)}
 .lv-form{display:flex;flex-direction:column;gap:11px}
 .lv-submit{width:100%;margin-top:4px;height:40px;font-weight:600;letter-spacing:.06em}
 .lv-error{
-  margin-top:13px;padding:8px 11px;border-radius:10px;font-size:12px;color:#b91c1c;
-  background:#fef2f2;border:1px solid #fbd5d5;
+  margin-top:13px;padding:8px 11px;border-radius:10px;font-size:12px;color:var(--danger);
+  background:var(--danger-bg);border:1px solid var(--danger);
 }
-.lv-hint{margin-top:12px;font-size:11px;line-height:1.6;color:#8591a9}
+.lv-hint{margin-top:12px;font-size:11px;line-height:1.6;color:var(--ink-3)}
 .lv-foot{
-  margin:20px 0 0;padding-top:14px;border-top:1px solid #eef2f7;
-  font-size:10.5px;letter-spacing:.12em;color:#b0b8c9;text-align:center;
+  margin:20px 0 0;padding-top:14px;border-top:1px solid var(--line-d);
+  font-size:10.5px;letter-spacing:.12em;color:var(--ink-3);text-align:center;
 }
 </style>

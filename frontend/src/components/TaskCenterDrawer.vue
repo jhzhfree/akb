@@ -11,7 +11,7 @@
         <div class="text-[11px] text-ink-500">已成功</div><b class="text-base">{{ success }}</b>
       </div>
       <div class="rounded-lg bg-ink-50 p-2">
-        <div class="text-[11px] text-ink-500">失败</div><b class="text-base text-rose-600">{{ failed }}</b>
+        <div class="text-[11px] text-ink-500">失败</div><b class="text-base text-[color:var(--danger)]">{{ failed }}</b>
       </div>
     </div>
     <PanelState
@@ -28,10 +28,10 @@
             <span class="truncate text-ink-800">{{ run.sourceName || `任务 #${run.id}` }}</span>
             <el-tag size="small" effect="plain" :type="statusType(run.status)">{{ run.status }}</el-tag>
           </div>
-          <div class="mt-0.5 text-[11px] text-ink-400">
+          <div class="mt-0.5 text-[11px] text-ink-500">
             {{ run.currentStage || '—' }} · Chunk {{ run.chunkCount ?? 0 }} · {{ run.startedTime ? String(run.startedTime).slice(0,19) : '' }}
           </div>
-          <div v-if="run.errorMessage" class="mt-1 truncate text-[11px] text-rose-600">{{ run.errorMessage }}</div>
+          <div v-if="run.errorMessage" class="mt-1 truncate text-[11px] text-[color:var(--danger)]">{{ run.errorMessage }}</div>
         </button>
       </div>
     </PanelState>

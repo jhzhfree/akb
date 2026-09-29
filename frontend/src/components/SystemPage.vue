@@ -99,12 +99,12 @@ const modules = computed(() => {
 /* 低频配置集中管理：卡片宫格是进入各配置模块的唯一入口。 */
 .config-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
 .config-card{
-  position:relative;padding:16px 18px;text-align:left;background:#fff;
-  border:1px solid #e2e9f2;border-radius:11px;box-shadow:0 2px 9px #1d35570a;cursor:pointer}
-.config-card:hover{border-color:#77aff8}
+  position:relative;padding:16px 18px;text-align:left;background:var(--bg-raised);
+  border:1px solid var(--line-d);border-radius:11px;box-shadow:0 2px 9px #1d35570a;cursor:pointer}
+.config-card:hover{border-color:var(--brand-400)}
 .config-card:disabled{cursor:not-allowed}
-.config-card b{display:block;font-size:15px;color:#164e8b}
-.config-card span{display:block;margin-top:4px;font-size:11.5px;color:#748399}
-.config-card em{position:absolute;right:14px;top:14px;font-size:11px;font-style:normal;color:#9aa4b5}
+.config-card b{display:block;font-size:15px;color:var(--ink-1)}
+.config-card span{display:block;margin-top:4px;font-size:11.5px;color:var(--ink-2)}
+.config-card em{position:absolute;right:14px;top:14px;font-size:11px;font-style:normal;color:var(--ink-3)}
 @media(max-width:1100px){.config-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 </style>

@@ -24,7 +24,7 @@
       <MetricCard label="在用凭证" :value="overview?.activeKeys ?? 0" hint="有效状态的 API 密钥" />
     </div>
 
-    <div v-if="error" class="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2.5 text-xs text-amber-700">
+    <div v-if="error" class="mt-3 rounded-lg border border-[color:var(--warn-bd)] bg-[color:var(--warn-bg)] px-4 py-2.5 text-xs text-[color:var(--warn)]">
       {{ error }}
     </div>
 
@@ -42,10 +42,10 @@
           <div class="mt-3 max-h-64 overflow-auto">
             <div v-for="item in overview?.rest?.endpoints || []" :key="item.method + item.path"
               class="flex items-start gap-2 border-b border-ink-100 py-1.5 last:border-0">
-              <span class="w-12 shrink-0 text-[11px] font-semibold text-indigo-600">{{ item.method }}</span>
+              <span class="w-12 shrink-0 text-[11px] font-semibold text-accent">{{ item.method }}</span>
               <span class="min-w-0 flex-1">
                 <span class="block truncate text-[11px] text-ink-700">{{ item.path }}</span>
-                <span class="block text-[11px] text-ink-400">{{ item.summary }}</span>
+                <span class="block text-[11px] text-ink-500">{{ item.summary }}</span>
               </span>
             </div>
           </div>
@@ -69,7 +69,7 @@
           <div class="mt-3 kb-muted">可用工具</div>
           <div class="mt-1 flex flex-wrap gap-1">
             <span v-for="tool in overview?.mcp?.tools || []" :key="tool"
-              class="rounded border border-indigo-200 bg-indigo-50 px-2 py-0.5 text-[11px] text-indigo-700">{{ tool }}</span>
+              class="rounded border border-[color:var(--info-bd)] bg-[color:var(--info-bg)] px-2 py-0.5 text-[11px] text-accent">{{ tool }}</span>
           </div>
         </div>
       </article>
@@ -87,7 +87,7 @@
             <div v-for="item in overview?.sse?.endpoints || []" :key="item.path"
               class="border-b border-ink-100 py-1.5 last:border-0">
               <span class="block truncate text-[11px] text-ink-700">{{ item.path }}</span>
-              <span class="block text-[11px] text-ink-400">{{ item.summary }}</span>
+              <span class="block text-[11px] text-ink-500">{{ item.summary }}</span>
             </div>
           </div>
         </div>
@@ -141,7 +141,7 @@
             <el-table-column label="操作" width="110" fixed="right">
               <template #default="{ row }">
                 <el-button v-if="row.status === 'ACTIVE'" link type="danger" size="small" @click="revoke(row)">吊销</el-button>
-                <span v-else class="text-[11px] text-ink-400">已失效</span>
+                <span v-else class="text-[11px] text-ink-500">已失效</span>
               </template>
             </el-table-column>
           </el-table>
@@ -170,7 +170,7 @@
               <button class="kb-btn-outline" :disabled="probing || !probeSecret.trim()" @click="probe">REST 自检</button>
               <button class="kb-btn-outline" :disabled="probing || !probeSecret.trim()" @click="probeSse">SSE 自检</button>
             </div>
-            <p v-if="probeResult" class="mt-2 text-[11px]" :class="probeOk ? 'text-emerald-600' : 'text-rose-600'">
+            <p v-if="probeResult" class="mt-2 text-[11px]" :class="probeOk ? 'text-[color:var(--ok)]' : 'text-[color:var(--danger)]'">
               {{ probeResult }}
             </p>
             <p class="kb-muted mt-2">
@@ -211,7 +211,7 @@
               </el-table-column>
               <el-table-column label="结果" width="90">
                 <template #default="{ row }">
-                  <span :class="row.statusCode >= 400 ? 'text-rose-600' : 'text-emerald-600'">{{ row.statusCode }}</span>
+                  <span :class="row.statusCode >= 400 ? 'text-[color:var(--danger)]' : 'text-[color:var(--ok)]'">{{ row.statusCode }}</span>
                 </template>
               </el-table-column>
               <el-table-column label="耗时" width="90">
@@ -245,7 +245,7 @@
         </el-form-item>
         <el-form-item label="限流">
           <el-input-number v-model="form.rateLimitPerMinute" :min="1" :max="6000" />
-          <span class="ml-2 text-[11px] text-ink-400">次 / 分钟</span>
+          <span class="ml-2 text-[11px] text-ink-500">次 / 分钟</span>
         </el-form-item>
         <el-form-item label="有效期">
           <el-input v-model="form.expiresAt" placeholder="留空长期有效，如 2026-12-31T23:59:59" />
@@ -490,13 +490,13 @@ onMounted(loadAll)
 <style scoped>
 .code-block{white-space:pre-wrap;
 word-break:break-all;
-border:1px solid #e5e7eb;
+border:1px solid var(--line-d);
 border-radius:10px;
-background:#f8fafc;
+background:var(--bg-sub);
 padding:10px 12px;
 font-size:11px;
 line-height:1.6;
-color:#334155;
+color:var(--ink-1);
 max-height:280px;
 overflow:auto}
 .w-full{width:100%}

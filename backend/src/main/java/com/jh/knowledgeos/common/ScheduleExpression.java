@@ -52,7 +52,8 @@ public final class ScheduleExpression {
         if (parts.length != 5) {
             throw new IllegalArgumentException("计划表达式需要 5 段（分 时 日 月 周），例如：0 3 * * 1");
         }
-        return new ScheduleExpression(raw, parseField(parts[0], 0, 59, "分钟"), parseField(parts[1], 0, 23, "小时"), parseField(parts[2], 1, 31, "日"), parseField(parts[3], 1, 12, "月"), parseField(parts[4], 1, 7, "星期"));
+        return new ScheduleExpression(raw, parseField(parts[0], 0, 59, "分钟"), parseField(parts[1], 0, 23, "小时"), parseField(parts[2], 1, 31, "日"),
+            parseField(parts[3], 1, 12, "月"), parseField(parts[4], 1, 7, "星期"));
     }
 
     /**

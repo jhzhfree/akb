@@ -26,6 +26,7 @@ import java.util.Map;
  * would be a worse defect than an incomplete one.</p>
  */
 @Component
+/** Filters sensitive fields from external-call audit payloads. */
 public class ExternalCallPayloadFilter extends OncePerRequestFilter {
 
     public static final String PAYLOAD_ATTRIBUTE = ExternalCallPayloadFilter.class.getName() + ".payload";

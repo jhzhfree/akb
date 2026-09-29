@@ -15,9 +15,11 @@ public interface GovernanceMapper {
     /**
      * Version snapshots of a knowledge base, newest first, optionally filtered.
      */
-    List<Map<String, Object>> listVersionSnapshots(@Param("kb") Long kb, @Param("objectType") String objectType, @Param("changeType") String changeType, @Param("keyword") String keyword, @Param("limit") int limit, @Param("offset") int offset);
+    List<Map<String, Object>> listVersionSnapshots(@Param("kb") Long kb, @Param("objectType") String objectType, @Param("changeType") String
+        changeType, @Param("keyword") String keyword, @Param("limit") int limit, @Param("offset") int offset);
 
-    long countVersionSnapshots(@Param("kb") Long kb, @Param("objectType") String objectType, @Param("changeType") String changeType, @Param("keyword") String keyword);
+    long countVersionSnapshots(@Param("kb") Long kb, @Param("objectType") String objectType, @Param("changeType") String changeType, @Param("keyword")
+        String keyword);
 
     /**
      * Snapshot counts grouped by object type and change type: answers "what changed, and how".
@@ -53,4 +55,43 @@ public interface GovernanceMapper {
      * Latest evaluation run of a knowledge base, the source of Hit@K style metrics.
      */
     Map<String, Object> latestEvaluationRun(@Param("kb") Long kb);
+
+    List<Map<String, Object>> listAdjudicationCandidates(@Param("kb") Long kb);
+
+    List<Map<String, Object>> listReviewsForObject(@Param("objectType") String objectType, @Param("objectCode") String objectCode);
+
+    List<Map<String, Object>> listAssessmentsForObject(@Param("kb") Long kb, @Param("objectType") String objectType, @Param("objectCode") String objectCode);
+
+    int snapshotKnowledgeObject(@Param("kb") Long kb, @Param("objectType") String objectType, @Param("objectCode") String objectCode,
+        @Param("changeType") String changeType, @Param("changedBy") String changedBy);
+
+    List<Map<String, Object>> listObjectConflicts(@Param("objectCode") String objectCode);
+
+    int insertAssessment(@Param("kb") Long kb, @Param("objectType") String objectType, @Param("objectCode") String objectCode, @Param("policyVersion")
+        String policyVersion, @Param("confidence") Double confidence, @Param("riskLevel") String riskLevel, @Param("decision") String decision,
+        @Param("requiresHuman") Boolean requiresHuman, @Param("scoreJson") String scoreJson, @Param("aiJson") String aiJson, @Param("reason") String reason);
+
+    List<Map<String, Object>> listAssessments(@Param("kb") Long kb, @Param("limit") Integer limit);
+
+    int updateCardStatus(@Param("code") String code, @Param("status") String status);
+
+    int updateClaimStatus(@Param("code") String code, @Param("status") String status);
+
+    int insertJudgment(@Param("type") String type, @Param("code") String code, @Param("decision") String decision, @Param("reviewer") String reviewer,
+        @Param("comment") String comment, @Param("inputObjectCodes") String inputObjectCodes, @Param("resultObjectCode") String resultObjectCode,
+        @Param("policyVersion") String policyVersion);
+
+    int insertConflict(@Param("kb") Long kb, @Param("a") String a, @Param("b") String b, @Param("type") String type, @Param("score") Double score);
+
+    List<Map<String, Object>> listConflicts(@Param("kb") Long kb, @Param("status") String status);
+
+    Map<String, Object> getConflict(@Param("id") Long id);
+
+    List<Map<String, Object>> listAdjudicationTargets(@Param("codes") List<String> codes);
+
+    int resolveConflict(@Param("id") Long id, @Param("status") String status, @Param("resolution") String resolution);
+
+    List<Map<String, Object>> listPendingReviews(@Param("kb") Long kb);
+
+    Long findKnowledgeBaseIdForObject(@Param("objectType") String objectType, @Param("objectCode") String objectCode);
 }

@@ -44,7 +44,9 @@ public class IntegrationInsightController {
 
     @GetMapping("/call-logs")
     @Operation(summary = "调用日志：按协议与结果过滤，traceId 可回到 Query Trace")
-    public ApiResponse<Object> callLogs(@RequestParam(value = "hours", required = false) Integer hours, @RequestParam(value = "protocol", required = false) String protocol, @RequestParam(value = "status", required = false) String status, @RequestParam(value = "limit", required = false) Integer limit) {
+    public ApiResponse<Object> callLogs(@RequestParam(value = "hours", required = false) Integer hours, @RequestParam(value = "protocol", required =
+        false) String protocol, @RequestParam(value = "status", required = false) String status, @RequestParam(value = "limit", required = false)
+        Integer limit) {
         requireManager();
         return ApiResponse.ok(service.callLogs(hours, protocol, status, limit));
     }

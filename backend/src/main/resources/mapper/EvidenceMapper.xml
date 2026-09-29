@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.jh.knowledgeos.mapper.EvidenceMapper">
+
+<select id="getContentUnitDetail" resultType="map">
+SELECT e.evidence_code evidenceCode,e.quote_text quoteText,e.authority_score authorityScore,
+       e.freshness_score freshnessScore,e.status evidenceStatus,
+       s.source_code sourceCode,s.name sourceName,s.source_type sourceType,s.source_uri sourceUri,
+       d.document_code documentCode,d.title documentTitle,d.mime_type mimeType,d.parse_status parseStatus,
+       cu.unit_code contentUnitCode,cu.heading_path headingPath,cu.page_no pageNo,cu.content content,
+       cu.content_hash contentHash
+FROM t_content_unit cu
+JOIN t_document d ON d.id=cu.document_id
+JOIN t_source_version sv ON sv.id=d.source_version_id
+JOIN t_source s ON s.id=sv.source_id
+LEFT JOIN t_evidence e ON e.content_unit_id=cu.id AND e.knowledge_base_id=#{kb}
+WHERE s.knowledge_base_id=#{kb} AND cu.id=#{contentUnitId} AND (s.permission_tags IS NULL OR JSON_LENGTH(s.permission_tags)=0
+ <if test="permissionTags != null and permissionTags.size() > 0">
+ OR (<foreach collection="permissionTags" item="tag" separator=" OR ">JSON_CONTAINS(s.permission_tags, JSON_QUOTE(#{tag}))</foreach>)
+ </if>)
+ORDER BY e.id ASC LIMIT 1
+</select>
+
+
+<select id="getEvidenceDetail" resultType="map">
+SELECT e.evidence_code evidenceCode,e.quote_text quoteText,e.authority_score authorityScore,
+       e.freshness_score freshnessScore,e.location_json locationJson,e.status evidenceStatus,
+       s.source_code sourceCode,s.name sourceName,s.source_type sourceType,s.source_uri sourceUri,
+       d.document_code documentCode,d.title documentTitle,d.mime_type mimeType,d.parse_status parseStatus,
+       cu.unit_code contentUnitCode,cu.heading_path headingPath,cu.page_no pageNo,cu.content content,
+       cu.content_hash contentHash
+FROM t_evidence e
+JOIN t_source s ON s.id=e.source_id
+LEFT JOIN t_content_unit cu ON cu.id=e.content_unit_id
+LEFT JOIN t_document d ON d.id=cu.document_id
+WHERE e.knowledge_base_id=#{kb} AND e.evidence_code=#{evidenceCode} AND (s.permission_tags IS NULL OR JSON_LENGTH(s.permission_tags)=0
+ <if test="permissionTags != null and permissionTags.size() > 0">
+ OR (<foreach collection="permissionTags" item="tag" separator=" OR ">JSON_CONTAINS(s.permission_tags, JSON_QUOTE(#{tag}))</foreach>)
+ </if>)
+LIMIT 1
+</select>
+
+
+<select id="listEvidenceForObject" resultType="map">
+SELECT e.evidence_code evidenceCode,e.quote_text quoteText,e.authority_score authorityScore,
+       e.freshness_score freshnessScore,s.name sourceName,e.location_json locationJson,
+       cu.unit_code contentUnitCode,cu.heading_path headingPath,cu.page_no pageNo,d.document_code documentCode,d.title documentTitle
+FROM t_evidence e JOIN t_source s ON s.id=e.source_id
+LEFT JOIN t_content_unit cu ON cu.id=e.content_unit_id LEFT JOIN t_document d ON d.id=cu.document_id
+WHERE e.id IN (SELECT evidence_id FROM t_claim_evidence WHERE claim_code=#{objectCode}) AND #{objectType}='CLAIM'
+UNION ALL
+SELECT e.evidence_code,e.quote_text,e.authority_score,e.freshness_score,s.name,e.location_json,
+       cu.unit_code,cu.heading_path,cu.page_no,d.document_code,d.title
+FROM t_evidence e JOIN t_source s ON s.id=e.source_id
+LEFT JOIN t_content_unit cu ON cu.id=e.content_unit_id LEFT JOIN t_document d ON d.id=cu.document_id
+WHERE e.id IN (SELECT evidence_id FROM t_knowledge_evidence WHERE knowledge_code=#{objectCode}) AND #{objectType}='CARD' LIMIT 8
+</select>
+
+
+<select id="listLineageForObject" resultType="map">SELECT e.evidence_code evidenceCode,e.content_hash evidenceHash,cu.id contentUnitId,cu.unit_code unitCode,cu.heading_path headingPath,cu.chunk_type chunkType,cu.page_no pageNo,cu.page_end pageEnd,cu.char_start charStart,cu.char_end charEnd,cu.revision chunkRevision,cu.status chunkStatus,LEFT(cu.content,240) excerpt,d.id documentId,d.document_code documentCode,d.title documentTitle,d.status documentStatus,s.id sourceId,s.name sourceName,s.source_type sourceType,sv.version_no sourceVersion,s.authority_score authorityScore FROM t_evidence e JOIN t_content_unit cu ON cu.id=e.content_unit_id JOIN t_document d ON d.id=cu.document_id JOIN t_source_version sv ON sv.id=d.source_version_id JOIN t_source s ON s.id=sv.source_id WHERE e.knowledge_base_id=#{kb} AND e.object_type=#{objectType} AND e.object_code=#{objectCode} ORDER BY e.id</select>
+
+
+<select id="findPrimaryEvidenceAnchor" resultType="map">
+SELECT evidenceCode,evidenceHash FROM (
+ (SELECT e.evidence_code evidenceCode,COALESCE(cu.content_hash,'') evidenceHash
+  FROM t_knowledge_evidence k JOIN t_evidence e ON e.id=k.evidence_id
+  LEFT JOIN t_content_unit cu ON cu.id=e.content_unit_id
+  WHERE k.knowledge_code=#{objectCode} AND #{objectType}='CARD' ORDER BY e.id ASC LIMIT 1)
+ UNION ALL
+ (SELECT e.evidence_code evidenceCode,COALESCE(cu.content_hash,'') evidenceHash
+  FROM t_claim_evidence c JOIN t_evidence e ON e.id=c.evidence_id
+  LEFT JOIN t_content_unit cu ON cu.id=e.content_unit_id
+  WHERE c.claim_code=#{objectCode} AND #{objectType}='CLAIM' ORDER BY e.id ASC LIMIT 1)
+) x LIMIT 1
+</select>
+
+
+<insert id="batchInsertEvidence">INSERT INTO t_evidence(evidence_code,knowledge_base_id,content_unit_id,source_id,quote_text,location_json,authority_score,freshness_score,status) VALUES <foreach collection="rows" item="row" separator=",">(#{row.evidenceCode},#{row.knowledgeBaseId},#{row.contentUnitId},#{row.sourceId},#{row.quoteText},CAST(#{row.locationJson} AS JSON),#{row.authorityScore},1.0,'ACTIVE')</foreach></insert>
+<insert id="insertEvidence">INSERT INTO t_evidence(evidence_code,knowledge_base_id,content_unit_id,source_id,quote_text,location_json,authority_score,freshness_score,status)VALUES(#{evidenceCode},#{kb},#{contentUnitId},#{sourceId},#{quoteText},CAST(#{locationJson} AS JSON),#{authorityScore},1.0,'ACTIVE')</insert>
+</mapper>

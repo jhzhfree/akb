@@ -66,14 +66,17 @@ public class PlatformEventPublisher {
      */
     public void emitUser(String type, Long kb, String source, String targetType, String targetCode, String summary, Map<String, Object> detail) {
         User user = AuthContext.get();
-        emit(type, kb, source, targetType, targetCode, summary, detail, ACTOR_USER, user == null ? null : String.valueOf(user.getId()), user == null ? null : user.getUsername());
+        emit(type, kb, source, targetType, targetCode, summary, detail, ACTOR_USER, user == null ? null : String.valueOf(user.getId()), user == null ?
+            null : user.getUsername());
     }
 
     /**
      * Event attributed to an external credential; also the path MCP and SSE channels use.
      */
-    public void emitExternal(ApiKey key, String type, Long kb, String source, String targetType, String targetCode, String summary, Map<String, Object> detail) {
-        emit(type, kb, source, targetType, targetCode, summary, detail, ACTOR_API_KEY, key == null ? null : key.getKeyCode(), key == null ? null : key.getName());
+    public void emitExternal(ApiKey key, String type, Long kb, String source, String targetType, String targetCode, String summary, Map<String,
+        Object> detail) {
+        emit(type, kb, source, targetType, targetCode, summary, detail, ACTOR_API_KEY, key == null ? null : key.getKeyCode(), key == null ? null :
+            key.getName());
     }
 
     /**
@@ -86,9 +89,11 @@ public class PlatformEventPublisher {
     /**
      * Same as {@link #emitUser} but stamped with the asynchronous task that produced it.
      */
-    public void emitUser(String type, Long kb, String source, String targetType, String targetCode, String summary, Map<String, Object> detail, EventTaskContext task) {
+    public void emitUser(String type, Long kb, String source, String targetType, String targetCode, String summary, Map<String, Object> detail,
+        EventTaskContext task) {
         User user = AuthContext.get();
-        emit(type, kb, source, targetType, targetCode, summary, detail, ACTOR_USER, user == null ? null : String.valueOf(user.getId()), user == null ? null : user.getUsername(), task);
+        emit(type, kb, source, targetType, targetCode, summary, detail, ACTOR_USER, user == null ? null : String.valueOf(user.getId()), user == null ?
+            null : user.getUsername(), task);
     }
 
     /**
@@ -102,7 +107,8 @@ public class PlatformEventPublisher {
      * Builds the event synchronously — the principal and trace id are thread-bound and would be
      * gone on any later thread — then persists it only once the surrounding transaction committed.
      */
-    public void emit(String type, Long kb, String source, String targetType, String targetCode, String summary, Map<String, Object> detail, String actorType, String actorId, String actorName) {
+    public void emit(String type, Long kb, String source, String targetType, String targetCode, String summary, Map<String, Object> detail, String
+        actorType, String actorId, String actorName) {
         emit(type, kb, source, targetType, targetCode, summary, detail, actorType, actorId, actorName, null);
     }
 
@@ -110,7 +116,8 @@ public class PlatformEventPublisher {
      * Builds the event synchronously — the principal and trace id are thread-bound and would be
      * gone on any later thread — then persists it only once the surrounding transaction committed.
      */
-    public void emit(String type, Long kb, String source, String targetType, String targetCode, String summary, Map<String, Object> detail, String actorType, String actorId, String actorName, EventTaskContext task) {
+    public void emit(String type, Long kb, String source, String targetType, String targetCode, String summary, Map<String, Object> detail, String
+        actorType, String actorId, String actorName, EventTaskContext task) {
         if (type == null || type.isEmpty()) {
             return;
         }

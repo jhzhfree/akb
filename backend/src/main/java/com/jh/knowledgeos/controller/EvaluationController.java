@@ -80,7 +80,8 @@ public class EvaluationController {
 
     @GetMapping("/runs/{kb}")
     @Operation(summary = "列出评测运行历史")
-    public ApiResponse<List<Map<String, Object>>> runs(@PathVariable Long kb, @RequestParam(value = "datasetId", required = false) Long datasetId, @RequestParam(value = "limit", required = false) Integer limit) {
+    public ApiResponse<List<Map<String, Object>>> runs(@PathVariable Long kb, @RequestParam(value = "datasetId", required = false) Long datasetId,
+        @RequestParam(value = "limit", required = false) Integer limit) {
         return ApiResponse.ok(service.listRuns(kb, datasetId, limit));
     }
 

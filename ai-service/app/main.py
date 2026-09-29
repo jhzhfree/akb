@@ -8,10 +8,14 @@ import uuid
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
+from contextlib import asynccontextmanager
+
 from app.core.config import settings
+from app.core.retrieval_settings import apply_retrieval_settings
 from app.core.runtime_settings import load_model_settings
 from app.derivation_routes import router as derivation_router
 from app.query_policy_routes import router as query_policy_router
+from app.retrieval_settings_routes import router as retrieval_settings_router
 from app.routes import router
 from app.schema_routes import router as schema_router
 from app.settings_routes import router as settings_router
@@ -32,9 +36,22 @@ class TraceAdapter(logging.LoggerAdapter):
         return msg, kwargs
 
 
-app = FastAPI(title="AI 原生企业知识库平台 - AI Service", version="1.1.0")
+@asynccontextmanager
+async def lifespan(_: FastAPI):
+    """Apply the persisted retrieval switches before the first request.
+
+    Environment variables only seed the console; once the console has been used
+    its file is authoritative, so a restart must not silently re-enable an engine
+    that an operator turned off.
+    """
+    apply_retrieval_settings()
+    yield
+
+
+app = FastAPI(title="AI 原生企业知识库平台 - AI Service", version="1.1.0", lifespan=lifespan)
 app.include_router(router)
 app.include_router(settings_router)
+app.include_router(retrieval_settings_router)
 app.include_router(query_policy_router)
 app.include_router(derivation_router)
 app.include_router(schema_router)

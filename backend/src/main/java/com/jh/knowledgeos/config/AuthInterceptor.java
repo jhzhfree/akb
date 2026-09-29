@@ -37,7 +37,8 @@ public class AuthInterceptor implements HandlerInterceptor {
     /**
      * 对外接口服务自带 API Key 鉴权与审计，不再要求控制台会话。
      */
-    private static final List<String> PUBLIC_PREFIXES = Arrays.asList("/api/auth/login", "/api/auth/status", "/v3/api-docs", "/swagger-ui", "/error", "/actuator/", "/api/v1/external/", "/api/mcp");
+    private static final List<String> PUBLIC_PREFIXES = Arrays.asList("/api/auth/login", "/api/auth/status", "/v3/api-docs", "/swagger-ui", "/error",
+        "/actuator/", "/api/v1/external/", "/api/mcp");
 
     private final AuthService authService;
 

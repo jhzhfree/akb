@@ -8,7 +8,7 @@ import java.sql.ResultSet;
 import java.sql.Statement;
 import java.util.Map;
 import com.jh.knowledgeos.domain.QueryTraceRecord;
-import com.jh.knowledgeos.mapper.KnowledgeMapper;
+import com.jh.knowledgeos.mapper.TraceMapper;
 import javax.sql.DataSource;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -24,7 +24,8 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 public class DatabaseMigrationIT {
 
     @Container
-    static final MySQLContainer<?> MYSQL = new MySQLContainer<>("mysql:8.0.36").withDatabaseName("knowledge_os").withUsername("knowledge").withPassword("knowledge123");
+    static final MySQLContainer<?> MYSQL = new
+        MySQLContainer<>("mysql:8.0.36").withDatabaseName("knowledge_os").withUsername("knowledge").withPassword("knowledge123");
 
     @DynamicPropertySource
     static void databaseProperties(DynamicPropertyRegistry registry) {
@@ -41,7 +42,7 @@ public class DatabaseMigrationIT {
     private DataSource dataSource;
 
     @Autowired
-    private KnowledgeMapper knowledgeMapper;
+    private TraceMapper traceMapper;
 
     @Test
     void flywayCreatesRequiredTablesAndTraceColumns() throws Exception {
@@ -94,8 +95,8 @@ public class DatabaseMigrationIT {
         trace.setErrorCode(null);
         trace.setTraceJson("{\"totalLatencyMs\":12}");
         trace.setAnswer("ok");
-        assertEquals(1, knowledgeMapper.insertTrace(trace));
-        Map<String, Object> stored = knowledgeMapper.getTrace("Q_IT_001");
+        assertEquals(1, traceMapper.insertTrace(trace));
+        Map<String, Object> stored = traceMapper.getTrace("Q_IT_001");
         assertNotNull(stored);
         assertEquals("TRACE_IT_001", String.valueOf(stored.get("traceId")));
         assertEquals("none", String.valueOf(stored.get("modelName")));
@@ -109,7 +110,8 @@ public class DatabaseMigrationIT {
     }
 
     private boolean indexExists(Statement st, String table, String index) throws Exception {
-        String sql = "SELECT COUNT(*) FROM information_schema.statistics " + "WHERE table_schema=DATABASE() AND table_name='" + table + "' AND index_name='" + index + "'";
+        String sql = "SELECT COUNT(*) FROM information_schema.statistics " + "WHERE table_schema=DATABASE() AND table_name='" + table +
+            "' AND index_name='" + index + "'";
         try (ResultSet rs = st.executeQuery(sql)) {
             rs.next();
             return rs.getInt(1) > 0;
@@ -117,7 +119,8 @@ public class DatabaseMigrationIT {
     }
 
     private boolean columnExists(Statement st, String table, String column) throws Exception {
-        String sql = "SELECT COUNT(*) FROM information_schema.columns " + "WHERE table_schema=DATABASE() AND table_name='" + table + "' AND column_name='" + column + "'";
+        String sql = "SELECT COUNT(*) FROM information_schema.columns " + "WHERE table_schema=DATABASE() AND table_name='" + table +
+            "' AND column_name='" + column + "'";
         try (ResultSet rs = st.executeQuery(sql)) {
             rs.next();
             return rs.getInt(1) == 1;

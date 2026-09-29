@@ -89,10 +89,10 @@
         <el-select v-model="userForm.role" class="w-full">
           <el-option v-for="role in ROLES" :key="role.code" :value="role.code" :label="role.label">
             <span>{{ role.label }}</span>
-            <span class="ml-2 text-[11px] text-slate-400">{{ role.brief }}</span>
+            <span class="ml-2 text-[11px] text-ink-500">{{ role.brief }}</span>
           </el-option>
         </el-select>
-        <p class="mt-1 text-[11px] leading-4 text-slate-400">{{ roleBrief(userForm.role) }}</p>
+        <p class="mt-1 text-[11px] leading-4 text-ink-500">{{ roleBrief(userForm.role) }}</p>
       </el-form-item>
       <el-form-item label="用户组">
         <el-select v-model="userForm.groupIds" multiple class="w-full" placeholder="可加入多个用户组">
@@ -386,11 +386,11 @@ defineExpose({ load })
 </script>
 <style scoped>
 .ua{display:flex;flex-direction:column;gap:16px}
-.ua-block{border:1px solid #e5e7eb;border-radius:12px;background:#fff;padding:14px}
+.ua-block{border:1px solid var(--line-d);border-radius:12px;background:var(--bg-raised);padding:14px}
 .ua-head{display:flex;align-items:flex-end;justify-content:space-between;margin-bottom:10px}
-.ua-head b{font-size:13px;color:#0f172a}
-.ua-head small{display:block;margin-top:2px;font-size:11px;color:#94a3b8}
+.ua-head b{font-size:13px;color:var(--ink-1)}
+.ua-head small{display:block;margin-top:2px;font-size:11px;color:var(--ink-3)}
 .ua-actions{display:flex;gap:8px}
-.ua-tip{margin-top:8px;font-size:11px;color:#94a3b8}
+.ua-tip{margin-top:8px;font-size:11px;color:var(--ink-3)}
 .w-full{width:100%}
 </style>

@@ -26,13 +26,13 @@
           <div class="flex justify-between gap-3">
             <b>{{ c.resourceType }} · {{ c.resourceCode }}</b><span class="kb-badge">{{ c.propagationState }}</span>
           </div>
-          <div class="mt-1 text-ink-400">{{ c.changeCode }} · {{ c.changedBy || 'system' }} · {{ c.createdTime }}</div>
-          <div v-if="c.propagationState==='REBUILD_REQUIRED'" class="mt-2 rounded bg-amber-50 p-2 text-amber-700">
+          <div class="mt-1 text-ink-500">{{ c.changeCode }} · {{ c.changedBy || 'system' }} · {{ c.createdTime }}</div>
+          <div v-if="c.propagationState==='REBUILD_REQUIRED'" class="mt-2 rounded bg-[color:var(--warn-bg)] p-2 text-[color:var(--warn)]">
             Milvus/Source cascade 需要权威重建；未验证前不标记 COMPLETED。
           </div>
-          <div v-if="c.lastError" class="mt-2 rounded bg-red-50 p-2 text-red-700">{{ c.lastError }}</div>
+          <div v-if="c.lastError" class="mt-2 rounded bg-[color:var(--danger-bg)] p-2 text-[color:var(--danger)]">{{ c.lastError }}</div>
         </div>
-        <div v-if="!changes.length" class="p-6 text-center text-xs text-ink-400">暂无 ACL 变更</div>
+        <div v-if="!changes.length" class="p-6 text-center text-xs text-ink-500">暂无 ACL 变更</div>
       </div>
     </section>
     <section class="kb-card overflow-hidden">
@@ -44,9 +44,9 @@
             <span class="kb-badge">{{ a.decision }}</span>
           </div>
           <div class="mt-1 text-ink-500">{{ a.resourceType }} · {{ a.resourceCode || '—' }}</div>
-          <div class="mt-1 text-[10px] text-ink-400">{{ a.reason || '—' }} · {{ a.createdTime }}</div>
+          <div class="mt-1 text-[10px] text-ink-500">{{ a.reason || '—' }} · {{ a.createdTime }}</div>
         </div>
-        <div v-if="!audits.length" class="p-6 text-center text-xs text-ink-400">暂无访问审计</div>
+        <div v-if="!audits.length" class="p-6 text-center text-xs text-ink-500">暂无访问审计</div>
       </div>
     </section>
   </div>

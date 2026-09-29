@@ -6,6 +6,11 @@ import com.jh.knowledgeos.common.PlatformEventTypes;
 import com.jh.knowledgeos.domain.Claim;
 import com.jh.knowledgeos.domain.KnowledgeCard;
 import com.jh.knowledgeos.mapper.KnowledgeMapper;
+import com.jh.knowledgeos.mapper.CardClaimMapper;
+import com.jh.knowledgeos.mapper.IndexMapper;
+import com.jh.knowledgeos.mapper.GraphMapper;
+import com.jh.knowledgeos.mapper.GovernanceMapper;
+import com.jh.knowledgeos.mapper.EvidenceMapper;
 import org.springframework.stereotype.Service;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
@@ -27,6 +32,17 @@ public class KnowledgeExtractionService {
 
     private final KnowledgeMapper mapper;
 
+    private final CardClaimMapper cardClaimMapper;
+
+    private final EvidenceMapper evidenceMapper;
+
+    private final GovernanceMapper governanceMapper;
+
+    private final GraphMapper graphMapper;
+
+    private final IndexMapper indexMapper;
+
+
     private final AiClient aiClient;
 
     private final ObjectMapper objectMapper;
@@ -43,7 +59,14 @@ public class KnowledgeExtractionService {
 
     private final SimpleDateFormat dateTimeFormatter = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
 
-    public KnowledgeExtractionService(KnowledgeMapper mapper, AiClient aiClient, ObjectMapper objectMapper, IdGenerator idGenerator, TransactionRunner transactionRunner, IndexOutboxService outboxService, EntityResolutionService entityResolutionService, PlatformEventPublisher publisher) {
+    public KnowledgeExtractionService(KnowledgeMapper mapper, AiClient aiClient, ObjectMapper objectMapper, IdGenerator idGenerator, TransactionRunner
+        transactionRunner, IndexOutboxService outboxService, EntityResolutionService entityResolutionService, PlatformEventPublisher publisher,
+        EvidenceMapper evidenceMapper, GovernanceMapper governanceMapper, GraphMapper graphMapper, IndexMapper indexMapper, CardClaimMapper cardClaimMapper) {
+        this.cardClaimMapper = cardClaimMapper;
+        this.evidenceMapper = evidenceMapper;
+        this.governanceMapper = governanceMapper;
+        this.graphMapper = graphMapper;
+        this.indexMapper = indexMapper;
         this.mapper = mapper;
         this.aiClient = aiClient;
         this.objectMapper = objectMapper;
@@ -81,9 +104,12 @@ public class KnowledgeExtractionService {
         List<Map<String, Object>> savedCards = persisted.cards;
         List<Map<String, Object>> savedClaims = persisted.claims;
         response.put("authoritativeGraph", persisted.graph);
-        Map<String, Object> graphPayload = buildKnowledgeIndexPayload(knowledgeBaseId, new ArrayList<Map<String, Object>>(), new ArrayList<Map<String, Object>>(), withPermissionTags(response.get("entities"), permissionTags), withPermissionTags(response.get("relations"), permissionTags));
+        Map<String, Object> graphPayload = buildKnowledgeIndexPayload(knowledgeBaseId, new ArrayList<Map<String, Object>>(), new ArrayList<Map<String,
+            Object>>(), withPermissionTags(response.get("entities"), permissionTags), withPermissionTags(response.get("relations"), permissionTags));
         String graphKey = "KB:" + knowledgeBaseId + ":GRAPH:" + (documentId == null ? "MANUAL" : documentId);
-        Map<String, Object> graphEvent = transactionRunner.required(() -> outboxService.enqueue(knowledgeBaseId, "GRAPH", graphKey, "GRAPH_BATCH_UPSERT", AiApiPaths.INDEX_KNOWLEDGE, graphPayload, documentId == null ? "GRAPH_EXTRACT:" + graphKey + ":" + UUID.randomUUID().toString() : "GRAPH_EXTRACT:" + graphKey + ":1"));
+        Map<String, Object> graphEvent = transactionRunner.required(() -> outboxService.enqueue(knowledgeBaseId, "GRAPH", graphKey,
+            "GRAPH_BATCH_UPSERT", AiApiPaths.INDEX_KNOWLEDGE, graphPayload, documentId == null ? "GRAPH_EXTRACT:" + graphKey + ":" +
+            UUID.randomUUID().toString() : "GRAPH_EXTRACT:" + graphKey + ":1"));
         Map<String, Object> indexSummary = new LinkedHashMap<String, Object>();
         indexSummary.put("mode", "transactional-outbox");
         indexSummary.put("cardEvents", savedCards.size());
@@ -113,12 +139,15 @@ public class KnowledgeExtractionService {
         detail.put("cardCodes", codes(savedCards, "knowledge_code", 20));
         detail.put("claimCodes", codes(savedClaims, "claim_code", 20));
         detail.put("cardTitles", titles(savedCards, 5));
-        publisher.emitUser(PlatformEventTypes.EXTRACTION_COMPLETED, knowledgeBaseId, PlatformEventPublisher.SOURCE_UI, "DOCUMENT", documentId == null ? null : String.valueOf(documentId), "知识抽取完成：新增 " + (savedCards == null ? 0 : savedCards.size()) + " 张卡片、" + (savedClaims == null ? 0 : savedClaims.size()) + " 条主张", detail);
+        publisher.emitUser(PlatformEventTypes.EXTRACTION_COMPLETED, knowledgeBaseId, PlatformEventPublisher.SOURCE_UI, "DOCUMENT", documentId == null
+            ? null : String.valueOf(documentId), "知识抽取完成：新增 " + (savedCards == null ? 0 : savedCards.size()) + " 张卡片、" + (savedClaims == null ? 0 :
+            savedClaims.size()) + " 条主张", detail);
         int candidateCount = (savedCards == null ? 0 : savedCards.size()) + (savedClaims == null ? 0 : savedClaims.size());
         if (candidateCount > 0) {
             // Candidates are distinguished from approved knowledge so a subscriber can follow the
             // review pipeline instead of assuming extraction means "usable now" (§16.2).
-            publisher.emitUser(PlatformEventTypes.KNOWLEDGE_CANDIDATE_CREATED, knowledgeBaseId, PlatformEventPublisher.SOURCE_UI, "DOCUMENT", documentId == null ? null : String.valueOf(documentId), "新增 " + candidateCount + " 条待审核候选知识", detail);
+            publisher.emitUser(PlatformEventTypes.KNOWLEDGE_CANDIDATE_CREATED, knowledgeBaseId, PlatformEventPublisher.SOURCE_UI, "DOCUMENT",
+                documentId == null ? null : String.valueOf(documentId), "新增 " + candidateCount + " 条待审核候选知识", detail);
         }
     }
 
@@ -165,7 +194,7 @@ public class KnowledgeExtractionService {
         if (documentId == null) {
             return 0.5D;
         }
-        Map<String, Object> header = mapper.getDocumentIndexHeader(documentId);
+        Map<String, Object> header = indexMapper.getDocumentIndexHeader(documentId);
         return header == null ? 0.5D : doubleValue(header.get("authorityScore"), 0.5D);
     }
 
@@ -191,10 +220,10 @@ public class KnowledgeExtractionService {
             card.setStatus(KnowledgeStatus.DRAFT.name());
             card.setPermissionTags(permissionTags);
             card.setVersion(1);
-            mapper.insertCard(card);
-            mapper.snapshotKnowledgeObject(knowledgeBaseId, "CARD", card.getKnowledgeCode(), "CREATED", "AI_EXTRACTION");
+            cardClaimMapper.insertCard(card);
+            governanceMapper.snapshotKnowledgeObject(knowledgeBaseId, "CARD", card.getKnowledgeCode(), "CREATED", "AI_EXTRACTION");
             if (documentId != null) {
-                mapper.linkCardEvidenceFromDocument(card.getKnowledgeCode(), documentId);
+                cardClaimMapper.linkCardEvidenceFromDocument(card.getKnowledgeCode(), documentId);
             }
             source.put("knowledge_code", card.getKnowledgeCode());
             source.put("status", card.getStatus());
@@ -202,10 +231,11 @@ public class KnowledgeExtractionService {
             // Retrieval quality signals: authority of the source, freshness anchor, evidence count.
             source.put("authority_score", authorityScore);
             source.put("updated_at", dateTimeFormatter.format(new Date()));
-            source.put("evidence_count", mapper.countCardEvidence(card.getKnowledgeCode()));
+            source.put("evidence_count", cardClaimMapper.countCardEvidence(card.getKnowledgeCode()));
             attachEvidenceAnchor("CARD", card.getKnowledgeCode(), source);
             Map<String, Object> payload = buildSingleKnowledgeIndexPayload(knowledgeBaseId, source, null);
-            outboxService.enqueue(knowledgeBaseId, "CARD", "KB:" + knowledgeBaseId + ":CARD:" + card.getKnowledgeCode(), "KNOWLEDGE_OBJECT_UPSERT", AiApiPaths.INDEX_KNOWLEDGE, payload, "CARD_CREATE:" + card.getKnowledgeCode() + ":1");
+            outboxService.enqueue(knowledgeBaseId, "CARD", "KB:" + knowledgeBaseId + ":CARD:" + card.getKnowledgeCode(), "KNOWLEDGE_OBJECT_UPSERT",
+                AiApiPaths.INDEX_KNOWLEDGE, payload, "CARD_CREATE:" + card.getKnowledgeCode() + ":1");
             saved.add(source);
         }
         return saved;
@@ -238,10 +268,10 @@ public class KnowledgeExtractionService {
             claim.setVersion(source.get("version") == null ? 1 : integerValue(source.get("version"), 1));
             claim.setStatus(KnowledgeStatus.UNCERTAIN.name());
             claim.setPermissionTags(permissionTags);
-            mapper.insertClaim(claim);
-            mapper.snapshotKnowledgeObject(knowledgeBaseId, "CLAIM", claim.getClaimCode(), "CREATED", "AI_EXTRACTION");
+            cardClaimMapper.insertClaim(claim);
+            governanceMapper.snapshotKnowledgeObject(knowledgeBaseId, "CLAIM", claim.getClaimCode(), "CREATED", "AI_EXTRACTION");
             if (documentId != null) {
-                mapper.linkClaimEvidenceFromDocument(claim.getClaimCode(), documentId);
+                cardClaimMapper.linkClaimEvidenceFromDocument(claim.getClaimCode(), documentId);
             }
             source.put("claim_code", claim.getClaimCode());
             source.put("status", claim.getStatus());
@@ -254,10 +284,11 @@ public class KnowledgeExtractionService {
             source.put("valid_to", formatDate(claim.getValidTo()));
             source.put("authority_score", authorityScore);
             source.put("updated_at", dateTimeFormatter.format(new Date()));
-            source.put("evidence_count", mapper.countClaimEvidence(claim.getClaimCode()));
+            source.put("evidence_count", cardClaimMapper.countClaimEvidence(claim.getClaimCode()));
             attachEvidenceAnchor("CLAIM", claim.getClaimCode(), source);
             Map<String, Object> payload = buildSingleKnowledgeIndexPayload(knowledgeBaseId, null, source);
-            outboxService.enqueue(knowledgeBaseId, "CLAIM", "KB:" + knowledgeBaseId + ":CLAIM:" + claim.getClaimCode(), "KNOWLEDGE_OBJECT_UPSERT", AiApiPaths.INDEX_KNOWLEDGE, payload, "CLAIM_CREATE:" + claim.getClaimCode() + ":1");
+            outboxService.enqueue(knowledgeBaseId, "CLAIM", "KB:" + knowledgeBaseId + ":CLAIM:" + claim.getClaimCode(), "KNOWLEDGE_OBJECT_UPSERT",
+                AiApiPaths.INDEX_KNOWLEDGE, payload, "CLAIM_CREATE:" + claim.getClaimCode() + ":1");
             saved.add(source);
         }
         return saved;
@@ -276,7 +307,7 @@ public class KnowledgeExtractionService {
     private Map<String, Object> persistAuthoritativeGraph(Long kb, Long documentId, Map<String, Object> response, String permissionTags) {
         Long sourceId = null;
         if (documentId != null) {
-            Map<String, Object> header = mapper.getDocumentIndexHeader(documentId);
+            Map<String, Object> header = indexMapper.getDocumentIndexHeader(documentId);
             if (header != null && header.get("sourceId") != null) {
                 sourceId = Long.valueOf(String.valueOf(header.get("sourceId")));
             }
@@ -296,12 +327,15 @@ public class KnowledgeExtractionService {
                 // Reuse the node of a term this knowledge base already knows, otherwise derive a
                 // stable code from the name so the next document connects to the same node.
                 String known = explicit.isEmpty() && !name.isEmpty() ? existingEntityCode(kb, name) : "";
-                String code = !explicit.isEmpty() ? explicit : (!known.isEmpty() ? known : (name.isEmpty() ? idGenerator.next("ENT_") : stableCode("ENT_", kb + "|" + normalizeName(name))));
-                mapper.upsertExtractedEntity(kb, sourceId, code, stringValue(first(entity, "entity_type", "type")), name, stringValue(entity.get("description")), doubleValue(entity.get("confidence"), 0.0D), "ACTIVE", permissionTags, aclFrom);
+                String code = !explicit.isEmpty() ? explicit : (!known.isEmpty() ? known : (name.isEmpty() ? idGenerator.next("ENT_") :
+                    stableCode("ENT_", kb + "|" + normalizeName(name))));
+                graphMapper.upsertExtractedEntity(kb, sourceId, code, stringValue(first(entity, "entity_type", "type")), name,
+                    stringValue(entity.get("description")), doubleValue(entity.get("confidence"), 0.0D), "ACTIVE", permissionTags, aclFrom);
                 String scopeHash = aclScopeHash(permissionTags);
-                mapper.insertEntityAclScope(kb, code, sourceId, documentId, permissionTags, scopeHash, aclFrom);
-                mapper.upsertEntityFacet(kb, code, code + ":" + scopeHash, sourceId, documentId, stringValue(first(entity, "entity_type", "type")), name, stringValue(entity.get("description")), permissionTags, scopeHash, aclFrom);
-                mapper.recomputeEntityAclMergePolicy(kb, code);
+                graphMapper.insertEntityAclScope(kb, code, sourceId, documentId, permissionTags, scopeHash, aclFrom);
+                graphMapper.upsertEntityFacet(kb, code, code + ":" + scopeHash, sourceId, documentId, stringValue(first(entity, "entity_type",
+                    "type")), name, stringValue(entity.get("description")), permissionTags, scopeHash, aclFrom);
+                graphMapper.recomputeEntityAclMergePolicy(kb, code);
                 entity.put("entity_code", code);
                 if (!name.isEmpty()) {
                     codeByName.put(normalizeName(name), code);
@@ -328,11 +362,13 @@ public class KnowledgeExtractionService {
                 }
                 String explicit = stringValue(first(relation, "relation_code", "code"));
                 String relationCode = !explicit.isEmpty() ? explicit : stableCode("REL_", kb + "|" + source.code + "|" + type + "|" + target.code);
-                mapper.upsertExtractedRelation(kb, sourceId, relationCode, source.id, type, target.id, doubleValue(relation.get("confidence"), 0.0D), "ACTIVE", permissionTags, aclFrom);
+                graphMapper.upsertExtractedRelation(kb, sourceId, relationCode, source.id, type, target.id, doubleValue(relation.get("confidence"),
+                    0.0D), "ACTIVE", permissionTags, aclFrom);
                 String scopeHash = aclScopeHash(permissionTags);
-                mapper.insertRelationAclScope(kb, relationCode, sourceId, documentId, permissionTags, scopeHash, aclFrom);
-                mapper.upsertRelationFacet(kb, relationCode, relationCode + ":" + scopeHash, sourceId, documentId, source.code, target.code, type, permissionTags, scopeHash, aclFrom);
-                mapper.recomputeRelationAclMergePolicy(kb, relationCode);
+                graphMapper.insertRelationAclScope(kb, relationCode, sourceId, documentId, permissionTags, scopeHash, aclFrom);
+                graphMapper.upsertRelationFacet(kb, relationCode, relationCode + ":" + scopeHash, sourceId, documentId, source.code, target.code,
+                    type, permissionTags, scopeHash, aclFrom);
+                graphMapper.recomputeRelationAclMergePolicy(kb, relationCode);
                 relation.put("relation_code", relationCode);
                 // Stamp the resolved entity codes so the graph index event connects the real
                 // entity nodes; name-only endpoints would create duplicate nodes in the graph view.
@@ -341,7 +377,8 @@ public class KnowledgeExtractionService {
                 relationCount++;
             }
         }
-        int linkCount = persistKnowledgeEntityLinks(kb, response.get("claims"), true, permissionTags, codeByName) + persistKnowledgeEntityLinks(kb, response.get("cards"), false, permissionTags, codeByName);
+        int linkCount = persistKnowledgeEntityLinks(kb, response.get("claims"), true, permissionTags, codeByName) + persistKnowledgeEntityLinks(kb,
+            response.get("cards"), false, permissionTags, codeByName);
         Map<String, Object> summary = new LinkedHashMap<String, Object>();
         summary.put("entityCount", entityCount);
         summary.put("relationCount", relationCount);
@@ -353,7 +390,7 @@ public class KnowledgeExtractionService {
      * Code of the node already carrying this term, or empty when the term is new.
      */
     private String existingEntityCode(Long kb, String name) {
-        Map<String, Object> row = mapper.findEntityRef(kb, name);
+        Map<String, Object> row = graphMapper.findEntityRef(kb, name);
         return row == null ? "" : stringValue(row.get("entityCode"));
     }
 
@@ -366,9 +403,9 @@ public class KnowledgeExtractionService {
             return null;
         }
         String batchCode = codeByName.get(normalizeName(value));
-        Map<String, Object> row = mapper.findEntityRef(kb, batchCode == null ? value : batchCode);
+        Map<String, Object> row = graphMapper.findEntityRef(kb, batchCode == null ? value : batchCode);
         if (row == null && batchCode != null) {
-            row = mapper.findEntityRef(kb, value);
+            row = graphMapper.findEntityRef(kb, value);
         }
         if (row == null || row.get("id") == null) {
             return null;
@@ -409,15 +446,16 @@ public class KnowledgeExtractionService {
                 continue;
             }
             for (Object entityValue : (List<Object>) entityCodes) {
-                String reference = entityValue instanceof Map ? stringValue(first((Map<String, Object>) entityValue, "entity_code", "code")) : stringValue(entityValue);
+                String reference = entityValue instanceof Map ? stringValue(first((Map<String, Object>) entityValue, "entity_code", "code")) :
+                    stringValue(entityValue);
                 EntityRef entity = resolveEntity(kb, reference, codeByName);
                 if (entity == null) {
                     continue;
                 }
                 if (claim) {
-                    mapper.linkClaimEntityAcl(objectCode, entity.code, "ABOUT", permissionTags);
+                    graphMapper.linkClaimEntityAcl(objectCode, entity.code, "ABOUT", permissionTags);
                 } else {
-                    mapper.linkCardEntityAcl(objectCode, entity.code, "ABOUT", permissionTags);
+                    graphMapper.linkCardEntityAcl(objectCode, entity.code, "ABOUT", permissionTags);
                 }
                 links++;
             }
@@ -454,7 +492,7 @@ public class KnowledgeExtractionService {
         if (objectCode == null || objectCode.isEmpty()) {
             return;
         }
-        Map<String, Object> anchor = mapper.findPrimaryEvidenceAnchor(objectType, objectCode);
+        Map<String, Object> anchor = evidenceMapper.findPrimaryEvidenceAnchor(objectType, objectCode);
         if (anchor == null) {
             return;
         }
@@ -494,7 +532,8 @@ public class KnowledgeExtractionService {
         return output;
     }
 
-    private Map<String, Object> buildKnowledgeIndexPayload(Long kb, List<Map<String, Object>> cards, List<Map<String, Object>> claims, Object entities, Object relations) {
+    private Map<String, Object> buildKnowledgeIndexPayload(Long kb, List<Map<String, Object>> cards, List<Map<String, Object>> claims, Object
+        entities, Object relations) {
         Map<String, Object> payload = new LinkedHashMap<String, Object>();
         payload.put("knowledgeBaseId", kb);
         payload.put("cards", cards);
@@ -518,7 +557,7 @@ public class KnowledgeExtractionService {
             }
             focusCodes.add(stringValue(claim.get("claim_code")));
         }
-        List<Claim> candidates = mapper.listClaimsBySubjects(knowledgeBaseId, subjects);
+        List<Claim> candidates = cardClaimMapper.listClaimsBySubjects(knowledgeBaseId, subjects);
         List<Map<String, Object>> conflictClaims = new ArrayList<Map<String, Object>>(candidates.size());
         for (Claim existing : candidates) {
             Map<String, Object> item = new LinkedHashMap<String, Object>();
@@ -546,11 +585,12 @@ public class KnowledgeExtractionService {
                 Map<String, Object> conflict = (Map<String, Object>) item;
                 String objectA = stringValue(conflict.get("objectACode"));
                 String objectB = stringValue(conflict.get("objectBCode"));
-                mapper.insertConflict(knowledgeBaseId, objectA, objectB, stringValue(conflict.get("conflictType")), doubleValue(conflict.get("conflictScore"), 0.0D));
-                mapper.updateClaimStatus(objectA, KnowledgeStatus.CONFLICTED.name());
-                mapper.updateClaimStatus(objectB, KnowledgeStatus.CONFLICTED.name());
-                mapper.snapshotKnowledgeObject(knowledgeBaseId, "CLAIM", objectA, "CONFLICT_DETECTED", "CONFLICT_ENGINE");
-                mapper.snapshotKnowledgeObject(knowledgeBaseId, "CLAIM", objectB, "CONFLICT_DETECTED", "CONFLICT_ENGINE");
+                governanceMapper.insertConflict(knowledgeBaseId, objectA, objectB, stringValue(conflict.get("conflictType")),
+                    doubleValue(conflict.get("conflictScore"), 0.0D));
+                governanceMapper.updateClaimStatus(objectA, KnowledgeStatus.CONFLICTED.name());
+                governanceMapper.updateClaimStatus(objectB, KnowledgeStatus.CONFLICTED.name());
+                governanceMapper.snapshotKnowledgeObject(knowledgeBaseId, "CLAIM", objectA, "CONFLICT_DETECTED", "CONFLICT_ENGINE");
+                governanceMapper.snapshotKnowledgeObject(knowledgeBaseId, "CLAIM", objectB, "CONFLICT_DETECTED", "CONFLICT_ENGINE");
                 String conflictOperation = "CONFLICT:" + objectA + ":" + objectB;
                 outboxService.enqueueObjectStatus(knowledgeBaseId, "CLAIM", objectA, KnowledgeStatus.CONFLICTED.name(), conflictOperation + ":A");
                 outboxService.enqueueObjectStatus(knowledgeBaseId, "CLAIM", objectB, KnowledgeStatus.CONFLICTED.name(), conflictOperation + ":B");

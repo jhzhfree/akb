@@ -40,8 +40,8 @@
           <button class="kb-btn-outline" @click="openType()">新增类型</button>
         </div>
         <div class="p-4">
-          <div v-if="loading && !types.length" class="py-6 text-center text-sm text-ink-400">正在读取类型字典...</div>
-          <div v-else-if="!visibleTypes.length" class="py-6 text-center text-sm text-ink-400">该分类下没有类型</div>
+          <div v-if="loading && !types.length" class="py-6 text-center text-sm text-ink-500">正在读取类型字典...</div>
+          <div v-else-if="!visibleTypes.length" class="py-6 text-center text-sm text-ink-500">该分类下没有类型</div>
           <table v-else class="kb-table">
             <thead>
               <tr><th>标识</th><th>名称</th><th>说明</th><th>属性</th><th>来源</th><th>状态</th><th></th></tr>
@@ -61,7 +61,7 @@
                 <td class="whitespace-nowrap text-right">
                   <button class="kb-link" @click="openType(type)">编辑</button>
                   <button class="kb-link ml-2" v-if="type.status==='ACTIVE'" @click="deprecate(type)">弃用</button>
-                  <button class="kb-link ml-2 text-rose-600" v-if="!type.builtIn" @click="remove(type)">删除</button>
+                  <button class="kb-link ml-2 text-[color:var(--danger)]" v-if="!type.builtIn" @click="remove(type)">删除</button>
                 </td>
               </tr>
             </tbody>
@@ -75,11 +75,11 @@
           <div v-if="published?.published" class="mt-2 text-[12px]">
             <div class="kb-muted">版本 {{ published.version }} · {{ published.publishedTime || '-' }}</div>
             <div class="kb-muted mt-1 break-all">校验和 {{ (published.checksum || '').slice(0, 24) }}…</div>
-            <div v-if="published.delivery && !published.delivery.delivered" class="mt-2 text-[11px] text-amber-600">
+            <div v-if="published.delivery && !published.delivery.delivered" class="mt-2 text-[11px] text-[color:var(--warn)]">
               已发布，但抽取侧同步未完成：{{ published.delivery.error || 'AI 服务不可用' }}（下次发布会重试）
             </div>
           </div>
-          <div v-else class="mt-2 text-[12px] text-ink-400">尚未发布，当前使用平台默认字典</div>
+          <div v-else class="mt-2 text-[12px] text-ink-500">尚未发布，当前使用平台默认字典</div>
         </article>
 
         <article class="kb-card p-4">
@@ -91,10 +91,10 @@
               </span>
               <span class="kb-muted">{{ validation.validatedAt || '' }}</span>
             </div>
-            <ul v-if="(validation.errors || []).length" class="mt-2 list-disc pl-4 text-rose-600">
+            <ul v-if="(validation.errors || []).length" class="mt-2 list-disc pl-4 text-[color:var(--danger)]">
               <li v-for="item in validation.errors" :key="item">{{ item }}</li>
             </ul>
-            <ul v-if="(validation.warnings || []).length" class="mt-2 list-disc pl-4 text-amber-600">
+            <ul v-if="(validation.warnings || []).length" class="mt-2 list-disc pl-4 text-[color:var(--warn)]">
               <li v-for="item in validation.warnings" :key="item">{{ item }}</li>
             </ul>
             <div v-if="(validation.violations || []).length" class="mt-2">
@@ -112,7 +112,7 @@
 
         <article class="kb-card p-4">
           <b class="text-sm">发布历史</b>
-          <div v-if="!releases.length" class="mt-2 text-[12px] text-ink-400">还没有发布记录</div>
+          <div v-if="!releases.length" class="mt-2 text-[12px] text-ink-500">还没有发布记录</div>
           <ul v-else class="mt-2 space-y-2 text-[12px]">
             <li v-for="release in releases" :key="release.releaseCode" class="kb-muted">
               <b class="text-ink-700">{{ release.version }}</b> · {{ release.state }} ·

@@ -49,7 +49,8 @@ public class ApiKeyService {
     /**
      * Creates a credential and returns its profile including the one-time plaintext secret.
      */
-    public Map<String, Object> create(String name, Long knowledgeBaseId, List<String> scopes, Integer rateLimitPerMinute, LocalDateTime expiresAt, Long createdBy) {
+    public Map<String, Object> create(String name, Long knowledgeBaseId, List<String> scopes, Integer rateLimitPerMinute, LocalDateTime expiresAt,
+        Long createdBy) {
         String secret = newSecret();
         ApiKey key = new ApiKey();
         key.setKeyCode(ids.next("AK_"));

@@ -26,7 +26,7 @@
         </span>
       </div>
       <div class="p-4">
-        <div v-if="policyLoading" class="py-4 text-center text-sm text-ink-400">正在读取分块策略...</div>
+        <div v-if="policyLoading" class="py-4 text-center text-sm text-ink-500">正在读取分块策略...</div>
         <div v-else class="space-y-3">
           <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <label class="block">
@@ -96,10 +96,10 @@
       <div class="kb-card p-3">
         <span class="block text-[11px] text-ink-500">类型分布</span>
         <div class="mt-1 flex flex-wrap gap-1">
-          <span v-for="item in typeStats" :key="item.type" class="rounded bg-indigo-50 px-2 py-0.5 text-[11px] text-indigo-700">
+          <span v-for="item in typeStats" :key="item.type" class="rounded bg-[color:var(--info-bg)] px-2 py-0.5 text-[11px] text-accent">
             {{ item.type }} {{ item.count }}
           </span>
-          <span v-if="!typeStats.length" class="text-[12px] text-ink-400">—</span>
+          <span v-if="!typeStats.length" class="text-[12px] text-ink-500">—</span>
         </div>
       </div>
       <div class="kb-card p-3">
@@ -167,7 +167,7 @@
             </el-table-column>
           </el-table>
           <!-- 原生 JSON：与接口返回逐字一致，便于对照契约核对字段 -->
-          <pre v-else class="max-h-[460px] overflow-auto rounded-lg bg-ink-900 p-4 text-[12px] leading-6 text-emerald-200">{{ jsonText }}</pre>
+          <pre v-else class="max-h-[460px] overflow-auto rounded-lg bg-ink-900 p-4 text-[12px] leading-6 text-[color:var(--ok)]">{{ jsonText }}</pre>
           <div v-if="filtered.length" class="mt-3 flex justify-end">
             <el-pagination
               small layout="prev,pager,next,total" :current-page="page" :page-size="size"
@@ -190,7 +190,12 @@ import { errorMessage as message, notifyError, notifySuccess } from '../utils/fe
 import { useShell } from '../shell'
 import PanelState from './PanelState.vue'
 
-const props = defineProps<{ knowledgeBaseId:number; documents: KnowledgeDocument[] }>()
+const props = defineProps<{
+  knowledgeBaseId:number
+  documents:KnowledgeDocument[]
+  /** 外部指定的文档：从「已解析文档」行的「文本分块」直接进入时不必再手动选择。 */
+  documentId?:number|null
+}>()
 const shell = useShell()
 
 const selectedId = ref(0)
@@ -319,6 +324,13 @@ onMounted(() => { void loadPolicy() })
 watch(() => props.knowledgeBaseId, () => { void loadPolicy() })
 watch([typeFilter, keyword], () => { page.value = 1 })
 watch(view, () => { page.value = 1 })
+/** 外部指定文档时直接选中并加载：从文档行进入的用户不该再选一次。 */
+watch(() => props.documentId, id => {
+  if (!id || id === selectedId.value) return
+  selectedId.value = id
+  page.value = 1
+  void load()
+}, { immediate:true })
 /** 文档列表首次就绪时自动选中第一个文档，避免进入页面就是空态。 */
 watch(() => props.documents, docs => {
   if (!selectedId.value && docs.length) {

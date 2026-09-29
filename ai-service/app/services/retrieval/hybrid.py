@@ -16,6 +16,7 @@ from app.core.config import settings
 from app.services.embedding import get_embedding_provider
 from app.services.graph_provider import get_graph_provider
 from app.services.retrieval.external import get_elasticsearch_provider, get_milvus_provider
+from app.storage.graph_store import graph_store
 from app.storage.index_store import store
 
 TOKEN_RE = re.compile(r"[A-Za-z0-9_.+-]+|[一-鿿]")
@@ -23,6 +24,10 @@ BM25_K1 = 1.5
 BM25_B = 0.75
 # Fallback budget used when a per-channel mapping does not name the channel.
 DEFAULT_CHANNEL_TOP_K = 20
+# Traversal bounds: a question names a handful of entities, and each one only has so many
+# neighbours worth putting in front of a reranker.
+MAX_GRAPH_SEEDS = 8
+MAX_GRAPH_BRANCH = 12
 
 
 def toks(text: str) -> list[str]:
@@ -201,10 +206,18 @@ class HybridRetriever:
                 graph = get_graph_provider()
                 if graph.available():
                     try:
-                        return await asyncio.to_thread(graph.search, kb, query, graph_size, permission_tags)
+                        hits = await asyncio.to_thread(graph.search, kb, query, graph_size, permission_tags)
+                        if hits:
+                            return hits
+                        errors.setdefault("graph", []).append("neo4j empty: no entity in the question matched")
                     except Exception as exc:
                         errors.setdefault("graph", []).append("neo4j degraded: %s" % exc)
-                        return await lexical("claim", "CLAIM", graph_size)
+                # No graph engine does not mean no graph: the authoritative graph mirrored at
+                # index time is still traversable, and answering a relation question with claim
+                # sentences instead of paths is how a multi-hop answer gets missed.
+                local = await asyncio.to_thread(self._graph_local, kb, query, graph_size, permission_tags)
+                if local:
+                    return local
                 return await lexical("claim", "CLAIM", graph_size)
 
             result["graph"] = await measured("graph", graph_search())
@@ -397,6 +410,147 @@ class HybridRetriever:
         # Local fallback intentionally uses CLAIM lexical candidates instead of
         # pretending to perform graph traversal when Neo4j is unavailable.
         return self._typed(kb, "CLAIM", query, top_k, permission_tags)
+
+    def _graph_local(self, kb, query, top_k, permission_tags=None):
+        """Traverse the locally mirrored authoritative graph, evidence-bound per path.
+
+        Traversal answers "what is connected, and through what"; the documents answer "why may
+        anyone say so". A path is therefore only offered as recall when a card or claim already
+        on the index states both of its endpoints — an unbound path would otherwise become a
+        citation with nothing standing behind it, and the answer gate would be right to block it.
+        """
+        graph = graph_store.load(kb)
+        entities = graph.get("entities") or {}
+        relations = graph.get("relations") or []
+        if not entities or not relations:
+            return []
+        seeds = self._seed_entities(entities, query)
+        if not seeds:
+            return []
+        adjacency: dict[str, list[tuple[str, dict[str, Any]]]] = defaultdict(list)
+        for relation in relations:
+            if not self._graph_allowed(relation.get("permissionTags"), permission_tags):
+                continue
+            adjacency[str(relation.get("source"))].append((str(relation.get("target")), relation))
+            adjacency[str(relation.get("target"))].append((str(relation.get("source")), relation))
+        documents = [doc for doc in store.load(kb) if allowed(doc, permission_tags)]
+        paths: list[tuple[str, list[tuple[dict[str, Any], str]]]] = []
+        for seed in seeds:
+            for neighbour, relation in adjacency.get(seed, [])[:MAX_GRAPH_BRANCH]:
+                paths.append((seed, [(relation, neighbour)]))
+                for second, relation2 in adjacency.get(neighbour, [])[:MAX_GRAPH_BRANCH]:
+                    if second == seed:
+                        continue
+                    paths.append((seed, [(relation, neighbour), (relation2, second)]))
+        scored = []
+        for seed, steps in paths:
+            support = self._path_support(documents, seed, steps[-1][1], entities)
+            if support is None:
+                continue
+            confidence = min(float(step[0].get("confidence") or 0.5) for step in steps)
+            # Every extra hop is another relation that has to hold, so a longer path is worth
+            # strictly less than a short one even when both are equally well supported.
+            score = confidence * (0.9 ** (len(steps) - 1)) + 0.15 * (len(steps) - 1)
+            scored.append((score, seed, steps, support))
+        scored.sort(key=lambda item: -item[0])
+        return [
+            self._as_graph_candidate(score, seed, steps, support, entities, permission_tags)
+            for score, seed, steps, support in scored[: max(int(top_k), 0)]
+        ]
+
+    @staticmethod
+    def _seed_entities(entities: dict[str, Any], query: str) -> list[str]:
+        """Entities the question actually asks about; traversal starts where the question points."""
+        text = re.sub(r"\s+", "", str(query or "").lower())
+        if not text:
+            return []
+        seeds = []
+        for code, entity in entities.items():
+            name = re.sub(r"\s+", "", str((entity or {}).get("name") or "").lower())
+            if len(name) >= 2 and (name in text or text in name):
+                seeds.append(str(code))
+        return seeds[:MAX_GRAPH_SEEDS]
+
+    @staticmethod
+    def _graph_allowed(required: Any, tags: Iterable[str] | None) -> bool:
+        """Graph ACL: an edge with no tags is visible, a tagged edge needs the matching tag."""
+        if isinstance(required, str):
+            required = [required] if required.strip() and required.strip() != "[]" else []
+        required = [str(value) for value in (required or []) if str(value) and str(value) not in {"[", "]"}]
+        if not required:
+            return True
+        if not tags:
+            return False
+        return bool(set(required).intersection(set(tags)))
+
+    @staticmethod
+    def _path_support(documents: list[dict[str, Any]], head: str, tail: str, entities: dict[str, Any]):
+        """The indexed card or claim that states both endpoints of a path."""
+        head_name = str((entities.get(head) or {}).get("name") or "")
+        tail_name = str((entities.get(tail) or {}).get("name") or "")
+        if not head_name or not tail_name or head_name == tail_name:
+            return None
+        for doc in documents:
+            haystack = "%s %s" % (doc.get("title") or "", doc.get("content") or "")
+            if head_name not in haystack or tail_name not in haystack:
+                continue
+            evidence = doc.get("evidence_code") or doc.get("evidenceCode")
+            evidence_hash = doc.get("evidence_hash") or doc.get("content_hash")
+            if evidence and evidence_hash:
+                return doc
+        return None
+
+    def _as_graph_candidate(self, score, seed, steps, support, entities, permission_tags=None):
+        codes = [seed] + [str(step[1]) for step in steps]
+        names = [self._entity_name(code, entities) for code in codes]
+        types = [str(step[0].get("relationType") or "RELATED_TO") for step in steps]
+        legs = []
+        for index, relation_type in enumerate(types):
+            legs.append("%s -%s-> %s" % (names[index], relation_type, names[index + 1]))
+        title = "%s → %s（图谱路径）" % (names[0], names[-1])
+        content = "图谱路径（%d 跳）：%s；支撑知识：%s" % (
+            len(steps),
+            " → ".join(legs),
+            support.get("title") or support.get("id") or "",
+        )
+        metadata = {
+            "object_type": "GRAPH",
+            "retrieval_provider": "local",
+            "source_name": "知识图谱路径",
+            "source_uri": "",
+            "status": "APPROVED",
+            "permission_tags": list(permission_tags or []),
+            # Borrowed from the document that states this path: the edge is structure, the
+            # document is the evidence that lets the answer quote it.
+            "evidence_code": support.get("evidence_code") or support.get("evidenceCode"),
+            "evidence_hash": support.get("evidence_hash") or support.get("content_hash"),
+            "content_hash": support.get("content_hash") or support.get("contentHash") or "",
+            "graph_path": [
+                {
+                    "sourceCode": codes[index],
+                    "relationType": types[index],
+                    "targetCode": codes[index + 1],
+                    "sourceName": names[index],
+                    "targetName": names[index + 1],
+                }
+                for index in range(len(types))
+            ],
+            "graph_hops": len(steps),
+            "confidence": min(float(step[0].get("confidence") or 0.5) for step in steps),
+        }
+        return {
+            "id": "GRAPH:" + "|".join(codes),
+            "channel": "graph",
+            "title": title,
+            "content": content,
+            "score": float(score),
+            "metadata": metadata,
+        }
+
+    @staticmethod
+    def _entity_name(code: str, entities: dict[str, Any]) -> str:
+        entity = entities.get(code) or {}
+        return str(entity.get("name") or code)
 
 
 def rrf(result_sets, k=60, weights=None, top_k=10):

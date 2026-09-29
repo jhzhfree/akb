@@ -3,6 +3,7 @@ package com.jh.knowledgeos.service;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.jh.knowledgeos.mapper.KnowledgeMapper;
+import com.jh.knowledgeos.mapper.GraphMapper;
 import com.jh.knowledgeos.projection.AuthoritativeGraphSnapshotRow;
 import org.springframework.stereotype.Service;
 import java.nio.charset.StandardCharsets;
@@ -21,11 +22,15 @@ public class AuthoritativeGraphGenerationService {
 
     private final KnowledgeMapper mapper;
 
+    private final GraphMapper graphMapper;
+
+
     private final AiClient ai;
 
     private final ObjectMapper json;
 
-    public AuthoritativeGraphGenerationService(KnowledgeMapper mapper, AiClient ai, ObjectMapper json) {
+    public AuthoritativeGraphGenerationService(KnowledgeMapper mapper, AiClient ai, ObjectMapper json, GraphMapper graphMapper) {
+        this.graphMapper = graphMapper;
         this.mapper = mapper;
         this.ai = ai;
         this.json = json;
@@ -36,7 +41,7 @@ public class AuthoritativeGraphGenerationService {
      */
     public Map<String, Object> rebuild(Long kb, String generation, String releaseId) {
         try {
-            List<AuthoritativeGraphSnapshotRow> rows = mapper.listAuthoritativeGraphSnapshot(kb);
+            List<AuthoritativeGraphSnapshotRow> rows = graphMapper.listAuthoritativeGraphSnapshot(kb);
             MessageDigest digest = MessageDigest.getInstance("SHA-256");
             MessageDigest facetDigest = MessageDigest.getInstance("SHA-256");
             long entityFacetCount = 0L;
@@ -57,22 +62,22 @@ public class AuthoritativeGraphGenerationService {
                 payload.add(item);
             }
             String hash = hex(digest.digest());
-            long entityCount = mapper.countAuthoritativeGraphEntities(kb);
-            long relationCount = mapper.countAuthoritativeGraphRelations(kb);
+            long entityCount = graphMapper.countAuthoritativeGraphEntities(kb);
+            long relationCount = graphMapper.countAuthoritativeGraphRelations(kb);
             Map<String, Object> request = new LinkedHashMap<String, Object>();
             request.put("generationId", generation);
             request.put("manifestHash", hash);
             request.put("entitiesAndRelations", payload);
-            List<Map<String, Object>> bindings = mapper.listAuthoritativeGraphEvidenceBindings(kb);
+            List<Map<String, Object>> bindings = graphMapper.listAuthoritativeGraphEvidenceBindings(kb);
             MessageDigest evidenceDigest = MessageDigest.getInstance("SHA-256");
             for (Map<String, Object> binding : bindings) {
                 evidenceDigest.update((json.writeValueAsString(binding) + "\n").getBytes(StandardCharsets.UTF_8));
             }
             request.put("evidenceBindings", bindings);
             Map<String, Object> response = ai.post(AiApiPaths.INDEX_SCHEMA_GRAPH_REBUILD_PREFIX + kb, request);
-            mapper.insertGraphManifest(releaseId, kb, generation, hash, entityCount, relationCount);
-            mapper.insertGraphFacetManifest(releaseId, kb, generation, hex(facetDigest.digest()), entityFacetCount, relationFacetCount);
-            mapper.insertGraphEvidenceManifest(releaseId, kb, generation, hex(evidenceDigest.digest()), (long) bindings.size(), (long) bindings.size());
+            graphMapper.insertGraphManifest(releaseId, kb, generation, hash, entityCount, relationCount);
+            graphMapper.insertGraphFacetManifest(releaseId, kb, generation, hex(facetDigest.digest()), entityFacetCount, relationFacetCount);
+            graphMapper.insertGraphEvidenceManifest(releaseId, kb, generation, hex(evidenceDigest.digest()), (long) bindings.size(), (long) bindings.size());
             response.put("expectedManifestHash", hash);
             response.put("expectedEntityCount", entityCount);
             response.put("expectedRelationCount", relationCount);

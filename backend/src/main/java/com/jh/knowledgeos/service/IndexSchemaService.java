@@ -3,6 +3,7 @@ package com.jh.knowledgeos.service;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.jh.knowledgeos.domain.IndexSchemaRelease;
 import com.jh.knowledgeos.mapper.KnowledgeMapper;
+import com.jh.knowledgeos.mapper.IndexMapper;
 import com.jh.knowledgeos.projection.AuthoritativeIndexSnapshotRow;
 import org.springframework.stereotype.Service;
 import java.nio.charset.StandardCharsets;
@@ -23,13 +24,18 @@ public class IndexSchemaService {
 
     private final KnowledgeMapper mapper;
 
+    private final IndexMapper indexMapper;
+
+
     private final AiClient ai;
 
     private final ObjectMapper objectMapper;
 
     private final AuthoritativeGraphGenerationService graphGeneration;
 
-    public IndexSchemaService(KnowledgeMapper mapper, AiClient ai, ObjectMapper objectMapper, AuthoritativeGraphGenerationService graphGeneration) {
+    public IndexSchemaService(KnowledgeMapper mapper, AiClient ai, ObjectMapper objectMapper, AuthoritativeGraphGenerationService graphGeneration,
+        IndexMapper indexMapper) {
+        this.indexMapper = indexMapper;
         this.mapper = mapper;
         this.ai = ai;
         this.objectMapper = objectMapper;
@@ -43,29 +49,34 @@ public class IndexSchemaService {
     public Map<String, Object> rebuild(Long kb, String schemaVersion) {
         String version = normalize(schemaVersion);
         String releaseId = UUID.randomUUID().toString();
-        long highWatermark = mapper.maxIndexOutboxId(kb);
-        long expected = mapper.countIndexableObjects(kb);
+        long highWatermark = indexMapper.maxIndexOutboxId(kb);
+        long expected = indexMapper.countIndexableObjects(kb);
         IndexSchemaRelease release = new IndexSchemaRelease();
         release.setReleaseId(releaseId);
         release.setKnowledgeBaseId(kb);
         release.setSchemaVersion(version);
         release.setState("BUILDING");
         release.setExpectedCount(expected);
-        mapper.insertIndexSchemaRelease(release);
+        indexMapper.insertIndexSchemaRelease(release);
         try {
             SnapshotResult snapshot = streamAuthoritativeSnapshot(kb, version, releaseId);
             String generationId = "gen-" + releaseId;
-            mapper.insertAclManifest(releaseId, kb, generationId, snapshot.checksum, snapshot.count, highWatermark);
-            mapper.updateSchemaManifest(releaseId, generationId, snapshot.checksum, snapshot.count);
+            indexMapper.insertAclManifest(releaseId, kb, generationId, snapshot.checksum, snapshot.count, highWatermark);
+            indexMapper.updateSchemaManifest(releaseId, generationId, snapshot.checksum, snapshot.count);
             Map<String, Object> graphValidation = graphGeneration.rebuild(kb, version, releaseId);
-            long endWatermark = mapper.maxIndexOutboxId(kb);
+            long endWatermark = indexMapper.maxIndexOutboxId(kb);
             boolean stable = highWatermark == endWatermark;
-            boolean countsMatch = snapshot.count == expected && snapshot.elasticsearchCount == expected && snapshot.milvusCount == expected && snapshot.neo4jCount == expected;
+            boolean countsMatch = snapshot.count == expected && snapshot.elasticsearchCount == expected && snapshot.milvusCount == expected &&
+                snapshot.neo4jCount == expected;
             String integrityState = stable && countsMatch ? "VERIFIED" : stable ? "COUNT_MISMATCH" : "SOURCE_CHANGED";
-            mapper.updateIndexSchemaIntegrity(releaseId, snapshot.checksum, highWatermark, endWatermark, snapshot.count, integrityState);
-            Map<String, Object> validation = map("releaseId", releaseId, "generationId", generationId, "aclManifestHash", snapshot.checksum, "snapshotChecksum", snapshot.checksum, "snapshotCount", snapshot.count, "sourceHighWatermark", highWatermark, "sourceEndWatermark", endWatermark, "sourceStable", stable, "elasticsearchCount", snapshot.elasticsearchCount, "milvusCount", snapshot.milvusCount, "neo4jCount", snapshot.neo4jCount, "authoritativeGraph", graphValidation);
+            indexMapper.updateIndexSchemaIntegrity(releaseId, snapshot.checksum, highWatermark, endWatermark, snapshot.count, integrityState);
+            Map<String, Object> validation = map("releaseId", releaseId, "generationId", generationId, "aclManifestHash", snapshot.checksum,
+                "snapshotChecksum", snapshot.checksum, "snapshotCount", snapshot.count, "sourceHighWatermark", highWatermark, "sourceEndWatermark",
+                endWatermark, "sourceStable", stable, "elasticsearchCount", snapshot.elasticsearchCount, "milvusCount", snapshot.milvusCount,
+                "neo4jCount", snapshot.neo4jCount, "authoritativeGraph", graphValidation);
             String state = stable && countsMatch ? "READY" : "VALIDATION_FAILED";
-            mapper.completeIndexSchemaRelease(releaseId, state, snapshot.elasticsearchCount, snapshot.milvusCount, snapshot.elasticsearchTarget, snapshot.milvusTarget, write(validation), "READY".equals(state) ? null : integrityState);
+            indexMapper.completeIndexSchemaRelease(releaseId, state, snapshot.elasticsearchCount, snapshot.milvusCount, snapshot.elasticsearchTarget,
+                snapshot.milvusTarget, write(validation), "READY".equals(state) ? null : integrityState);
             if (!"READY".equals(state)) {
                 throw new IllegalStateException("Index snapshot integrity validation failed: " + integrityState);
             }
@@ -73,9 +84,9 @@ public class IndexSchemaService {
             validation.put("schemaVersion", version);
             return validation;
         } catch (Exception ex) {
-            IndexSchemaRelease current = mapper.findIndexSchemaRelease(releaseId);
+            IndexSchemaRelease current = indexMapper.findIndexSchemaRelease(releaseId);
             if (current != null && !"VALIDATION_FAILED".equals(current.getState())) {
-                mapper.completeIndexSchemaRelease(releaseId, "FAILED", null, null, null, null, null, abbreviate(ex.getMessage()));
+                indexMapper.completeIndexSchemaRelease(releaseId, "FAILED", null, null, null, null, null, abbreviate(ex.getMessage()));
             }
             throw new IllegalStateException("Index schema rebuild failed", ex);
         }
@@ -94,7 +105,7 @@ public class IndexSchemaService {
         boolean reset = true;
         // Offset paging is intentionally bounded to keep JVM heap stable during large rebuilds.
         while (true) {
-            List<AuthoritativeIndexSnapshotRow> rows = mapper.listAuthoritativeIndexSnapshot(kb, offset, SNAPSHOT_PAGE_SIZE);
+            List<AuthoritativeIndexSnapshotRow> rows = indexMapper.listAuthoritativeIndexSnapshot(kb, offset, SNAPSHOT_PAGE_SIZE);
             if (rows.isEmpty()) {
                 break;
             }
@@ -103,7 +114,8 @@ public class IndexSchemaService {
             for (AuthoritativeIndexSnapshotRow row : rows) {
                 digest.update(manifestRowBytes(row));
             }
-            mapper.insertIndexSnapshotAudit(releaseId, kb, pageNo, rows.size(), pageChecksum, rows.get(0).getObjectKey(), rows.get(rows.size() - 1).getObjectKey());
+            indexMapper.insertIndexSnapshotAudit(releaseId, kb, pageNo, rows.size(), pageChecksum, rows.get(0).getObjectKey(), rows.get(rows.size() -
+                1).getObjectKey());
             Map<String, Object> request = map("schemaVersion", version, "releaseId", releaseId, "reset", reset, "documents", toPayloads(rows));
             Map<String, Object> response = ai.post(AiApiPaths.INDEX_SCHEMA_REBUILD_BATCH_PREFIX + kb, request);
             elasticsearchCount += longValue(response, "elasticsearchCount", 0L);
@@ -123,8 +135,9 @@ public class IndexSchemaService {
      */
     public Map<String, Object> activate(Long kb, String releaseId) {
         IndexSchemaRelease release = requireRelease(kb, releaseId);
-        Map<String, Object> response = ai.post(AiApiPaths.INDEX_SCHEMA_ACTIVATE_PREFIX + kb, map("schemaVersion", release.getSchemaVersion(), "releaseId", releaseId));
-        mapper.activateIndexSchemaRelease(kb, releaseId);
+        Map<String, Object> response = ai.post(AiApiPaths.INDEX_SCHEMA_ACTIVATE_PREFIX + kb, map("schemaVersion", release.getSchemaVersion(),
+            "releaseId", releaseId));
+        indexMapper.activateIndexSchemaRelease(kb, releaseId);
         return response;
     }
 
@@ -136,11 +149,11 @@ public class IndexSchemaService {
     }
 
     public List<IndexSchemaRelease> list(Long kb) {
-        return mapper.listIndexSchemaReleases(kb, 20);
+        return indexMapper.listIndexSchemaReleases(kb, 20);
     }
 
     private IndexSchemaRelease requireRelease(Long kb, String releaseId) {
-        IndexSchemaRelease release = mapper.findIndexSchemaRelease(releaseId);
+        IndexSchemaRelease release = indexMapper.findIndexSchemaRelease(releaseId);
         if (release == null || !kb.equals(release.getKnowledgeBaseId())) {
             throw new IllegalArgumentException("schema release not found");
         }
@@ -272,7 +285,8 @@ public class IndexSchemaService {
 
         private final String milvusTarget;
 
-        private SnapshotResult(String checksum, long count, long elasticsearchCount, long milvusCount, long neo4jCount, String elasticsearchTarget, String milvusTarget) {
+        private SnapshotResult(String checksum, long count, long elasticsearchCount, long milvusCount, long neo4jCount, String elasticsearchTarget,
+            String milvusTarget) {
             this.checksum = checksum;
             this.count = count;
             this.elasticsearchCount = elasticsearchCount;

@@ -30,8 +30,24 @@ DEFAULT_RELATION_VOCABULARY: tuple[str, ...] = (
     "DESCRIBES",
     "CONTAINS",
     "MANAGES",
+    # Security / delivery vocabulary: without these an impact chain has no label to
+    # travel on, and "which customers does a CVE affect" cannot be answered by traversal.
+    "AFFECTS",
+    "DEPLOYED_IN",
 )
-DEFAULT_ENTITY_TYPES: tuple[str, ...] = ("TERM", "PRODUCT", "SYSTEM", "METRIC", "ORG", "ROLE")
+DEFAULT_ENTITY_TYPES: tuple[str, ...] = (
+    "TERM",
+    "PRODUCT",
+    "SYSTEM",
+    "METRIC",
+    "ORG",
+    "ROLE",
+    # Vulnerability / delivery entities: a CVE is not a product and a customer is not an
+    # org chart entry, so forcing them into TERM loses the distinction the graph relies on.
+    "VULNERABILITY",
+    "PROJECT",
+    "CUSTOMER",
+)
 
 _LOCK = threading.Lock()
 _CACHE: dict[int, dict[str, Any]] = {}
@@ -135,6 +151,7 @@ def entity_types(knowledge_base_id: int | None = None) -> tuple[str, ...]:
 
 
 def clear_cache() -> None:
+    """Clear cached knowledge-schema definitions after a governance change."""
     with _LOCK:
         _CACHE.clear()
 
