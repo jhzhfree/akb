@@ -2,7 +2,7 @@
   <section class="kb-page">
     <header class="kb-section-head">
       <div>
-        <div class="kb-eyebrow">知识工作台</div>
+        <div class="kb-eyebrow">知识概览</div>
         <h1 class="kb-title mt-1">知识质量</h1>
         <p class="kb-muted mt-1">
           可信覆盖率、引用准确率、检索命中、新鲜度。每个数字都能追到表里的数据；没有跑过的评测显示未测，不用 0 假装测过。

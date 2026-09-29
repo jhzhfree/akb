@@ -2,8 +2,8 @@
   <section class="kb-page">
     <header class="kb-section-head">
       <div>
-        <div class="kb-eyebrow">知识集成</div>
-        <h1 class="kb-title mt-1">集成概览</h1>
+        <div class="kb-eyebrow">接口服务</div>
+        <h1 class="kb-title mt-1">接口概览</h1>
         <p class="kb-muted mt-1">
           接知识：把平台的可信知识能力通过 REST API / MCP / SSE 与凭证接入业务系统、AI 应用与 Agent。
         </p>
@@ -21,7 +21,7 @@
     <!-- §6.2 服务 KPI -->
     <div class="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-5">
       <article class="kb-metric">
-        <span class="kb-metric-label">集成服务</span>
+        <span class="kb-metric-label">接口服务</span>
         <strong class="kb-metric-value">{{ overview?.serviceCount ?? 0 }}</strong>
         <small class="kb-metric-hint">{{ overview?.credentialCount ?? 0 }} 个凭证</small>
       </article>
@@ -47,14 +47,14 @@
       </article>
     </div>
 
-    <!-- §6 集成模块的其余入口：MCP / SSE / 凭证等左侧不再展开二级菜单 -->
-    <nav class="kos-modnav mt-4" aria-label="知识集成">
+    <!-- §6 接口服务模块的其余入口：MCP / SSE / 凭证等左侧不再展开二级菜单 -->
+    <nav class="kos-modnav mt-4" aria-label="接口服务">
       <button
         v-for="item in entries"
         :key="item.key"
         class="kos-modnav-chip"
         @click="$emit('navigate',item.key)">
-        <span class="kos-nav-ic">{{ item.icon }}</span>
+        <NavIcon class="kos-nav-ic" :name="item.icon" :size="14"/>
         <span>{{ item.label }}</span>
       </button>
     </nav>
@@ -63,7 +63,7 @@
       <!-- §6.3 集成服务 -->
       <article class="kb-card">
         <div class="kb-card-head">
-          <b class="text-sm">集成服务</b>
+          <b class="text-sm">接口服务</b>
           <button class="text-xs font-medium text-accent hover:text-accent" @click="$emit('navigate','integration.services')">
             服务与 API →
           </button>
@@ -79,7 +79,7 @@
             <div class="mt-1 text-[11px] text-ink-500">{{ service.purpose }}</div>
             <code class="mt-1 block truncate text-[11px] text-accent">{{ service.endpoint }}</code>
           </div>
-          <div v-if="!overview?.services?.length" class="py-6 text-center text-[12px] text-ink-500">暂无集成服务</div>
+          <div v-if="!overview?.services?.length" class="py-6 text-center text-[12px] text-ink-500">暂无接口服务</div>
         </div>
       </article>
 
@@ -165,14 +165,14 @@ const overview = ref<IntegrationOverview|null>(null)
 const hours = ref(24)
 const loading = ref(false)
 
-/** 集成模块的二级入口：协议适配与凭证管理。 */
+/** 接口服务模块的二级入口：协议适配与凭证管理（图标名与 IA 保持一致）。 */
 const entries = [
-  { key:'integration.services', icon:'🔌', label:'服务' },
-  { key:'integration.api', icon:'⌁', label:'API' },
-  { key:'integration.mcp', icon:'🧩', label:'MCP' },
-  { key:'integration.sse', icon:'⇉', label:'SSE' },
-  { key:'integration.credentials', icon:'🔑', label:'凭证' },
-  { key:'integration.logs', icon:'📜', label:'调用日志' },
+  { key:'integration.services', icon:'server', label:'服务' },
+  { key:'integration.api', icon:'code', label:'API' },
+  { key:'integration.mcp', icon:'blocks', label:'MCP' },
+  { key:'integration.sse', icon:'broadcast', label:'SSE' },
+  { key:'integration.credentials', icon:'key', label:'凭证' },
+  { key:'integration.logs', icon:'doc', label:'调用日志' },
 ]
 
 const healthSummary = computed(() => {

@@ -1,17 +1,17 @@
 <!doctype html><html lang="zh-CN"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1.0"/>
 <link rel="icon" type="image/svg+xml" href="/favicon.svg"/>
-<meta name="theme-color" content="#172554"/>
+<meta name="theme-color" content="#ffffff"/>
 <meta name="description" content="AI 原生企业知识库平台：知识生命周期管理、检索治理与权限管控"/>
 <title>智能知识平台 · Knowledge Lifecycle OS</title>
-<!-- 首屏防闪：在样式与脚本执行前定好主题，避免深色偏好用户看到一帧浅色底 -->
+<!-- 首屏防闪：在样式与脚本执行前定好主题。默认浅色（原型基准），用户切过深色则沿用其选择。 -->
 <script>
 (function(){
   try{
-    var m=localStorage.getItem('kos.theme')||'dark';
-    var t=m==='light'?'light':m==='system'?(window.matchMedia&&window.matchMedia('(prefers-color-scheme: light)').matches?'light':'dark'):'dark';
+    var m=localStorage.getItem('kos.theme')||'light';
+    var t=m==='dark'?'dark':m==='system'?(window.matchMedia&&window.matchMedia('(prefers-color-scheme: light)').matches?'light':'dark'):'light';
     document.documentElement.dataset.theme=t;
     document.documentElement.style.colorScheme=t;
-  }catch(e){document.documentElement.dataset.theme='dark';}
+  }catch(e){document.documentElement.dataset.theme='light';}
 })();
 </script>
 </head><body><div id="app"></div><script type="module" src="/src/main.ts"></script></body></html>

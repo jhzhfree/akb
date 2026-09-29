@@ -2,13 +2,13 @@ import { computed, ref, watch } from 'vue'
 
 /**
  * 主题：深浅两套 + 跟随系统。
- * 主题只体现在 <html data-theme> 上，配色全部由 theme.css 的变量提供，
- * 组件不感知当前主题，避免把「是深色吗」的判断散落到几十个组件里。
+ * 默认浅色——原型页面以浅色为基准；主题只体现在 <html data-theme> 上，
+ * 配色全部由 theme.css 的变量提供，组件不感知当前主题，避免把「是深色吗」的判断散落到几十个组件里。
  */
 export type ThemeMode = 'dark' | 'light' | 'system'
 
 const STORAGE_KEY = 'kos.theme'
-const CYCLE: ThemeMode[] = ['dark', 'light', 'system']
+const CYCLE: ThemeMode[] = ['light', 'dark', 'system']
 
 const mediaQuery = typeof window !== 'undefined' && window.matchMedia
   ? window.matchMedia('(prefers-color-scheme: light)')
@@ -18,8 +18,8 @@ function readStored(): ThemeMode {
   try {
     const raw = localStorage.getItem(STORAGE_KEY)
     if (raw === 'dark' || raw === 'light' || raw === 'system') return raw
-  } catch { /* 隐私模式下 localStorage 不可用：回落默认深色 */ }
-  return 'dark'
+  } catch { /* 隐私模式下 localStorage 不可用：回落默认浅色 */ }
+  return 'light'
 }
 
 const mode = ref<ThemeMode>(readStored())

@@ -107,42 +107,44 @@
   --ink-900-rgb: 15 23 42;
   --ink-950-rgb: 2 6 23;
 
-  --brand-50-rgb: 239 246 255; --brand-100-rgb: 219 234 254; --brand-200-rgb: 191 219 254;
-  --brand-300-rgb: 147 197 253; --brand-400-rgb: 96 165 250; --brand-500-rgb: 59 130 246;
-  --brand-600-rgb: 37 99 235; --brand-700-rgb: 29 78 216; --brand-800-rgb: 30 64 175;
-  --brand-900-rgb: 30 58 138;
+  /* 品牌主色改为原型蓝紫（#5b5cff 系），亮度分布与原蓝色阶保持一致 */
+  --brand-50-rgb: 240 240 255; --brand-100-rgb: 226 225 255; --brand-200-rgb: 203 202 254;
+  --brand-300-rgb: 172 170 253; --brand-400-rgb: 141 137 250; --brand-500-rgb: 111 108 247;
+  --brand-600-rgb: 91 92 255; --brand-700-rgb: 71 72 224; --brand-800-rgb: 58 58 179;
+  --brand-900-rgb: 38 38 110;
 
-  --bg-base: #f4f6fb;
+  --bg-base: #f7f8fc;
   --bg-raised: #ffffff;
-  --bg-sub: #eef2f9;
-  --bg-sunken: #e7ecf5;
-  --ink-1: #0f172a;
+  --bg-sub: #f1f3f9;
+  --bg-sunken: #eef1f8;
+  --ink-1: #101326;
   --ink-2: #475569;
-  --ink-3: #64748b;
-  --line-d: #e2e8f0;
-  --line: #cbd5e1;
-  --line-soft: #d8e0ec;
+  --ink-3: #6a7085;
+  --line-d: #e3e6f0;
+  --line: #cbd2e0;
+  --line-soft: #d2d6e5;
 
-  --accent-text: #1d4ed8;
-  --accent-text-rgb: 29 78 216;
-  --accent-bg: #dbeafe;
+  --accent-text: #4748e0;
+  --accent-text-rgb: 71 72 224;
+  --accent-bg: #eff0ff;
 
-  --brand-50: #eff6ff; --brand-100: #dbeafe; --brand-200: #bfdbfe; --brand-300: #93c5fd;
-  --brand-400: #60a5fa; --brand-500: #3b82f6; --brand-600: #2563eb; --brand-700: #1d4ed8;
-  --brand-800: #1e40af; --brand-900: #1e3a8a;
+  --brand-50: #f0f0ff; --brand-100: #e2e1ff; --brand-200: #cbcafe; --brand-300: #acaafc;
+  --brand-400: #8d89fa; --brand-500: #6f6cf7; --brand-600: #5b5cff; --brand-700: #4748e0;
+  --brand-800: #3a3ab3; --brand-900: #26266e;
   --teal-300: #2dd4bf; --teal-400: #14b8a6; --teal-500: #0d9488;
 
   /* 浅底需要压深状态色，否则黄/绿在白底上读不清；三件套与深色一一对应 */
-  --warn: #b45309; --warn-bg: #fef3c7; --warn-bd: #fcd34d;
-  --danger: #dc2626; --danger-bg: #fee2e2; --danger-bd: #fecaca;
-  --ok: #047857; --ok-bg: #d1fae5; --ok-bd: #a7f3d0;
-  --info: #1d4ed8; --info-bg: #dbeafe; --info-bd: #bfdbfe;
+  /* 状态色同样对齐原型：成功 #22a06b / 警告 #d97706 / 危险 #e5484d */
+  --warn: #d97706; --warn-bg: #fdf3e3; --warn-bd: #f8d9a8;
+  --danger: #e5484d; --danger-bg: #fdecec; --danger-bd: #f8c9cb;
+  --ok: #22a06b; --ok-bg: #e7f7ef; --ok-bd: #b7e7cf;
+  --info: #4748e0; --info-bg: #eff0ff; --info-bd: #d9d9ff;
   --neutral-fg: #475569; --neutral-bg: #eef2f9; --neutral-bd: #e2e8f0;
 
   --topbar-bg: linear-gradient(96deg, #ffffff 0%, #f6f9ff 40%, #e8f0ff 78%, #e6f7fb 100%);
   --topbar-fg: #0f172a;
   --topbar-muted: rgba(15, 23, 42, .62);
-  --topbar-accent: #1e40af;
+  --topbar-accent: #4748e0;
   --topbar-line: rgba(15, 23, 42, .14);
   --topbar-chip: rgba(15, 23, 42, .04);
   --topbar-chip-hover: rgba(15, 23, 42, .09);
@@ -151,11 +153,11 @@
   --gc-bg: #fbfcfe;
   --gc-grid: #e2e8f0;
   --topbar-shadow: 0 4px 16px rgba(15, 23, 42, .08);
-  --topbar-glow: linear-gradient(90deg, rgba(37, 99, 235, .25), rgba(20, 184, 166, .08));
+  --topbar-glow: linear-gradient(90deg, rgba(91, 92, 255, .28), rgba(20, 184, 166, .08));
   --side-bg: linear-gradient(180deg, #ffffff, #f5f8fc);
 
   --sd-1: 0 1px 2px rgba(15, 23, 42, .06);
   --sd-2: 0 6px 18px rgba(15, 23, 42, .08);
   --sd-3: 0 16px 40px rgba(15, 23, 42, .12);
-  --ring: 0 0 0 3px rgba(37, 99, 235, .25);
+  --ring: 0 0 0 3px rgba(91, 92, 255, .25);
 }

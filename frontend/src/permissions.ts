@@ -45,7 +45,8 @@ export function hasPermission(granted: string[] | null | undefined, code: string
 export const ROLE_HOME: Record<UserRoleValue, string> = {
   ADMIN: 'system',
   KNOWLEDGE_ADMIN: 'workbench',
-  KNOWLEDGE_OPERATOR: 'create.overview',
+  /** 知识运营员的生成模块只开放文档导入 / 裁决 / 衍生，落地页直接进文档导入。 */
+  KNOWLEDGE_OPERATOR: 'create.import',
   KNOWLEDGE_AUDITOR: 'create.judgment',
   KNOWLEDGE_VIEWER: 'workbench',
 }

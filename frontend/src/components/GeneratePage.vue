@@ -1,15 +1,9 @@
 <template>
-  <!-- 设计 §4：知识生成 = 建知识。四个任务卡是主入口，下方 Tab 组织完整工作区。 -->
-  <div class="gen-hero">
-    <button v-for="action in actions" :key="action.key" class="gen-action"
-      @click="$emit('select',action.key)">
-      <b>{{ action.label }}</b>
-      <small>{{ action.desc }}</small>
-    </button>
-  </div>
-
+  <!-- 设计 §4：知识生成 = 建知识。入口统一走顶部 Tab，这里不再重复一排动作卡——同样的能力只保留一处入口。
+       Tab 由外壳按角色下发：管理员是「生成概览 / 文档导入 / 连接器 / 生成任务 / 知识裁决 / 知识衍生」，
+       普通成员精简为「文档导入（默认进入）/ 知识裁决 / 知识衍生」，本页不重复判断角色。 -->
   <ModuleTabs
-    class="mt-4" label="知识生成" :leaves="tabs" :active="active" :badges="badges"
+    label="知识生成" :leaves="tabs" :active="active" :badges="badges"
     @select="$emit('select',$event)" />
 
   <GenerateHomePanel
@@ -78,8 +72,8 @@
 
   <DerivationPanel v-else-if="active==='create.derive'" :knowledge-base-id="knowledgeBaseId" />
 
-  <PanelState v-else :empty="true" empty-text="请选择一个生成动作"
-    empty-hint="左侧动作卡片进入对应工作台" />
+  <PanelState v-else :empty="true" empty-text="请选择一个生成能力"
+    empty-hint="从上方入口条进入对应工作台" />
 </template>
 <script setup lang="ts">
 import { computed } from 'vue'
@@ -88,7 +82,6 @@ import type {
   KnowledgeDocument, KnowledgeSource, ReviewRow, SourcePreview,
 } from '../types'
 import { useShell } from '../shell'
-import { PERM } from '../permissions'
 import ModuleTabs from './ModuleTabs.vue'
 import GenerateHomePanel from './GenerateHomePanel.vue'
 import DataCenterPanel from './DataCenterPanel.vue'
@@ -140,16 +133,6 @@ defineEmits<{
 
 const shell = useShell()
 const tabs = computed(() => shell.tabs('create'))
-/**
- * 生成动作卡：按角色裁剪——运营员只看到导入文档，审核员额外看到裁决，
- * 只有知识系统管理员才看到连接器与衍生（设计 §4 + 角色权限矩阵）。
- */
-const actions = computed(() => [
-  { key: 'create.import', label: '导入文档', desc: '文件 / URL / 文本', permission: PERM.GENERATE_IMPORT },
-  { key: 'create.connector', label: '连接数据源', desc: '数据库 / API / 对象存储 / SaaS', permission: PERM.GENERATE_CONNECTOR },
-  { key: 'create.judgment', label: '知识裁决', desc: '待审核 / 冲突 / Evidence', permission: PERM.GENERATE_JUDGE },
-  { key: 'create.derive', label: '知识衍生', desc: '规则 / 计算 / Graph / AI', permission: PERM.GENERATE_DERIVE },
-].filter(action => shell.can(action.permission)))
 const badges = computed<Record<string, number | string>>(() => ({
   'create.judgment': props.pendingReviews.length + props.conflicts.length || '',
 }))
@@ -160,17 +143,3 @@ const dcFocus = computed<'documents' | 'ingestion' | ''>(() => {
   return ''
 })
 </script>
-<style scoped>
-/* 四个任务入口卡：知识生成页的主操作区，与原型 hero 卡片一致。 */
-/* 动作卡数量随角色变化，用 auto-fit 保证 1~4 张卡都排得下。 */
-.gen-hero{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}
-.gen-action{
-  position:relative;padding:16px 18px;text-align:left;background:var(--bg-raised);
-  border:1px solid var(--line-d);border-radius:11px;box-shadow:0 2px 9px #1d35570a;cursor:pointer}
-.gen-action:hover{border-color:var(--brand-400)}
-.gen-action:disabled{cursor:not-allowed;color:var(--ink-3)}
-.gen-action b{display:block;font-size:15px;color:var(--ink-1)}
-.gen-action small{display:block;margin-top:4px;font-size:11.5px;color:var(--ink-2)}
-.gen-action em{position:absolute;right:14px;top:14px;font-size:11px;font-style:normal;color:var(--ink-3)}
-@media(max-width:1100px){.gen-hero{grid-template-columns:repeat(2,minmax(0,1fr))}}
-</style>

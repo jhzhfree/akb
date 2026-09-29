@@ -41,7 +41,8 @@ body{background:var(--bg-base);color:var(--ink-1)}
 
 /* 键盘可达聚焦环 */
 .kos-nav-item:focus-visible,.kos-modnav-chip:focus-visible,.kos-modnav-home:focus-visible,
-.kos-kbswitch:focus-visible,.kos-task:focus-visible,.kos-logout:focus-visible,.kos-search-btn:focus-visible,.kos-icon-btn:focus-visible,
+.kos-kbswitch:focus-visible,.kos-logout:focus-visible,.kos-search-btn:focus-visible,.kos-icon-btn:focus-visible,
+.kos-viewswitch-chip:focus-visible,
 .quick-grid button:focus-visible,.kb-step:focus-visible,.config-card:focus-visible,.role-banner-action:focus-visible{
   outline:none;box-shadow:var(--ring);
 }
@@ -73,8 +74,8 @@ body{background:var(--bg-base);color:var(--ink-1)}
   box-shadow:inset 0 1px 0 var(--topbar-chip-hover);
 }
 .kos-grow{flex:1}
-.kos-kbswitch,.kos-task,.kos-logout,.kos-search-btn{transition:background .18s var(--ease),border-color .18s var(--ease),transform .18s var(--ease)}
-.kos-kbswitch:active,.kos-task:active,.kos-logout:active,.kos-search-btn:active{transform:translateY(1px)}
+.kos-kbswitch,.kos-logout,.kos-search-btn{transition:background .18s var(--ease),border-color .18s var(--ease),transform .18s var(--ease)}
+.kos-kbswitch:active,.kos-logout:active,.kos-search-btn:active{transform:translateY(1px)}
 .kos-kbswitch{
   display:flex;align-items:center;gap:7px;font-size:12px;background:var(--topbar-chip);
   border:1px solid var(--topbar-line);border-radius:9px;padding:5px 11px;color:var(--topbar-fg);cursor:pointer;
@@ -92,16 +93,6 @@ body{background:var(--bg-base);color:var(--ink-1)}
 .kos-search-input::placeholder{color:var(--topbar-placeholder)}
 .kos-search-btn{background:transparent;border:0;color:var(--topbar-fg);cursor:pointer;padding:6px 9px;font-size:13px}
 .kos-search-btn:hover{background:var(--topbar-chip-hover)}
-.kos-task{
-  display:flex;align-items:center;gap:5px;font-size:12px;background:var(--topbar-chip);
-  border:1px solid var(--topbar-line);border-radius:9px;padding:5px 11px;color:var(--topbar-fg);cursor:pointer;
-}
-.kos-task:hover{background:var(--topbar-chip-hover);border-color:var(--topbar-line)}
-.kos-task.alert{border-color:var(--danger);color:var(--danger);background:var(--danger-bg)}
-.kos-task em{font-style:normal;min-width:16px;height:16px;line-height:16px;border-radius:999px;background:var(--danger);color:var(--on-brand);font-size:10px;text-align:center;padding:0 4px}
-.kos-status{display:flex;align-items:center;font-size:12px;opacity:.92;white-space:nowrap;color:var(--topbar-muted)}
-.kos-dot{width:7px;height:7px;border-radius:50%;background:var(--topbar-line);margin-right:6px;display:inline-block}
-.kos-dot.ok{background:var(--ok);box-shadow:0 0 0 3px rgba(52,211,153,.25)}
 /* 顶栏图标按钮（主题切换）：与知识库/任务胶囊同形，只是更小、只放一个字形 */
 .kos-icon-btn{
   display:grid;place-items:center;width:30px;height:30px;flex:none;border-radius:9px;cursor:pointer;
@@ -116,6 +107,25 @@ body{background:var(--bg-base);color:var(--ink-1)}
   background:linear-gradient(140deg,color-mix(in srgb,var(--role-accent,#4f8cf7) 46%,var(--brand-900)),color-mix(in srgb,var(--role-accent,#4f8cf7) 22%,var(--bg-sunken)));
   color:var(--topbar-fg);box-shadow:inset 0 0 0 1px var(--topbar-line);
 }
+/* 顶栏视图切换：用户视图 / 管理视图。
+   管理员登录后两个都可点；普通账号只有用户视图，另一项置灰但仍展示，让人知道自己用的是哪套视图。 */
+.kos-viewswitch{
+  display:flex;align-items:center;gap:2px;padding:2px;white-space:nowrap;
+  background:var(--topbar-chip);border:1px solid var(--topbar-line);border-radius:10px;
+}
+.kos-viewswitch-chip{
+  padding:4px 10px;border:0;border-radius:8px;background:transparent;cursor:pointer;font-family:inherit;
+  font-size:12px;color:var(--topbar-muted);
+  transition:background .18s var(--ease),color .18s var(--ease);
+}
+.kos-viewswitch-chip:hover{background:var(--topbar-chip-hover);color:var(--topbar-fg)}
+.kos-viewswitch-chip.active{
+  background:var(--topbar-chip-hover);color:var(--topbar-fg);font-weight:600;
+  box-shadow:inset 0 0 0 1px var(--topbar-line);
+}
+.kos-viewswitch-chip:disabled{cursor:not-allowed;opacity:.45}
+/* 当前视图被禁用（普通账号）时不该跟着置灰：它仍是「当前所在」的标识 */
+.kos-viewswitch-chip.active:disabled{opacity:1;cursor:default}
 /* 用户区：头像 + 用户名 + 退出。角色不再占顶栏位置，只在头像 hover 时给出身份说明。 */
 .kos-user{display:flex;align-items:center;gap:8px}
 .kos-user-name{
@@ -141,6 +151,12 @@ body{background:var(--bg-base);color:var(--ink-1)}
 }
 .kos-side-nav{flex:1;min-height:0;overflow:auto}
 .kos-nav-title{font-size:11px;color:var(--ink-3);letter-spacing:1px;margin:8px 10px 6px}
+/* 业务域分组标题（工作台 / 知识库 / 系统集成）：对齐原型侧栏的分组标签 */
+.kos-nav-group{
+  display:flex;align-items:center;margin:14px 11px 5px;padding:0;
+  font-size:11px;font-weight:600;color:var(--ink-3);letter-spacing:.12em;
+}
+.kos-nav-group:first-child{margin-top:2px}
 .kos-nav-item{
   position:relative;display:flex;align-items:center;gap:9px;width:100%;padding:8px 11px;border-radius:9px;
   font-size:13.5px;color:var(--ink-2);cursor:pointer;user-select:none;margin-bottom:2px;
@@ -156,7 +172,11 @@ body{background:var(--bg-base);color:var(--ink-1)}
   content:'';position:absolute;left:0;top:7px;bottom:7px;width:3px;border-radius:0 3px 3px 0;
   background:linear-gradient(180deg,var(--brand-400),var(--teal-400));
 }
-.kos-nav-ic{width:18px;text-align:center;font-size:14px;flex:none;color:inherit}
+/* 导航图标：原型风格的 24×24 线性 SVG，尺寸由 NavIcon 的 size 传入，这里只负责不参与压缩 */
+.kos-icon{display:block;flex:none}
+/* 未收录图标名的回落：仍按字符图标渲染 */
+.kos-icon-glyph{font-size:14px;line-height:1;color:inherit}
+.kos-nav-ic{width:18px;display:flex;align-items:center;justify-content:center;text-align:center;font-size:14px;flex:none;color:inherit}
 .kos-nav-tx{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .kos-nav-dot{font-style:normal;font-size:10px;padding:1px 6px;border-radius:999px;background:var(--ok-bg);color:var(--ok);box-shadow:inset 0 0 0 1px rgba(52,211,153,.3)}
 
@@ -169,10 +189,65 @@ body{background:var(--bg-base);color:var(--ink-1)}
 .kos-nav-l2.planned,.kos-nav-l2:disabled{color:var(--ink-3);cursor:not-allowed}
 .kos-nav-l2.planned:hover,.kos-nav-l2:disabled:hover{background:transparent}
 .kos-nav-planned{font-style:normal;font-size:10px;color:var(--ink-3);border:1px solid var(--line);border-radius:999px;padding:0 5px}
-/* 侧栏底部工具区：当前用户 + 系统配置入口 + 版本信息。
-   原先只放「当前角色」说明，角色身份改为用户名下方的小字，位置不变但信息更集中。 */
-.kos-side-foot{flex:none;margin-top:10px;padding-top:10px;border-top:1px solid var(--line-d)}
-.kos-side-user{display:flex;align-items:center;gap:8px;padding:2px 4px}
+/* 侧栏底部工具区：当前用户（点开看角色与常用入口）+ 系统配置 + 版本信息。
+   角色说明从主页面顶部的横幅收进底部用户块的浮层：主页面首屏留给页面内容，
+   角色信息仍在一击可达的位置，且不再随页面滚动被带走。 */
+/* 底部一行排下「用户名 + 设置图标 + 版本」：整行 flex 且不换行，
+   用户块吃掉剩余宽度并自行截断，图标与版本固定宽度靠右。 */
+.kos-side-foot{
+  flex:none;margin-top:10px;padding-top:10px;border-top:1px solid var(--line-d);
+  display:flex;align-items:center;gap:6px;flex-wrap:nowrap;
+}
+/* 浮层要相对这一行定位，所以用户块自己包一层 relative 容器 */
+.kos-side-user-wrap{position:relative;flex:1;min-width:0}
+.kos-side-user{
+  width:100%;display:flex;align-items:center;gap:8px;padding:4px 6px;cursor:pointer;font-family:inherit;
+  background:transparent;border:1px solid transparent;border-radius:10px;text-align:left;
+  transition:background .18s var(--ease),border-color .18s var(--ease);
+}
+.kos-side-user:hover,.kos-side-user.active{background:var(--bg-sub);border-color:var(--line-d)}
+.kos-side-user:focus-visible{outline:none;box-shadow:var(--ring)}
+.kos-side-caret{
+  flex:none;font-size:11px;line-height:1;color:var(--ink-3);
+  transform:rotate(180deg);transition:transform .18s var(--ease);
+}
+.kos-side-caret.up{transform:rotate(0deg)}
+/* 角色面板：贴着用户块向上展开，宽度与侧栏内容区一致 */
+.kos-user-panel{
+  position:absolute;left:0;right:0;bottom:calc(100% + 8px);z-index:40;
+  padding:14px;border-radius:12px;background:var(--bg-raised);
+  border:1px solid var(--line-d);box-shadow:var(--sd-3);
+}
+.kos-user-panel-head{display:flex;align-items:center;gap:10px}
+.kos-user-panel-avatar{
+  width:34px;height:34px;border-radius:50%;flex:none;display:grid;place-items:center;font-size:13px;font-weight:700;
+  background:linear-gradient(140deg,color-mix(in srgb,var(--role-accent,#4f8cf7) 46%,var(--brand-900)),color-mix(in srgb,var(--role-accent,#4f8cf7) 22%,var(--bg-sunken)));
+  color:var(--on-brand);box-shadow:inset 0 0 0 1px var(--line);
+}
+.kos-user-panel-copy{display:flex;flex-direction:column;line-height:1.35;min-width:0}
+.kos-user-panel-copy b{font-size:13px;font-weight:700;color:var(--ink-1);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.kos-user-panel-copy small{font-size:10.5px;font-weight:600;color:var(--accent-text)}
+.kos-user-panel-brief{margin:10px 0 0;font-size:11.5px;line-height:1.75;color:var(--ink-2)}
+.kos-user-panel-actions{display:flex;flex-direction:column;gap:6px;margin-top:12px}
+.kos-user-panel-action{
+  display:flex;align-items:center;gap:8px;width:100%;padding:7px 9px;cursor:pointer;font-family:inherit;
+  font-size:12px;color:var(--ink-1);text-align:left;border-radius:9px;
+  background:var(--bg-sub);border:1px solid var(--line-d);
+  transition:background .18s var(--ease),border-color .18s var(--ease),color .18s var(--ease);
+}
+.kos-user-panel-action:hover{background:color-mix(in srgb,var(--role-accent,#4f8cf7) 12%,transparent);border-color:var(--brand-400);color:var(--accent-text)}
+.kos-user-panel-action:focus-visible{outline:none;box-shadow:var(--ring)}
+.kos-user-panel-action.disabled{opacity:.45;cursor:not-allowed}
+.kos-user-panel-action.disabled:hover{background:var(--bg-sub);border-color:var(--line-d);color:var(--ink-1)}
+.kos-user-panel-ic{font-size:13px;line-height:1;flex:none;width:16px;display:flex;align-items:center;justify-content:center;text-align:center}
+.kos-user-panel-foot{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:12px;padding-top:10px;border-top:1px solid var(--line-d)}
+.kos-user-panel-link{
+  display:inline-flex;align-items:center;gap:5px;
+  padding:0;background:none;border:0;cursor:pointer;font-family:inherit;font-size:11.5px;font-weight:600;
+  color:var(--accent-text);
+}
+.kos-user-panel-link:hover{text-decoration:underline}
+.kos-user-panel-link.danger{color:var(--danger)}
 .kos-side-avatar{
   width:26px;height:26px;border-radius:50%;flex:none;display:grid;place-items:center;font-size:11px;font-weight:700;
   background:linear-gradient(140deg,color-mix(in srgb,var(--role-accent,#4f8cf7) 46%,var(--brand-900)),color-mix(in srgb,var(--role-accent,#4f8cf7) 22%,var(--bg-sunken)));
@@ -484,10 +559,17 @@ body{background:var(--bg-base);color:var(--ink-1)}
   .metric-grid,.overview-grid,.config-grid{grid-template-columns:1fr 1fr}
   .kos-side{width:60px;padding:14px 6px}
   .kos-nav-title,.kos-nav-tx,.kos-nav-dot{display:none}
+  /* 分组标题在窄侧栏退化成分隔线：图标列仍需看出分组边界 */
+  .kos-nav-group{
+    height:1px;margin:10px 8px;padding:0;overflow:hidden;
+    background:var(--line-d);font-size:0;color:transparent;
+  }
   .kos-nav-item{justify-content:center}
-  /* 窄侧栏只留头像与设置图标：用户名、角色说明、版本号收起 */
-  .kos-side-user{flex-direction:column;gap:8px}
-  .kos-side-user-copy,.kos-side-ver{display:none}
+  /* 底部仍是一行：窄侧栏只留头像与设置图标，用户名、箭头、版本号收起但不换行 */
+  .kos-side-user{flex-direction:row;justify-content:center;gap:0;padding:2px 0}
+  .kos-side-user-copy,.kos-side-ver,.kos-side-caret{display:none}
+  /* 侧栏只有 60px，面板改用视口定位向左展开，否则会被侧栏的 overflow:hidden 裁掉 */
+  .kos-user-panel{position:fixed;left:66px;right:auto;bottom:16px;width:220px}
   .kos-brand-copy small{display:none}
 }
 @media(max-width:720px){

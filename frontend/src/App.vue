@@ -4,22 +4,25 @@
 <div v-if="!authReady" class="flex h-screen items-center justify-center text-[13px] text-ink-500">
   正在进入工作台…
 </div>
-<LoginView v-else-if="needLogin" :hint="loginHint" @success="onLogin"/>
+<LoginView v-else-if="needLogin" :hint="loginHint" :mode="loginMode" @switch-mode="setLoginMode" @success="onLogin"/>
 <div v-else class="kos-shell">
 <AppHeader :base-name="activeBase?.name" :visibility="visibilityLabel(activeBase?.visibility)"
-  v-model:keyword="globalKeyword" :show-tasks="canSeeTasks" :failed-task-count="failedTaskCount"
-  :connected="!!capabilities" :avatar="avatarText" :display-name="me?.user?.displayName||me?.user?.username"
+  v-model:keyword="globalKeyword" :avatar="avatarText" :display-name="me?.user?.displayName||me?.user?.username"
   :role-title="roleTitle" :logged-in="!!me?.user" :role-accent="roleAccent"
-  @switch-base="showBases=true" @search="globalSearch" @tasks="taskCenterVisible=true" @logout="doLogout"/>
+  :view-mode="adminView?'admin':'user'" :can-switch-view="canAdminView" @set-view="setViewMode"
+  @switch-base="showBases=true" @search="globalSearch" @logout="doLogout"/>
 <div class="kos-body">
 <!-- 设计 §1 / §2.2：左侧只放业务一级入口，且不挂任何二级菜单；
      Chunk、Assertion、Graph、Evaluation、凭证等全部进入模块页面内部的 Tab、卡片与抽屉。
+     一级入口按业务域分组：工作台（知识概览）/ 知识库（知识生成、知识检索）/ 系统集成（接口服务）。
      系统配置属于低频平台配置，收进侧栏底部的用户工具区（设置图标），不再占用业务导航。 -->
-<AppSidebar :sections="navSections" :active-section="activeSection" :badge="sectionBadge"
-  :role-brief="me?.user?roleBrief:''" :user-name="me?.user?(me.user.displayName||me.user.username):''"
+<AppSidebar :groups="navGroups" :active-section="activeSection" :badge="sectionBadge"
+  :role-brief="me?.user?roleBrief:''" :role-name="me?.user?roleName:''"
+  :user-name="me?.user?(me.user.displayName||me.user.username):''"
   :avatar="avatarText" :role-accent="roleAccent" :can-system="canSystem"
+  :actions="roleQuickActions" :logged-in="!!me?.user"
   :system-active="activeSection==='system'" :version="APP_VERSION"
-  @enter="enterSection" @enter-system="enterSystem"/>
+  @enter="enterSection" @enter-system="enterSystem" @go="key=>goto(key)" @logout="doLogout"/>
 <main class="kos-main">
   <div v-if="failure" class="mb-3 flex items-start gap-3 rounded-lg border px-4 py-3" style="background:var(--danger-bg);border-color:var(--danger)">
     <span class="text-[13px] leading-5 text-[color:var(--danger)]">⚠</span>
@@ -29,15 +32,27 @@
     </div>
     <button class="text-[12px] text-[color:var(--danger)] hover:text-[color:var(--danger)]" @click="failure=''">✕</button>
   </div>
-  <!-- 第 4 章：进入知识空间后，页面顶部保留「当前空间 + 环境 + 索引状态」。 -->
+  <!-- 主页面顶部的当前知识库栏：所有右侧主页面统一在最上方显示「当前知识库 + 环境 + 索引状态」，
+       不再只限于需要知识库上下文的页面——停在哪个页面都能看到、也能一键切换知识库。 -->
   <SpaceContextBar
-    v-if="scopedView"
     :base="activeBase" :environment="environmentLabel" :index="indexState" :loading="contextLoading"
     @switch="showBases=true" @refresh="loadSpaceContext"/>
 
-  <!-- 角色欢迎区：登录角色落地页顶部展示身份色 + 职责 + 常用入口（仅登录用户显示）。 -->
-  <RoleWelcomeBanner v-if="me?.user" :role-name="roleName" :brief="roleBrief" :accent="roleAccent"
-    :actions="roleQuickActions" @go="key=>goto(key)"/>
+  <!-- 角色信息（角色名 / 职责说明 / 常用入口）收在侧栏底部用户块里，点用户名展开查看与操作，
+       主页面顶部不再叠加横幅，把首屏留给页面自己的内容。 -->
+
+  <!-- 一级入口条：进入「知识概览」后由页面顶部横向切换首页 / 工作台 / 资产浏览 / 版本 / 质量。
+       统一放在主内容最上方，页面内部的欢迎区与标题都排在它下面，避免入口条随内容沉到下方。 -->
+  <ModuleTabs
+    v-if="activeSection==='workbench'" label="知识概览" :leaves="shell.tabs('workbench')" :active="active"
+    @select="selectKey"/>
+
+  <!-- 首页：登录后的主页面（原型 dashboard）——数据总览、最近访问的知识库。 -->
+  <HomeDashboard
+    v-if="active==='home'"
+    :bases="bases" :base-stats="baseStats" :recent-ids="recentIds"
+    :loading="basesLoading||baseStatsLoading" :can-create="canCreateBase"
+    @create="showBases=true" @open-bases="showBases=true" @open-base="openHomeBase"/>
 
   <!-- 设计 §1：五个一级页面各自内部用 Tab 组织能力，App 只负责选择模块页面。 -->
   <WorkbenchPage
@@ -85,7 +100,7 @@
     :active="active" :knowledge-base-id="knowledgeBaseId" :base-name="activeBase?.name||''"
     :bases="bases" :overview="overview"
     :acl-subjects="aclSubjects" :acl-roles="aclRoles" :acl-changes="aclChanges" :acl-audits="aclAudits"
-    :can-manage-users="!!me?.canManageUsers"
+    :can-manage-users="!!me?.canManageUsers&&adminView"
     @select="selectKey" @acl-change="changeAcl"
     @select-base="selectBase" @create-base="showBases=true" @refresh="loadOverview"/>
 </main>
@@ -134,7 +149,10 @@ import QueryTracePanel from './components/QueryTracePanel.vue'
 import ApiCallTracePanel from './components/ApiCallTracePanel.vue'
 import EvidenceViewer from './components/EvidenceViewer.vue'
 import LoginView from './components/LoginView.vue'
-import RoleWelcomeBanner from './components/RoleWelcomeBanner.vue'
+/** 登录后的主页面（原型 dashboard）：作为「知识概览」模块的「首页」Tab 挂载。 */
+import HomeDashboard from './components/HomeDashboard.vue'
+/** 一级入口条：模块内二级 Tab 统一由外壳在最上方渲染。 */
+import ModuleTabs from './components/ModuleTabs.vue'
 /** 五个一级模块页面：左侧导航不再挂二级菜单，模块内部自持 Tab（设计 §1）。 */
 import WorkbenchPage from './components/WorkbenchPage.vue'
 import GeneratePage from './components/GeneratePage.vue'
@@ -158,7 +176,8 @@ import {
   getDashboardSummary, getDashboardLifecycle, getDashboardGovernance,
 } from './api/knowledge'
 import {
-  NAV_SECTIONS, defaultLeafOf, leavesOfSection, locate, normalizeViewKey, visibleLeaves, visibleSections,
+  NAV_SECTIONS, defaultLeafOf, isAdminView, leavesOfSection, locate, normalizeViewKey,
+  visibleGroups, visibleLeaves,
 } from './navigation'
 import type { NavLeaf, NavSection } from './navigation'
 import { PERM, hasPermission } from './permissions'
@@ -218,9 +237,6 @@ const dashboard=ref<DashboardSummary|null>(null),
 const assetType=ref<AssetType>('card')
 /** 顶栏全局搜索关键词与任务中心抽屉。 */
 const globalKeyword=ref(''), taskCenterVisible=ref(false)
-/** 失败任务数：顶栏任务入口的红点，读取已加载的任务列表。 */
-const failedTaskCount=computed(()=>
-  runs.value.filter(v=>String(v.status||'').toUpperCase()==='FAILED').length)
 /** 源文件预览：选中资料后单独加载，失败只在页面内提示，不打断摄入流程。 */
 const preview=ref<SourcePreview|null>(null),
     previewLoading=ref(false),
@@ -296,6 +312,58 @@ const loginHint=computed(()=>{
   if(authStatus.value&&!authStatus.value.initialized)return '系统尚未创建管理员账号：请查看后端启动日志中的初始密码'
   return '登录后可访问自己创建、所属用户组与公开的知识库'
 })
+/**
+ * 登录入口：user 普通用户登录页 / admin 管理员控制台登录页。
+ * 默认普通用户；访问 #/admin 直达管理员入口，选过一次后记住，避免每次都要再点一次切换。
+ */
+const loginMode=ref<'user'|'admin'>(initialLoginMode())
+function initialLoginMode():'user'|'admin'{
+  if(typeof location!=='undefined'&&location.hash==='#/admin')return 'admin'
+  return localStorage.getItem('kos.loginMode')==='admin'?'admin':'user'
+}
+function setLoginMode(mode:'user'|'admin'){
+  loginMode.value=mode
+  try{localStorage.setItem('kos.loginMode',mode)}catch{/* 隐私模式下记不住，本次会话内仍生效 */}
+}
+/** 各知识库的概览统计：主页面的汇总数字按库聚合，拉取失败的库按 0 计入。 */
+const baseStats=ref<Record<number,Overview>>({})
+const baseStatsLoading=ref(false)
+/** 知识库列表的加载态：首屏骨架由主页面自己呈现，避免先空后填的跳动。 */
+const basesLoading=ref(false)
+/** 最近访问的知识库 id：主页面「最近访问」按它排序。 */
+const recentIds=ref<number[]>(readRecentIds())
+function readRecentIds():number[]{
+  try{
+    const raw=JSON.parse(localStorage.getItem('kos.recentBases')||'[]')
+    return Array.isArray(raw)?raw.filter(v=>typeof v==='number'):[]
+  }catch{return []}
+}
+function pushRecentBase(id:number){
+  recentIds.value=[id,...recentIds.value.filter(v=>v!==id)].slice(0,8)
+  try{localStorage.setItem('kos.recentBases',JSON.stringify(recentIds.value))}catch{/* 忽略：仅影响排序 */}
+}
+async function loadBaseStats(){
+  if(!bases.value.length){baseStats.value={};return}
+  baseStatsLoading.value=true
+  try{
+    const pairs=await Promise.all(bases.value.map(async base=>{
+      try{
+        const stat=unwrap(await getOverview(base.id),null as unknown as Overview)
+        return stat?([base.id,stat] as const):null
+      }catch{return null}
+    }))
+    const map:Record<number,Overview>={}
+    for(const pair of pairs)if(pair)map[pair[0]]=pair[1]
+    baseStats.value=map
+  }finally{baseStatsLoading.value=false}
+}
+/** 知识库管理权限：主页面的「创建知识库」入口按它裁剪。 */
+const canCreateBase=computed(()=>can(PERM.SYSTEM_SPACE))
+/** 主页面点知识库卡片：选中该库、记入最近访问，再进入工作台。 */
+function openHomeBase(id:number){
+  selectBase(id)
+  goto('workbench')
+}
 const avatarText=computed(()=>
   String(me.value?.user?.displayName||activeBase.value?.name||'知识库').trim().slice(0,1)||'K')
 /**
@@ -304,18 +372,49 @@ const avatarText=computed(()=>
  */
 const can=(code:string)=>hasPermission(me.value?.permissions,code)
 /**
+ * 角色决定模块内 Tab 的详略：管理员（ADMIN / KNOWLEDGE_ADMIN）看完整流水线，
+ * 其余角色只看「干活」的那几个入口（如知识生成只剩文档导入 / 知识裁决 / 知识衍生）。
+ * 角色缺省表示未开启认证或 me 尚未就绪，此时按管理员视图渲染，与权限全放行保持一致。
+ */
+const role=computed(()=>me.value?.user?.role)
+/**
+ * 顶栏视图切换：管理员登录即管理视图，可一键切到用户视图核对普通成员看到的界面；
+ * 普通账号固定用户视图（顶栏仍显示当前视图，但不可切换）。选择记在本地，刷新后保持。
+ */
+type ViewMode='user'|'admin'
+const viewMode=ref<ViewMode>(readViewMode())
+function readViewMode():ViewMode{
+  try{return localStorage.getItem('kos.viewMode')==='user'?'user':'admin'}catch{return 'admin'}
+}
+/** 只有管理员角色才有管理视图可切；普通账号永远停在用户视图。 */
+const canAdminView=computed(()=>isAdminView(role.value))
+const adminView=computed(()=>canAdminView.value&&viewMode.value==='admin')
+/**
+ * 导航裁剪用的「有效角色」：管理视图按真实角色渲染完整入口，
+ * 用户视图按普通成员渲染（adminOnly 的运维/测评入口全部收起）。
+ */
+const navRole=computed(()=>adminView.value?(role.value||'ADMIN'):'KNOWLEDGE_VIEWER')
+function setViewMode(mode:ViewMode){
+  if(!canAdminView.value||viewMode.value===mode)return
+  viewMode.value=mode
+  try{localStorage.setItem('kos.viewMode',mode)}catch{/* 隐私模式记不住，本次会话内仍生效 */}
+  // 切到用户视图后当前页可能是管理员专属入口：回落到当前模块的默认页，避免停在无权页面。
+  const current=locate(active.value)
+  if(current&&!canLeaf(current.leaf))
+    active.value=defaultLeafOf(current.section,can,navRole.value).key
+}
+/**
  * 一级导航：IA 的业务模块，二级入口全部下沉到模块页面内部的 Tab。
+ * 左侧按业务域分组展示：工作台（知识概览）/ 知识库（知识生成、知识检索）/ 系统集成（接口服务）。
  * 「系统配置」不再作为业务一级入口，改由侧栏底部的设置图标进入（低频平台配置不占业务导航）。
  */
-const navSections=computed(()=>visibleSections(can).filter(section=>section.key!=='system'))
+const navGroups=computed(()=>visibleGroups(can,role.value))
 /** 系统配置模块本身：只在底部工具区使用，是否展示由该模块内是否有可见 Tab 决定。 */
 const systemSection=NAV_SECTIONS.find(section=>section.key==='system')
 /** 无任何系统配置权限时不展示设置入口，避免点进去处处 403。 */
-const canSystem=computed(()=>!!systemSection&&visibleLeaves(systemSection,can).length>0)
+const canSystem=computed(()=>!!systemSection&&visibleLeaves(systemSection,can,navRole.value).length>0)
 const activeLocation=computed(()=>locate(active.value))
 const activeSection=computed(()=>activeLocation.value?.section.key||'workbench')
-/** 属于知识空间的页面才展示「空间 + 环境 + 索引状态」上下文条。 */
-const scopedView=computed(()=>!!activeLocation.value?.section.scoped)
 /** 一级菜单收起二级后，把该模块内所有待处理计数汇总到一级入口上。 */
 function sectionBadge(section:NavSection):string{
   let total=0
@@ -325,17 +424,18 @@ function sectionBadge(section:NavSection):string{
   }
   return total?String(total):''
 }
-/** 模块页内 Tab：按权限裁剪，避免普通账号看到无权操作的入口。 */
+/** 模块页内 Tab：按角色与权限裁剪，避免普通账号看到运维入口与无权操作的入口。 */
 function leavesOf(section:NavSection){
-  return visibleLeaves(section,can)
+  return visibleLeaves(section,can,navRole.value)
 }
+/** 进入一级模块：落到该角色可见的第一个 Tab（普通成员进知识生成即到文档导入）。 */
 function enterSection(section:NavSection){
-  active.value=defaultLeafOf(section,can).key
+  active.value=defaultLeafOf(section,can,navRole.value).key
 }
 /** 点击侧栏底部设置图标：进入系统配置的默认页（按权限取第一个可见 Tab）。 */
 function enterSystem(){
   if(!systemSection)return
-  goto(defaultLeafOf(systemSection,can).key)
+  goto(defaultLeafOf(systemSection,can,navRole.value).key)
 }
 /** 模块页面回传的视图 key：规划中与无权访问的入口不进入，避免落到未实现页面。 */
 function selectKey(key:string){
@@ -345,6 +445,7 @@ function selectKey(key:string){
   active.value=key
 }
 function canLeaf(leaf:NavLeaf){
+  if(leaf.adminOnly&&!adminView.value)return false
   return !leaf.permission||can(leaf.permission)
 }
 /** 页面内的快捷跳转（KPI 下钻、治理待办、质量页）先用它裁剪，无权的目标置灰而不是点了才报错。 */
@@ -352,9 +453,6 @@ function canNavigate(key:string){
   const leaf=locate(normalizeViewKey(key))?.leaf
   return !leaf||canLeaf(leaf)
 }
-/** 顶栏任务入口：只有参与知识生产或平台运维的角色需要看任务。 */
-const canSeeTasks=computed(()=>
-  can(PERM.GENERATE_IMPORT)||can(PERM.GENERATE_DERIVE)||can(PERM.SYSTEM_TASK))
 /** 顶栏角色名：优先用后端下发的中文名，避免出现角色码。 */
 const currentRoleExperience=computed(()=>roleExperience(
   me.value?.user?.role,me.value?.roleLabel||me.value?.user?.roleLabel))
@@ -367,17 +465,22 @@ const roleTitle=computed(()=>me.value?.user?`${roleName.value} · ${roleBrief.va
 /** 角色欢迎区常用入口：按当前角色权限预置常用目标，无权者置灰而非隐藏。 */
 const roleQuickActions=computed(()=>{
   const Actions:{key:string;label:string;icon:string;disabled?:boolean}[]=[]
-  const push=(key:string,label:string,icon:string)=>{
+  /** 图标直接取 IA 里的图标名，避免同一入口在菜单与常用入口里出现两套图标。 */
+  const push=(key:string,label:string)=>{
     const leaf=locate(normalizeViewKey(key))?.leaf
     if(!leaf)return
-    Actions.push({key:leaf.key,label,icon,disabled:!canLeaf(leaf)})
+    Actions.push({key:leaf.key,label,icon:leaf.icon,disabled:!canLeaf(leaf)})
   }
   const r=me.value?.user?.role
-  if(r==='ADMIN'){push('system.audit','审计日志','📜');push('system.schema','知识Schema','🧬')}
-  else if(r==='KNOWLEDGE_ADMIN'){push('system.space','知识空间','◈');push('system.schema','知识Schema','🧬');push('workbench.assets','资产浏览','🗃')}
-  else if(r==='KNOWLEDGE_OPERATOR'){push('create.import','上传文档','📄');push('create.jobs','生成任务','⏳');push('search.query','知识检索','⌕')}
-  else if(r==='KNOWLEDGE_AUDITOR'){push('create.judgment','知识裁决','⚖');push('search.benchmark','检索评测','📈')}
-  else{push('workbench.assets','资产浏览','🗃');push('search.query','知识检索','⌕')}
+  if(r==='ADMIN'){push('system.audit','审计日志');push('system.schema','知识Schema')}
+  else if(r==='KNOWLEDGE_ADMIN'){push('system.space','知识空间');push('system.schema','知识Schema');push('workbench.assets','资产浏览')}
+  else if(r==='KNOWLEDGE_OPERATOR'){push('create.import','上传文档');push('create.derive','知识衍生');push('search.query','知识检索')}
+  /** 检索评测只在管理视图开放，用户视图下换成同域可用的知识检索，不放一个永远点不动的入口。 */
+  else if(r==='KNOWLEDGE_AUDITOR'){
+    push('create.judgment','知识裁决')
+    push(adminView.value?'search.benchmark':'search.query',adminView.value?'检索评测':'知识检索')
+  }
+  else{push('workbench.assets','资产浏览');push('search.query','知识检索')}
   return Actions
 })
 /** 角标只用于需要人工介入的入口：待审核与未解决冲突。 */
@@ -428,8 +531,11 @@ function err(e:unknown, fallback='操作失败'){
   failure.value=errorMessage(e,fallback)
   ElMessage.error(failure.value)
 }
-async function loadBases(){bases.value=unwrap(await getKnowledgeBases(),[]);
+async function loadBases(){
+basesLoading.value=true
+try{bases.value=unwrap(await getKnowledgeBases(),[]);
 if(!bases.value.some(v=>v.id===knowledgeBaseId.value)&&bases.value.length)knowledgeBaseId.value=bases.value[0].id}
+finally{basesLoading.value=false}}
 async function createBase(payload:{name:string;description:string;visibility:string;ownerGroupId:number|null}){
 try{
   const base=unwrap(
@@ -440,6 +546,7 @@ selectBase(base.id);
 showBases.value=false;
 ElMessage.success('知识库已创建')}catch(e){err(e)}}
 function selectBase(id:number){knowledgeBaseId.value=id;
+pushRecentBase(id);
 showBases.value=false}
 async function loadAcl(){
   const r=await Promise.allSettled([
@@ -561,7 +668,8 @@ const REVIEW_KEYS=['create.judgment']
 const QUERY_KEYS=['search.query','search.test','search.trace']
 const ACL_KEYS=['system.acl','system.audit']
 async function loadActive(){try{
-if(active.value==='workbench')await Promise.all([loadOverview(),loadDashboard()]);
+if(active.value==='home')await loadBaseStats();
+else if(active.value==='workbench')await Promise.all([loadOverview(),loadDashboard()]);
 else if(DATA_KEYS.includes(active.value))await loadData();
 else if(REVIEW_KEYS.includes(active.value))await loadReview();
 else if(QUERY_KEYS.includes(active.value))await loadQueryHistory();
@@ -745,6 +853,9 @@ async function onLogin(){
   try{me.value=unwrap(await getMe(),null)}catch(e){err(e)}
   if(!me.value?.user)return
   await loadGroups()
+  // 从管理员入口登录的账号如果不是管理员，说明走错了入口：仍允许登录，但明确提示。
+  if(loginMode.value==='admin'&&me.value.user.role!=='ADMIN')
+    ElMessage.warning('该账号不是平台管理员，已进入普通用户视图')
   // 拿到角色权限后再决定落地页，登录前不能沿用旧的会话位置。
   resolveInitialView()
   await initialLoad()
@@ -760,7 +871,7 @@ async function doLogout(){
  */
 const shell:KosShell={
   navigate, openAssets, openGraph, openRun, openTrace, openCallTrace, openDetail, openEvidence, openCitation,
-  can, canNavigate, tabs:key=>leavesOfSection(key,can),
+  can, canNavigate, tabs:key=>leavesOfSection(key,can,navRole.value),
   upload, pick, remove,
   uploadFiles:files=>{void uploadFiles(files)},
   cancelBatch:code=>{void cancelBatch(code)},
@@ -785,7 +896,7 @@ function onAuthExpired(){
 }
 async function initialLoad(){
   try{await loadBases();
-  await Promise.all([loadOverview(),loadReview(),loadDashboard(),loadTasks()]);
+  await Promise.all([loadOverview(),loadReview(),loadDashboard(),loadTasks(),loadBaseStats()]);
   if(active.value!=='workbench')await loadActive();
   void loadEnvironment();
   void loadSpaceContext()}catch(e){err(e)}
@@ -793,7 +904,8 @@ async function initialLoad(){
 watch(active,
     v=>{if(!v)return
 localStorage.setItem('kos.activeView',v);
-if(scopedView.value)void loadSpaceContext();
+/* 顶部知识库栏在所有主页面都显示，切页时同样要刷新索引状态。 */
+void loadSpaceContext();
 void loadActive()});
 watch(knowledgeBaseId,
     v=>{localStorage.setItem('llmkb.kbId',String(v));
@@ -814,15 +926,15 @@ onUnmounted(()=>{
 })
 /**
  * 决定登录后的第一个页面：沿用上次访问的位置，但它可能已无权访问（换账号或角色被调整），
- * 这时回到该角色的默认工作区；没有历史位置时直接进角色落地页。
+ * 这时回到主页面。没有历史位置时一律进主页面——主页面是登录后统一的首屏，
+ * 角色专属的深入入口（系统配置 / 裁决 / 生成任务）由侧栏与页面内快捷入口承担。
  * 必须在拿到 /auth/me 的权限之后执行，否则会按「未知角色」渲染出无权页面。
  */
 function resolveInitialView(){
   const remembered=localStorage.getItem('kos.activeView')||localStorage.getItem('llmkb.activeTab')
   const leaf=remembered?locate(normalizeViewKey(remembered))?.leaf:undefined
   if(leaf&&canLeaf(leaf)){active.value=leaf.key;return}
-  const home=me.value?.homeView||'workbench'
-  active.value=locate(home)?.leaf?home:'workbench'
+  active.value='home'
 }
 onMounted(async()=>{
   window.addEventListener(AUTH_EXPIRED_EVENT,onAuthExpired)

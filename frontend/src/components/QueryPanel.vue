@@ -2,18 +2,9 @@
 <section class="kb-page max-w-[1180px]">
   <header class="kb-section-head"><div><div class="kb-eyebrow">混合检索与图谱增强</div>
     <h2 class="kb-title mt-1">智能问答</h2><p class="kb-muted mt-1">查询理解 → 多路召回 → 融合排序 → 重排 → 证据上下文 → 可追溯回答。</p></div></header>
-  <!-- §5 检索模块的二级入口：左侧不再展开二级菜单，改在默认页直接给出 -->
-  <nav class="kos-modnav" aria-label="知识检索">
-    <button
-      v-for="tool in tools"
-      :key="tool.key"
-      class="kos-modnav-chip"
-      @click="$emit('navigate',tool.key)">
-      <span class="kos-nav-ic">{{tool.icon}}</span>
-      <span>{{tool.label}}</span>
-    </button>
-  </nav>
-  <div class="grid gap-4 lg:grid-cols-[1fr_280px]">
+  <!-- 检索模块各入口统一由页面顶部的模块 Tab 承载，这里不再重复一排同样的菜单 -->
+  <!-- 历史列比原来宽一些：单行要放下「问题 + 时间 + 耗时」，280px 会把问题截得只剩两三个字。 -->
+  <div class="grid gap-4 lg:grid-cols-[1fr_340px]">
     <div>
       <article class="kb-card overflow-hidden">
         <textarea :value="query" rows="5" class="w-full resize-none border-0 px-5 py-4 text-[15px] leading-7 text-ink-900 outline-none"
@@ -110,12 +101,26 @@
     <aside class="kb-card h-fit overflow-hidden">
       <div class="kb-card-head"><div><b class="text-sm">问答历史</b><div class="text-[10px] text-ink-500">查询历史</div></div>
         <button class="text-xs text-accent" @click="$emit('refresh-history')">刷新</button></div>
-      <div class="max-h-[620px] divide-y divide-ink-100 overflow-auto">
-        <button v-for="item in history" :key="item.queryId" class="block w-full p-3 text-left hover:bg-ink-50" @click="$emit('open-trace',item.queryId)">
-          <b class="line-clamp-2 text-xs leading-5 text-ink-700">{{ item.originalQuery }}</b>
-          <div class="mt-2 flex justify-between text-[10px] text-ink-500"><span>{{ time(item.createdTime) }}</span><span>{{ item.latencyMs || 0 }}ms</span></div>
-        </button>
-        <div v-if="!history.length" class="p-8 text-center text-xs text-ink-500">暂无问答历史</div>
+      <!-- 列表形态与「知识概览 · 知识治理」一致：卡片内的次级表面块（--bg-sub）+
+           语义圆点 + 名称 + 数字胶囊 + hover 才出现的箭头，静态时也有明确层次。 -->
+      <div class="p-2">
+        <div class="max-h-[560px] min-h-[132px] space-y-1 overflow-y-auto rounded-lg bg-[color:var(--bg-sub)] p-1.5">
+          <button v-for="item in history" :key="item.queryId"
+            class="group flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left transition-colors hover:bg-brand-500/10"
+            :title="`${item.originalQuery}${item.errorCode?`（失败：${item.errorCode}）`:''} · 点击查看完整链路`"
+            @click="$emit('open-trace',item.queryId)">
+            <i class="kb-dot" :class="historyDot(item)"></i>
+            <span class="min-w-0 flex-1 truncate text-[13px] text-ink-700">{{ item.originalQuery }}</span>
+            <span class="flex-none text-[11px] text-ink-500 tabular-nums">{{ time(item.createdTime) }}</span>
+            <b class="kb-badge flex-none tabular-nums" :class="item.errorCode?'kb-state-danger':'kb-state-neutral'"
+              :title="`耗时 ${item.latencyMs || 0}ms`">{{ latency(item.latencyMs) }}</b>
+            <span class="flex-none text-[12px] text-ink-500 opacity-0 transition-opacity group-hover:opacity-100">→</span>
+          </button>
+          <div v-if="!history.length" class="px-2 py-7 text-center">
+            <p class="text-[13px] text-ink-600">暂无问答历史</p>
+            <p class="kb-muted mt-1">提问后，历史与完整链路会汇总到这里</p>
+          </div>
+        </div>
       </div>
     </aside>
   </div>
@@ -125,23 +130,20 @@
 import { computed } from 'vue'
 import type { QueryCitation, QueryHistoryItem, QueryResult, QuerySupportClaim } from '../types'
 import { renderMarkdown } from '../utils/markdown'
-import { useShell } from '../shell'
-import { PERM } from '../permissions'
 
-const shell = useShell()
 const props = defineProps<{ query:string; result:QueryResult|null; asking:boolean; history:QueryHistoryItem[] }>()
-defineEmits<{ ask:[]; 'update:query':[value:string]; 'open-trace':[qid:string]; 'refresh-history':[]; 'open-citation':[citation:QueryCitation]; navigate:[key:string] }>()
-/**
- * 检索模块的其余入口：调试（检索测试 / 检索链路追踪）与调优（策略 / Benchmark）。
- * 运营员不能配置策略、不能测评，审核员只多出测评，剩余入口按角色裁剪。
- */
-const tools = computed(() => [
-  { key:'search.test', icon:'🧪', label:'检索测试', permission: PERM.SEARCH_TEST },
-  { key:'search.profile', icon:'⌗', label:'检索策略', permission: PERM.SEARCH_POLICY },
-  { key:'search.trace', icon:'🛰', label:'检索链路追踪', permission: PERM.SEARCH_TEST },
-  { key:'search.benchmark', icon:'📈', label:'Benchmark', permission: PERM.SEARCH_EVALUATE },
-].filter(tool => shell.can(tool.permission)))
-const time=(v?:string)=>v?new Date(v).toLocaleString():'—'
+defineEmits<{ ask:[]; 'update:query':[value:string]; 'open-trace':[qid:string]; 'refresh-history':[]; 'open-citation':[citation:QueryCitation] }>()
+/** 历史行内的时间只到「月-日 时:分」：列表单行排布，完整时间戳会挤掉问题文本。 */
+const time=(v?:string)=>{
+  if(!v)return '—'
+  const d=new Date(v), p=(n:number)=>String(n).padStart(2,'0')
+  return `${p(d.getMonth()+1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`
+}
+/** 耗时胶囊：秒级以上折成 s，避免 5 位数字把单行挤满；精确值留在 title 里。 */
+const latency=(ms?:number)=>{const v=Number(ms||0); return v>=1000?`${(v/1000).toFixed(1)}s`:`${v}ms`}
+/** 历史项状态点：失败红 / 有回答绿 / 其余中性，与「知识治理」同一套语义色。 */
+const historyDot=(item:QueryHistoryItem)=>
+  item.errorCode ? 'kb-dot-danger' : item.answer ? 'kb-dot-ok' : 'kb-dot-neutral'
 
 /** Markdown 答案 + [证据N] 上标引用（llmwiki 式排版）。 */
 const renderedAnswer = computed(() =>

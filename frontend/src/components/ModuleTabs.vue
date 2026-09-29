@@ -9,7 +9,7 @@
       :disabled="leaf.planned"
       :title="leaf.planned ? '规划中：该能力尚未实现' : ''"
       @click="select(leaf)">
-      <span class="kos-nav-ic">{{ leaf.icon }}</span>
+      <NavIcon class="kos-nav-ic" :name="leaf.icon" :size="14"/>
       <span>{{ leaf.label }}</span>
       <em v-if="badges?.[leaf.key]" class="kos-nav-dot">{{ badges[leaf.key] }}</em>
       <em v-else-if="leaf.planned" class="kos-nav-planned">规划</em>
@@ -18,6 +18,7 @@
 </template>
 <script setup lang="ts">
 import type { NavLeaf } from '../navigation'
+import NavIcon from './NavIcon.vue'
 
 defineProps<{
   label: string

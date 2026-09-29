@@ -7,7 +7,7 @@
     :query="query" @update:query="$emit('update:query',$event)"
     :result="result" :asking="asking" :history="history"
     @ask="$emit('ask')" @open-trace="shell.openTrace" @refresh-history="$emit('refresh-history')"
-    @open-citation="shell.openCitation" @navigate="shell.navigate" />
+    @open-citation="shell.openCitation" />
 
   <RetrievalTestPanel
     v-else-if="active==='search.test'"

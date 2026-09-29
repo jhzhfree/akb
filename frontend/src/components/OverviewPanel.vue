@@ -2,8 +2,8 @@
   <section class="kb-page">
     <header class="kb-section-head">
       <div>
-        <div class="kb-eyebrow">知识工作台</div>
-        <h1 class="kb-title mt-1">知识工作台</h1>
+        <div class="kb-eyebrow">知识概览</div>
+        <h1 class="kb-title mt-1">知识概览</h1>
         <p class="kb-muted mt-1">
           看知识：资产规模、生命周期进度与需要人工介入的治理项，一处发现、三处闭环。
         </p>
@@ -14,7 +14,7 @@
           <span class="kb-entry-label">知识健康度</span>
           <b :class="healthClass">{{ healthScore }}%</b>
         </div>
-        <button v-if="canGenerate" class="kb-entry-primary" @click="$emit('navigate','create.overview')">＋ 生成知识</button>
+        <button v-if="canGenerate" class="kb-entry-primary" @click="$emit('navigate',generateTarget)">＋ 生成知识</button>
         <button class="kb-entry" @click="$emit('navigate','search.query')">知识搜索 →</button>
         <button class="kb-entry" @click="$emit('navigate','workbench.version')">版本 →</button>
         <button class="kb-entry" @click="$emit('navigate','workbench.quality')">质量 →</button>
@@ -303,6 +303,11 @@ const healthClass = computed(() => {
 
 /** 生成入口只对有知识生成权限的角色开放；浏览员与无生成权限的角色看不到该按钮。 */
 const canGenerate = computed(() => shell.can(PERM.GENERATE_IMPORT))
+/**
+ * 「＋ 生成知识」的落点按角色区分：管理员进生成概览，
+ * 普通成员的生成模块里没有概览页（只有文档导入 / 裁决 / 衍生），因此直接进文档导入。
+ */
+const generateTarget = computed(() => shell.canNavigate('create.overview') ? 'create.overview' : 'create.import')
 /**
  * 概览里的下钻目标可能超出当前角色（例如浏览员点「知识裁决」）。
  * 无权时把入口置灰，而不是等点了才提示或撞上 403。
