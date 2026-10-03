@@ -79,8 +79,8 @@ public class KnowledgeService {
     public List<KnowledgeSource> sources(Long kb, java.util.List<String> permissionTags) {
         return readService.sources(kb, permissionTags);
     }
-    public List<Map<String, Object>> documents(Long kb) {
-        return readService.documents(kb);
+    public List<Map<String, Object>> documents(Long kb, java.util.List<String> permissionTags) {
+        return readService.documents(kb, permissionTags);
     }
     public Map<String, Object> retryDocument(Long documentId) throws Exception {
         return ingestionService.retry(documentId);

@@ -14,10 +14,17 @@ SELECT DISTINCT permission_tag FROM (
 
 <select id="listAclRoles" resultType="map">SELECT role_code roleCode,role_name roleName,status FROM t_acl_role ORDER BY role_code</select>
 
-<select id="listAclAudits" resultType="map">SELECT id,subject_code subjectCode,knowledge_base_id knowledgeBaseId,resource_type resourceType,resource_code resourceCode,action_name actionName,decision,permission_tags permissionTags,reason,trace_id traceId,request_uri requestUri,created_time createdTime FROM t_acl_access_audit WHERE (#{kb} IS NULL OR knowledge_base_id=#{kb}) ORDER BY id DESC LIMIT #{limit}</select>
+<!-- 审计 / 变更按知识库取页：日志只增不减，翻页必须走 LIMIT+OFFSET，配合计数给出真实总条数。 -->
+<sql id="aclKbScope">WHERE (#{kb} IS NULL OR knowledge_base_id=#{kb})</sql>
+
+<select id="listAclAudits" resultType="map">SELECT id,subject_code subjectCode,knowledge_base_id knowledgeBaseId,resource_type resourceType,resource_code resourceCode,action_name actionName,decision,permission_tags permissionTags,reason,trace_id traceId,request_uri requestUri,created_time createdTime FROM t_acl_access_audit <include refid="aclKbScope"/> ORDER BY id DESC LIMIT #{limit} OFFSET #{offset}</select>
+
+<select id="countAclAudits" resultType="long">SELECT COUNT(*) FROM t_acl_access_audit <include refid="aclKbScope"/></select>
 
 <select id="listAclChanges" resultType="map">SELECT id,change_code changeCode,knowledge_base_id knowledgeBaseId,resource_type resourceType,resource_code resourceCode,old_permission_tags oldPermissionTags,new_permission_tags newPermissionTags,changed_by changedBy,propagation_state propagationState,impact_json impactJson,propagation_result propagationResult,last_error lastError,
-completed_time completedTime,created_time createdTime FROM t_acl_change WHERE (#{kb} IS NULL OR knowledge_base_id=#{kb}) ORDER BY id DESC LIMIT #{limit}</select>
+completed_time completedTime,created_time createdTime FROM t_acl_change <include refid="aclKbScope"/> ORDER BY id DESC LIMIT #{limit} OFFSET #{offset}</select>
+
+<select id="countAclChanges" resultType="long">SELECT COUNT(*) FROM t_acl_change <include refid="aclKbScope"/></select>
 
 <select id="getResourcePermissionTags" resultType="string">SELECT CASE WHEN #{type}='SOURCE' THEN (SELECT CAST(permission_tags AS CHAR) FROM t_source WHERE knowledge_base_id=#{kb} AND source_code=#{code}) WHEN #{type}='CARD' THEN (SELECT CAST(permission_tags AS CHAR) FROM t_knowledge_card WHERE knowledge_base_id=#{kb} AND knowledge_code=#{code}) WHEN #{type}='CLAIM' THEN (SELECT CAST(permission_tags AS CHAR) FROM t_claim WHERE knowledge_base_id=#{kb} AND claim_code=#{code}) END</select>
 

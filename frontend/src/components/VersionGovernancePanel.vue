@@ -10,23 +10,23 @@
       </div>
       <div class="flex shrink-0 items-center gap-2">
         <span class="kb-muted">共 {{ total }} 个快照</span>
-        <button class="kb-btn-outline" @click="load">刷新</button>
+        <button class="kb-btn-outline" @click="load()">刷新</button>
       </div>
     </header>
 
     <!-- 页头之后收进一张卡片：与工作台概览、资产浏览同构，不再整页包在卡片里 -->
     <div class="kb-card p-4">
     <div class="grid grid-cols-1 gap-2 md:grid-cols-[130px_160px_minmax(0,1fr)]">
-      <select v-model="objectType" class="kb-input" @change="load">
+      <select v-model="objectType" class="kb-input" @change="search">
         <option value="">全部对象</option>
         <option value="CARD">知识卡片</option>
         <option value="CLAIM">断言</option>
       </select>
-      <select v-model="changeType" class="kb-input" @change="load">
+      <select v-model="changeType" class="kb-input" @change="search">
         <option value="">全部变更</option>
         <option v-for="option in changeTypes" :key="option" :value="option">{{ option }}</option>
       </select>
-      <input v-model="keyword" class="kb-input" placeholder="按对象码 / 标题搜索…" @keyup.enter="load">
+      <input v-model="keyword" class="kb-input" placeholder="按对象码 / 标题搜索…" @keyup.enter="search">
     </div>
 
     <div v-if="groups.length" class="mt-3 flex flex-wrap gap-2">
@@ -80,6 +80,12 @@
           <template #default="{ row }">{{ time(row.createdTime) }}</template>
         </el-table-column>
       </el-table>
+      <div v-if="total > size" class="mt-3 flex justify-end">
+        <el-pagination
+          small layout="prev,pager,next,total,sizes" :current-page="page" :page-size="size"
+          :page-sizes="[20,50,100]" :total="total" :pager-count="5"
+          @current-change="setPage" @size-change="setSize" />
+      </div>
     </PanelState>
 
     <!-- 抽屉：版本链 + 差异 + 证据原文定位 -->
@@ -147,6 +153,8 @@ const error = ref('')
 const objectType = ref('')
 const changeType = ref('')
 const keyword = ref('')
+const page = ref(1)
+const size = ref(20)
 const selected = ref<VersionSnapshotRow | null>(null)
 const chain = ref<KnowledgeVersion[]>([])
 const chainLoading = ref(false)
@@ -160,7 +168,11 @@ const pageLabel = (item:VersionEvidenceRow) =>
   item.pageNo == null ? '未分页'
     : item.pageEnd && item.pageEnd !== item.pageNo ? `P${item.pageNo}-${item.pageEnd}` : `P${item.pageNo}`
 
-async function load() {
+/**
+ * 分页同样交给服务端：版本快照是全量留痕表，一次拉几百条会把列表撑爆，
+ * 而且前端切片后「共 N 个快照」就对不上了。total 由后端按当前筛选条件计数返回。
+ */
+async function load(allowReflow = true) {
   loading.value = true
   error.value = ''
   try {
@@ -168,15 +180,42 @@ async function load() {
       objectType:objectType.value || undefined,
       changeType:changeType.value || undefined,
       keyword:keyword.value || undefined,
-      limit:100,
+      limit:size.value,
+      offset:(page.value - 1) * size.value,
     })
     const data = res.data.data
     rows.value = data?.rows || []
     groups.value = data?.groups || []
     total.value = data?.total || 0
+    // 筛选后命中变少时把页码收回最后一页，避免停在空白页。
+    const maxPage = Math.max(1, Math.ceil(total.value / size.value))
+    if (page.value > maxPage) {
+      page.value = maxPage
+      if (allowReflow) {
+        await load(false)
+        return
+      }
+    }
   } catch (e) {
     error.value = (e as Error).message || '版本快照加载失败'
   } finally { loading.value = false }
+}
+
+/** 改筛选条件等于换了一次检索：页码必须回到第一页。 */
+function search() {
+  page.value = 1
+  load()
+}
+
+function setPage(next:number) {
+  page.value = next
+  load()
+}
+
+function setSize(next:number) {
+  size.value = next
+  page.value = 1
+  load()
 }
 
 /**
@@ -216,7 +255,7 @@ async function loadEvidence(row:VersionSnapshotRow) {
 function applyGroup(group:{ objectType:string; changeType:string }) {
   objectType.value = group.objectType
   changeType.value = group.changeType
-  load()
+  search()
 }
 
 function openDetail() {
@@ -224,6 +263,6 @@ function openDetail() {
   emit('openDetail', selected.value.objectType, selected.value.objectCode)
 }
 
-watch(() => props.knowledgeBaseId, () => { selected.value = null; load() })
+watch(() => props.knowledgeBaseId, () => { selected.value = null; search() })
 load()
 </script>

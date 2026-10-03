@@ -12,6 +12,8 @@
 
 <update id="updateKnowledgeBaseAccess">UPDATE t_knowledge_base SET visibility=#{visibility},owner_group_id=#{ownerGroupId} WHERE id=#{id}</update>
 
+<update id="updateKnowledgeBase">UPDATE t_knowledge_base SET name=#{name},description=#{description},visibility=#{visibility},owner_group_id=#{ownerGroupId} WHERE id=#{id}</update>
+
 <update id="updateKnowledgeBaseOwner">UPDATE t_knowledge_base SET created_by=#{createdBy} WHERE id=#{id} AND created_by IS NULL</update>
 
 </mapper>

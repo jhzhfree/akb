@@ -46,9 +46,13 @@ AclAdministrationService {
         return mapper.listAclRoles();
     }
 
-    public List<Map<String, Object>> changes(Long kb, Integer limit) {
+    public List<Map<String, Object>> changes(Long kb, Integer limit, int offset) {
         int normalized = Math.min(500, Math.max(1, limit == null ? 100 : limit));
-        return mapper.listAclChanges(kb, normalized);
+        return mapper.listAclChanges(kb, normalized, Math.max(offset, 0));
+    }
+
+    public long countChanges(Long kb) {
+        return mapper.countAclChanges(kb);
     }
 
     @Transactional

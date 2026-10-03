@@ -118,6 +118,14 @@
         <el-form-item label="站点地址">
           <el-input v-model="form.baseUrl" placeholder="https://jira.example.com" />
         </el-form-item>
+        <el-form-item v-if="form.baseUrl.trim().toLowerCase().startsWith('https://')">
+          <el-checkbox v-model="form.config.insecureSsl">
+            跳过 SSL 证书校验（自签名证书 / IP 直连场景）
+          </el-checkbox>
+          <div class="mt-1 text-[11px] text-ink-500">
+            内网 Jira / Confluence 常用自签名证书，不开启会报「PKIX path building failed」而读不到任何内容。
+          </div>
+        </el-form-item>
         <el-form-item label="认证方式">
           <el-select v-model="form.authType" class="w-full">
             <el-option label="无" value="NONE" />
@@ -136,6 +144,7 @@
 
         <el-form-item v-if="form.type === 'JIRA'" label="JQL">
           <el-input v-model="form.config.jql" placeholder="project = OPS AND updated >= -30d order by updated DESC" />
+          <div v-if="jqlWarning" class="mt-1 text-[11px] text-amber-600">{{ jqlWarning }}</div>
         </el-form-item>
         <el-form-item v-if="form.type === 'CONFLUENCE'" label="空间 Key">
           <el-input v-model="form.config.spaceKey" placeholder="如 OPS；留空读取全站" />
@@ -253,12 +262,20 @@ interface ConnectorForm {
     limitParam:string
     pageParam:string
     sizeParam:string
+    insecureSsl:boolean
   }
 }
 
 const form = ref<ConnectorForm>(emptyForm())
 
 const items = computed<ConnectorItem[]>(() => page.value?.items || [])
+/** JQL 里出现在字符串外的 % 会被 Jira 直接拒绝（保留字符），保存前就提醒比等 400 省事。 */
+const jqlWarning = computed(() => {
+  const jql = form.value.config.jql || ''
+  const outsideLiterals = jql.replace(/"[^"]*"/g, '')
+  if (!outsideLiterals.includes('%')) return ''
+  return 'JQL 中的 % 是 Jira 保留字符：请把关键词放进英文双引号内（如 summary ~ "%关键词%"），或写成 \\u0025'
+})
 const connectedCount = computed(() => connectors.value.filter(v => v.lastTestStatus === 'OK').length)
 const rangeText = computed(() => {
   if (!items.value.length) return '—'
@@ -391,6 +408,7 @@ function openEdit(row:ConnectorSource) {
       limitParam:row.config?.limitParam || '',
       pageParam:row.config?.pageParam || '',
       sizeParam:row.config?.sizeParam || '',
+      insecureSsl:row.config?.insecureSsl === true,
     },
   }
   headersText.value = row.config?.headers ? JSON.stringify(row.config.headers, null, 2) : ''
@@ -520,6 +538,7 @@ function emptyForm():ConnectorForm {
       limitParam:'',
       pageParam:'',
       sizeParam:'',
+      insecureSsl:false,
     },
   }
 }

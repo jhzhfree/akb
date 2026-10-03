@@ -35,9 +35,9 @@ public class DashboardService {
     /**
      * KPI strip: asset counters plus the derived health score and the most recent objects.
      */
-    public Map<String, Object> summary(Long kb) {
-        Map<String, Object> counts = mapper.countCoreObjects(kb);
-        Map<String, Object> governance = governance(kb, DEFAULT_LOW_CONFIDENCE);
+    public Map<String, Object> summary(Long kb, List<String> permissionTags) {
+        Map<String, Object> counts = mapper.countCoreObjects(kb, permissionTags);
+        Map<String, Object> governance = governance(kb, DEFAULT_LOW_CONFIDENCE, permissionTags);
         Map<String, Object> result = new LinkedHashMap<String, Object>();
         result.put("knowledgeBaseId", kb);
         result.put("sourceCount", num(counts.get("sourceCount")));
@@ -50,15 +50,15 @@ public class DashboardService {
         result.put("healthScore", num(governance.get("healthScore")));
         result.put("pendingReviewCount", num(governance.get("pendingReview")));
         result.put("openConflictCount", num(governance.get("conflict")));
-        result.put("recent", mapper.listRecentObjects(kb, 8));
+        result.put("recent", mapper.listRecentObjects(kb, 8, permissionTags));
         return result;
     }
 
     /**
      * Lifecycle stages: 接入 → 解析 → 抽取 → 衍生 → 裁决 → 发布，每阶段带异常数与点击目标。
      */
-    public Map<String, Object> lifecycle(Long kb) {
-        Map<String, Object> raw = mapper.countLifecycle(kb);
+    public Map<String, Object> lifecycle(Long kb, List<String> permissionTags) {
+        Map<String, Object> raw = mapper.countLifecycle(kb, permissionTags);
         List<Map<String, Object>> stages = new ArrayList<Map<String, Object>>();
         // 接入阶段的异常只看“没接干净”的对象：失败或脏文档，而不是文档总数。
         stages.add(stage("接入", "INGEST", num(raw.get("ingestSource")) + num(raw.get("ingestDocument")), num(raw.get("publishDirty")), "create.sources"));
@@ -80,9 +80,9 @@ public class DashboardService {
      * Governance backlog. Only actionable counters are returned, each with a severity so the
      * workbench can colour blocking problems red, pending work orange and healthy state green.
      */
-    public Map<String, Object> governance(Long kb, Double lowConfidence) {
+    public Map<String, Object> governance(Long kb, Double lowConfidence, List<String> permissionTags) {
         double threshold = lowConfidence == null || lowConfidence <= 0 ? DEFAULT_LOW_CONFIDENCE : lowConfidence;
-        Map<String, Object> raw = mapper.countGovernance(kb, threshold);
+        Map<String, Object> raw = mapper.countGovernance(kb, threshold, permissionTags);
         long pendingReview = num(raw.get("pendingReviewClaim")) + num(raw.get("pendingReviewCard"));
         long conflict = num(raw.get("conflict"));
         long expired = num(raw.get("expired"));

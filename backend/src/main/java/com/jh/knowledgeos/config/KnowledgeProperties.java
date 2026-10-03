@@ -38,6 +38,20 @@ public class KnowledgeProperties {
 
     private String opsAdminToken = "";
 
+    /**
+     * 内网数据源常挂在自签名证书或 IP 直连上，默认严格校验会直接握手失败。
+     * 打开后所有连接器都不校验证书；只对单个数据源放开通行，用连接器配置 insecureSsl。
+     */
+    private boolean connectorTrustAllSsl = false;
+
+    public boolean isConnectorTrustAllSsl() {
+        return connectorTrustAllSsl;
+    }
+
+    public void setConnectorTrustAllSsl(boolean connectorTrustAllSsl) {
+        this.connectorTrustAllSsl = connectorTrustAllSsl;
+    }
+
     public String getAiServiceBaseUrl() {
         return aiServiceBaseUrl;
     }

@@ -48,15 +48,23 @@ FROM t_alert_event WHERE alert_code=#{alertCode}</select>
 <select id="getAlertEventByDedup" resultType="map">SELECT alert_code alertCode,status FROM t_alert_event
 WHERE dedup_key=#{dedupKey}</select>
 
+<!-- 告警筛选条件：取页与计数共用，未处理优先的排序在计数里不生效但结果一致。 -->
+<sql id="alertEventFilter">
+WHERE (knowledge_base_id=#{kb} OR knowledge_base_id IS NULL OR #{kb} IS NULL)
+<if test="status != null and status != ''">AND status=#{status}</if>
+<if test="severity != null and severity != ''">AND severity=#{severity}</if>
+</sql>
+
 <select id="listAlertEvents" resultType="map">SELECT alert_code alertCode,rule_code ruleCode,
   knowledge_base_id knowledgeBaseId,severity,status,title,detail_json detailJson,metric_value metricValue,
   dedup_key dedupKey,occur_count occurCount,first_seen firstSeen,last_seen lastSeen,acked_by ackedBy,
   created_time createdTime
 FROM t_alert_event
-WHERE (knowledge_base_id=#{kb} OR knowledge_base_id IS NULL OR #{kb} IS NULL)
-<if test="status != null and status != ''">AND status=#{status}</if>
-<if test="severity != null and severity != ''">AND severity=#{severity}</if>
-ORDER BY FIELD(status,'OPEN','ACKED','RESOLVED'),last_seen DESC LIMIT #{limit}</select>
+<include refid="alertEventFilter"/>
+ORDER BY FIELD(status,'OPEN','ACKED','RESOLVED'),last_seen DESC LIMIT #{limit} OFFSET #{offset}</select>
+
+<select id="countAlertEvents" resultType="long">SELECT COUNT(*) FROM t_alert_event
+<include refid="alertEventFilter"/></select>
 
 <update id="updateAlertStatus">UPDATE t_alert_event SET status=#{status},
   acked_by=IF(#{status}='ACKED',#{operator},acked_by),acked_time=IF(#{status}='ACKED',CURRENT_TIMESTAMP,acked_time),

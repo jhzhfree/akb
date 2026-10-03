@@ -14,8 +14,6 @@ import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-import java.io.UnsupportedEncodingException;
-import java.net.URLEncoder;
 import java.util.Collections;
 import java.util.Map;
 
@@ -102,12 +100,13 @@ public class QueryPolicyController {
         return ApiResponse.ok(aiClient.delete(AiApiPaths.QUERY_POLICY_PROFILE_PREFIX + encode(name)));
     }
 
+    /**
+     * 策略名只允许中英文、数字、下划线与短横线，路径段无需手工编码：RestTemplate 会把
+     * String 形式的 URL 再编码一次，这里预先 encode 会导致中文被双重编码
+     * （%E8%BF%90 变成 %25E8%25BF%2590），AI 服务侧因此找不到策略。
+     */
     private static String encode(String name) {
-        try {
-            return URLEncoder.encode(name, "UTF-8");
-        } catch (UnsupportedEncodingException ignored) {
-            return name;
-        }
+        return name == null ? "" : name.trim();
     }
 
     private static Map<String, Object> body(Map<String, Object> payload) {

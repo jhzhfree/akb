@@ -20,7 +20,9 @@
   <AclAdministrationPanel
     v-else-if="active==='system.acl'"
     :subjects="aclSubjects" :roles="aclRoles" :changes="aclChanges" :audits="aclAudits"
-    @change="$emit('acl-change',$event)" />
+    :change-total="changeTotal" :change-page="changePage" :change-size="changeSize"
+    :audit-total="auditTotal" :audit-page="auditPage" :audit-size="auditSize"
+    @change="$emit('acl-change',$event)" @log-page="$emit('acl-log-page',$event)" />
 
   <SchemaPanel v-else-if="active==='system.schema'" :knowledge-base-id="knowledgeBaseId" />
 
@@ -33,7 +35,9 @@
   <AclAdministrationPanel
     v-else-if="active==='system.audit'"
     :subjects="aclSubjects" :roles="aclRoles" :changes="aclChanges" :audits="aclAudits"
-    @change="$emit('acl-change',$event)" />
+    :change-total="changeTotal" :change-page="changePage" :change-size="changeSize"
+    :audit-total="auditTotal" :audit-page="auditPage" :audit-size="auditSize"
+    @change="$emit('acl-change',$event)" @log-page="$emit('acl-log-page',$event)" />
 
   <SpacePanel
     v-else-if="active==='system.space'"
@@ -63,12 +67,20 @@ const props = defineProps<{
   aclRoles: AclRole[]
   aclChanges: AclChange[]
   aclAudits: AclAudit[]
+  /** 审计与变更的分页状态：列表只装当前页，总数来自后端计数。 */
+  changeTotal?: number
+  changePage?: number
+  changeSize?: number
+  auditTotal?: number
+  auditPage?: number
+  auditSize?: number
   /** 用户与组织仅管理员可见，非管理员不渲染该 Tab。 */
   canManageUsers: boolean
 }>()
 defineEmits<{
   select: [key: string]
   'acl-change': [payload: { resourceType: string; resourceCode: string; permissionTags: string[]; reason: string }]
+  'acl-log-page': [payload: { which: 'audit' | 'change'; page: number; size: number }]
   'select-base': [id: number]
   'create-base': []
   refresh: []

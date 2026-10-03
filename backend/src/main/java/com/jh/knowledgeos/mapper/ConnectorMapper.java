@@ -18,4 +18,7 @@ public interface ConnectorMapper {
     List<ConnectorSource> list(@Param("kb") Long kb);
 
     int updateTestResult(@Param("id") Long id, @Param("status") String status, @Param("message") String message);
+
+    /** 同步结果：列表页要告诉用户这批数据有多新、有多少条。 */
+    int updateSyncResult(@Param("id") Long id, @Param("count") int count);
 }

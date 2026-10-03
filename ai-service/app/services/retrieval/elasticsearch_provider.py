@@ -55,12 +55,17 @@ def _status_filter() -> dict[str, Any]:
     }
 
 
-def _permission_filter(tags: Iterable[str] | None) -> dict[str, Any]:
-    """Build the Elasticsearch ACL filter.
+def _permission_filter(tags: Iterable[str] | None) -> dict[str, Any] | None:
+    """Build the Elasticsearch ACL filter, or None when the caller is unrestricted.
 
-    Missing ``permission_tags`` means the object is public. Restricted objects
-    are visible only when at least one required tag intersects the caller tags.
+    ``None`` means there is no ACL identity to enforce (platform admin or auth off):
+    every object is visible, so no ACL clause is applied at all. An empty list means a
+    known identity that holds no tag, which may only see public objects. Missing
+    ``permission_tags`` means the object is public; restricted objects are visible
+    only when at least one required tag intersects the caller tags.
     """
+    if tags is None:
+        return None
     should = [{"bool": {"must_not": [{"exists": {"field": "permission_tags"}}]}}]
     values = list(tags or [])
     if values:
@@ -338,10 +343,10 @@ class ElasticsearchProvider:
         """Full-text search over normalized source units."""
         if not self.enabled:
             return []
-        filters: list[dict[str, Any]] = [
-            {"term": {"knowledge_base_id": kb}},
-            _permission_filter(permission_tags),
-        ]
+        filters: list[dict[str, Any]] = [{"term": {"knowledge_base_id": kb}}]
+        acl = _permission_filter(permission_tags)
+        if acl:
+            filters.append(acl)
         if document_id is not None:
             filters.append({"term": {"document_id": document_id}})
         body = {
@@ -662,11 +667,10 @@ class ElasticsearchProvider:
         object_type: str | None = None,
     ) -> list[dict[str, Any]]:
         """Run ACL-aware BM25/full-text retrieval."""
-        filters: list[dict[str, Any]] = [
-            {"term": {"knowledge_base_id": kb}},
-            _permission_filter(permission_tags),
-            _status_filter(),
-        ]
+        filters: list[dict[str, Any]] = [{"term": {"knowledge_base_id": kb}}, _status_filter()]
+        acl = _permission_filter(permission_tags)
+        if acl:
+            filters.append(acl)
         if object_type:
             filters.append({"term": {"object_type": object_type}})
 

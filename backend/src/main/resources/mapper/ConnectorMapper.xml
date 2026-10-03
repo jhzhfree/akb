@@ -2,7 +2,7 @@
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.jh.knowledgeos.mapper.ConnectorMapper">
 
-<sql id="columns">id,connector_code AS connectorCode,knowledge_base_id AS knowledgeBaseId,name,connector_type AS type,base_url AS baseUrl,auth_type AS authType,username,secret,config_json AS configJson,status,last_test_status AS lastTestStatus,last_test_message AS lastTestMessage,last_test_time AS lastTestTime,created_by AS createdBy,created_time AS createdTime</sql>
+<sql id="columns">id,connector_code AS connectorCode,knowledge_base_id AS knowledgeBaseId,name,connector_type AS type,base_url AS baseUrl,auth_type AS authType,username,secret,config_json AS configJson,status,last_test_status AS lastTestStatus,last_test_message AS lastTestMessage,last_test_time AS lastTestTime,last_sync_time AS lastSyncTime,last_sync_count AS lastSyncCount,created_by AS createdBy,created_time AS createdTime</sql>
 
 <insert id="insert" parameterType="com.jh.knowledgeos.domain.ConnectorSource" useGeneratedKeys="true" keyProperty="id">INSERT INTO t_connector_source(connector_code,knowledge_base_id,name,connector_type,base_url,auth_type,username,secret,config_json,status,created_by) VALUES(#{connectorCode},#{knowledgeBaseId},#{name},#{type},#{baseUrl},#{authType},#{username},#{secret},#{configJson},#{status},#{createdBy})</insert>
 
@@ -16,5 +16,7 @@
 <select id="list" resultType="com.jh.knowledgeos.domain.ConnectorSource">SELECT <include refid="columns"/> FROM t_connector_source WHERE knowledge_base_id=#{kb} ORDER BY id DESC</select>
 
 <update id="updateTestResult">UPDATE t_connector_source SET last_test_status=#{status},last_test_message=#{message},last_test_time=CURRENT_TIMESTAMP WHERE id=#{id}</update>
+
+<update id="updateSyncResult">UPDATE t_connector_source SET last_sync_count=#{count},last_sync_time=CURRENT_TIMESTAMP WHERE id=#{id}</update>
 
 </mapper>

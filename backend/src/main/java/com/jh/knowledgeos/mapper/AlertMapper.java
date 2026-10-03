@@ -47,7 +47,9 @@ public interface AlertMapper {
     Map<String, Object> getAlertEventByDedup(@Param("dedupKey") String dedupKey);
 
     List<Map<String, Object>> listAlertEvents(@Param("kb") Long kb, @Param("status") String status, @Param("severity") String severity,
-            @Param("limit") int limit);
+            @Param("limit") int limit, @Param("offset") int offset);
+
+    long countAlertEvents(@Param("kb") Long kb, @Param("status") String status, @Param("severity") String severity);
 
     int updateAlertStatus(@Param("alertCode") String alertCode, @Param("status") String status, @Param("operator") String operator, @Param("note") String note);
 

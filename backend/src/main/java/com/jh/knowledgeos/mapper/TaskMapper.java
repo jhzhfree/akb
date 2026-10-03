@@ -30,7 +30,10 @@ public interface TaskMapper {
     Map<String, Object> getTaskRun(@Param("taskCode") String taskCode);
 
     List<Map<String, Object>> listTaskRuns(@Param("kb") Long kb, @Param("status") String status, @Param("taskType") String taskType,
-            @Param("triggerType") String triggerType, @Param("limit") int limit);
+            @Param("triggerType") String triggerType, @Param("limit") int limit, @Param("offset") int offset);
+
+    long countTaskRuns(@Param("kb") Long kb, @Param("status") String status, @Param("taskType") String taskType,
+            @Param("triggerType") String triggerType);
 
     List<Map<String, Object>> taskStats(@Param("kb") Long kb);
 

@@ -1,6 +1,7 @@
 import axios, { type AxiosResponse } from 'axios'
 import type {
-  ApiEnvelope, ConnectorItemPage, ConnectorPayload, ConnectorSource, ConnectorTestResult,
+  ApiEnvelope, CatalogFacets, CatalogItem, CatalogPage, CatalogSyncResult,
+  ConnectorItemPage, ConnectorPayload, ConnectorSource, ConnectorTestResult,
 } from '../../types'
 
 type ApiResponse<T> = AxiosResponse<ApiEnvelope<T>>
@@ -32,3 +33,35 @@ export const previewConnector = (payload:ConnectorPayload):Promise<ApiResponse<C
 
 export const connectorItems = (id:number, limit = 20, offset = 0):Promise<ApiResponse<ConnectorItemPage>> =>
   axios.get(`/api/knowledge/connectors/${id}/items?limit=${limit}&offset=${offset}`, { timeout:EXTERNAL_TIMEOUT_MS })
+
+/** 同步是「替用户跑一遍外部系统」，慢是正常的，因此比普通读取给更长的等待时间。 */
+const SYNC_TIMEOUT_MS = 120000
+
+export const syncConnectorCatalog = (id:number):Promise<ApiResponse<CatalogSyncResult>> =>
+  axios.post(`/api/knowledge/connectors/${id}/sync`, {}, { timeout:SYNC_TIMEOUT_MS })
+
+/**
+ * attr 形如 status=进行中，可重复；type 为空表示全部类型。
+ *
+ * 查询串自己拼：axios 默认把数组序列化成 attr[]=…，后端 @RequestParam 收不到，
+ * 表现就是「只有类型生效，其他属性点了没反应」。
+ */
+export const connectorCatalog = (
+  id:number,
+  params:{ type?:string; keyword?:string; attr?:string[]; page?:number; size?:number } = {},
+):Promise<ApiResponse<CatalogPage>> => {
+  const { attr, ...rest } = params
+  const search = new URLSearchParams()
+  for (const [key, value] of Object.entries(rest)) {
+    if (value !== undefined && value !== null && value !== '') search.append(key, String(value))
+  }
+  for (const item of attr || []) search.append('attr', item)
+  const query = search.toString()
+  return axios.get(`/api/knowledge/connectors/${id}/catalog${query ? `?${query}` : ''}`)
+}
+
+export const connectorCatalogFacets = (id:number, type?:string):Promise<ApiResponse<CatalogFacets>> =>
+  axios.get(`/api/knowledge/connectors/${id}/catalog/facets`, { params:{ type } })
+
+export const connectorCatalogItem = (itemId:number):Promise<ApiResponse<CatalogItem>> =>
+  axios.get(`/api/knowledge/connectors/catalog/items/${itemId}`)

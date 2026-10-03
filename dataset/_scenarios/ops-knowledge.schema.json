@@ -1,0 +1,265 @@
+{
+  "scenario": "ops-knowledge",
+  "title": "运维知识库场景 Schema",
+  "knowledgeBase": {
+    "name": "运维知识库",
+    "description": "运维规范、操作手册、命令操作记录、故障与拦截事件、FAQ、月报与口径通知的统一知识库",
+    "visibility": "PUBLIC",
+    "permissionTags": "ops,sre,dba"
+  },
+  "knowledgeTypes": [
+    {
+      "kind": "KNOWLEDGE_TYPE",
+      "typeCode": "OPS_RULE",
+      "label": "运维规范",
+      "description": "运维类制度与规范：值班、账号权限、高危命令、告警分级、发布变更等，含编号/版本/生效日期",
+      "properties": {
+        "properties": [
+          { "name": "docCode", "type": "STRING", "label": "文件编号" },
+          { "name": "version", "type": "STRING", "label": "版本" },
+          { "name": "effectiveFrom", "type": "DATE", "label": "生效日期" },
+          { "name": "effectiveTo", "type": "DATE", "label": "有效期至" },
+          { "name": "ownerDept", "type": "STRING", "label": "归口部门" },
+          { "name": "approver", "type": "STRING", "label": "审批人" },
+          { "name": "docLevel", "type": "ENUM", "label": "文件层级", "values": ["制度", "规范", "手册", "通知"] }
+        ]
+      }
+    },
+    {
+      "kind": "KNOWLEDGE_TYPE",
+      "typeCode": "OPS_MANUAL",
+      "label": "操作手册",
+      "description": "主机、数据库、容器、中间件的运维操作手册与排障命令集",
+      "properties": {
+        "properties": [
+          { "name": "docCode", "type": "STRING", "label": "文件编号" },
+          { "name": "target", "type": "STRING", "label": "适用对象" },
+          { "name": "version", "type": "STRING", "label": "版本" },
+          { "name": "revisedAt", "type": "DATE", "label": "最近修订" },
+          { "name": "author", "type": "STRING", "label": "编写人" }
+        ]
+      }
+    },
+    {
+      "kind": "KNOWLEDGE_TYPE",
+      "typeCode": "OPS_COMMAND_RECORD",
+      "label": "命令操作记录",
+      "description": "堡垒主机留存的命令操作记录：会话号、主机、命令序列、结果、归档编号与关联工单",
+      "properties": {
+        "properties": [
+          { "name": "recordCode", "type": "STRING", "label": "记录编号" },
+          { "name": "sessionId", "type": "STRING", "label": "会话ID" },
+          { "name": "archiveId", "type": "STRING", "label": "审计归档编号" },
+          { "name": "operator", "type": "STRING", "label": "操作人" },
+          { "name": "operatorId", "type": "STRING", "label": "工号" },
+          { "name": "host", "type": "STRING", "label": "主机" },
+          { "name": "operatedAt", "type": "DATE", "label": "操作时间" },
+          { "name": "ticket", "type": "STRING", "label": "关联工单" },
+          { "name": "commandLevel", "type": "ENUM", "label": "命令等级", "values": ["L1", "L2", "L3"] }
+        ]
+      }
+    },
+    {
+      "kind": "KNOWLEDGE_TYPE",
+      "typeCode": "OPS_INCIDENT",
+      "label": "故障与拦截事件",
+      "description": "生产故障复盘、高危命令拦截事件，含等级、影响、根因与改进项",
+      "properties": {
+        "properties": [
+          { "name": "incidentCode", "type": "STRING", "label": "事件编号" },
+          { "name": "level", "type": "ENUM", "label": "等级", "values": ["P1", "P2", "P3", "P4"] },
+          { "name": "occurredAt", "type": "DATE", "label": "发生日期" },
+          { "name": "duration", "type": "STRING", "label": "影响时长" },
+          { "name": "impact", "type": "TEXT", "label": "影响范围" },
+          { "name": "rootCause", "type": "TEXT", "label": "根因" }
+        ]
+      }
+    },
+    {
+      "kind": "KNOWLEDGE_TYPE",
+      "typeCode": "OPS_FAQ",
+      "label": "运维常见问题",
+      "description": "值班与业务方高频问答，答案引用规范与手册编号",
+      "properties": {
+        "properties": [
+          { "name": "docCode", "type": "STRING", "label": "文件编号" },
+          { "name": "questionCount", "type": "NUMBER", "label": "问题数" },
+          { "name": "maintainer", "type": "STRING", "label": "维护人" },
+          { "name": "updatedAt", "type": "DATE", "label": "最近更新" }
+        ]
+      }
+    },
+    {
+      "kind": "KNOWLEDGE_TYPE",
+      "typeCode": "OPS_REPORT",
+      "label": "运维报告",
+      "description": "运维月报、故障复盘报告，含统计周期、编制人与复核人",
+      "properties": {
+        "properties": [
+          { "name": "reportCode", "type": "STRING", "label": "报告编号" },
+          { "name": "period", "type": "STRING", "label": "统计周期" },
+          { "name": "author", "type": "STRING", "label": "编制人" },
+          { "name": "reviewer", "type": "STRING", "label": "复核人" },
+          { "name": "reportType", "type": "ENUM", "label": "报告类型", "values": ["月报", "周报", "复盘", "专题"] }
+        ]
+      }
+    },
+    {
+      "kind": "KNOWLEDGE_TYPE",
+      "typeCode": "OPS_NOTICE",
+      "label": "口径变更通知",
+      "description": "与既有规范存在差异的临时口径调整，含生效日期与失效条件（用于冲突裁决）",
+      "properties": {
+        "properties": [
+          { "name": "noticeCode", "type": "STRING", "label": "通知编号" },
+          { "name": "effectiveFrom", "type": "DATE", "label": "生效日期" },
+          { "name": "conflictsWith", "type": "STRING", "label": "冲突文件" },
+          { "name": "expireCondition", "type": "TEXT", "label": "失效条件" },
+          { "name": "publisher", "type": "STRING", "label": "发布人" }
+        ]
+      }
+    }
+  ],
+  "entityTypes": [
+    {
+      "kind": "ENTITY_TYPE",
+      "typeCode": "HOST",
+      "label": "主机",
+      "description": "物理机、虚机或容器节点",
+      "properties": {
+        "properties": [
+          { "name": "hostname", "type": "STRING", "label": "主机名" },
+          { "name": "ip", "type": "STRING", "label": "IP" },
+          { "name": "env", "type": "ENUM", "label": "环境", "values": ["生产", "预发", "测试"] },
+          { "name": "purpose", "type": "STRING", "label": "用途" }
+        ]
+      }
+    },
+    {
+      "kind": "ENTITY_TYPE",
+      "typeCode": "SERVICE",
+      "label": "服务",
+      "description": "业务服务与中间件服务",
+      "properties": {
+        "properties": [
+          { "name": "serviceName", "type": "STRING", "label": "服务名" },
+          { "name": "namespace", "type": "STRING", "label": "命名空间" },
+          { "name": "owner", "type": "STRING", "label": "负责人" },
+          { "name": "language", "type": "STRING", "label": "技术栈" }
+        ]
+      }
+    },
+    {
+      "kind": "ENTITY_TYPE",
+      "typeCode": "DB_INSTANCE",
+      "label": "数据库实例",
+      "description": "MySQL/Redis/Kafka 等实例",
+      "properties": {
+        "properties": [
+          { "name": "instanceName", "type": "STRING", "label": "实例名" },
+          { "name": "address", "type": "STRING", "label": "地址" },
+          { "name": "role", "type": "ENUM", "label": "角色", "values": ["主库", "从库", "延迟从库", "只读库", "Broker"] },
+          { "name": "engine", "type": "STRING", "label": "引擎" }
+        ]
+      }
+    },
+    {
+      "kind": "ENTITY_TYPE",
+      "typeCode": "COMMAND",
+      "label": "命令",
+      "description": "运维命令及其高危等级",
+      "properties": {
+        "properties": [
+          { "name": "commandText", "type": "STRING", "label": "命令" },
+          { "name": "level", "type": "ENUM", "label": "等级", "values": ["L1", "L2", "L3"] },
+          { "name": "risk", "type": "TEXT", "label": "风险说明" },
+          { "name": "alternative", "type": "TEXT", "label": "推荐替代" }
+        ]
+      }
+    },
+    {
+      "kind": "ENTITY_TYPE",
+      "typeCode": "PERSON",
+      "label": "人员",
+      "description": "内部员工、外包与厂商人员",
+      "properties": {
+        "properties": [
+          { "name": "name", "type": "STRING", "label": "姓名" },
+          { "name": "employeeId", "type": "STRING", "label": "工号" },
+          { "name": "role", "type": "STRING", "label": "角色" },
+          { "name": "employeeType", "type": "ENUM", "label": "人员类型", "values": ["内部", "外包", "厂商"] }
+        ]
+      }
+    },
+    {
+      "kind": "ENTITY_TYPE",
+      "typeCode": "TICKET",
+      "label": "工单",
+      "description": "ITSM 故障工单与变更工单",
+      "properties": {
+        "properties": [
+          { "name": "ticketCode", "type": "STRING", "label": "工单号" },
+          { "name": "ticketType", "type": "ENUM", "label": "类型", "values": ["故障", "变更", "权限", "环境"] },
+          { "name": "status", "type": "STRING", "label": "状态" },
+          { "name": "createdAt", "type": "DATE", "label": "创建时间" }
+        ]
+      }
+    }
+  ],
+  "relationTypes": [
+    {
+      "kind": "RELATION_TYPE",
+      "typeCode": "PERSON_EXECUTED_COMMAND",
+      "label": "人员执行命令",
+      "description": "谁在哪台主机上执行了哪条命令",
+      "properties": {
+        "constraints": { "fromKinds": ["PERSON"], "toKinds": ["COMMAND"] }
+      }
+    },
+    {
+      "kind": "RELATION_TYPE",
+      "typeCode": "COMMAND_ON_HOST",
+      "label": "命令作用于主机",
+      "description": "命令执行的目标主机",
+      "properties": {
+        "constraints": { "fromKinds": ["COMMAND"], "toKinds": ["HOST"] }
+      }
+    },
+    {
+      "kind": "RELATION_TYPE",
+      "typeCode": "HOST_RUNS_SERVICE",
+      "label": "主机运行服务",
+      "description": "主机与运行其上的服务的承载关系",
+      "properties": {
+        "constraints": { "fromKinds": ["HOST"], "toKinds": ["SERVICE"] }
+      }
+    },
+    {
+      "kind": "RELATION_TYPE",
+      "typeCode": "SERVICE_DEPENDS_ON",
+      "label": "服务依赖实例",
+      "description": "服务依赖的数据库或中间件实例",
+      "properties": {
+        "constraints": { "fromKinds": ["SERVICE"], "toKinds": ["DB_INSTANCE"] }
+      }
+    },
+    {
+      "kind": "RELATION_TYPE",
+      "typeCode": "PERSON_OWNS_TICKET",
+      "label": "人员负责工单",
+      "description": "工单的处理人与申请人",
+      "properties": {
+        "constraints": { "fromKinds": ["PERSON"], "toKinds": ["TICKET"] }
+      }
+    },
+    {
+      "kind": "RELATION_TYPE",
+      "typeCode": "TICKET_RELATED_HOST",
+      "label": "工单关联主机",
+      "description": "故障或变更工单影响的主机",
+      "properties": {
+        "constraints": { "fromKinds": ["TICKET"], "toKinds": ["HOST"] }
+      }
+    }
+  ]
+}

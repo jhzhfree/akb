@@ -44,8 +44,8 @@ public class EntityGovernanceService {
     /**
      * Entities of a knowledge base with alias and mention cardinality, merged ones included.
      */
-    public List<Map<String, Object>> entities(Long knowledgeBaseId) {
-        return graphMapper.listEntitiesWithUsage(knowledgeBaseId);
+    public List<Map<String, Object>> entities(Long knowledgeBaseId, List<String> permissionTags) {
+        return graphMapper.listEntitiesWithUsage(knowledgeBaseId, permissionTags);
     }
 
     /**
@@ -171,7 +171,8 @@ public class EntityGovernanceService {
     }
 
     private Map<String, Object> findUsage(Long knowledgeBaseId, String entityCode) {
-        for (Map<String, Object> row : graphMapper.listEntitiesWithUsage(knowledgeBaseId)) {
+        // 治理动作（合并 / 改状态）本身已受接口权限约束，这里按全量评估影响面，不受对象级 ACL 限制。
+        for (Map<String, Object> row : graphMapper.listEntitiesWithUsage(knowledgeBaseId, null)) {
             if (entityCode.equals(String.valueOf(row.get("entityCode")))) {
                 return row;
             }

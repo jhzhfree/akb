@@ -1,0 +1,121 @@
+{
+  "name": "工程协同",
+  "label": "研发协同场景：问题单可追溯与时效优先",
+  "rationale": "研发问答多为「某个 issue 状态 / 某次故障根因 / 迭代进度 / 谁负责 / 怎么上线」，Key 与工单号是强精确信号，同时日报周报时效性强，故 BM25 与图谱并重、时效权重最高，根因类走多跳。",
+  "policy": {
+    "version": "query-policy-v1",
+    "route": {
+      "enabled": true,
+      "defaultStrategies": ["card", "bm25", "graph", "vector"],
+      "rules": [
+        {
+          "questionType": "EXACT",
+          "enabled": true,
+          "priority": 96,
+          "keywords": ["PAY-", "KOS-", "ITSM-", "CHG-", "OA-", "Jira", "issue", "接口", "字段", "错误码", "版本号", "分支", "PR", "Sprint"],
+          "strategies": ["bm25", "card", "vector"],
+          "reason": "编号与接口字段：BM25 精确命中 issue Key、工单号与字段名，卡片给出上下文字段表。"
+        },
+        {
+          "questionType": "RELATION",
+          "enabled": true,
+          "priority": 86,
+          "keywords": ["依赖", "影响", "关联", "阻塞", "谁负责", "经办人", "负责人", "归属", "上游", "下游", "对接"],
+          "strategies": ["graph", "card", "vector"],
+          "reason": "责任与依赖：图谱走人员—模块—问题单关系，卡片补充表格字段。"
+        },
+        {
+          "questionType": "MULTIHOP",
+          "enabled": true,
+          "priority": 84,
+          "keywords": ["为什么", "根因", "追根溯源", "导致", "最终", "引发", "链条", "复盘"],
+          "strategies": ["graph", "claim", "card"],
+          "reason": "根因追问：图谱多跳 + 复盘断言，答案须给出时间线与改进项。"
+        },
+        {
+          "questionType": "FACT",
+          "enabled": true,
+          "priority": 88,
+          "keywords": ["进度", "点数", "状态", "覆盖率", "达成率", "时长", "MTTR", "多少", "什么时候", "截止"],
+          "strategies": ["card", "claim", "bm25"],
+          "reason": "进度与指标：卡片表格与断言为主，注意日报周报的统计周期。"
+        },
+        {
+          "questionType": "PROCEDURE",
+          "enabled": true,
+          "priority": 80,
+          "keywords": ["流程", "怎么上线", "发布", "检查清单", "门禁", "回滚", "提测", "评审", "如何申请"],
+          "strategies": ["card", "bm25", "vector"],
+          "reason": "流程类：发布检查清单与协作流程卡片，BM25 命中命令与门禁项。"
+        },
+        {
+          "questionType": "CONFLICT",
+          "enabled": true,
+          "priority": 78,
+          "keywords": ["冲突", "不一致", "以哪个为准", "哪个版本", "文档与实现", "失效", "最新"],
+          "strategies": ["claim", "card", "bm25"],
+          "reason": "文档与实现差异：优先断言与最新文档，答案须标注文档版本与日期。"
+        },
+        {
+          "questionType": "CONDITION",
+          "enabled": true,
+          "priority": 70,
+          "keywords": ["是否", "能否", "可以吗", "要不要", "达标了吗", "通过了吗"],
+          "strategies": ["card", "claim", "bm25"],
+          "reason": "判断类：卡片阈值与门禁项，答案须给出判定依据。"
+        },
+        {
+          "questionType": "GLOBAL",
+          "enabled": true,
+          "priority": 62,
+          "keywords": ["有哪些", "清单", "总览", "汇总", "全部", "统计", "本周", "本迭代"],
+          "strategies": ["card", "vector"],
+          "reason": "汇总类（含周报/月报）：卡片清单为主，按时间倒序取最近周期。"
+        }
+      ]
+    },
+    "rewrite": {
+      "enabled": true,
+      "llmEnabled": false,
+      "maxVariants": 4,
+      "maxRecallRounds": 2,
+      "synonyms": {
+        "报错": ["失败", "异常", "缺陷", "Bug"],
+        "怎么": ["如何", "流程", "步骤"],
+        "是啥": ["是什么", "含义", "定义"],
+        "配置": ["参数", "设置", "开关"],
+        "版本": ["迭代", "Sprint", "发布版本"],
+        "进度": ["完成情况", "达成", "状态"],
+        "负责人": ["经办人", "Owner", "对接人"],
+        "复盘": ["回顾", "Retro", "总结"]
+      }
+    },
+    "recall": {
+      "channels": {
+        "bm25": { "enabled": true, "weight": 1.25, "scale": 1.0 },
+        "vector": { "enabled": true, "weight": 1.15, "scale": 1.0 },
+        "card": { "enabled": true, "weight": 1.20, "scale": 1.0 },
+        "claim": { "enabled": true, "weight": 1.15, "scale": 1.0 },
+        "graph": { "enabled": true, "weight": 1.15, "scale": 1.0 }
+      },
+      "recallMultiplier": 4,
+      "minRecallCandidates": 32
+    },
+    "fusion": {
+      "rrfK": 55,
+      "qualitySignalsEnabled": true,
+      "qualityWeights": { "authority": 0.10, "freshness": 0.25, "confidence": 0.15, "evidence": 0.15 },
+      "chunkBoost": { "enabled": true, "base": 1.25, "headingHit": 0.16, "coverage": 0.18 }
+    },
+    "rerank": { "enabled": true, "topN": 0 },
+    "answer": {
+      "contextMaxChars": 9000,
+      "minChunkEvidence": 3,
+      "evidenceGateEnabled": true,
+      "faithfulnessMin": 0.05,
+      "entailmentMin": 0.09,
+      "policyVersion": "answer-policy-v1",
+      "noAnswerText": "现有工程协同知识库中未检索到足够证据（Jira/Confluence/OA 或日报周报），暂无法确认，请补充 issue Key、工单号或时间范围。"
+    }
+  }
+}

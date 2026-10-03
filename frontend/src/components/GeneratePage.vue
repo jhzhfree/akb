@@ -32,6 +32,11 @@
     v-else-if="active==='create.connector'"
     :knowledge-base-id="knowledgeBaseId" />
 
+  <!-- 连接器同步下来的外部知识：按类型与属性浏览，与连接器配置分开两个入口。 -->
+  <ConnectorKnowledgePanel
+    v-else-if="active==='create.connectorCatalog'"
+    :knowledge-base-id="knowledgeBaseId" />
+
   <!-- 文档导入 / 生成任务：同一面板按 focus 切换区块（设计 §4.1 / §4.2）。 -->
   <DataCenterPanel
     v-else-if="dcFocus"
@@ -86,6 +91,7 @@ import ModuleTabs from './ModuleTabs.vue'
 import GenerateHomePanel from './GenerateHomePanel.vue'
 import DataCenterPanel from './DataCenterPanel.vue'
 import ConnectorPanel from './ConnectorPanel.vue'
+import ConnectorKnowledgePanel from './ConnectorKnowledgePanel.vue'
 import ReviewPanel from './ReviewPanel.vue'
 import PanelState from './PanelState.vue'
 import DerivationPanel from './DerivationPanel.vue'

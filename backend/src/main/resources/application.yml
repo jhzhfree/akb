@@ -64,6 +64,9 @@ knowledge:
   ai-connect-timeout-ms: ${AI_CONNECT_TIMEOUT_MS:10000}
   ai-read-timeout-ms: ${AI_READ_TIMEOUT_MS:180000}
   startup-fail-fast: ${STARTUP_FAIL_FAST:false}
+  # 数据源连接器统一跳过 SSL 证书校验：内网 Jira/Confluence 多为自签名证书或 IP 直连，
+  # 打开后不必逐个配置 insecureSsl；只影响连接器出向请求。
+  connector-trust-all-ssl: ${KNOWLEDGE_CONNECTOR_TRUST_ALL_SSL:false}
   ops-rbac-enabled: ${OPS_RBAC_ENABLED:false}
   ops-viewer-token: ${OPS_VIEWER_TOKEN:}
   ops-operator-token: ${OPS_OPERATOR_TOKEN:}

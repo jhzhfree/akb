@@ -312,11 +312,14 @@ class MilvusProvider:
             safe_type = str(object_type).replace('"', '"')
             clauses.append('object_type == "%s"' % safe_type)
         clauses.append('(status in ["APPROVED", "EFFECTIVE"] or status == "")')
-        values = ["__public__"] + [str(tag).replace('"', '"') for tag in (tags or [])]
-        quoted = ", ".join('"%s"' % value for value in values)
-        # permission_tags is a dynamic JSON-array field, therefore JSON_CONTAINS_ANY
-        # is the correct Milvus scalar-filter operator.
-        clauses.append("json_contains_any(permission_tags, [%s])" % quoted)
+        # tags is None: caller is unrestricted (platform admin / auth off) → no ACL clause,
+        # otherwise restricted knowledge (e.g. the ops knowledge base) would never be recalled.
+        if tags is not None:
+            values = ["__public__"] + [str(tag).replace('"', '"') for tag in tags]
+            quoted = ", ".join('"%s"' % value for value in values)
+            # permission_tags is a dynamic JSON-array field, therefore JSON_CONTAINS_ANY
+            # is the correct Milvus scalar-filter operator.
+            clauses.append("json_contains_any(permission_tags, [%s])" % quoted)
         return " and ".join(clauses)
 
     async def search(

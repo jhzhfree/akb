@@ -814,13 +814,18 @@ export interface AlertEvent {
 export interface TaskOverview {
   tasks:TaskRun[]; stats:TaskStats; taskTypes:string[]
   alerts:AlertEvent[]; alertStats:AlertStats; rules:AlertRule[]
+  /** 任务与告警各自按当前筛选条件的命中总数，供分页条渲染（不传时按一页处理）。 */
+  taskTotal?:number; alertTotal?:number
 }
 export interface TaskStatsPair { tasks:TaskStats; alerts:AlertStats }
 export interface TaskDictionaries {
   taskTypes:string[]
   alert:{ metrics:string[]; metricLabels:Record<string,string>; severities:string[]; statuses:string[] }
 }
-export interface AlertList { events:AlertEvent[]; stats:AlertStats }
+export interface AlertList { events:AlertEvent[]; stats:AlertStats; total?:number }
+
+/** ACL 流水（访问审计 / 权限变更）的分页结果：只增不减的日志，必须能翻到任意一页。 */
+export interface AclLogPage<T> { items:T[]; total:number; page:number; size:number; pageCount:number }
 
 /* ---- 知识衍生（设计 §4.5） ---- */
 

@@ -14,6 +14,7 @@ import com.jh.knowledgeos.dto.QueryRequest;
 import com.jh.knowledgeos.dto.QueryResponse;
 import com.jh.knowledgeos.dto.KnowledgeBaseRequest;
 import com.jh.knowledgeos.service.AclContextResolver;
+import com.jh.knowledgeos.service.AssetBrowseService;
 import com.jh.knowledgeos.service.AclAuditService;
 import com.jh.knowledgeos.service.AclRebuildOrchestrator;
 import com.jh.knowledgeos.service.BatchIngestionService;
@@ -59,10 +60,13 @@ import java.util.Map;
 public class KnowledgeReadController {
     private final KnowledgeService service;
     private final AclContextResolver aclContextResolver;
+    private final AssetBrowseService assetBrowseService;
 
-    public KnowledgeReadController(KnowledgeService service, AclContextResolver aclContextResolver) {
+    public KnowledgeReadController(KnowledgeService service, AclContextResolver aclContextResolver,
+        AssetBrowseService assetBrowseService) {
         this.service = service;
         this.aclContextResolver = aclContextResolver;
+        this.assetBrowseService = assetBrowseService;
     }
 
 
@@ -73,6 +77,22 @@ public class KnowledgeReadController {
         return ApiResponse.ok(service.overview(kb, aclContextResolver.resolve(permissionTags)));
     }
 
+    /**
+     * 资产浏览：来源/文档/卡片/断言/实体/关系 的服务端分页与关键字检索。
+     *
+     * <p>与各自清单接口同源、同 ACL，因此「共 N 条」与工作台 KPI 是同一个数；
+     * 列表不再一次拉全量，避免几百条以上对象时把页面卡住。</p>
+     */
+    @GetMapping("/assets/{kb}/{type}")
+    @Operation(summary = "资产浏览：按对象类型分页检索（SOURCE/DOCUMENT/CARD/CLAIM/ENTITY/RELATION）")
+    public ApiResponse<Object> assets(@PathVariable Long kb, @PathVariable String type,
+        @RequestParam(value = "keyword", required = false) String keyword,
+        @RequestParam(value = "page", required = false) Integer page,
+        @RequestParam(value = "size", required = false) Integer size,
+        @RequestHeader(value = "X-Authenticated-Permission-Tags", required = false) String permissionTags) {
+        return ApiResponse.ok(assetBrowseService.browse(kb, type, keyword, page, size, aclContextResolver.resolve(permissionTags)));
+    }
+
     @GetMapping("/sources/{kb}")
     public ApiResponse<Object> sources(@PathVariable Long kb, @RequestHeader(value = "X-Authenticated-Permission-Tags", required = false) String
         permissionTags) {
@@ -80,8 +100,9 @@ public class KnowledgeReadController {
     }
 
     @GetMapping("/documents/{kb}")
-    public ApiResponse<Object> documents(@PathVariable Long kb) {
-        return ApiResponse.ok(service.documents(kb));
+    public ApiResponse<Object> documents(@PathVariable Long kb, @RequestHeader(value = "X-Authenticated-Permission-Tags", required = false) String
+        permissionTags) {
+        return ApiResponse.ok(service.documents(kb, aclContextResolver.resolve(permissionTags)));
     }
 
 

@@ -24,6 +24,8 @@ export interface ConnectorConfig {
   pageParam?:string
   sizeParam?:string
   headers?:Record<string, string>
+  /** 跳过 SSL 证书校验：内网自签名证书或 IP 直连的站点需要开启，否则握手直接失败。 */
+  insecureSsl?:boolean
 }
 
 export interface ConnectorSource {
@@ -62,9 +64,68 @@ export interface ConnectorPayload {
 export interface ConnectorItem {
   externalId:string
   title:string
+  /** 外部系统的类型：Jira 的问题类型、Confluence 的内容类型、REST 的 typeField。 */
+  type?:string
+  /** 类型专属属性（状态 / 优先级 / 经办人…），按类型动态展示与筛选。 */
+  attributes?:Record<string, CatalogAttribute>
   url?:string|null
   updatedAt?:string|null
   excerpt?:string|null
+}
+
+/** 一个属性：键是外部系统字段名，标签是我们给它的中文名。 */
+export interface CatalogAttribute {
+  key:string
+  label:string
+  value:string|number|null
+}
+
+/** 已同步落库的一条外部知识：比 ConnectorItem 多了主键与同步时间。 */
+export interface CatalogItem extends ConnectorItem {
+  id:number
+  externalId:string
+  title:string
+  type:string
+  attributes?:Record<string, CatalogAttribute>
+  syncedTime?:string|null
+  /** 仅详情返回：外部系统的原始条目（归一化后的 JSON 文本）。 */
+  raw?:string|null
+  connectorName?:string
+  connectorType?:string
+}
+
+export interface CatalogPage {
+  connector?:{ id:number; name:string; type:string; baseUrl:string }
+  items:CatalogItem[]
+  total:number
+  page:number
+  size:number
+  lastSyncTime?:string|null
+  lastSyncCount?:number|null
+}
+
+/** 左侧筛选树：类型计数 + 选中类型下每个属性的取值计数。 */
+export interface CatalogFacets {
+  types:{ value:string; count:number }[]
+  attributes:{
+    key:string
+    label:string
+    values:{ value:string; count:number }[]
+  }[]
+  total:number
+  lastSyncTime?:string|null
+  lastSyncCount?:number|null
+}
+
+/** 属性筛选条件在 URL 上的形态：key=value，可重复。 */
+export type CatalogFilter = string
+
+export interface CatalogSyncResult {
+  connectorId:number
+  synced:number
+  remoteTotal?:number|null
+  storedTotal?:number|null
+  message:string
 }
 
 export interface ConnectorItemPage {

@@ -1,0 +1,121 @@
+{
+  "name": "运维知识库",
+  "label": "运维场景：命令与故障精确定位优先",
+  "rationale": "运维问答多为「命令怎么执行 / 故障怎么处置 / 阈值是多少 / 哪个口径生效」，术语与编号极多，故 BM25 与卡片通道优先，冲突类问题优先取通知类断言，图谱仅用于依赖与影响面追问。",
+  "policy": {
+    "version": "query-policy-v1",
+    "route": {
+      "enabled": true,
+      "defaultStrategies": ["card", "bm25", "vector", "claim"],
+      "rules": [
+        {
+          "questionType": "EXACT",
+          "enabled": true,
+          "priority": 95,
+          "keywords": ["错误码", "命令", "主机名", "主机", "工号", "会话号", "归档编号", "工单号", "端口", "进程", "L1", "L2", "L3", "rm -rf", "kubectl", "redis-cli", "参数名", "配置项"],
+          "strategies": ["bm25", "card", "vector"],
+          "reason": "运维专有名词/命令/编号：BM25 精确命中命令与编号，卡片给出处置步骤，向量兜底语义变体。"
+        },
+        {
+          "questionType": "PROCEDURE",
+          "enabled": true,
+          "priority": 88,
+          "keywords": ["怎么", "如何", "步骤", "排查", "处置", "恢复", "回滚", "清理", "扩容", "重启", "迁移", "发布", "限流", "止损"],
+          "strategies": ["card", "bm25", "vector"],
+          "reason": "操作类问题：以手册与 SOP 卡片为主，命令片段用 BM25 精确定位。"
+        },
+        {
+          "questionType": "FACT",
+          "enabled": true,
+          "priority": 85,
+          "keywords": ["阈值", "时限", "多少", "多久", "标准", "等级", "首响", "MTTR", "保留", "有效期", "天数", "比例"],
+          "strategies": ["card", "claim", "bm25"],
+          "reason": "指标与阈值：卡片给出结构化口径，断言处理版本与时效差异。"
+        },
+        {
+          "questionType": "CONFLICT",
+          "enabled": true,
+          "priority": 92,
+          "keywords": ["冲突", "不一致", "以哪个为准", "失效", "新口径", "调整后", "9月", "过渡期", "哪个版本"],
+          "strategies": ["claim", "card", "bm25"],
+          "reason": "口径冲突：优先版本化断言与变更通知，答案须同时给出新旧口径与生效日期。"
+        },
+        {
+          "questionType": "RELATION",
+          "enabled": true,
+          "priority": 70,
+          "keywords": ["依赖", "上游", "下游", "影响", "关联", "涉及", "所属", "谁负责"],
+          "strategies": ["graph", "card", "vector"],
+          "reason": "影响面与依赖关系：走图谱邻域，卡片补充实体属性。"
+        },
+        {
+          "questionType": "MULTIHOP",
+          "enabled": true,
+          "priority": 72,
+          "keywords": ["为什么", "根因", "追根溯源", "导致", "最终", "间接", "链条"],
+          "strategies": ["graph", "card", "vector"],
+          "reason": "根因追问：图谱多跳 + 复盘卡片，避免只给结论不给链路。"
+        },
+        {
+          "questionType": "CONDITION",
+          "enabled": true,
+          "priority": 68,
+          "keywords": ["是否", "能否", "可以吗", "要不要", "需要审批吗", "允许"],
+          "strategies": ["card", "claim", "bm25"],
+          "reason": "条件判断：卡片条款 + 断言，答案须给出适用条件与例外。"
+        },
+        {
+          "questionType": "GLOBAL",
+          "enabled": true,
+          "priority": 60,
+          "keywords": ["有哪些", "总览", "清单", "汇总", "全部", "概览", "统计"],
+          "strategies": ["card", "vector"],
+          "reason": "汇总类：卡片概览为主，向量补充语义相近条目。"
+        }
+      ]
+    },
+    "rewrite": {
+      "enabled": true,
+      "llmEnabled": false,
+      "maxVariants": 4,
+      "maxRecallRounds": 2,
+      "synonyms": {
+        "报错": ["失败", "异常", "error", "5xx"],
+        "怎么": ["如何", "步骤", "流程"],
+        "是啥": ["是什么", "含义", "定义"],
+        "配置": ["参数", "设置", "配置项"],
+        "版本": ["生效日期", "有效期", "修订"],
+        "清理": ["删除", "归档", "释放"],
+        "处置": ["处理", "恢复", "止损"],
+        "告警": ["报警", "预警", "阈值"]
+      }
+    },
+    "recall": {
+      "channels": {
+        "bm25": { "enabled": true, "weight": 1.30, "scale": 1.0 },
+        "vector": { "enabled": true, "weight": 1.00, "scale": 1.0 },
+        "card": { "enabled": true, "weight": 1.25, "scale": 1.0 },
+        "claim": { "enabled": true, "weight": 1.15, "scale": 1.0 },
+        "graph": { "enabled": true, "weight": 1.00, "scale": 1.0 }
+      },
+      "recallMultiplier": 4,
+      "minRecallCandidates": 30
+    },
+    "fusion": {
+      "rrfK": 50,
+      "qualitySignalsEnabled": true,
+      "qualityWeights": { "authority": 0.20, "freshness": 0.15, "confidence": 0.10, "evidence": 0.15 },
+      "chunkBoost": { "enabled": true, "base": 1.25, "headingHit": 0.18, "coverage": 0.15 }
+    },
+    "rerank": { "enabled": true, "topN": 0 },
+    "answer": {
+      "contextMaxChars": 9000,
+      "minChunkEvidence": 3,
+      "evidenceGateEnabled": true,
+      "faithfulnessMin": 0.06,
+      "entailmentMin": 0.10,
+      "policyVersion": "answer-policy-v1",
+      "noAnswerText": "现有运维知识库中未检索到足够证据（命令、手册或操作记录），暂无法确认，请补充工单号或主机信息后再问。"
+    }
+  }
+}

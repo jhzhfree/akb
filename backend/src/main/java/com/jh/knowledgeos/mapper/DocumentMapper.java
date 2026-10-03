@@ -31,7 +31,7 @@ public interface DocumentMapper {
 
     Map<String, Object> getSourcePreview(@Param("kb") Long kb, @Param("sourceId") Long sourceId, @Param("permissionTags") List<String> permissionTags);
 
-    List<Map<String, Object>> listDocuments(@Param("kb") Long kb);
+    List<Map<String, Object>> listDocuments(@Param("kb") Long kb, @Param("permissionTags") List<String> permissionTags);
 
     int supersedeDocumentChunks(@Param("documentId") Long documentId);
 

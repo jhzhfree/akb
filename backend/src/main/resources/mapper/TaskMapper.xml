@@ -23,16 +23,24 @@ WHERE task_code=#{taskCode}</update>
   started_time startedTime,finished_time finishedTime,created_time createdTime,updated_time updatedTime
 FROM t_task_run WHERE task_code=#{taskCode}</select>
 
+<!-- 任务筛选条件：取页与计数共用同一段 WHERE，翻页时「共 N 条」不会和列表打架。 -->
+<sql id="taskRunFilter">
+WHERE (knowledge_base_id=#{kb} OR #{kb} IS NULL)
+<if test="status != null and status != ''">AND status=#{status}</if>
+<if test="taskType != null and taskType != ''">AND task_type=#{taskType}</if>
+<if test="triggerType != null and triggerType != ''">AND trigger_type=#{triggerType}</if>
+</sql>
+
 <select id="listTaskRuns" resultType="map">SELECT task_code taskCode,knowledge_base_id knowledgeBaseId,
   task_type taskType,task_name taskName,target_type targetType,target_code targetCode,status,stage,progress,
   trigger_type triggerType,triggered_by triggeredBy,retry_count retryCount,max_attempts maxAttempts,
   error_message errorMessage,started_time startedTime,finished_time finishedTime,created_time createdTime
 FROM t_task_run
-WHERE (knowledge_base_id=#{kb} OR #{kb} IS NULL)
-<if test="status != null and status != ''">AND status=#{status}</if>
-<if test="taskType != null and taskType != ''">AND task_type=#{taskType}</if>
-<if test="triggerType != null and triggerType != ''">AND trigger_type=#{triggerType}</if>
-ORDER BY created_time DESC,id DESC LIMIT #{limit}</select>
+<include refid="taskRunFilter"/>
+ORDER BY created_time DESC,id DESC LIMIT #{limit} OFFSET #{offset}</select>
+
+<select id="countTaskRuns" resultType="long">SELECT COUNT(*) FROM t_task_run
+<include refid="taskRunFilter"/></select>
 
 <select id="taskStats" resultType="map">SELECT status,COUNT(*) total FROM t_task_run
 WHERE (knowledge_base_id=#{kb} OR #{kb} IS NULL) AND created_time&gt;=DATE_SUB(NOW(),INTERVAL 7 DAY)

@@ -14,10 +14,10 @@ JOIN t_document d ON d.id=cu.document_id
 JOIN t_source_version sv ON sv.id=d.source_version_id
 JOIN t_source s ON s.id=sv.source_id
 LEFT JOIN t_evidence e ON e.content_unit_id=cu.id AND e.knowledge_base_id=#{kb}
-WHERE s.knowledge_base_id=#{kb} AND cu.id=#{contentUnitId} AND (s.permission_tags IS NULL OR JSON_LENGTH(s.permission_tags)=0
+WHERE s.knowledge_base_id=#{kb} AND cu.id=#{contentUnitId}<choose><when test="permissionTags == null"></when><otherwise> AND (s.permission_tags IS NULL OR JSON_LENGTH(s.permission_tags)=0
  <if test="permissionTags != null and permissionTags.size() > 0">
  OR (<foreach collection="permissionTags" item="tag" separator=" OR ">JSON_CONTAINS(s.permission_tags, JSON_QUOTE(#{tag}))</foreach>)
- </if>)
+ </if>)</otherwise></choose>
 ORDER BY e.id ASC LIMIT 1
 </select>
 
@@ -33,10 +33,10 @@ FROM t_evidence e
 JOIN t_source s ON s.id=e.source_id
 LEFT JOIN t_content_unit cu ON cu.id=e.content_unit_id
 LEFT JOIN t_document d ON d.id=cu.document_id
-WHERE e.knowledge_base_id=#{kb} AND e.evidence_code=#{evidenceCode} AND (s.permission_tags IS NULL OR JSON_LENGTH(s.permission_tags)=0
+WHERE e.knowledge_base_id=#{kb} AND e.evidence_code=#{evidenceCode}<choose><when test="permissionTags == null"></when><otherwise> AND (s.permission_tags IS NULL OR JSON_LENGTH(s.permission_tags)=0
  <if test="permissionTags != null and permissionTags.size() > 0">
  OR (<foreach collection="permissionTags" item="tag" separator=" OR ">JSON_CONTAINS(s.permission_tags, JSON_QUOTE(#{tag}))</foreach>)
- </if>)
+ </if>)</otherwise></choose>
 LIMIT 1
 </select>
 

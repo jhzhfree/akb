@@ -16,21 +16,26 @@ public interface DashboardMapper {
 
     /**
      * Asset counters: source / document / card / assertion / entity / relation.
+     *
+     * <p>permissionTags 与列表查询共用同一套 ACL 语义（null = 不受约束）：
+     * 计数必须与「用户能看到多少条」一致，否则工作台会显示列表里根本不存在的数量。</p>
      */
-    Map<String, Object> countCoreObjects(@Param("kb") Long kb);
+    Map<String, Object> countCoreObjects(@Param("kb") Long kb, @Param("permissionTags") List<String> permissionTags);
 
     /**
      * Per-stage counters of the lifecycle: ingest → parse → extract → derive → judge → publish.
      */
-    Map<String, Object> countLifecycle(@Param("kb") Long kb);
+    Map<String, Object> countLifecycle(@Param("kb") Long kb, @Param("permissionTags") List<String> permissionTags);
 
     /**
      * Governance backlog: pending review / conflict / expired / no-evidence / low-confidence / stale.
      */
-    Map<String, Object> countGovernance(@Param("kb") Long kb, @Param("lowConfidence") Double lowConfidence);
+    Map<String, Object> countGovernance(@Param("kb") Long kb, @Param("lowConfidence") Double lowConfidence,
+        @Param("permissionTags") List<String> permissionTags);
 
     /**
      * Recently updated knowledge objects, used by the "最近更新" list on the workbench.
      */
-    List<Map<String, Object>> listRecentObjects(@Param("kb") Long kb, @Param("limit") int limit);
+    List<Map<String, Object>> listRecentObjects(@Param("kb") Long kb, @Param("limit") int limit,
+        @Param("permissionTags") List<String> permissionTags);
 }

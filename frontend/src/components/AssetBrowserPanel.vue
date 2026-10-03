@@ -9,7 +9,10 @@
         </p>
       </div>
       <div class="flex shrink-0 items-center gap-2">
-        <input v-model="keyword" class="kb-input w-52" placeholder="搜索名称 / 编码" />
+        <input
+          v-model="keyword" class="kb-input w-52" placeholder="搜索名称 / 编码"
+          @input="onKeywordInput" @keyup.enter="onSearch">
+        <button class="kb-btn-outline" @click="onSearch">检索</button>
         <button class="kb-btn-outline" @click="load">刷新</button>
       </div>
     </header>
@@ -30,18 +33,23 @@
     <article class="kb-card">
       <div class="kb-card-head">
         <b class="text-sm">{{ currentLabel }}</b>
-        <span class="kb-muted">{{ filtered.length }} / {{ rows.length }} 条</span>
+        <span class="kb-muted">
+          共 {{ total }} 条<template v-if="keyword.trim()">· 命中「{{ keyword.trim() }}」</template>
+        </span>
       </div>
       <div class="p-3">
         <PanelState
           :loading="loading"
           :error="error"
-          :empty="!filtered.length"
+          :empty="!rows.length"
           :empty-text="hint.empty"
           :empty-hint="hint.detail"
           retryable
           @retry="load">
-          <el-table :data="filtered" border size="small" @row-click="onRowClick">
+          <el-table :data="rows" border size="small" @row-click="onRowClick">
+            <el-table-column v-if="type==='source'" prop="sourceCode" label="编码" width="180" show-overflow-tooltip>
+              <template #default="{ row }">{{ row.sourceCode || '—' }}</template>
+            </el-table-column>
             <el-table-column v-if="type==='source'" prop="name" label="来源名称" min-width="200" show-overflow-tooltip />
             <el-table-column v-if="type==='source'" prop="sourceType" label="类型" width="120" />
             <el-table-column v-if="type==='source'" label="权威度" width="90">
@@ -49,6 +57,9 @@
             </el-table-column>
             <el-table-column v-if="type==='source'" prop="status" label="状态" width="100" />
 
+            <el-table-column v-if="type==='document'" prop="documentCode" label="编码" width="180" show-overflow-tooltip>
+              <template #default="{ row }">{{ row.documentCode || '—' }}</template>
+            </el-table-column>
             <el-table-column v-if="type==='document'" prop="title" label="文档标题" min-width="220" show-overflow-tooltip />
             <el-table-column v-if="type==='document'" prop="sourceName" label="来源" width="160" show-overflow-tooltip />
             <el-table-column v-if="type==='document'" prop="status" label="状态" width="110" />
@@ -56,19 +67,26 @@
               <template #default="{ row }">{{ row.chunkCount ?? 0 }}</template>
             </el-table-column>
 
-            <el-table-column v-if="type==='card'" prop="knowledgeCode" label="卡片编码" width="160" />
+            <el-table-column v-if="type==='card'" prop="knowledgeCode" label="编码" width="180" show-overflow-tooltip>
+              <template #default="{ row }">{{ row.knowledgeCode || '—' }}</template>
+            </el-table-column>
             <el-table-column v-if="type==='card'" prop="title" label="标题" min-width="220" show-overflow-tooltip />
             <el-table-column v-if="type==='card'" prop="status" label="状态" width="120" />
             <el-table-column v-if="type==='card'" label="置信度" width="90">
               <template #default="{ row }">{{ row.confidence ?? '—' }}</template>
             </el-table-column>
 
-            <el-table-column v-if="type==='assertion'" prop="claimCode" label="断言编码" width="140" />
+            <el-table-column v-if="type==='assertion'" prop="claimCode" label="编码" width="180" show-overflow-tooltip>
+              <template #default="{ row }">{{ row.claimCode || '—' }}</template>
+            </el-table-column>
             <el-table-column v-if="type==='assertion'" prop="subject" label="主体" min-width="140" show-overflow-tooltip />
             <el-table-column v-if="type==='assertion'" prop="predicate" label="谓词" width="110" />
             <el-table-column v-if="type==='assertion'" prop="objectValue" label="客体" min-width="160" show-overflow-tooltip />
             <el-table-column v-if="type==='assertion'" prop="status" label="状态" width="120" />
 
+            <el-table-column v-if="type==='entity'" prop="entityCode" label="编码" width="180" show-overflow-tooltip>
+              <template #default="{ row }">{{ row.entityCode || '—' }}</template>
+            </el-table-column>
             <el-table-column v-if="type==='entity'" prop="canonicalName" label="规范名" min-width="180" show-overflow-tooltip />
             <el-table-column v-if="type==='entity'" prop="entityType" label="类型" width="140" />
             <el-table-column v-if="type==='entity'" prop="status" label="状态" width="110" />
@@ -76,7 +94,14 @@
               <template #default="{ row }">{{ (row.claimCount || 0) + (row.cardCount || 0) }}</template>
             </el-table-column>
 
-            <el-table-column v-if="type==='relation'" prop="code" label="关系编码" min-width="200" show-overflow-tooltip />
+            <el-table-column v-if="type==='relation'" prop="code" label="编码" width="180" show-overflow-tooltip>
+              <template #default="{ row }">{{ row.code || '—' }}</template>
+            </el-table-column>
+            <el-table-column v-if="type==='relation'" prop="sourceName" label="主体" min-width="140" show-overflow-tooltip />
+            <el-table-column v-if="type==='relation'" prop="relationType" label="关系类型" width="140" />
+            <el-table-column v-if="type==='relation'" prop="targetName" label="客体" min-width="140" show-overflow-tooltip />
+            <el-table-column v-if="type==='relation'" prop="status" label="状态" width="100" />
+
             <el-table-column label="操作" width="120" fixed="right">
               <template #default="{ row }">
                 <span class="text-[12px] text-accent">
@@ -85,6 +110,12 @@
               </template>
             </el-table-column>
           </el-table>
+          <div v-if="total > size" class="mt-3 flex justify-end">
+            <el-pagination
+              small layout="prev,pager,next,total,sizes" :current-page="page" :page-size="size"
+              :page-sizes="[20,50,100]" :total="total" :pager-count="5"
+              @current-change="setPage" @size-change="setSize" />
+          </div>
         </PanelState>
       </div>
     </article>
@@ -93,14 +124,10 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import PanelState from './PanelState.vue'
-import {
-  getCards, getClaims, getDocuments, getEntities, getSources, unwrap,
-} from '../api/knowledge'
-import type { Claim, EntityRow, KnowledgeCard, KnowledgeDocument, KnowledgeSource } from '../types'
+import { searchAssets, unwrap } from '../api/knowledge'
+import type { AssetPage, AssetRow } from '../types/knowledge'
 
 export type AssetType = 'source'|'document'|'card'|'assertion'|'entity'|'relation'
-/** 列表行：不同对象类型字段不同，统一按索引访问，表格列由类型决定。 */
-type AssetRow = Record<string, unknown>
 
 const props = defineProps<{ knowledgeBaseId:number; type:AssetType }>()
 const emit = defineEmits<{
@@ -119,23 +146,48 @@ const tabs:{ type:AssetType; label:string }[] = [
   { type:'relation', label:'关系' },
 ]
 
+/** 前端类型名 → 后端资产类型：后端只认领域名词，断言/关系在这里翻译。 */
+const backendType = computed(() => props.type === 'assertion' ? 'CLAIM' : props.type.toUpperCase())
+
 const rows = ref<AssetRow[]>([])
+const total = ref(0)
+const page = ref(1)
+const size = ref(20)
 const loading = ref(false)
 const error = ref('')
 const keyword = ref('')
+let timer:number|undefined
 
 const currentLabel = computed(() => tabs.find(v => v.type === props.type)?.label || '资产')
-/** 关系没有独立清单接口：通过图谱邻域查看，避免为列表另造数据。 */
-const hint = computed(() => props.type === 'relation'
-  ? { empty:'请在图谱中查看关系', detail:'关系依附于实体，选中实体后展开邻域即可看到关系边与证据' }
+const hint = computed(() => keyword.value.trim()
+  ? { empty:`没有匹配「${keyword.value.trim()}」的${currentLabel.value}`, detail:'换个关键词，或清空后重新浏览' }
   : { empty:`暂无${currentLabel.value}`, detail:'先在「知识生成 / 文档导入」接入资料并完成解析' })
 
-const filtered = computed(() => {
-  const key = keyword.value.trim().toLowerCase()
-  if (!key) return rows.value
-  return rows.value.filter(row =>
-    Object.values(row).some(value => String(value ?? '').toLowerCase().includes(key)))
-})
+/** 输入停顿 300ms 再检索：避免每敲一个字都打一次后端。 */
+function onKeywordInput() {
+  if (timer) window.clearTimeout(timer)
+  timer = window.setTimeout(() => {
+    page.value = 1
+    load()
+  }, 300)
+}
+
+function onSearch() {
+  if (timer) window.clearTimeout(timer)
+  page.value = 1
+  load()
+}
+
+function setPage(next:number) {
+  page.value = next
+  load()
+}
+
+function setSize(next:number) {
+  size.value = next
+  page.value = 1
+  load()
+}
 
 function actionable(row:AssetRow):boolean {
   if (props.type === 'card') return !!row.knowledgeCode
@@ -160,23 +212,16 @@ function onRowClick(row:AssetRow) {
   if (props.type === 'relation') emit('navigate', 'search.graph')
 }
 
+/** 分页与检索都在服务端完成：拿回的就是当前页数据与真实命中总数。 */
 async function load() {
   loading.value = true
   error.value = ''
   try {
-    if (props.type === 'source') {
-      rows.value = unwrap(await getSources(props.knowledgeBaseId), [] as KnowledgeSource[]) as unknown as AssetRow[]
-    } else if (props.type === 'document') {
-      rows.value = unwrap(await getDocuments(props.knowledgeBaseId), [] as KnowledgeDocument[]) as unknown as AssetRow[]
-    } else if (props.type === 'card') {
-      rows.value = unwrap(await getCards(props.knowledgeBaseId), [] as KnowledgeCard[]) as unknown as AssetRow[]
-    } else if (props.type === 'assertion') {
-      rows.value = unwrap(await getClaims(props.knowledgeBaseId), [] as Claim[]) as unknown as AssetRow[]
-    } else if (props.type === 'entity') {
-      rows.value = unwrap(await getEntities(props.knowledgeBaseId), [] as EntityRow[]) as unknown as AssetRow[]
-    } else {
-      rows.value = []
-    }
+    const data = unwrap(await searchAssets(props.knowledgeBaseId, backendType.value, keyword.value.trim(), page.value, size.value),
+      { type:backendType.value, keyword:'', items:[], total:0, page:1, size:size.value, pageCount:0 } as AssetPage)
+    rows.value = data.items || []
+    total.value = data.total || 0
+    page.value = data.page || 1
   } catch (e) {
     error.value = e instanceof Error ? e.message : '加载失败'
   } finally {
@@ -185,5 +230,10 @@ async function load() {
 }
 
 onMounted(load)
-watch(() => [props.knowledgeBaseId, props.type], load)
+watch(() => [props.knowledgeBaseId, props.type], () => {
+  // 换库或换对象类型：关键词与页码一起重置，避免停在空白页。
+  keyword.value = ''
+  page.value = 1
+  load()
+})
 </script>

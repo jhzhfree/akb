@@ -159,8 +159,14 @@ public class AlertService {
     }
 
     // ----------------------------------------------------------------- events
-    public List<Map<String, Object>> events(Long kb, String status, String severity, Integer limit) {
-        return mapper.listAlertEvents(kb, blank(status), blank(severity), limit == null || limit <= 0 ? 50 : Math.min(limit, 200));
+    public List<Map<String, Object>> events(Long kb, String status, String severity, Integer limit, int offset) {
+        return mapper.listAlertEvents(kb, blank(status), blank(severity),
+            limit == null || limit <= 0 ? 50 : Math.min(limit, 200), Math.max(offset, 0));
+    }
+
+    /** 与 events 同筛选条件，给分页条一个真实总数：未处理优先的排序不影响计数。 */
+    public long countEvents(Long kb, String status, String severity) {
+        return mapper.countAlertEvents(kb, blank(status), blank(severity));
     }
 
     public Map<String, Object> stats(Long kb) {

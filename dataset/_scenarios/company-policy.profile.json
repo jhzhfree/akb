@@ -1,0 +1,121 @@
+{
+  "name": "公司制度",
+  "label": "制度场景：条款原文与时效口径优先",
+  "rationale": "制度问答关心「有多少天 / 多少钱 / 走什么流程 / 新规以哪个为准」，答案必须给出条款出处与生效日期；故卡片与断言通道优先，时效权重最高，冲突类问题强制走版本化断言。",
+  "policy": {
+    "version": "query-policy-v1",
+    "route": {
+      "enabled": true,
+      "defaultStrategies": ["card", "claim", "bm25", "vector"],
+      "rules": [
+        {
+          "questionType": "EXACT",
+          "enabled": true,
+          "priority": 92,
+          "keywords": ["年假", "病假", "事假", "调休", "报销", "住宿标准", "差旅", "公积金", "五险一金", "职级", "工号", "文件编号", "P4", "P5", "P6", "P7"],
+          "strategies": ["bm25", "card", "vector"],
+          "reason": "制度专有名词与编号：BM25 精确命中条款，卡片给出标准与额度。"
+        },
+        {
+          "questionType": "FACT",
+          "enabled": true,
+          "priority": 90,
+          "keywords": ["多少天", "多少钱", "多久", "标准", "额度", "比例", "上限", "下限", "带宽", "时限", "有效期", "几天"],
+          "strategies": ["card", "claim", "bm25"],
+          "reason": "额度与天数：卡片给结构化标准，断言处理修订通知带来的口径差异。"
+        },
+        {
+          "questionType": "CONFLICT",
+          "enabled": true,
+          "priority": 96,
+          "keywords": ["冲突", "不一致", "以哪个为准", "新规定", "调整后", "9月起", "修订通知", "过渡期", "失效", "哪个版本"],
+          "strategies": ["claim", "card", "bm25"],
+          "reason": "制度冲突：优先版本化断言与修订通知，答案须同时给出新口径、原条款与生效日期。"
+        },
+        {
+          "questionType": "PROCEDURE",
+          "enabled": true,
+          "priority": 86,
+          "keywords": ["流程", "怎么申请", "如何办", "步骤", "审批", "提交", "需要什么材料", "销假", "交接"],
+          "strategies": ["card", "bm25", "vector"],
+          "reason": "流程类：卡片步骤与审批链为主，BM25 命中 OA 系统名称与表单。"
+        },
+        {
+          "questionType": "CONDITION",
+          "enabled": true,
+          "priority": 82,
+          "keywords": ["是否", "能否", "可以吗", "要不要", "能不能报", "算不算", "是否享受", "是否违规"],
+          "strategies": ["card", "claim", "bm25"],
+          "reason": "条件判断：条款 + 断言，答案须给出适用条件、例外与违规定性。"
+        },
+        {
+          "questionType": "RELATION",
+          "enabled": true,
+          "priority": 66,
+          "keywords": ["归口", "负责", "审批链", "哪个部门", "谁审批", "所属", "对接"],
+          "strategies": ["graph", "card", "vector"],
+          "reason": "归口与职责：走图谱关系，卡片补充部门职责说明。"
+        },
+        {
+          "questionType": "MULTIHOP",
+          "enabled": true,
+          "priority": 64,
+          "keywords": ["为什么", "依据", "根据什么", "连带", "导致", "影响"],
+          "strategies": ["graph", "card", "vector"],
+          "reason": "依据追问：图谱关联制度与部门，卡片给出条款出处。"
+        },
+        {
+          "questionType": "GLOBAL",
+          "enabled": true,
+          "priority": 60,
+          "keywords": ["有哪些", "清单", "总览", "全部", "汇总", "福利有哪些", "制度有哪些"],
+          "strategies": ["card", "vector"],
+          "reason": "汇总类：卡片清单为主，向量补充语义相近条目。"
+        }
+      ]
+    },
+    "rewrite": {
+      "enabled": true,
+      "llmEnabled": false,
+      "maxVariants": 4,
+      "maxRecallRounds": 2,
+      "synonyms": {
+        "年假": ["年休假", "带薪年假", "休假"],
+        "报销": ["费用报销", "报销单", "发票"],
+        "怎么": ["如何", "流程", "步骤"],
+        "是啥": ["是什么", "含义", "定义"],
+        "配置": ["标准", "规则", "口径"],
+        "版本": ["生效日期", "修订", "新规定"],
+        "离职": ["辞职", "解除劳动合同", "交接"],
+        "绩效": ["考核", "评级", "KPI"]
+      }
+    },
+    "recall": {
+      "channels": {
+        "bm25": { "enabled": true, "weight": 1.15, "scale": 1.0 },
+        "vector": { "enabled": true, "weight": 1.00, "scale": 1.0 },
+        "card": { "enabled": true, "weight": 1.30, "scale": 1.0 },
+        "claim": { "enabled": true, "weight": 1.25, "scale": 1.0 },
+        "graph": { "enabled": true, "weight": 0.95, "scale": 1.0 }
+      },
+      "recallMultiplier": 4,
+      "minRecallCandidates": 28
+    },
+    "fusion": {
+      "rrfK": 55,
+      "qualitySignalsEnabled": true,
+      "qualityWeights": { "authority": 0.25, "freshness": 0.20, "confidence": 0.10, "evidence": 0.10 },
+      "chunkBoost": { "enabled": true, "base": 1.25, "headingHit": 0.20, "coverage": 0.15 }
+    },
+    "rerank": { "enabled": true, "topN": 0 },
+    "answer": {
+      "contextMaxChars": 8600,
+      "minChunkEvidence": 3,
+      "evidenceGateEnabled": true,
+      "faithfulnessMin": 0.05,
+      "entailmentMin": 0.10,
+      "policyVersion": "answer-policy-v1",
+      "noAnswerText": "现有制度知识库中未检索到足够证据，暂无法确认；涉及口径冲突时请以生效日期较晚的修订通知为准，或咨询人力资源部 HRBP。"
+    }
+  }
+}

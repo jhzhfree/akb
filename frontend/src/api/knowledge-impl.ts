@@ -7,6 +7,7 @@ import type {
   AnswerQualification, AnswerQualificationSummary,
 } from '../types'
 import type { RetrievalRequest, RetrievalResult, AnswerResult, DocumentRetryResult, AdjudicationRunResult } from './contracts'
+import type { AssetPage } from '../types/knowledge'
 
 const LONG_TIMEOUT_MS = 180000
 type ApiResponse<T> = AxiosResponse<ApiEnvelope<T>>
@@ -18,6 +19,11 @@ export const createKnowledgeBase = (
   name:string, description='', visibility='PUBLIC', ownerGroupId:number|null=null,
 ):Promise<ApiResponse<KnowledgeBase>> =>
   axios.post('/api/knowledge/bases', { name, description, visibility, ownerGroupId })
+/** 编辑知识库：改名 / 改描述，并可在同一次提交中调整可见范围（GROUP 时须传 ownerGroupId）。 */
+export const updateKnowledgeBase = (
+  id:number, payload:{name:string; description?:string; visibility?:string; ownerGroupId?:number|null},
+):Promise<ApiResponse<KnowledgeBase>> =>
+  axios.put(`/api/knowledge/bases/${id}`, payload)
 export const updateKnowledgeBaseAccess = (
   id:number, visibility:string, ownerGroupId:number|null=null,
 ):Promise<ApiResponse<KnowledgeBase>> =>
@@ -205,6 +211,15 @@ export const getQueryHistory = (kb:number, limit=30):Promise<ApiResponse<QueryHi
 
 export const getEntities = (kb:number):Promise<ApiResponse<import('../types').EntityRow[]>> =>
   axios.get(`/api/knowledge/entities/${kb}`)
+
+/** 资产浏览：服务端分页 + 关键字检索，type 为 SOURCE/DOCUMENT/CARD/CLAIM/ENTITY/RELATION。 */
+export const searchAssets = (
+  kb:number, type:string, keyword='', page=1, size=20,
+):Promise<ApiResponse<AssetPage>> =>
+  axios.get(
+    `/api/knowledge/assets/${kb}/${encodeURIComponent(type)}`
+    + `?keyword=${encodeURIComponent(keyword)}&page=${page}&size=${size}`,
+  )
 export const getEntityDetail = (
   kb:number, entityCode:string,
 ):Promise<ApiResponse<import('../types').EntityDetail>> =>
@@ -304,10 +319,15 @@ export const getAclSubjects = ():Promise<ApiResponse<import('../types').AclSubje
   axios.get('/api/knowledge/acl/subjects')
 export const getAclRoles = ():Promise<ApiResponse<import('../types').AclRole[]>> =>
   axios.get('/api/knowledge/acl/roles')
-export const getAclAudits = (kb:number):Promise<ApiResponse<import('../types').AclAudit[]>> =>
-  axios.get(`/api/knowledge/acl/audits/${kb}?limit=100`)
-export const getAclChanges = (kb:number):Promise<ApiResponse<import('../types').AclChange[]>> =>
-  axios.get(`/api/knowledge/acl/changes/${kb}?limit=100`)
+/** 访问审计与权限变更：日志只增不减，按页取，total 由后端计数返回。 */
+export const getAclAudits = (
+  kb:number, page=1, size=20,
+):Promise<ApiResponse<import('../types').AclLogPage<import('../types').AclAudit>>> =>
+  axios.get(`/api/knowledge/acl/audits/${kb}`, { params:{ limit:size, offset:(page - 1) * size } })
+export const getAclChanges = (
+  kb:number, page=1, size=20,
+):Promise<ApiResponse<import('../types').AclLogPage<import('../types').AclChange>>> =>
+  axios.get(`/api/knowledge/acl/changes/${kb}`, { params:{ limit:size, offset:(page - 1) * size } })
 export const changeResourceAcl = (
   kb:number, resourceType:string, resourceCode:string, permissionTags:string[], reason:string,
 ):Promise<ApiResponse<Record<string,unknown>>> =>
@@ -491,8 +511,12 @@ export const getQualityOverview = (
 
 /* ---- 任务中心与告警（设计 §7：任务 / DLQ / 告警规则） ---- */
 
+/** 任务与告警两块列表各自分页：offset 管任务，alertOffset 管告警，统计不受影响。 */
 export const getTaskOverview = (
-  params:{ kb?:number; status?:string; taskType?:string; triggerType?:string; limit?:number } = {},
+  params:{
+    kb?:number; status?:string; taskType?:string; triggerType?:string; limit?:number; offset?:number
+    alertLimit?:number; alertOffset?:number; alertStatus?:string; alertSeverity?:string
+  } = {},
 ):Promise<ApiResponse<import('../types').TaskOverview>> =>
   axios.get('/api/knowledge/tasks', { params })
 export const getTaskStats = (kb?:number):Promise<ApiResponse<import('../types').TaskStatsPair>> =>
@@ -507,7 +531,7 @@ export const retryTask = (taskCode:string, kb?:number):Promise<ApiResponse<Recor
 export const cancelTask = (taskCode:string):Promise<ApiResponse<Record<string, unknown>>> =>
   axios.post(`/api/knowledge/tasks/${taskCode}/cancel`)
 export const getAlerts = (
-  params:{ kb?:number; status?:string; severity?:string; limit?:number } = {},
+  params:{ kb?:number; status?:string; severity?:string; limit?:number; offset?:number } = {},
 ):Promise<ApiResponse<import('../types').AlertList>> =>
   axios.get('/api/knowledge/tasks/alerts', { params })
 /** 立即评估告警规则，不等待下一次调度。 */

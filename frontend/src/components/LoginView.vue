@@ -4,12 +4,33 @@
      差异只在标题、副标题、第三方登录区与底部互相切换的入口。 -->
 <div class="lv-page">
   <section class="lv-brand" aria-label="产品介绍">
+    <!-- 品牌底图：深蓝渐变 + 细网格 + 知识网络装饰，配色取自 logo（深蓝底 / 亮蓝点缀）。
+         用 CSS + SVG 分层而不是位图：任意屏宽都不糊，也不用额外下载背景图。 -->
+    <div class="lv-brand-art" aria-hidden="true">
+      <svg class="lv-brand-net" viewBox="0 0 640 900" preserveAspectRatio="xMidYMid slice">
+        <g class="lv-net-lines">
+          <path d="M-20 620 L120 560 L250 640 L360 540 L500 596 L660 520" />
+          <path d="M120 560 L190 430 L320 392 L430 470 L500 596" />
+          <path d="M250 640 L300 780 L450 828 L600 760" />
+          <path d="M190 430 L120 300 L240 236 L360 300 L430 470" />
+          <path d="M360 300 L470 200 L600 244" />
+          <path d="M240 236 L200 120 L320 78" />
+        </g>
+        <g class="lv-net-nodes">
+          <circle cx="120" cy="560" r="5" /><circle cx="250" cy="640" r="4" />
+          <circle cx="360" cy="540" r="5" /><circle cx="500" cy="596" r="4" />
+          <circle cx="190" cy="430" r="4" /><circle cx="320" cy="392" r="6" />
+          <circle cx="430" cy="470" r="4" /><circle cx="120" cy="300" r="4" />
+          <circle cx="240" cy="236" r="5" /><circle cx="360" cy="300" r="4" />
+          <circle cx="470" cy="200" r="4" /><circle cx="600" cy="244" r="3" />
+          <circle cx="300" cy="780" r="4" /><circle cx="450" cy="828" r="3" />
+          <circle cx="200" cy="120" r="3" /><circle cx="320" cy="78" r="4" />
+        </g>
+      </svg>
+    </div>
+
     <div class="lv-brand-top">
-      <KosBrandMark :size="40" tone="onBrand" label="智能知识平台"/>
-      <span class="lv-brand-copy">
-        <b>智能知识平台</b>
-        <small>Knowledge OS</small>
-      </span>
+      <KosBrandLogo :size="38" tone="onDark"/>
     </div>
     <div class="lv-brand-body">
       <h1>让团队的知识，随时随地被 AI 调用</h1>
@@ -20,7 +41,7 @@
         <li><span class="lv-check">✓</span>精细的角色权限控制，安全可控</li>
       </ul>
     </div>
-    <div class="lv-brand-foot">© 2026 智能知识平台 · Knowledge OS</div>
+    <div class="lv-brand-foot">© 2026 智能知识库平台 · AI KNOWLEDGE BASE</div>
   </section>
 
   <section class="lv-panel" aria-label="登录">
@@ -81,7 +102,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { ElMessage } from 'element-plus'
-import KosBrandMark from './KosBrandMark.vue'
+import KosBrandLogo from './KosBrandLogo.vue'
 import { login, setToken } from '../api/auth'
 import type { AuthSessionResult } from '../types'
 
@@ -142,33 +163,42 @@ async function submit() {
 </script>
 
 <style scoped>
-/* 登录页不跟随主题骨架：品牌区沿用原型蓝紫渐变，表单区用主题表面色，
-   这样浅色下是原型观感，深色下也不会刺眼。 */
+/* 登录页不跟随主题骨架：品牌区改用 logo 的深蓝主色（#071227 → #12306b），
+   表单区仍用主题表面色——浅色主题下呈现品牌观感，深色主题下也不会刺眼。 */
 .lv-page{
   display:grid;grid-template-columns:1.05fr .95fr;min-height:100dvh;background:var(--bg-base);
 }
 .lv-brand{
   position:relative;overflow:hidden;
   display:flex;flex-direction:column;padding:46px 52px;color:#fff;
-  background:linear-gradient(160deg,#5b5cff 0%,#6f5cff 46%,#8a5cff 100%);
+  background:
+    radial-gradient(120% 78% at 88% 6%,rgba(47,107,255,.5),rgba(47,107,255,0) 62%),
+    radial-gradient(96% 62% at 4% 100%,rgba(24,184,200,.24),rgba(24,184,200,0) 64%),
+    linear-gradient(158deg,#071227 0%,#0b1d3e 44%,#12306b 100%);
 }
-/* 品牌区柔光：两团光斑压在大面积渐变上，避免整块色面发平 */
-.lv-brand::before,.lv-brand::after{content:'';position:absolute;border-radius:50%;pointer-events:none}
+/* 细网格：给整块深色底一点结构感；用径向遮罩四周渐隐，避免出现硬边 */
 .lv-brand::before{
-  width:440px;height:440px;top:-160px;right:-140px;
-  background:radial-gradient(circle,rgba(255,255,255,.18),rgba(255,255,255,0) 70%);
+  content:'';position:absolute;inset:0;pointer-events:none;opacity:.55;
+  background-image:
+    linear-gradient(rgba(255,255,255,.05) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(255,255,255,.05) 1px,transparent 1px);
+  background-size:46px 46px,46px 46px;
+  mask-image:radial-gradient(120% 92% at 50% 38%,#000 28%,transparent 84%);
+  -webkit-mask-image:radial-gradient(120% 92% at 50% 38%,#000 28%,transparent 84%);
 }
+/* 左上柔光：把 logo 与标题区“点亮”，与右下角的知识网络形成对角呼应 */
 .lv-brand::after{
-  width:360px;height:360px;bottom:-170px;left:-120px;
-  background:radial-gradient(circle,rgba(24,184,200,.3),rgba(24,184,200,0) 70%);
+  content:'';position:absolute;width:460px;height:460px;top:-190px;left:-150px;border-radius:50%;pointer-events:none;
+  background:radial-gradient(circle,rgba(255,255,255,.13),rgba(255,255,255,0) 70%);
 }
+/* 知识网络装饰：铺满品牌区、沉在文案之下（节点 + 连线表达“知识被 AI 调用”） */
+.lv-brand-art{position:absolute;inset:0;pointer-events:none;z-index:0}
+.lv-brand-net{display:block;width:100%;height:100%}
+.lv-net-lines path{fill:none;stroke:rgba(122,168,255,.34);stroke-width:1.1}
+.lv-net-nodes circle{fill:rgba(147,197,253,.7)}
+.lv-net-nodes circle:nth-child(6){fill:#60a5fa}
+.lv-net-nodes circle:nth-child(9){fill:#60a5fa}
 .lv-brand-top{position:relative;z-index:1;display:flex;align-items:center;gap:12px}
-.lv-brand-copy{display:flex;flex-direction:column;line-height:1.15}
-.lv-brand-copy b{font-size:16px;font-weight:700;letter-spacing:.02em}
-.lv-brand-copy small{
-  margin-top:3px;font-size:10px;font-weight:600;letter-spacing:.18em;
-  text-transform:uppercase;color:rgba(255,255,255,.76);
-}
 .lv-brand-body{position:relative;z-index:1;margin-top:auto;margin-bottom:auto;max-width:460px}
 .lv-brand-body h1{margin:0;font-size:30px;line-height:1.35;font-weight:700;letter-spacing:-.01em}
 .lv-brand-body p{margin:14px 0 0;font-size:13.5px;line-height:1.8;color:rgba(255,255,255,.86)}

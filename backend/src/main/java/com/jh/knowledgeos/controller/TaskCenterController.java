@@ -50,16 +50,26 @@ public class TaskCenterController {
         this.batchIngestion = batchIngestion;
     }
 
+    /**
+     * 总览一次给出任务、告警与规则三块数据：任务与告警各自带 offset 分页，
+     * 统计口径不受分页影响（始终是筛选条件下的全量）。
+     */
     @GetMapping
-    @Operation(summary = "任务与告警总览：任务列表、统计、告警与死信")
+    @Operation(summary = "任务与告警总览：任务列表（分页）、统计、告警（分页）与规则")
     public ApiResponse<Object> overview(@RequestParam(value = "kb", required = false) Long kb, @RequestParam(value = "status", required = false)
         String status, @RequestParam(value = "taskType", required = false) String taskType, @RequestParam(value = "triggerType", required = false)
-        String triggerType, @RequestParam(value = "limit", required = false) Integer limit) {
+        String triggerType, @RequestParam(value = "limit", required = false) Integer limit, @RequestParam(value = "offset", required = false,
+        defaultValue = "0") int offset, @RequestParam(value = "alertLimit", required = false) Integer alertLimit,
+        @RequestParam(value = "alertOffset", required = false, defaultValue = "0") int alertOffset,
+        @RequestParam(value = "alertStatus", required = false) String alertStatus, @RequestParam(value = "alertSeverity", required = false)
+        String alertSeverity) {
         Map<String, Object> payload = new LinkedHashMap<String, Object>();
-        payload.put("tasks", tasks.list(kb, status, taskType, triggerType, limit));
+        payload.put("tasks", tasks.list(kb, status, taskType, triggerType, limit, offset));
+        payload.put("taskTotal", tasks.count(kb, status, taskType, triggerType));
         payload.put("stats", tasks.stats(kb));
         payload.put("taskTypes", TaskCenterService.taskTypes());
-        payload.put("alerts", alerts.events(kb, null, null, 20));
+        payload.put("alerts", alerts.events(kb, alertStatus, alertSeverity, alertLimit == null ? 20 : alertLimit, alertOffset));
+        payload.put("alertTotal", alerts.countEvents(kb, alertStatus, alertSeverity));
         payload.put("alertStats", alerts.stats(kb));
         payload.put("rules", alerts.rules(kb));
         return ApiResponse.ok(payload);
@@ -131,9 +141,11 @@ public class TaskCenterController {
     @GetMapping("/alerts")
     @Operation(summary = "告警事件：未处理优先，可按下状态与级别筛选")
     public ApiResponse<Object> alerts(@RequestParam(value = "kb", required = false) Long kb, @RequestParam(value = "status", required = false) String
-        status, @RequestParam(value = "severity", required = false) String severity, @RequestParam(value = "limit", required = false) Integer limit) {
+        status, @RequestParam(value = "severity", required = false) String severity, @RequestParam(value = "limit", required = false) Integer limit,
+        @RequestParam(value = "offset", required = false, defaultValue = "0") int offset) {
         Map<String, Object> payload = new LinkedHashMap<String, Object>();
-        payload.put("events", alerts.events(kb, status, severity, limit));
+        payload.put("events", alerts.events(kb, status, severity, limit, offset));
+        payload.put("total", alerts.countEvents(kb, status, severity));
         payload.put("stats", alerts.stats(kb));
         return ApiResponse.ok(payload);
     }

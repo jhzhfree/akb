@@ -25,6 +25,7 @@ import logging
 import os
 import re
 import threading
+import urllib.parse
 from typing import Any
 
 from pydantic import BaseModel, Field, field_validator, model_validator
@@ -408,6 +409,23 @@ def _profile_name(raw: Any) -> str:
     return name
 
 
+def _coerce_name(raw: str) -> str:
+    """Normalize a profile id that arrives through a URL path segment.
+
+    A legal id never contains '%', so a percent-encoded value can only come from a
+    caller that encoded the segment twice (backend pre-encoding plus the HTTP client
+    encoding it again). Decoding once keeps those callers working instead of failing
+    with "策略不存在：%E8%BF%90...".
+    """
+    text = str(raw or "")
+    if "%" in text:
+        try:
+            text = urllib.parse.unquote(text, encoding="utf-8", errors="replace")
+        except Exception:
+            pass
+    return _profile_name(text)
+
+
 def _read_store() -> dict[str, Any]:
     """Read the persisted policy store, promoting a legacy single-policy file on the fly."""
     store: dict[str, Any] = {"active": DEFAULT_PROFILE, "profiles": {}}
@@ -556,6 +574,7 @@ def update_profile(name: str, payload: dict[str, Any]) -> dict[str, Any]:
     global _cache
     with _lock:
         store = _read_store()
+        name = _coerce_name(name)
         if name not in store["profiles"]:
             raise ValueError("策略不存在：%s" % name)
         entry = store["profiles"][name] or {}
@@ -576,10 +595,11 @@ def rename_profile(name: str, label: str | None = None, new_name: str | None = N
     """Rename a profile or change its display label, keeping it the active one if it was."""
     with _lock:
         store = _read_store()
+        name = _coerce_name(name)
         if name not in store["profiles"]:
             raise ValueError("策略不存在：%s" % name)
         entry = store["profiles"].pop(name)
-        target = _profile_name(new_name) if new_name else name
+        target = _coerce_name(new_name) if new_name else name
         if target in store["profiles"]:
             store["profiles"][name] = entry
             raise ValueError("策略已存在：%s" % target)
@@ -598,6 +618,7 @@ def delete_profile(name: str) -> dict[str, Any]:
     global _cache
     with _lock:
         store = _read_store()
+        name = _coerce_name(name)
         if name not in store["profiles"]:
             raise ValueError("策略不存在：%s" % name)
         if len(store["profiles"]) <= 1:
@@ -615,6 +636,7 @@ def activate_profile(name: str) -> dict[str, Any]:
     global _cache
     with _lock:
         store = _read_store()
+        name = _coerce_name(name)
         if name not in store["profiles"]:
             raise ValueError("策略不存在：%s" % name)
         store["active"] = name

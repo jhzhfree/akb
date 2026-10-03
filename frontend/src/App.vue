@@ -21,7 +21,8 @@
   :user-name="me?.user?(me.user.displayName||me.user.username):''"
   :avatar="avatarText" :role-accent="roleAccent" :can-system="canSystem"
   :actions="roleQuickActions" :logged-in="!!me?.user"
-  :system-active="activeSection==='system'"
+  :system-active="activeSection==='system'" :system-hint="systemHint"
+  :environment="environmentLabel" :version="APP_VERSION"
   @enter="enterSection" @enter-system="enterSystem" @go="key=>goto(key)" @logout="doLogout"/>
 <main class="kos-main">
   <div v-if="failure" class="mb-3 flex items-start gap-3 rounded-lg border px-4 py-3" style="background:var(--danger-bg);border-color:var(--danger)">
@@ -100,15 +101,20 @@
     :active="active" :knowledge-base-id="knowledgeBaseId" :base-name="activeBase?.name||''"
     :bases="bases" :overview="overview"
     :acl-subjects="aclSubjects" :acl-roles="aclRoles" :acl-changes="aclChanges" :acl-audits="aclAudits"
+    :change-total="changeTotal" :change-page="changePage" :change-size="changeSize"
+    :audit-total="auditTotal" :audit-page="auditPage" :audit-size="auditSize"
     :can-manage-users="!!me?.canManageUsers&&adminView"
-    @select="selectKey" @acl-change="changeAcl"
+    @select="selectKey" @acl-change="changeAcl" @acl-log-page="p=>onAclLogPage(p.which,p.page,p.size)"
     @select-base="selectBase" @create-base="showBases=true" @refresh="loadOverview"/>
 
   <!-- 版本与授权信息：所有主页面共用同一条底部说明，侧栏不再单独放版本号。 -->
   <AppFooter :product-version="APP_VERSION" :environment="environmentLabel"/>
 </main>
 </div>
-<KnowledgeBaseDialog :visible="showBases" :bases="bases" :groups="groups" :active-id="knowledgeBaseId" @close="showBases=false" @select="selectBase" @create="createBase"/>
+<KnowledgeBaseDialog
+  :visible="showBases" :bases="bases" :groups="groups" :active-id="knowledgeBaseId"
+  :can-manage="canCreateBase" :current-user-id="me?.user?.id??null"
+  @close="showBases=false" @select="selectBase" @create="createBase" @update="updateBase"/>
 <TaskCenterDrawer v-model:visible="taskCenterVisible" :knowledge-base-id="knowledgeBaseId"
   @navigate="navigate" @open-run="openRun"/>
 <KnowledgeDetailWorkspace
@@ -133,7 +139,7 @@ import{ElMessage,type UploadFile}from'element-plus'
 import type {
   AssessmentRow, Capabilities, ConflictRow,
   IngestionRun, IngestionRunDetail, KnowledgeBase, KnowledgeDocument,
-  KnowledgeSource, Overview, AclSubject, AclRole, AclAudit, AclChange, ConflictDetail,
+  KnowledgeSource, Overview, AclSubject, AclRole, AclAudit, AclChange, AclLogPage, ConflictDetail,
   QueryCitation, QueryHistoryItem, QueryResult, QueryTrace, ReviewRow, EvidenceDetail,
   SourcePreview,
   KnowledgeObjectDetail, AuthMe, AuthStatus, UserGroupRow,
@@ -167,7 +173,7 @@ import SystemPage from './components/SystemPage.vue'
 import { KOS_SHELL } from './shell'
 import type { KosShell } from './shell'
 import {
-  createKnowledgeBase, getKnowledgeBases, getOverview, getSources, getDocuments,
+  createKnowledgeBase, updateKnowledgeBase, getKnowledgeBases, getOverview, getSources, getDocuments,
   getPendingReviews, getOpenConflicts, getCapabilities, getAssessments,
   getIngestionRuns, getIngestionRun,
   uploadDocument, queryKnowledge, runAdjudication, reviewKnowledge,
@@ -206,6 +212,9 @@ const file=ref<File|null>(null);
 const authority=ref(.85);
 const sourcePermissionTags=ref('')
 const aclSubjects=ref<AclSubject[]>([]),aclRoles=ref<AclRole[]>([]),aclAudits=ref<AclAudit[]>([]),aclChanges=ref<AclChange[]>([])
+/** 审计流水只增不减：审计与变更各自记住页码，翻页由 SystemPage 回传。 */
+const auditPage=ref(1),auditSize=ref(20),auditTotal=ref(0)
+const changePage=ref(1),changeSize=ref(20),changeTotal=ref(0)
 const overview=ref<Overview>({
   knowledgeBaseId:1, sourceCount:0, documentCount:0, chunkCount:0, cardCount:0,
   effectiveCardCount:0, claimCount:0, pendingReviewCount:0, openConflictCount:0, assessmentCount:0,
@@ -463,6 +472,8 @@ const currentRoleExperience=computed(()=>roleExperience(
   me.value?.user?.role,me.value?.roleLabel||me.value?.user?.roleLabel))
 const roleName=computed(()=>currentRoleExperience.value.name)
 const roleBrief=computed(()=>currentRoleExperience.value.brief)
+/** 系统配置入口不可点时的说明：入口置灰保留可见，需说明是角色限制而非功能缺失。 */
+const systemHint=computed(()=>`当前角色（${roleName.value}）无权访问系统配置`)
 /** 角色身份色：接入顶栏头像底色 / 侧栏 / 欢迎区视觉标识（纯展示，不参与权限判定）。 */
 const roleAccent=computed(()=>currentRoleExperience.value.accent)
 /** 顶栏头像 hover 说明：角色名与职责从顶栏收起后仍可查，但不再占顶栏位置。 */
@@ -550,18 +561,54 @@ await loadBases();
 selectBase(base.id);
 showBases.value=false;
 ElMessage.success('知识库已创建')}catch(e){err(e)}}
+/** 编辑知识库：改名 / 改描述 / 调整可见范围，改的是当前库时顺带刷新概览。 */
+async function updateBase(payload:{id:number;name:string;description:string;visibility:string;ownerGroupId:number|null}){
+try{
+  unwrap(
+    await updateKnowledgeBase(payload.id,{
+      name:payload.name,
+      description:payload.description,
+      visibility:payload.visibility,
+      ownerGroupId:payload.ownerGroupId,
+    }),
+    null as unknown as KnowledgeBase)
+await loadBases();
+if(payload.id===knowledgeBaseId.value)await loadOverview();
+ElMessage.success('知识库已更新')}catch(e){err(e)}}
 function selectBase(id:number){knowledgeBaseId.value=id;
 pushRecentBase(id);
 showBases.value=false}
+/** 主体与角色是全量字典；审计与变更按页取，因此拆成两个互不阻塞的加载。 */
 async function loadAcl(){
-  const r=await Promise.allSettled([
-    getAclSubjects(), getAclRoles(), getAclAudits(knowledgeBaseId.value),
-    getAclChanges(knowledgeBaseId.value),
-  ])
+  const r=await Promise.allSettled([getAclSubjects(), getAclRoles()])
   if(r[0].status==='fulfilled')aclSubjects.value=unwrap(r[0].value,[])
   if(r[1].status==='fulfilled')aclRoles.value=unwrap(r[1].value,[])
-  if(r[2].status==='fulfilled')aclAudits.value=unwrap(r[2].value,[])
-  if(r[3].status==='fulfilled')aclChanges.value=unwrap(r[3].value,[])
+  await loadAclLogs()
+}
+async function loadAclLogs(){
+  const r=await Promise.allSettled([
+    getAclAudits(knowledgeBaseId.value,auditPage.value,auditSize.value),
+    getAclChanges(knowledgeBaseId.value,changePage.value,changeSize.value),
+  ])
+  const empty={items:[],total:0,page:1,size:20,pageCount:0}
+  if(r[0].status==='fulfilled'){
+    const d=unwrap(r[0].value,empty as AclLogPage<AclAudit>)
+    aclAudits.value=d.items||[]
+    auditTotal.value=d.total||0
+    auditPage.value=d.page||auditPage.value
+  }
+  if(r[1].status==='fulfilled'){
+    const d=unwrap(r[1].value,empty as AclLogPage<AclChange>)
+    aclChanges.value=d.items||[]
+    changeTotal.value=d.total||0
+    changePage.value=d.page||changePage.value
+  }
+}
+/** 审计/变更翻页：页码由面板回传，换页后重新取当前页。 */
+function onAclLogPage(which:'audit'|'change',page:number,size:number){
+  if(which==='audit'){auditPage.value=page;auditSize.value=size}
+  else{changePage.value=page;changeSize.value=size}
+  loadAclLogs()
 }
 async function changeAcl(p:{
   resourceType:string; resourceCode:string; permissionTags:string[]; reason:string
@@ -571,6 +618,9 @@ async function changeAcl(p:{
       knowledgeBaseId.value,p.resourceType,p.resourceCode,p.permissionTags,p.reason,
     ),{})
     ElMessage.success('ACL 已保存并写入传播队列')
+    // 新变更插在队首，回到第一页才能看到它。
+    auditPage.value=1
+    changePage.value=1
     await loadAcl()
   }catch(e){err(e)}
 }
@@ -915,6 +965,7 @@ void loadSpaceContext();
 void loadActive()});
 watch(knowledgeBaseId,
     v=>{localStorage.setItem('llmkb.kbId',String(v));
+auditPage.value=1;changePage.value=1;
 void loadDashboard();
 void loadTasks();
 result.value=null;

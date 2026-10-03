@@ -1,0 +1,79 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.jh.knowledgeos.mapper.AssetBrowseMapper">
+
+  <!-- 资产浏览：按对象类型做服务端分页与关键字检索。
+
+       与各自清单接口（listSources / listDocuments / listCards / listClaims /
+       listEntitiesWithUsage）取同一批表、同一套 ACL 语义（permissionTags 为 null
+       表示当前身份不受对象级 ACL 约束），因此翻页或搜索后看到的总数与工作台 KPI
+       始终一致——早期「列表一次拉全量、前端本地过滤」的做法在几千条对象时会把列表
+       卡死，也拿不到真实命中数。 -->
+
+  <!-- 对象级 ACL：alias 由各对象类型的片段通过 include property 传入。 -->
+  <sql id="assetAcl">
+    <choose>
+      <when test="permissionTags == null"></when>
+      <when test="permissionTags != null and permissionTags.size() > 0">
+        AND (${alias}.permission_tags IS NULL OR JSON_LENGTH(${alias}.permission_tags)=0 OR
+        <foreach collection="permissionTags" item="tag" open="(" separator=" OR " close=")">JSON_CONTAINS(${alias}.permission_tags, JSON_QUOTE(#{tag}))</foreach>)
+      </when>
+      <otherwise>AND (${alias}.permission_tags IS NULL OR JSON_LENGTH(${alias}.permission_tags)=0)</otherwise>
+    </choose>
+  </sql>
+
+  <!-- 关键字检索：每种对象检索自己的可读字段，不跨对象模糊匹配。 -->
+  <sql id="assetKeyword">
+    <if test="keyword != null and keyword != ''">
+      <choose>
+        <when test='type == "SOURCE"'> AND (s.name LIKE CONCAT('%',#{keyword},'%') OR s.source_code LIKE CONCAT('%',#{keyword},'%') OR s.source_type LIKE CONCAT('%',#{keyword},'%'))</when>
+        <when test='type == "DOCUMENT"'> AND (d.title LIKE CONCAT('%',#{keyword},'%') OR d.document_code LIKE CONCAT('%',#{keyword},'%') OR s.name LIKE CONCAT('%',#{keyword},'%'))</when>
+        <when test='type == "CARD"'> AND (k.title LIKE CONCAT('%',#{keyword},'%') OR k.knowledge_code LIKE CONCAT('%',#{keyword},'%') OR k.status LIKE CONCAT('%',#{keyword},'%'))</when>
+        <when test='type == "CLAIM"'> AND (c.subject LIKE CONCAT('%',#{keyword},'%') OR c.predicate LIKE CONCAT('%',#{keyword},'%') OR c.object_value LIKE CONCAT('%',#{keyword},'%') OR c.claim_code LIKE CONCAT('%',#{keyword},'%'))</when>
+        <when test='type == "ENTITY"'> AND (e.canonical_name LIKE CONCAT('%',#{keyword},'%') OR e.entity_code LIKE CONCAT('%',#{keyword},'%') OR e.entity_type LIKE CONCAT('%',#{keyword},'%') OR e.description LIKE CONCAT('%',#{keyword},'%'))</when>
+        <when test='type == "RELATION"'> AND (r.relation_code LIKE CONCAT('%',#{keyword},'%') OR r.relation_type LIKE CONCAT('%',#{keyword},'%') OR se.canonical_name LIKE CONCAT('%',#{keyword},'%') OR te.canonical_name LIKE CONCAT('%',#{keyword},'%'))</when>
+      </choose>
+    </if>
+  </sql>
+
+  <sql id="assetColumns">
+    <choose>
+      <when test='type == "SOURCE"'>s.id id,s.source_code sourceCode,s.name name,s.source_type sourceType,s.source_uri sourceUri,s.authority_score authorityScore,s.status status,s.created_time createdTime</when>
+      <when test='type == "DOCUMENT"'>d.id id,d.document_code documentCode,d.title title,d.mime_type mimeType,d.parse_status parseStatus,d.status status,d.chunk_count chunkCount,d.created_time createdTime,s.name sourceName,s.id sourceId</when>
+      <when test='type == "CARD"'>k.id id,k.knowledge_code knowledgeCode,k.title title,k.status status,k.confidence confidence,COALESCE(k.updated_time,k.created_time) updatedTime</when>
+      <when test='type == "CLAIM"'>c.id id,c.claim_code claimCode,c.subject subject,c.predicate predicate,c.object_value objectValue,c.status status,c.confidence confidence,COALESCE(c.updated_time,c.created_time) updatedTime</when>
+      <when test='type == "ENTITY"'>e.id id,e.entity_code entityCode,e.entity_type entityType,e.canonical_name canonicalName,e.description description,e.status status,e.confidence confidence,
+        (SELECT COUNT(*) FROM t_claim_entity ce JOIN t_claim c2 ON c2.claim_code=ce.claim_code WHERE ce.entity_code=e.entity_code AND c2.knowledge_base_id=e.knowledge_base_id) claimCount,
+        (SELECT COUNT(*) FROM t_card_entity ce2 JOIN t_knowledge_card k2 ON k2.knowledge_code=ce2.knowledge_code WHERE ce2.entity_code=e.entity_code AND k2.knowledge_base_id=e.knowledge_base_id) cardCount,
+        (SELECT COUNT(*) FROM t_entity_alias a WHERE a.knowledge_base_id=e.knowledge_base_id AND a.entity_code=e.entity_code) aliasCount</when>
+      <when test='type == "RELATION"'>r.id id,r.relation_code code,r.relation_type relationType,r.status status,r.confidence confidence,se.canonical_name sourceName,se.entity_code sourceCode,te.canonical_name targetName,te.entity_code targetCode</when>
+    </choose>
+  </sql>
+
+  <sql id="assetBody">
+    <choose>
+      <when test='type == "SOURCE"'>FROM t_source s WHERE s.knowledge_base_id=#{kb}<include refid="assetAcl"><property name="alias" value="s"/></include><include refid="assetKeyword"/></when>
+      <when test='type == "DOCUMENT"'>FROM t_document d JOIN t_source_version sv ON sv.id=d.source_version_id JOIN t_source s ON s.id=sv.source_id WHERE s.knowledge_base_id=#{kb}<include refid="assetAcl"><property name="alias" value="s"/></include><include refid="assetKeyword"/></when>
+      <when test='type == "CARD"'>FROM t_knowledge_card k WHERE k.knowledge_base_id=#{kb}<include refid="assetAcl"><property name="alias" value="k"/></include><include refid="assetKeyword"/></when>
+      <when test='type == "CLAIM"'>FROM t_claim c WHERE c.knowledge_base_id=#{kb}<include refid="assetAcl"><property name="alias" value="c"/></include><include refid="assetKeyword"/></when>
+      <when test='type == "ENTITY"'>FROM t_entity e WHERE e.knowledge_base_id=#{kb}<include refid="assetAcl"><property name="alias" value="e"/></include><include refid="assetKeyword"/></when>
+      <when test='type == "RELATION"'>FROM t_relation r LEFT JOIN t_entity se ON se.id=r.source_entity_id LEFT JOIN t_entity te ON te.id=r.target_entity_id WHERE r.knowledge_base_id=#{kb}<include refid="assetAcl"><property name="alias" value="r"/></include><include refid="assetKeyword"/></when>
+    </choose>
+  </sql>
+
+  <sql id="assetOrder">
+    <choose>
+      <when test='type == "SOURCE"'>ORDER BY s.created_time DESC,s.id DESC</when>
+      <when test='type == "DOCUMENT"'>ORDER BY d.created_time DESC,d.id DESC</when>
+      <when test='type == "CARD"'>ORDER BY updatedTime DESC,k.id DESC</when>
+      <when test='type == "CLAIM"'>ORDER BY updatedTime DESC,c.id DESC</when>
+      <when test='type == "ENTITY"'>ORDER BY claimCount DESC,e.canonical_name</when>
+      <when test='type == "RELATION"'>ORDER BY r.id DESC</when>
+    </choose>
+  </sql>
+
+  <select id="countAssets" resultType="long">SELECT COUNT(*) <include refid="assetBody"/></select>
+
+  <select id="pageAssets" resultType="map">SELECT <include refid="assetColumns"/> <include refid="assetBody"/> <include refid="assetOrder"/> LIMIT #{offset},#{size}</select>
+
+</mapper>

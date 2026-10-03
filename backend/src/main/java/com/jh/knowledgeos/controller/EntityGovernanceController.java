@@ -7,9 +7,11 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import java.util.Map;
+import com.jh.knowledgeos.service.AclContextResolver;
 import com.jh.knowledgeos.service.EntityGovernanceService;
 
 @RestController
@@ -17,13 +19,16 @@ import com.jh.knowledgeos.service.EntityGovernanceService;
 @CrossOrigin
 public class EntityGovernanceController {
     private final EntityGovernanceService entityGovernanceService;
-    public EntityGovernanceController(EntityGovernanceService entityGovernanceService) {
+    private final AclContextResolver aclContextResolver;
+    public EntityGovernanceController(EntityGovernanceService entityGovernanceService, AclContextResolver aclContextResolver) {
         this.entityGovernanceService = entityGovernanceService;
+        this.aclContextResolver = aclContextResolver;
     }
     @GetMapping("/entities/{kb}")
     @Operation(summary = "实体与别名词典：查看归一结果（V1.0 §5.4.1）")
-    public ApiResponse<Object> entities(@PathVariable Long kb) {
-        return ApiResponse.ok(entityGovernanceService.entities(kb));
+    public ApiResponse<Object> entities(@PathVariable Long kb, @RequestHeader(value = "X-Authenticated-Permission-Tags", required = false) String
+        permissionTags) {
+        return ApiResponse.ok(entityGovernanceService.entities(kb, aclContextResolver.resolve(permissionTags)));
     }    @GetMapping("/entities/{kb}/{entityCode}")
     @Operation(summary = "实体详情：别名、影响面与归一依据（V1.0 §5.4.1）")
     public ApiResponse<Object> entityDetail(@PathVariable Long kb, @PathVariable String entityCode) {

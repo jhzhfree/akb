@@ -46,6 +46,11 @@ public class ConnectorSource {
 
     private Date lastTestTime;
 
+    /** 最近一次把外部知识同步落库的时间与条数（t_connector_item）。 */
+    private Date lastSyncTime;
+
+    private Integer lastSyncCount;
+
     private String createdBy;
 
     private Date createdTime;
@@ -184,6 +189,22 @@ public class ConnectorSource {
 
     public void setCreatedBy(String createdBy) {
         this.createdBy = createdBy;
+    }
+
+    public Date getLastSyncTime() {
+        return lastSyncTime;
+    }
+
+    public void setLastSyncTime(Date lastSyncTime) {
+        this.lastSyncTime = lastSyncTime;
+    }
+
+    public Integer getLastSyncCount() {
+        return lastSyncCount;
+    }
+
+    public void setLastSyncCount(Integer lastSyncCount) {
+        this.lastSyncCount = lastSyncCount;
     }
 
     public Date getCreatedTime() {

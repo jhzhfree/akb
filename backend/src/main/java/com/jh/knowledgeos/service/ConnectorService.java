@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.jh.knowledgeos.domain.ConnectorSource;
 import com.jh.knowledgeos.domain.User;
 import com.jh.knowledgeos.dto.ConnectorRequest;
+import com.jh.knowledgeos.mapper.ConnectorItemMapper;
 import com.jh.knowledgeos.mapper.ConnectorMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -46,15 +47,18 @@ public class ConnectorService {
 
     private final ConnectorMapper mapper;
 
+    private final ConnectorItemMapper itemMapper;
+
     private final ConnectorFetchService fetchService;
 
     private final KnowledgeBaseAccessService access;
 
     private final ObjectMapper objectMapper;
 
-    public ConnectorService(ConnectorMapper mapper, ConnectorFetchService fetchService, KnowledgeBaseAccessService access,
-        ObjectMapper objectMapper) {
+    public ConnectorService(ConnectorMapper mapper, ConnectorItemMapper itemMapper, ConnectorFetchService fetchService,
+        KnowledgeBaseAccessService access, ObjectMapper objectMapper) {
         this.mapper = mapper;
+        this.itemMapper = itemMapper;
         this.fetchService = fetchService;
         this.access = access;
         this.objectMapper = objectMapper;
@@ -95,6 +99,8 @@ public class ConnectorService {
     public void delete(Long id) {
         ConnectorSource existing = require(id);
         access.assertWrite(existing.getKnowledgeBaseId());
+        // 同步下来的条目是连接器的私有副本：连接器没了，副本也该走。
+        itemMapper.deleteByConnector(id);
         mapper.delete(id);
     }
 

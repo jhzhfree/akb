@@ -74,6 +74,56 @@ public class KnowledgeBaseService {
         return base;
     }
 
+    /**
+     * Edit a workspace: rename it, rewrite its purpose and move it to another sharing scope
+     * in one request, so the console edits a knowledge base the way it created it.
+     */
+    public KnowledgeBase update(Long id, String name, String description, String visibility, Long ownerGroupId) {
+        User user = AuthContext.get();
+        KnowledgeBase base = mapper.getKnowledgeBase(id);
+        if (base == null) {
+            throw new IllegalArgumentException("知识库不存在：" + id);
+        }
+        if ("ARCHIVED".equalsIgnoreCase(base.getStatus())) {
+            throw new IllegalStateException("已归档的知识库不可编辑");
+        }
+        if (!canManage(user, base)) {
+            throw new SecurityException("只有知识库创建人或管理员可以编辑该知识库");
+        }
+        if (name == null || name.trim().isEmpty()) {
+            throw new IllegalArgumentException("知识库名称不能为空");
+        }
+        KnowledgeBaseScope scope = visibility == null
+            ? resolveScope(base.getVisibility(), base.getOwnerGroupId())
+            : resolveScope(visibility, ownerGroupId);
+        String previousName = base.getName();
+        String previousVisibility = base.getVisibility();
+        mapper.updateKnowledgeBase(id, name.trim(), description, scope.visibility.name(), scope.ownerGroupId);
+        KnowledgeBase updated = mapper.getKnowledgeBase(id);
+        Map<String, Object> detail = describe(updated);
+        detail.put("description", updated.getDescription());
+        detail.put("previousName", previousName);
+        detail.put("previousVisibility", previousVisibility);
+        publisher.emitUser(PlatformEventTypes.KNOWLEDGE_BASE_UPDATED, id, PlatformEventPublisher.SOURCE_UI, "KNOWLEDGE_BASE",
+            updated.getBaseCode(), "编辑知识库：" + updated.getName(), detail);
+        return updated;
+    }
+
+    /**
+     * Editing follows the same rule as listing: platform and knowledge administrators manage
+     * every workspace, everybody else only the ones they created. A missing creator (workspace
+     * seeded before ownership was recorded) stays editable by administrators only.
+     */
+    private boolean canManage(User user, KnowledgeBase base) {
+        if (user == null) {
+            return true;
+        }
+        if (UserRole.of(user.getRole()).canManageKnowledgeBases()) {
+            return true;
+        }
+        return base.getCreatedBy() != null && base.getCreatedBy().equals(user.getId());
+    }
+
     public KnowledgeBase updateAccess(Long id, String visibility, Long ownerGroupId) {
         KnowledgeBase base = mapper.getKnowledgeBase(id);
         if (base == null) {

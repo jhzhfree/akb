@@ -113,6 +113,14 @@ public class KnowledgeIngestionController {
     }
 
 
+    @PutMapping("/bases/{id}")
+    @Operation(summary = "编辑知识库：名称、描述与可见范围（创建人或管理员）")
+    public ApiResponse<Object> updateBase(@PathVariable Long id, @Valid @RequestBody KnowledgeBaseRequest request) {
+        return ApiResponse.ok(knowledgeBaseService.update(id, request.getName(), request.getDescription(), request.getVisibility(),
+            request.getOwnerGroupId()));
+    }
+
+
     @PostMapping("/bases/{id}/access")
     @Operation(summary = "调整知识库可见范围与所属用户组")
     public ApiResponse<Object> updateBaseAccess(@PathVariable Long id, @RequestBody KnowledgeBaseRequest request) {

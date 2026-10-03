@@ -13,6 +13,9 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import javax.validation.Valid;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/knowledge/acl")
@@ -40,14 +43,32 @@ AclAdministrationController {
         return ApiResponse.ok(admin.roles());
     }
 
+    /**
+     * 权限变更与访问审计都是只增不减的流水：列表按 offset 取页，total 单独计数，
+     * 页面因此能显示真实总条数并翻到任意一页，而不是永远只看得到最近 100 条。
+     */
     @GetMapping("/changes/{kb}")
-    public ApiResponse<Object> changes(@PathVariable Long kb, @RequestParam(required = false) Integer limit) {
-        return ApiResponse.ok(admin.changes(kb, limit));
+    public ApiResponse<Object> changes(@PathVariable Long kb, @RequestParam(required = false) Integer limit,
+        @RequestParam(required = false, defaultValue = "0") int offset) {
+        return ApiResponse.ok(page(admin.changes(kb, limit, offset), admin.countChanges(kb), limit, offset));
     }
 
     @GetMapping("/audits/{kb}")
-    public ApiResponse<Object> audits(@PathVariable Long kb, @RequestParam(required = false) Integer limit) {
-        return ApiResponse.ok(audit.list(kb, limit));
+    public ApiResponse<Object> audits(@PathVariable Long kb, @RequestParam(required = false) Integer limit,
+        @RequestParam(required = false, defaultValue = "0") int offset) {
+        return ApiResponse.ok(page(audit.list(kb, limit, offset), audit.count(kb), limit, offset));
+    }
+
+    private Map<String, Object> page(List<Map<String, Object>> items, long total, Integer limit, int offset) {
+        int size = Math.min(500, Math.max(1, limit == null ? 20 : limit));
+        int safeOffset = Math.max(offset, 0);
+        Map<String, Object> payload = new LinkedHashMap<String, Object>();
+        payload.put("items", items);
+        payload.put("total", total);
+        payload.put("page", safeOffset / size + 1);
+        payload.put("size", size);
+        payload.put("pageCount", (int) Math.ceil((double) total / (double) size));
+        return payload;
     }
 
     @PostMapping("/resources/{kb}")

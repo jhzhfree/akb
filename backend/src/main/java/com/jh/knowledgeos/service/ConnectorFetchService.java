@@ -1,27 +1,36 @@
 package com.jh.knowledgeos.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.jh.knowledgeos.config.KnowledgeProperties;
 import com.jh.knowledgeos.domain.ConnectorSource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
+import org.springframework.web.client.HttpStatusCodeException;
 import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestTemplate;
+import org.springframework.web.util.UriComponentsBuilder;
 import org.springframework.web.util.UriUtils;
 import java.io.IOException;
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Base64;
 import java.util.Collections;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.regex.Pattern;
 
 /**
  * Reads "what knowledge does this system have" from a saved connector.
@@ -48,15 +57,36 @@ public class ConnectorFetchService {
 
     private static final int EXCERPT_LIMIT = 400;
 
+    /** 单个 REST 条目最多采集多少属性：够看清内容，又不至于把一行几百列的接口全塞进 JSON。 */
+    private static final int REST_ATTRIBUTE_LIMIT = 12;
+
+    private static final Set<String> TIME_ATTRIBUTE_KEYS = new LinkedHashSet<String>(Arrays.asList(
+        "created", "createdat", "createtime", "created_time", "createdate", "createddate",
+        "updated", "updatedat", "updatetime", "updated_time", "lastmodified", "lastmodifiedtime",
+        "modified", "timestamp", "createts", "updatets"));
+
+    private static final Pattern ISO_TIME = Pattern.compile("\\d{4}-\\d{2}-\\d{2}[T ].*");
+
+    private static final Pattern SLASH_TIME = Pattern.compile("\\d{4}/\\d{1,2}/\\d{1,2}.*");
+
+    private static final Pattern EPOCH_MILLIS = Pattern.compile("\\d{13}");
+
     /** Common array locations when a REST endpoint does not say where its items are. */
     private static final List<String> FALLBACK_ARRAY_KEYS = Arrays.asList("data", "results", "items", "list", "content", "records", "rows");
 
     private final RestTemplate restTemplate;
 
+    private final RestTemplate trustAllRestTemplate;
+
+    private final KnowledgeProperties properties;
+
     private final ObjectMapper objectMapper;
 
-    public ConnectorFetchService(RestTemplate restTemplate, ObjectMapper objectMapper) {
+    public ConnectorFetchService(RestTemplate restTemplate, @Qualifier("connectorTrustAllRestTemplate") RestTemplate trustAllRestTemplate,
+        KnowledgeProperties properties, ObjectMapper objectMapper) {
         this.restTemplate = restTemplate;
+        this.trustAllRestTemplate = trustAllRestTemplate;
+        this.properties = properties;
         this.objectMapper = objectMapper;
     }
 
@@ -104,20 +134,32 @@ public class ConnectorFetchService {
             jql = "order by updated DESC";
         }
         String url = base(connector) + "/rest/api/2/search?jql=" + encode(jql) + "&startAt=" + offset + "&maxResults=" + limit
-            + "&fields=summary,updated,description";
+            + "&fields=summary,updated,description,issuetype,status,priority,assignee,reporter,labels,created,project,resolution,components";
         Map<String, Object> body = getJson(url, connector);
         List<Map<String, Object>> issues = array(body.get("issues"));
         List<Map<String, Object>> items = new ArrayList<Map<String, Object>>();
         for (Map<String, Object> issue : issues) {
-            Object fields = issue.get("fields");
-            Map<?, ?> map = fields instanceof Map ? (Map<?, ?>) fields : null;
+            Map<String, Object> fields = mapOf(issue.get("fields"));
             String key = string(issue.get("key"));
             Map<String, Object> item = new LinkedHashMap<String, Object>();
             item.put("externalId", key);
-            item.put("title", first(map == null ? null : map.get("summary"), "(无标题)"));
+            item.put("title", first(fields.get("summary"), "(无标题)"));
             item.put("url", base(connector) + "/browse/" + key);
-            item.put("updatedAt", map == null ? null : map.get("updated"));
-            item.put("excerpt", excerpt(map == null ? null : map.get("description")));
+            item.put("updatedAt", fields.get("updated"));
+            item.put("excerpt", excerpt(fields.get("description")));
+            // 类型是 Jira 自己的问题类型（缺陷 / 任务 / 故事…），属性按类型动态展示，
+            // 所以这里不写死列：取得到的属性才进 Map，缺失的字段不占位。
+            item.put("type", first(nameOf(fields.get("issuetype")), "ISSUE"));
+            Map<String, Object> attributes = new LinkedHashMap<String, Object>();
+            put(attributes, "status", nameOf(fields.get("status")));
+            put(attributes, "priority", nameOf(fields.get("priority")));
+            put(attributes, "assignee", nameOf(fields.get("assignee")));
+            put(attributes, "reporter", nameOf(fields.get("reporter")));
+            put(attributes, "project", nameOf(fields.get("project")));
+            put(attributes, "resolution", nameOf(fields.get("resolution")));
+            put(attributes, "labels", join(fields.get("labels")));
+            put(attributes, "components", names(fields.get("components")));
+            item.put("attributes", attributes);
             items.add(item);
         }
         return new Page(items, toLong(body.get("total")));
@@ -135,13 +177,20 @@ public class ConnectorFetchService {
         List<Map<String, Object>> items = new ArrayList<Map<String, Object>>();
         for (Map<String, Object> result : results) {
             String id = string(result.get("id"));
+            Map<String, Object> version = mapOf(result.get("version"));
             Map<String, Object> item = new LinkedHashMap<String, Object>();
             item.put("externalId", id);
             item.put("title", first(string(result.get("title")), "(无标题)"));
             item.put("url", confluenceUrl(base(connector), result.get("_links"), id));
-            Object version = result.get("version");
-            item.put("updatedAt", version instanceof Map ? ((Map<?, ?>) version).get("when") : null);
+            item.put("updatedAt", version.get("when"));
             item.put("excerpt", excerpt(bodyOf(result)));
+            item.put("type", first(string(result.get("type")).toUpperCase(), "PAGE"));
+            Map<String, Object> attributes = new LinkedHashMap<String, Object>();
+            put(attributes, "space", nameOf(result.get("space")));
+            put(attributes, "status", result.get("status"));
+            put(attributes, "author", nameOf(version.get("by")));
+            put(attributes, "version", version.get("number"));
+            item.put("attributes", attributes);
             items.add(item);
         }
         return new Page(items, toLong(body.get("size")));
@@ -167,6 +216,9 @@ public class ConnectorFetchService {
         Object raw = resolveArray(body, string(config.get("itemsPath")));
         List<Map<String, Object>> rows = array(raw);
         Map<String, Object> fields = fieldMap(config);
+        // 通用 REST 没有「类型」这个概念：由配置指定哪个字段是类型（typeField），
+        // 没配就归入 ITEM；其余标量字段作为属性，这样不同类型的条目也能各自展示。
+        String typePath = string(config.get("typeField"));
         List<Map<String, Object>> items = new ArrayList<Map<String, Object>>();
         for (Map<String, Object> row : rows) {
             Map<String, Object> item = new LinkedHashMap<String, Object>();
@@ -175,6 +227,8 @@ public class ConnectorFetchService {
             item.put("url", pick(row, mapping(fields, "url", "url")));
             item.put("updatedAt", pick(row, mapping(fields, "updatedAt", "updatedAt")));
             item.put("excerpt", excerpt(pick(row, mapping(fields, "excerpt", "content"))));
+            item.put("type", first(typePath.isEmpty() ? null : valueAt(row, typePath), "ITEM"));
+            item.put("attributes", restAttributes(row, fields, typePath));
             items.add(item);
         }
         return new Page(items, toLong(body.get("total") != null ? body.get("total") : body.get("totalElements")));
@@ -235,6 +289,115 @@ public class ConnectorFetchService {
         return new String[]{fallback};
     }
 
+    /**
+     * REST 条目的属性：映射出去的字段（标识 / 标题 / 链接…）不再重复出现，
+     * 剩下的标量字段就是「这个类型的条目还有什么可看的」。上限只是防止一行几百列的接口把页面撑爆。
+     */
+    private Map<String, Object> restAttributes(Map<String, Object> row, Map<String, Object> fields, String typePath) {
+        Set<String> used = new LinkedHashSet<String>();
+        for (String name : new String[]{"externalId", "title", "url", "updatedAt", "excerpt"}) {
+            for (String candidate : mapping(fields, name, "")) {
+                if (!candidate.isEmpty()) {
+                    used.add(candidate);
+                }
+            }
+        }
+        if (!typePath.isEmpty()) {
+            used.add(typePath);
+        }
+        Map<String, Object> attributes = new LinkedHashMap<String, Object>();
+        for (Map.Entry<String, Object> entry : row.entrySet()) {
+            if (attributes.size() >= REST_ATTRIBUTE_LIMIT) {
+                break;
+            }
+            if (used.contains(entry.getKey()) || entry.getValue() == null) {
+                continue;
+            }
+            // 时间字段每条都不一样，做成筛选维度只会得到 N 个取值各 1 条，详情里看得到就够了。
+            if (isTimeAttribute(entry.getKey(), entry.getValue())) {
+                continue;
+            }
+            if (entry.getValue() instanceof Map || entry.getValue() instanceof List) {
+                continue;
+            }
+            put(attributes, entry.getKey(), entry.getValue());
+        }
+        return attributes;
+    }
+
+    /**
+     * 时间类属性不进筛选面板：Jira 的 created、REST 源的 createTime 之类每条一个值，
+     * 摆到左侧既点不动也筛不出东西。详情里仍然看得到，所以这里只是不让它成为维度。
+     */
+    public static boolean isTimeAttribute(String key, Object value) {
+        if (TIME_ATTRIBUTE_KEYS.contains(key == null ? "" : key.toLowerCase())) {
+            return true;
+        }
+        String text = value == null ? "" : String.valueOf(value).trim();
+        return ISO_TIME.matcher(text).matches() || SLASH_TIME.matcher(text).matches() || EPOCH_MILLIS.matcher(text).matches();
+    }
+
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> mapOf(Object value) {
+        return value instanceof Map ? (Map<String, Object>) value : Collections.<String, Object>emptyMap();
+    }
+
+    /** Jira / Confluence 的对象字段取值统一走 name：{@code status -> {"name":"进行中"}}。 */
+    private Object nameOf(Object value) {
+        if (value instanceof Map) {
+            Object name = ((Map<?, ?>) value).get("name");
+            if (name != null) {
+                return name;
+            }
+            Object key = ((Map<?, ?>) value).get("key");
+            if (key != null) {
+                return key;
+            }
+            return ((Map<?, ?>) value).get("displayName");
+        }
+        return value;
+    }
+
+    /** 数组字段（components / labels）压成一个可筛选、可比较的字符串。 */
+    private String names(Object value) {
+        if (!(value instanceof List)) {
+            return null;
+        }
+        List<String> out = new ArrayList<String>();
+        for (Object row : (List<?>) value) {
+            String name = string(nameOf(row));
+            if (!name.isEmpty()) {
+                out.add(name);
+            }
+        }
+        return out.isEmpty() ? null : String.join(", ", out);
+    }
+
+    private String join(Object value) {
+        if (!(value instanceof List)) {
+            return value == null ? null : string(value);
+        }
+        List<String> out = new ArrayList<String>();
+        for (Object row : (List<?>) value) {
+            String text = string(row);
+            if (!text.isEmpty()) {
+                out.add(text);
+            }
+        }
+        return out.isEmpty() ? null : String.join(", ", out);
+    }
+
+    /** 属性只在真的有值时落库：空占位会让「按属性筛选」出现一堆空选项。 */
+    private void put(Map<String, Object> attributes, String key, Object value) {
+        if (value == null) {
+            return;
+        }
+        String text = value instanceof List || value instanceof Map ? join(value) : string(value);
+        if (!text.isEmpty()) {
+            attributes.put(key, text);
+        }
+    }
+
     private Object pick(Map<String, Object> row, String... candidates) {
         for (String candidate : candidates) {
             Object value = valueAt(row, candidate);
@@ -257,6 +420,26 @@ public class ConnectorFetchService {
         return current;
     }
 
+    /**
+     * 是否跳过证书校验：连接器自己声明（insecureSsl=true / verifySsl=false）优先，
+     * 其次是全局开关。两者都关时仍走严格校验，不会因为一个内网源就把整机的校验关掉。
+     */
+    private boolean trustAll(ConnectorSource connector) {
+        if (properties != null && properties.isConnectorTrustAllSsl()) {
+            return true;
+        }
+        Map<String, Object> config = config(connector);
+        Object insecure = config.get("insecureSsl");
+        if (insecure == null) {
+            insecure = config.get("verifySsl");
+            if (insecure != null) {
+                return !Boolean.parseBoolean(String.valueOf(insecure).trim());
+            }
+            return false;
+        }
+        return Boolean.parseBoolean(String.valueOf(insecure).trim());
+    }
+
     private Map<String, Object> getJson(String url, ConnectorSource connector) {
         HttpHeaders headers = new HttpHeaders();
         headers.setAccept(Collections.singletonList(MediaType.APPLICATION_JSON));
@@ -274,12 +457,22 @@ public class ConnectorFetchService {
                 headers.set(String.valueOf(entry.getKey()), String.valueOf(entry.getValue()));
             }
         }
+        RestTemplate client = trustAll(connector) ? trustAllRestTemplate : restTemplate;
         ResponseEntity<String> response;
         try {
-            response = restTemplate.exchange(url, HttpMethod.GET, new HttpEntity<String>(headers), String.class);
+            // 必须传 URI：把 String 交给 RestTemplate 会被当成 URI 模板再编码一次，
+            // JQL 里的 %22 / %25 会变成 %2522 / %2525，对端只解码一次，引号就变成了字面量。
+            response = client.exchange(requestUri(url), HttpMethod.GET, new HttpEntity<String>(headers), String.class);
+        } catch (HttpStatusCodeException ex) {
+            // 上游 4xx/5xx 的正文才是真正的原因（JQL 语法、字段不存在、令牌过期…），
+            // 原样丢回去只会让人看到一坨 JSON。
+            String detail = describeUpstreamError(ex.getRawStatusCode(), ex.getResponseBodyAsString());
+            log.warn("connector rejected type={} url={} status={} message={}", connector.getType(), url, ex.getRawStatusCode(), detail);
+            throw new IllegalArgumentException("连接数据源失败：" + detail + jqlHint(connector, detail));
         } catch (RestClientException ex) {
-            log.warn("connector request failed type={} url={} message={}", connector.getType(), url, ex.getMessage());
-            throw new IllegalArgumentException("连接数据源失败：" + ex.getMessage());
+            log.warn("connector request failed type={} url={} trustAll={} message={}", connector.getType(), url,
+                client == trustAllRestTemplate, ex.getMessage());
+            throw new IllegalArgumentException("连接数据源失败：" + ex.getMessage() + sslHint(ex, client == trustAllRestTemplate));
         }
         String payload = response.getBody();
         if (payload == null || payload.trim().isEmpty()) {
@@ -297,6 +490,97 @@ public class ConnectorFetchService {
         } catch (IOException ex) {
             throw new IllegalArgumentException("数据源返回的内容不是 JSON：" + ex.getMessage());
         }
+    }
+
+    /**
+     * 查询串在拼接时已经编码过一次（见 encode），这里只做解析、不再编码。
+     * 地址里若还有没编码的字符（中文路径最直接），退回让 Spring 补一次编码。
+     */
+    private URI requestUri(String url) {
+        try {
+            return new URI(url);
+        } catch (URISyntaxException ex) {
+            try {
+                return UriComponentsBuilder.fromUriString(url).encode().build().toUri();
+            } catch (RuntimeException nested) {
+                throw new IllegalArgumentException("数据源地址不合法：" + url);
+            }
+        }
+    }
+
+    /**
+     * Jira / Confluence 的错误正文有固定形状（errorMessages 数组、errors 对象），REST 源则五花八门。
+     * 统一压成一行人话，再不行才回退到截断的原文。
+     */
+    private String describeUpstreamError(int status, String body) {
+        String text = body == null ? "" : body.trim();
+        if (!text.isEmpty()) {
+            try {
+                Map<String, Object> parsed = objectMapper.readValue(text, Map.class);
+                Object messages = parsed.get("errorMessages");
+                if (messages instanceof List && !((List<?>) messages).isEmpty()) {
+                    return "数据源返回 " + status + "：" + String.join("；", strings((List<?>) messages));
+                }
+                Object errors = parsed.get("errors");
+                if (errors instanceof Map && !((Map<?, ?>) errors).isEmpty()) {
+                    return "数据源返回 " + status + "：" + String.valueOf(errors);
+                }
+                for (String key : new String[]{"message", "errorMessage", "error", "msg"}) {
+                    Object value = parsed.get(key);
+                    if (value != null && !String.valueOf(value).trim().isEmpty()) {
+                        return "数据源返回 " + status + "：" + String.valueOf(value).trim();
+                    }
+                }
+            } catch (IOException ex) {
+                // 不是 JSON，退回原文片段
+            }
+        }
+        return "数据源返回 " + status + (text.isEmpty() ? "" : "：" + clip(text, 300));
+    }
+
+    private List<String> strings(List<?> values) {
+        List<String> out = new ArrayList<String>();
+        for (Object value : values) {
+            if (value != null) {
+                out.add(String.valueOf(value).trim());
+            }
+        }
+        return out;
+    }
+
+    private String clip(String value, int limit) {
+        return value.length() <= limit ? value : value.substring(0, limit) + "…";
+    }
+
+    /** JQL 的语法错误（尤其是保留字符）照抄 Jira 的原文看不懂，补一句能照着改的说明。 */
+    private String jqlHint(ConnectorSource connector, String detail) {
+        if (!"JIRA".equals(upper(connector.getType()))) {
+            return "";
+        }
+        boolean jqlIssue = detail.contains("JQL") || detail.contains("保留字符") || detail.contains("reserved")
+            || detail.contains("does not exist") || detail.contains("Field");
+        if (!jqlIssue) {
+            return "";
+        }
+        return "（JQL 中 % 等字符是保留字符：把关键词放进英文双引号，如 summary ~ \"%关键词%\"；"
+            + "确需字面量时写成 \\u0025。也可先留空 JQL 用默认排序连通，再逐步加条件）";
+    }
+
+    /**
+     * 证书类失败默认只抛一长串 PKIX 堆栈，看的人不知道下一步该做什么；
+     * 这里按是否已经放过证书校验，补一句能照着做的提示。
+     */
+    private String sslHint(Exception ex, boolean trustAll) {
+        String message = ex.getMessage() == null ? "" : ex.getMessage();
+        boolean certIssue = message.contains("PKIX") || message.contains("SSLHandshake")
+            || message.contains("CertPath") || message.contains("certificate");
+        if (!certIssue) {
+            return "";
+        }
+        return trustAll
+            ? "（已跳过证书校验仍失败：请确认站点地址、端口与 https 协议是否正确，以及网络是否可达）"
+            : "（目标站点使用了不受信任的证书，常见为自签名证书或 IP 直连：可在该数据源配置里开启 insecureSsl=true，"
+                + "或由管理员设置 KNOWLEDGE_CONNECTOR_TRUST_ALL_SSL=true）";
     }
 
     private Map<String, Object> config(ConnectorSource connector) {

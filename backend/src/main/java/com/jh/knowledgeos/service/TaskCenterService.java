@@ -169,8 +169,17 @@ public class TaskCenterService {
         return detail(taskCode);
     }
 
-    public List<Map<String, Object>> list(Long kb, String status, String taskType, String triggerType, Integer limit) {
-        return mapper.listTaskRuns(kb, blank(status), blank(taskType), blank(triggerType), limit == null || limit <= 0 ? 50 : Math.min(limit, 200));
+    /**
+     * 任务分页：解析/索引类任务会随时间持续堆积，一次拉全量既拖慢页面也让「共 N 条」失真，
+     * 因此取页与计数共用同一套筛选条件，由调用方按页码传 offset。
+     */
+    public List<Map<String, Object>> list(Long kb, String status, String taskType, String triggerType, Integer limit, int offset) {
+        return mapper.listTaskRuns(kb, blank(status), blank(taskType), blank(triggerType),
+            limit == null || limit <= 0 ? 50 : Math.min(limit, 200), Math.max(offset, 0));
+    }
+
+    public long count(Long kb, String status, String taskType, String triggerType) {
+        return mapper.countTaskRuns(kb, blank(status), blank(taskType), blank(triggerType));
     }
 
     public Map<String, Object> detail(String taskCode) {

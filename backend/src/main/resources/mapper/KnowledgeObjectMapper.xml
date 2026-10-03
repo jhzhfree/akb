@@ -6,18 +6,18 @@
 SELECT 'CARD' objectType,k.id,k.knowledge_code objectCode,k.title,k.type,
        k.summary,k.content,k.status,k.confidence,k.created_time createdTime,k.updated_time updatedTime
 FROM t_knowledge_card k
-WHERE #{objectType}='CARD' AND k.knowledge_base_id=#{kb} AND k.knowledge_code=#{objectCode} AND (k.permission_tags IS NULL OR JSON_LENGTH(k.permission_tags)=0
+WHERE #{objectType}='CARD' AND k.knowledge_base_id=#{kb} AND k.knowledge_code=#{objectCode}<choose><when test="permissionTags == null"></when><otherwise> AND (k.permission_tags IS NULL OR JSON_LENGTH(k.permission_tags)=0
  <if test="permissionTags != null and permissionTags.size() > 0">
  OR (<foreach collection="permissionTags" item="tag" separator=" OR ">JSON_CONTAINS(k.permission_tags, JSON_QUOTE(#{tag}))</foreach>)
- </if>)
+ </if>)</otherwise></choose>
 UNION ALL
 SELECT 'CLAIM',c.id,c.claim_code,c.subject,c.predicate,
        NULL,c.object_value,c.status,c.confidence,c.created_time,c.updated_time
 FROM t_claim c
-WHERE #{objectType}='CLAIM' AND c.knowledge_base_id=#{kb} AND c.claim_code=#{objectCode} AND (c.permission_tags IS NULL OR JSON_LENGTH(c.permission_tags)=0
+WHERE #{objectType}='CLAIM' AND c.knowledge_base_id=#{kb} AND c.claim_code=#{objectCode}<choose><when test="permissionTags == null"></when><otherwise> AND (c.permission_tags IS NULL OR JSON_LENGTH(c.permission_tags)=0
  <if test="permissionTags != null and permissionTags.size() > 0">
  OR (<foreach collection="permissionTags" item="tag" separator=" OR ">JSON_CONTAINS(c.permission_tags, JSON_QUOTE(#{tag}))</foreach>)
- </if>)
+ </if>)</otherwise></choose>
 </select>
 
 <select id="listKnowledgeVersions" resultType="map">

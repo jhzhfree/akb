@@ -1,0 +1,522 @@
+{
+  "baseUrl": "http://localhost:8080",
+  "finishedAt": "2026-09-29 22:41:08",
+  "scenarios": {
+    "ops-knowledge": {
+      "directory": "/root/pub/gitlab/ai-knowledge-os/dataset/ops-knowledge",
+      "fileCount": 18,
+      "knowledgeBase": {
+        "id": 10,
+        "name": "运维知识库"
+      },
+      "schema": {
+        "applied": {
+          "knowledgeTypes": [
+            "OPS_RULE",
+            "OPS_MANUAL",
+            "OPS_COMMAND_RECORD",
+            "OPS_INCIDENT",
+            "OPS_FAQ",
+            "OPS_REPORT",
+            "OPS_NOTICE"
+          ],
+          "entityTypes": [
+            "HOST",
+            "SERVICE",
+            "DB_INSTANCE",
+            "COMMAND",
+            "PERSON",
+            "TICKET"
+          ],
+          "relationTypes": [
+            "PERSON_EXECUTED_COMMAND",
+            "COMMAND_ON_HOST",
+            "HOST_RUNS_SERVICE",
+            "SERVICE_DEPENDS_ON",
+            "PERSON_OWNS_TICKET",
+            "TICKET_RELATED_HOST"
+          ]
+        },
+        "publish": {
+          "definitionJson": "{\"types\": [{\"kind\": \"ENTITY_TYPE\", \"label\": \"客户\", \"status\": \"ACTIVE\", \"builtIn\": true, \"version\": 1, \"typeCode\": \"CUSTOMER\", \"updatedBy\": \"system\", \"description\": \"购买或使用交付成果的外部组织\", \"updatedTime\": \"2026-09-24T10:18:31\", \"knowledgeBaseId\": 0}, {\"kind\": \"ENTITY_TYPE\", \"label\": \"指标\", \"status\": \"ACTIVE\", \"builtIn\": true, \"version\": 1, \"typeCode\": \"METRIC\", \"updatedBy\": \"system\", \"description\": \"可度量的业务或技术指标\", \"updatedTime\": \"2026-09-20T23:49:26\", \"knowledgeBaseId\": 0}, {\"kind\": \"ENTITY_TYPE\", \"label\": \"组织\", \"status\": \"ACTIVE\", \"builtIn\": true, \"version\": 1, \"typeCode\": \"ORG\", \"updatedBy\": \"system\", \"description\": \"部门、团队或外部机构\", \"updatedTime\": \"2026-09-20T23:49:26\", \"knowledgeBaseId\": 0}, {\"kind\": \"ENTITY_TYPE\", \"label\": \"产品\", \"status\": \"ACTIVE\", \"builtIn\": true, \"version\": 1, \"typeCode\": \"PRODUCT\", \"updatedBy\": \"system\", \"description\": \"产品、模块或服务\", \"updatedTime\": \"2026-09-20T23:49:26\", \"knowledgeBaseId\": 0}, {\"kind\": \"ENTITY_TYPE\", \"label\": \"项目\", \"status\": \"ACTIVE\", \"builtIn\": true, \"version\": 1, \"typeCode\": \"PROJECT\", \"updatedBy\": \"system\", \"description\": \"交付项目、实施项目或工程\", \"updatedTime\": \"2026-09-24T10:18:31\", \"knowledgeBaseId\": 0}, {\"kind\": \"ENTITY_TYPE\", \"label\": \"角色\", \"status\": \"ACTIVE\", \"builtIn\": true, \"version\": 1, \"typeCode\": \"ROLE\", \"updatedBy\": \"system\", \"description\": \"岗位、职责或使用者\", \"updatedTime\": \"2026-09-20T23:49:26\", \"knowledgeBaseId\": 0}, {\"kind\": \"ENTITY_TYPE\", \"label\": \"系统\", \"status\": \"ACTIVE\", \"builtIn\": true, \"version\": 1, \"typeCode\": \"SYSTEM\", \"updatedBy\": \"system\", \"description\": \"平台、子系统或组件\", \"updatedTime\": \"2026-09-20T23:49:26\", \"knowledgeBaseId\": 0}, {\"kind\": \"ENTITY_TYPE\", \"label\": \"术语\", \"status\": \"ACTIVE\", \"builtIn\": true, \"version\": 1, \"typeCode\": \"TERM\", \"updatedBy\": \"system\", \"description\": \"领域词汇与专有名词\", \"updatedTime\": \"2026-09-20T23:49:26\", \"knowledgeBaseId\": 0}, {\"kind\": \"ENTITY_TYPE\", \"label\": \"漏洞\", \"status\": \"ACTIVE\", \"builtIn\": true, \"version\": 1, \"typeCode\": \"VULNERABILITY\", \"updatedBy\": \"system\", \"description\": \"安全漏洞、缺陷编号与风险项\", \"updatedTime\": \"2026-09-24T10:18:31\", \"knowledgeBaseId\": 0}, {\"kind\": \"ENTITY_TYPE\", \"label\": \"命令\", \"status\": \"ACTIVE\", \"builtIn\": false, \"version\": 1, \"typeCode\": \"COMMAND\", \"updatedBy\": \"admin\", \"description\": \"运维命令及其高危等级\", \"updatedTime\": \"2026-09-29T22:41:07\", \"propertiesJson\": \"{\\\"properties\\\": []}\", \"knowledgeBaseId\": 10}, {\"kind\": \"ENTITY_TYPE\", \"label\": \"数据库实例\", \"status\": \"ACTIVE\", \"builtIn\": false, \"version\": 1, \"typeCode\": \"DB_INSTANCE\", \"updatedBy\": \"admin\", \"description\": \"MySQL/Redis/Kafka 等实例\", \"updatedTime\": \"2026-09-29T22:41:07\", \"propertiesJson\": \"{\\\"properties\\\": []}\", \"knowledgeBaseId\": 10}, {\"kind\": \"ENTITY_TYPE\", \"label\": \"主机\", \"status\": \"ACTIVE\", \"builtIn\": false, \"version\": 1, \"typeCode\": \"HOST\", \"updatedBy\": \"admin\", \"description\": \"物理机、虚机或容器节点\", \"updatedTime\": \"2026-09-29T22:41:07\", \"propertiesJson\": \"{\\\"properties\\\": []}\", \"knowledgeBaseId\": 10}, {\"kind\": \"ENTITY_TYPE\", \"label\": \"人员\", \"status\": \"ACTIVE\", \"builtIn\": false, \"version\": 1, \"typeCode\": \"PERSON\", \"updatedBy\": \"admin\", \"description\": \"内部员工、外包与厂商人员\", \"updatedTime\": \"2026-09-29T22:41:07\", \"propertiesJson\": \"{\\\"properties\\\": []}\", \"knowledgeBaseId\": 10}, {\"kind\": \"ENTITY_TYPE\", \"label\": \"服务\", \"status\": \"ACTIVE\", \"builtIn\": false, \"version\": 1, \"typeCode\": \"SERVICE\", \"updatedBy\": \"admin\", \"description\": \"业务服务与中间件服务\", \"updatedTime\": \"2026-09-29T22:41:07\", \"propertiesJson\": \"{\\\"properties\\\": []}\", \"knowledgeBaseId\": 10}, {\"kind\": \"ENTITY_TYPE\", \"label\": \"工单\", \"status\": \"ACTIVE\", \"builtIn\": false, \"version\": 1, \"typeCode\": \"TICKET\", \"updatedBy\": \"admin\", \"description\": \"ITSM 故障工单与变更工单\", \"updatedTime\": \"2026-09-29T22:41:07\", \"propertiesJson\": \"{\\\"properties\\\": []}\", \"knowledgeBaseId\": 10}, {\"kind\": \"KNOWLEDGE_TYPE\", \"label\": \"概念\", \"status\": \"ACTIVE\", \"builtIn\": true, \"version\": 1, \"typeCode\": \"CONCEPT\", \"updatedBy\": \"system\", \"description\": \"术语、定义与原理说明\", \"updatedTime\": \"2026-09-20T23:49:26\", \"knowledgeBaseId\": 0}, {\"kind\": \"KNOWLEDGE_TYPE\", \"label\": \"事实\", \"status\": \"ACTIVE\", \"builtIn\": true, \"version\": 1, \"typeCode\": \"FACT\", \"updatedBy\": \"system\", \"description\": \"可直接引用的客观事实与数据\", \"updatedTime\": \"2026-09-20T23:49:26\", \"knowledgeBaseId\": 0}, {\"kind\": \"KNOWLEDGE_TYPE\", \"label\": \"问题方案\", \"status\": \"ACTIVE\", \"builtIn\": true, \"version\": 1, \"typeCode\": \"PROBLEM_SOLUTION\", \"updatedBy\": \"system\", \"description\": \"问题现象与对应解决办法\", \"updatedTime\": \"2026-09-20T23:49:26\", \"knowledgeBaseId\": 0}, {\"kind\": \"KNOWLEDGE_TYPE\", \"label\": \"流程\", \"status\": \"ACTIVE\", \"builtIn\": true, \"version\": 1, \"typeCode\": \"PROCEDURE\", \"updatedBy\": \"system\", \"description\": \"按步骤完成一项工作的操作序列\", \"updatedTime\": \"2026-09-20T23:49:26\", \"knowledgeBaseId\": 0}, {\"kind\": \"KNOWLEDGE_TYPE\", \"label\": \"规则\", \"status\": \"ACTIVE\", \"builtIn\": true, \"version\": 1, \"typeCode\": \"RULE\", \"updatedBy\": \"system\", \"description\": \"约束、规范与判定标准\", \"updatedTime\": \"2026-09-20T23:49:26\", \"knowledgeBaseId\": 0}, {\"kind\": \"KNOWLEDGE_TYPE\", \"label\": \"命令操作记录\", \"status\": \"ACTIVE\", \"builtIn\": false, \"version\": 1, \"typeCode\": \"OPS_COMMAND_RECORD\", \"updatedBy\": \"admin\", \"description\": \"堡垒主机留存的命令操作记录：会话号、主机、命令序列、结果、归档编号与关联工单\", \"updatedTime\": \"2026-09-29T22:41:07\", \"propertiesJson\": \"{\\\"properties\\\": []}\", \"knowledgeBaseId\": 10}, {\"kind\": \"KNOWLEDGE_TYPE\", \"label\": \"运维常见问题\", \"status\": \"ACTIVE\", \"builtIn\": false, \"version\": 1, \"typeCode\": \"OPS_FAQ\", \"updatedBy\": \"admin\", \"description\": \"值班与业务方高频问答，答案引用规范与手册编号\", \"updatedTime\": \"2026-09-29T22:41:07\", \"propertiesJson\": \"{\\\"properties\\\": []}\", \"knowledgeBaseId\": 10}, {\"kind\": \"KNOWLEDGE_TYPE\", \"label\": \"故障与拦截事件\", \"status\": \"ACTIVE\", \"builtIn\": false, \"version\": 1, \"typeCode\": \"OPS_INCIDENT\", \"updatedBy\": \"admin\", \"description\": \"生产故障复盘、高危命令拦截事件，含等级、影响、根因与改进项\", \"updatedTime\": \"2026-09-29T22:41:07\", \"propertiesJson\": \"{\\\"properties\\\": []}\", \"knowledgeBaseId\": 10}, {\"kind\": \"KNOWLEDGE_TYPE\", \"label\": \"操作手册\", \"status\": \"ACTIVE\", \"builtIn\": false, \"version\": 1, \"typeCode\": \"OPS_MANUAL\", \"updatedBy\": \"admin\", \"description\": \"主机、数据库、容器、中间件的运维操作手册与排障命令集\", \"updatedTime\": \"2026-09-29T22:41:07\", \"propertiesJson\": \"{\\\"properties\\\": []}\", \"knowledgeBaseId\": 10}, {\"kind\": \"KNOWLEDGE_TYPE\", \"label\": \"口径变更通知\", \"status\": \"ACTIVE\", \"builtIn\": false, \"version\": 1, \"typeCode\": \"OPS_NOTICE\", \"updatedBy\": \"admin\", \"description\": \"与既有规范存在差异的临时口径调整，含生效日期与失效条件（用于冲突裁决）\", \"updatedTime\": \"2026-09-29T22:41:07\", \"propertiesJson\": \"{\\\"properties\\\": []}\", \"knowledgeBaseId\": 10}, {\"kind\": \"KNOWLEDGE_TYPE\", \"label\": \"运维报告\", \"status\": \"ACTIVE\", \"builtIn\": false, \"version\": 1, \"typeCode\": \"OPS_REPORT\", \"updatedBy\": \"admin\", \"description\": \"运维月报、故障复盘报告，含统计周期、编制人与复核人\", \"updatedTime\": \"2026-09-29T22:41:07\", \"propertiesJson\": \"{\\\"properties\\\": []}\", \"knowledgeBaseId\": 10}, {\"kind\": \"KNOWLEDGE_TYPE\", \"label\": \"运维规范\", \"status\": \"ACTIVE\", \"builtIn\": false, \"version\": 1, \"typeCode\": \"OPS_RULE\", \"updatedBy\": \"admin\", \"description\": \"运维类制度与规范：值班、账号权限、高危命令、告警分级、发布变更等，含编号/版本/生效日期\", \"updatedTime\": \"2026-09-29T22:41:07\", \"propertiesJson\": \"{\\\"properties\\\": []}\", \"knowledgeBaseId\": 10}, {\"kind\": \"RELATION_TYPE\", \"label\": \"受影响于\", \"status\": \"ACTIVE\", \"builtIn\": true, \"version\": 1, \"typeCode\": \"AFFECTS\", \"updatedBy\": \"system\", \"description\": \"漏洞、风险或变更对实体的影响关系\", \"updatedTime\": \"2026-09-24T10:18:31\", \"knowledgeBaseId\": 0}, {\"kind\": \"RELATION_TYPE\", \"label\": \"归属\", \"status\": \"ACTIVE\", \"builtIn\": true, \"version\": 1, \"typeCode\": \"BELONGS_TO\", \"updatedBy\": \"system\", \"description\": \"归属关系\", \"updatedTime\": \"2026-09-20T23:49:26\", \"knowledgeBaseId\": 0}, {\"kind\": \"RELATION_TYPE\", \"label\": \"导致\", \"status\": \"ACTIVE\", \"builtIn\": true, \"version\": 1, \"typeCode\": \"CAUSES\", \"updatedBy\": \"system\", \"description\": \"因果关系\", \"updatedTime\": \"2026-09-20T23:49:26\", \"knowledgeBaseId\": 0}, {\"kind\": \"RELATION_TYPE\", \"label\": \"包含\", \"status\": \"ACTIVE\", \"builtIn\": true, \"version\": 1, \"typeCode\": \"CONTAINS\", \"updatedBy\": \"system\", \"description\": \"容器与内容\", \"updatedTime\": \"2026-09-20T23:49:26\", \"knowledgeBaseId\": 0}, {\"kind\": \"RELATION_TYPE\", \"label\": \"依赖\", \"status\": \"ACTIVE\", \"builtIn\": true, \"version\": 1, \"typeCode\": \"DEPENDS_ON\", \"updatedBy\": \"system\", \"description\": \"功能或运行依赖\", \"updatedTime\": \"2026-09-20T23:49:26\", \"knowledgeBaseId\": 0}, {\"kind\": \"RELATION_TYPE\", \"label\": \"部署于\", \"status\": \"ACTIVE\", \"builtIn\": true, \"version\": 1, \"typeCode\": \"DEPLOYED_IN\", \"updatedBy\": \"system\", \"description\": \"产品、组件或服务在某个项目或环境中的部署关系\", \"updatedTime\": \"2026-09-24T10:18:31\", \"knowledgeBaseId\": 0}, {\"kind\": \"RELATION_TYPE\", \"label\": \"描述\", \"status\": \"ACTIVE\", \"builtIn\": true, \"version\": 1, \"typeCode\": \"DESCRIBES\", \"updatedBy\": \"system\", \"description\": \"实体与描述性知识的关系\", \"updatedTime\": \"2026-09-20T23:49:26\", \"knowledgeBaseId\": 0}, {\"kind\": \"RELATION_TYPE\", \"label\": \"位于\", \"status\": \"ACTIVE\", \"builtIn\": true, \"version\": 1, \"typeCode\": \"LOCATED_IN\", \"updatedBy\": \"system\", \"description\": \"位置或部署关系\", \"updatedTime\": \"2026-09-20T23:49:26\", \"knowledgeBaseId\": 0}, {\"kind\": \"RELATION_TYPE\", \"label\": \"管理\", \"status\": \"ACTIVE\", \"builtIn\": true, \"version\": 1, \"typeCode\": \"MANAGES\", \"updatedBy\": \"system\", \"description\": \"管理或负责关系\", \"updatedTime\": \"2026-09-20T23:49:26\", \"knowledgeBaseId\": 0}, {\"kind\": \"RELATION_TYPE\", \"label\": \"组成部分\", \"status\": \"ACTIVE\", \"builtIn\": true, \"version\": 1, \"typeCode\": \"PART_OF\", \"updatedBy\": \"system\", \"description\": \"整体与部分\", \"updatedTime\": \"2026-09-20T23:49:26\", \"knowledgeBaseId\": 0}, {\"kind\": \"RELATION_TYPE\", \"label\": \"相关\", \"status\": \"ACTIVE\", \"builtIn\": true, \"version\": 1, \"typeCode\": \"RELATED_TO\", \"updatedBy\": \"system\", \"description\": \"通用关联\", \"updatedTime\": \"2026-09-20T23:49:26\", \"knowledgeBaseId\": 0}, {\"kind\": \"RELATION_TYPE\", \"label\": \"使用\", \"status\": \"ACTIVE\", \"builtIn\": true, \"version\": 1, \"typeCode\": \"USES\", \"updatedBy\": \"system\", \"description\": \"使用某项能力或资源\", \"updatedTime\": \"2026-09-20T23:49:26\", \"knowledgeBaseId\": 0}, {\"kind\": \"RELATION_TYPE\", \"label\": \"命令作用于主机\", \"status\": \"ACTIVE\", \"builtIn\": false, \"version\": 1, \"typeCode\": \"COMMAND_ON_HOST\", \"updatedBy\": \"admin\", \"description\": \"命令执行的目标主机\", \"updatedTime\": \"2026-09-29T22:41:07\", \"propertiesJson\": \"{\\\"properties\\\": []}\", \"knowledgeBaseId\": 10}, {\"kind\": \"RELATION_TYPE\", \"label\": \"主机运行服务\", \"status\": \"ACTIVE\", \"builtIn\": false, \"version\": 1, \"typeCode\": \"HOST_RUNS_SERVICE\", \"updatedBy\": \"admin\", \"description\": \"主机与运行其上的服务的承载关系\", \"updatedTime\": \"2026-09-29T22:41:07\", \"propertiesJson\": \"{\\\"properties\\\": []}\", \"knowledgeBaseId\": 10}, {\"kind\": \"RELATION_TYPE\", \"label\": \"人员执行命令\", \"status\": \"ACTIVE\", \"builtIn\": false, \"version\": 1, \"typeCode\": \"PERSON_EXECUTED_COMMAND\", \"updatedBy\": \"admin\", \"description\": \"谁在哪台主机上执行了哪条命令\", \"updatedTime\": \"2026-09-29T22:41:07\", \"propertiesJson\": \"{\\\"properties\\\": []}\", \"knowledgeBaseId\": 10}, {\"kind\": \"RELATION_TYPE\", \"label\": \"人员负责工单\", \"status\": \"ACTIVE\", \"builtIn\": false, \"version\": 1, \"typeCode\": \"PERSON_OWNS_TICKET\", \"updatedBy\": \"admin\", \"description\": \"工单的处理人与申请人\", \"updatedTime\": \"2026-09-29T22:41:07\", \"propertiesJson\": \"{\\\"properties\\\": []}\", \"knowledgeBaseId\": 10}, {\"kind\": \"RELATION_TYPE\", \"label\": \"服务依赖实例\", \"status\": \"ACTIVE\", \"builtIn\": false, \"version\": 1, \"typeCode\": \"SERVICE_DEPENDS_ON\", \"updatedBy\": \"admin\", \"description\": \"服务依赖的数据库或中间件实例\", \"updatedTime\": \"2026-09-29T22:41:07\", \"propertiesJson\": \"{\\\"properties\\\": []}\", \"knowledgeBaseId\": 10}, {\"kind\": \"RELATION_TYPE\", \"label\": \"工单关联主机\", \"status\": \"ACTIVE\", \"builtIn\": false, \"version\": 1, \"typeCode\": \"TICKET_RELATED_HOST\", \"updatedBy\": \"admin\", \"description\": \"故障或变更工单影响的主机\", \"updatedTime\": \"2026-09-29T22:41:07\", \"propertiesJson\": \"{\\\"properties\\\": []}\", \"knowledgeBaseId\": 10}], \"knowledgeBaseId\": 10}",
+          "publishedBy": "admin",
+          "delivery": {
+            "delivered": true,
+            "response": {
+              "applied": true,
+              "knowledgeBaseId": 10,
+              "version": "",
+              "relationTypes": [
+                "AFFECTS",
+                "BELONGS_TO",
+                "CAUSES",
+                "CONTAINS",
+                "DEPENDS_ON",
+                "DEPLOYED_IN",
+                "DESCRIBES",
+                "LOCATED_IN",
+                "MANAGES",
+                "PART_OF",
+                "RELATED_TO",
+                "USES",
+                "COMMAND_ON_HOST",
+                "HOST_RUNS_SERVICE",
+                "PERSON_EXECUTED_COMMAND",
+                "PERSON_OWNS_TICKET",
+                "SERVICE_DEPENDS_ON",
+                "TICKET_RELATED_HOST"
+              ],
+              "entityTypes": [
+                "CUSTOMER",
+                "METRIC",
+                "ORG",
+                "PRODUCT",
+                "PROJECT",
+                "ROLE",
+                "SYSTEM",
+                "TERM",
+                "VULNERABILITY",
+                "COMMAND",
+                "DB_INSTANCE",
+                "HOST",
+                "PERSON",
+                "SERVICE",
+                "TICKET"
+              ],
+              "knowledgeTypes": [
+                "CONCEPT",
+                "FACT",
+                "PROBLEM_SOLUTION",
+                "PROCEDURE",
+                "RULE",
+                "OPS_COMMAND_RECORD",
+                "OPS_FAQ",
+                "OPS_INCIDENT",
+                "OPS_MANUAL",
+                "OPS_NOTICE",
+                "OPS_REPORT",
+                "OPS_RULE"
+              ]
+            }
+          },
+          "publishedTime": "2026-09-29T22:41:08",
+          "checksum": "ddc8683182ffe52e4052798b5c0607a2207b88c95131a1ffbbf4c0d8d78a3740",
+          "releaseCode": "SRaec885194272494fb125bde106f76aba",
+          "knowledgeBaseId": 10,
+          "state": "PUBLISHED",
+          "version": "v1",
+          "validationJson": "{\"valid\": true, \"errors\": [], \"warnings\": [], \"typeCount\": 45, \"violations\": [], \"validatedAt\": \"2026-09-29T22:41:07.986\", \"violationCount\": 0}"
+        }
+      },
+      "profile": {
+        "created": {
+          "active": "default",
+          "profiles": [
+            {
+              "name": "default",
+              "label": "默认策略",
+              "updatedAt": "",
+              "active": true,
+              "summary": {
+                "channels": [
+                  "bm25",
+                  "vector",
+                  "card",
+                  "claim",
+                  "graph"
+                ],
+                "routingEnabled": true,
+                "rerankEnabled": true,
+                "rrfK": 60,
+                "recallMultiplier": 3
+              }
+            },
+            {
+              "name": "运维知识库",
+              "label": "运维场景：命令与故障精确定位优先",
+              "updatedAt": "2026-09-29T14:41:08Z",
+              "active": false,
+              "summary": {
+                "channels": [
+                  "bm25",
+                  "vector",
+                  "card",
+                  "claim",
+                  "graph"
+                ],
+                "routingEnabled": true,
+                "rerankEnabled": true,
+                "rrfK": 50,
+                "recallMultiplier": 4
+              }
+            }
+          ]
+        },
+        "activated": null
+      }
+    },
+    "company-policy": {
+      "directory": "/root/pub/gitlab/ai-knowledge-os/dataset/company-policy",
+      "fileCount": 15,
+      "knowledgeBase": {
+        "id": 11,
+        "name": "公司制度知识库"
+      },
+      "schema": {
+        "applied": {
+          "knowledgeTypes": [
+            "POLICY_RULE",
+            "EMPLOYEE_HANDBOOK",
+            "POLICY_FAQ",
+            "POLICY_NOTICE",
+            "BENEFIT_ITEM",
+            "REWARD_PENALTY"
+          ],
+          "entityTypes": [
+            "DEPARTMENT",
+            "POSITION",
+            "JOB_LEVEL",
+            "EMPLOYEE",
+            "SYSTEM",
+            "POLICY_DOC_CODE"
+          ],
+          "relationTypes": [
+            "DEPT_OWNS_POLICY",
+            "EMPLOYEE_IN_DEPT",
+            "EMPLOYEE_HAS_LEVEL",
+            "POSITION_REQUIRES_LEVEL",
+            "POLICY_EXEC_IN_SYSTEM",
+            "LEVEL_HAS_BENEFIT"
+          ]
+        },
+        "publish": {
+          "definitionJson": "{\"types\": [{\"kind\": \"ENTITY_TYPE\", \"label\": \"客户\", \"status\": \"ACTIVE\", \"builtIn\": true, \"version\": 1, \"typeCode\": \"CUSTOMER\", \"updatedBy\": \"system\", \"description\": \"购买或使用交付成果的外部组织\", \"updatedTime\": \"2026-09-24T10:18:31\", \"knowledgeBaseId\": 0}, {\"kind\": \"ENTITY_TYPE\", \"label\": \"指标\", \"status\": \"ACTIVE\", \"builtIn\": true, \"version\": 1, \"typeCode\": \"METRIC\", \"updatedBy\": \"system\", \"description\": \"可度量的业务或技术指标\", \"updatedTime\": \"2026-09-20T23:49:26\", \"knowledgeBaseId\": 0}, {\"kind\": \"ENTITY_TYPE\", \"label\": \"组织\", \"status\": \"ACTIVE\", \"builtIn\": true, \"version\": 1, \"typeCode\": \"ORG\", \"updatedBy\": \"system\", \"description\": \"部门、团队或外部机构\", \"updatedTime\": \"2026-09-20T23:49:26\", \"knowledgeBaseId\": 0}, {\"kind\": \"ENTITY_TYPE\", \"label\": \"产品\", \"status\": \"ACTIVE\", \"builtIn\": true, \"version\": 1, \"typeCode\": \"PRODUCT\", \"updatedBy\": \"system\", \"description\": \"产品、模块或服务\", \"updatedTime\": \"2026-09-20T23:49:26\", \"knowledgeBaseId\": 0}, {\"kind\": \"ENTITY_TYPE\", \"label\": \"项目\", \"status\": \"ACTIVE\", \"builtIn\": true, \"version\": 1, \"typeCode\": \"PROJECT\", \"updatedBy\": \"system\", \"description\": \"交付项目、实施项目或工程\", \"updatedTime\": \"2026-09-24T10:18:31\", \"knowledgeBaseId\": 0}, {\"kind\": \"ENTITY_TYPE\", \"label\": \"角色\", \"status\": \"ACTIVE\", \"builtIn\": true, \"version\": 1, \"typeCode\": \"ROLE\", \"updatedBy\": \"system\", \"description\": \"岗位、职责或使用者\", \"updatedTime\": \"2026-09-20T23:49:26\", \"knowledgeBaseId\": 0}, {\"kind\": \"ENTITY_TYPE\", \"label\": \"系统\", \"status\": \"ACTIVE\", \"builtIn\": true, \"version\": 1, \"typeCode\": \"SYSTEM\", \"updatedBy\": \"system\", \"description\": \"平台、子系统或组件\", \"updatedTime\": \"2026-09-20T23:49:26\", \"knowledgeBaseId\": 0}, {\"kind\": \"ENTITY_TYPE\", \"label\": \"术语\", \"status\": \"ACTIVE\", \"builtIn\": true, \"version\": 1, \"typeCode\": \"TERM\", \"updatedBy\": \"system\", \"description\": \"领域词汇与专有名词\", \"updatedTime\": \"2026-09-20T23:49:26\", \"knowledgeBaseId\": 0}, {\"kind\": \"ENTITY_TYPE\", \"label\": \"漏洞\", \"status\": \"ACTIVE\", \"builtIn\": true, \"version\": 1, \"typeCode\": \"VULNERABILITY\", \"updatedBy\": \"system\", \"description\": \"安全漏洞、缺陷编号与风险项\", \"updatedTime\": \"2026-09-24T10:18:31\", \"knowledgeBaseId\": 0}, {\"kind\": \"ENTITY_TYPE\", \"label\": \"部门\", \"status\": \"ACTIVE\", \"builtIn\": false, \"version\": 1, \"typeCode\": \"DEPARTMENT\", \"updatedBy\": \"admin\", \"description\": \"公司组织架构中的部门与中心\", \"updatedTime\": \"2026-09-29T22:41:08\", \"propertiesJson\": \"{\\\"properties\\\": []}\", \"knowledgeBaseId\": 11}, {\"kind\": \"ENTITY_TYPE\", \"label\": \"员工\", \"status\": \"ACTIVE\", \"builtIn\": false, \"version\": 1, \"typeCode\": \"EMPLOYEE\", \"updatedBy\": \"admin\", \"description\": \"员工主体与任职信息\", \"updatedTime\": \"2026-09-29T22:41:08\", \"propertiesJson\": \"{\\\"properties\\\": []}\", \"knowledgeBaseId\": 11}, {\"kind\": \"ENTITY_TYPE\", \"label\": \"职级\", \"status\": \"ACTIVE\", \"builtIn\": false, \"version\": 1, \"typeCode\": \"JOB_LEVEL\", \"updatedBy\": \"admin\", \"description\": \"P4–P9 与 M1–M4 职级体系\", \"updatedTime\": \"2026-09-29T22:41:08\", \"propertiesJson\": \"{\\\"properties\\\": []}\", \"knowledgeBaseId\": 11}, {\"kind\": \"ENTITY_TYPE\", \"label\": \"制度编号\", \"status\": \"ACTIVE\", \"builtIn\": false, \"version\": 1, \"typeCode\": \"POLICY_DOC_CODE\", \"updatedBy\": \"admin\", \"description\": \"制度文件的编号体系（HR-HB-xx / FIN-POL-xx / SEC-POL-xx 等）\", \"updatedTime\": \"2026-09-29T22:41:08\", \"propertiesJson\": \"{\\\"properties\\\": []}\", \"knowledgeBaseId\": 11}, {\"kind\": \"ENTITY_TYPE\", \"label\": \"岗位\", \"status\": \"ACTIVE\", \"builtIn\": false, \"version\": 1, \"typeCode\": \"POSITION\", \"updatedBy\": \"admin\", \"description\": \"岗位名称与职级区间\", \"updatedTime\": \"2026-09-29T22:41:08\", \"propertiesJson\": \"{\\\"properties\\\": []}\", \"knowledgeBaseId\": 11}, {\"kind\": \"ENTITY_TYPE\", \"label\": \"信息系统\", \"status\": \"ACTIVE\", \"builtIn\": false, \"version\": 1, \"typeCode\": \"SYSTEM\", \"updatedBy\": \"admin\", \"description\": \"OA、财务、HR、堡垒主机等业务系统\", \"updatedTime\": \"2026-09-29T22:41:08\", \"propertiesJson\": \"{\\\"properties\\\": []}\", \"knowledgeBaseId\": 11}, {\"kind\": \"KNOWLEDGE_TYPE\", \"label\": \"概念\", \"status\": \"ACTIVE\", \"builtIn\": true, \"version\": 1, \"typeCode\": \"CONCEPT\", \"updatedBy\": \"system\", \"description\": \"术语、定义与原理说明\", \"updatedTime\": \"2026-09-20T23:49:26\", \"knowledgeBaseId\": 0}, {\"kind\": \"KNOWLEDGE_TYPE\", \"label\": \"事实\", \"status\": \"ACTIVE\", \"builtIn\": true, \"version\": 1, \"typeCode\": \"FACT\", \"updatedBy\": \"system\", \"description\": \"可直接引用的客观事实与数据\", \"updatedTime\": \"2026-09-20T23:49:26\", \"knowledgeBaseId\": 0}, {\"kind\": \"KNOWLEDGE_TYPE\", \"label\": \"问题方案\", \"status\": \"ACTIVE\", \"builtIn\": true, \"version\": 1, \"typeCode\": \"PROBLEM_SOLUTION\", \"updatedBy\": \"system\", \"description\": \"问题现象与对应解决办法\", \"updatedTime\": \"2026-09-20T23:49:26\", \"knowledgeBaseId\": 0}, {\"kind\": \"KNOWLEDGE_TYPE\", \"label\": \"流程\", \"status\": \"ACTIVE\", \"builtIn\": true, \"version\": 1, \"typeCode\": \"PROCEDURE\", \"updatedBy\": \"system\", \"description\": \"按步骤完成一项工作的操作序列\", \"updatedTime\": \"2026-09-20T23:49:26\", \"knowledgeBaseId\": 0}, {\"kind\": \"KNOWLEDGE_TYPE\", \"label\": \"规则\", \"status\": \"ACTIVE\", \"builtIn\": true, \"version\": 1, \"typeCode\": \"RULE\", \"updatedBy\": \"system\", \"description\": \"约束、规范与判定标准\", \"updatedTime\": \"2026-09-20T23:49:26\", \"knowledgeBaseId\": 0}, {\"kind\": \"KNOWLEDGE_TYPE\", \"label\": \"福利项目\", \"status\": \"ACTIVE\", \"builtIn\": false, \"version\": 1, \"typeCode\": \"BENEFIT_ITEM\", \"updatedBy\": \"admin\", \"description\": \"福利类别、标准与适用对象\", \"updatedTime\": \"2026-09-29T22:41:08\", \"propertiesJson\": \"{\\\"properties\\\": []}\", \"knowledgeBaseId\": 11}, {\"kind\": \"KNOWLEDGE_TYPE\", \"label\": \"员工手册\", \"status\": \"ACTIVE\", \"builtIn\": false, \"version\": 1, \"typeCode\": \"EMPLOYEE_HANDBOOK\", \"updatedBy\": \"admin\", \"description\": \"面向全员的综合性手册，规定价值观、入职、考勤、福利与行为红线\", \"updatedTime\": \"2026-09-29T22:41:08\", \"propertiesJson\": \"{\\\"properties\\\": []}\", \"knowledgeBaseId\": 11}, {\"kind\": \"KNOWLEDGE_TYPE\", \"label\": \"制度常见问题\", \"status\": \"ACTIVE\", \"builtIn\": false, \"version\": 1, \"typeCode\": \"POLICY_FAQ\", \"updatedBy\": \"admin\", \"description\": \"员工高频问答，答案引用制度编号并说明冲突时的取值规则\", \"updatedTime\": \"2026-09-29T22:41:08\", \"propertiesJson\": \"{\\\"properties\\\": []}\", \"knowledgeBaseId\": 11}, {\"kind\": \"KNOWLEDGE_TYPE\", \"label\": \"制度修订通知\", \"status\": \"ACTIVE\", \"builtIn\": false, \"version\": 1, \"typeCode\": \"POLICY_NOTICE\", \"updatedBy\": \"admin\", \"description\": \"与现行制度存在差异的临时口径调整，含生效日期、差异对照与失效条件（用于冲突裁决）\", \"updatedTime\": \"2026-09-29T22:41:08\", \"propertiesJson\": \"{\\\"properties\\\": []}\", \"knowledgeBaseId\": 11}, {\"kind\": \"KNOWLEDGE_TYPE\", \"label\": \"制度规范\", \"status\": \"ACTIVE\", \"builtIn\": false, \"version\": 1, \"typeCode\": \"POLICY_RULE\", \"updatedBy\": \"admin\", \"description\": \"公司级制度与管理办法：考勤、薪酬、报销、绩效、晋升、安全、采购等\", \"updatedTime\": \"2026-09-29T22:41:08\", \"propertiesJson\": \"{\\\"properties\\\": []}\", \"knowledgeBaseId\": 11}, {\"kind\": \"KNOWLEDGE_TYPE\", \"label\": \"奖惩条款\", \"status\": \"ACTIVE\", \"builtIn\": false, \"version\": 1, \"typeCode\": \"REWARD_PENALTY\", \"updatedBy\": \"admin\", \"description\": \"奖励类别与违规分级对照，含处理措施\", \"updatedTime\": \"2026-09-29T22:41:08\", \"propertiesJson\": \"{\\\"properties\\\": []}\", \"knowledgeBaseId\": 11}, {\"kind\": \"RELATION_TYPE\", \"label\": \"受影响于\", \"status\": \"ACTIVE\", \"builtIn\": true, \"version\": 1, \"typeCode\": \"AFFECTS\", \"updatedBy\": \"system\", \"description\": \"漏洞、风险或变更对实体的影响关系\", \"updatedTime\": \"2026-09-24T10:18:31\", \"knowledgeBaseId\": 0}, {\"kind\": \"RELATION_TYPE\", \"label\": \"归属\", \"status\": \"ACTIVE\", \"builtIn\": true, \"version\": 1, \"typeCode\": \"BELONGS_TO\", \"updatedBy\": \"system\", \"description\": \"归属关系\", \"updatedTime\": \"2026-09-20T23:49:26\", \"knowledgeBaseId\": 0}, {\"kind\": \"RELATION_TYPE\", \"label\": \"导致\", \"status\": \"ACTIVE\", \"builtIn\": true, \"version\": 1, \"typeCode\": \"CAUSES\", \"updatedBy\": \"system\", \"description\": \"因果关系\", \"updatedTime\": \"2026-09-20T23:49:26\", \"knowledgeBaseId\": 0}, {\"kind\": \"RELATION_TYPE\", \"label\": \"包含\", \"status\": \"ACTIVE\", \"builtIn\": true, \"version\": 1, \"typeCode\": \"CONTAINS\", \"updatedBy\": \"system\", \"description\": \"容器与内容\", \"updatedTime\": \"2026-09-20T23:49:26\", \"knowledgeBaseId\": 0}, {\"kind\": \"RELATION_TYPE\", \"label\": \"依赖\", \"status\": \"ACTIVE\", \"builtIn\": true, \"version\": 1, \"typeCode\": \"DEPENDS_ON\", \"updatedBy\": \"system\", \"description\": \"功能或运行依赖\", \"updatedTime\": \"2026-09-20T23:49:26\", \"knowledgeBaseId\": 0}, {\"kind\": \"RELATION_TYPE\", \"label\": \"部署于\", \"status\": \"ACTIVE\", \"builtIn\": true, \"version\": 1, \"typeCode\": \"DEPLOYED_IN\", \"updatedBy\": \"system\", \"description\": \"产品、组件或服务在某个项目或环境中的部署关系\", \"updatedTime\": \"2026-09-24T10:18:31\", \"knowledgeBaseId\": 0}, {\"kind\": \"RELATION_TYPE\", \"label\": \"描述\", \"status\": \"ACTIVE\", \"builtIn\": true, \"version\": 1, \"typeCode\": \"DESCRIBES\", \"updatedBy\": \"system\", \"description\": \"实体与描述性知识的关系\", \"updatedTime\": \"2026-09-20T23:49:26\", \"knowledgeBaseId\": 0}, {\"kind\": \"RELATION_TYPE\", \"label\": \"位于\", \"status\": \"ACTIVE\", \"builtIn\": true, \"version\": 1, \"typeCode\": \"LOCATED_IN\", \"updatedBy\": \"system\", \"description\": \"位置或部署关系\", \"updatedTime\": \"2026-09-20T23:49:26\", \"knowledgeBaseId\": 0}, {\"kind\": \"RELATION_TYPE\", \"label\": \"管理\", \"status\": \"ACTIVE\", \"builtIn\": true, \"version\": 1, \"typeCode\": \"MANAGES\", \"updatedBy\": \"system\", \"description\": \"管理或负责关系\", \"updatedTime\": \"2026-09-20T23:49:26\", \"knowledgeBaseId\": 0}, {\"kind\": \"RELATION_TYPE\", \"label\": \"组成部分\", \"status\": \"ACTIVE\", \"builtIn\": true, \"version\": 1, \"typeCode\": \"PART_OF\", \"updatedBy\": \"system\", \"description\": \"整体与部分\", \"updatedTime\": \"2026-09-20T23:49:26\", \"knowledgeBaseId\": 0}, {\"kind\": \"RELATION_TYPE\", \"label\": \"相关\", \"status\": \"ACTIVE\", \"builtIn\": true, \"version\": 1, \"typeCode\": \"RELATED_TO\", \"updatedBy\": \"system\", \"description\": \"通用关联\", \"updatedTime\": \"2026-09-20T23:49:26\", \"knowledgeBaseId\": 0}, {\"kind\": \"RELATION_TYPE\", \"label\": \"使用\", \"status\": \"ACTIVE\", \"builtIn\": true, \"version\": 1, \"typeCode\": \"USES\", \"updatedBy\": \"system\", \"description\": \"使用某项能力或资源\", \"updatedTime\": \"2026-09-20T23:49:26\", \"knowledgeBaseId\": 0}, {\"kind\": \"RELATION_TYPE\", \"label\": \"部门归口制度\", \"status\": \"ACTIVE\", \"builtIn\": false, \"version\": 1, \"typeCode\": \"DEPT_OWNS_POLICY\", \"updatedBy\": \"admin\", \"description\": \"制度的归口责任部门\", \"updatedTime\": \"2026-09-29T22:41:08\", \"propertiesJson\": \"{\\\"properties\\\": []}\", \"knowledgeBaseId\": 11}, {\"kind\": \"RELATION_TYPE\", \"label\": \"员工职级\", \"status\": \"ACTIVE\", \"builtIn\": false, \"version\": 1, \"typeCode\": \"EMPLOYEE_HAS_LEVEL\", \"updatedBy\": \"admin\", \"description\": \"员工当前职级\", \"updatedTime\": \"2026-09-29T22:41:08\", \"propertiesJson\": \"{\\\"properties\\\": []}\", \"knowledgeBaseId\": 11}, {\"kind\": \"RELATION_TYPE\", \"label\": \"员工隶属部门\", \"status\": \"ACTIVE\", \"builtIn\": false, \"version\": 1, \"typeCode\": \"EMPLOYEE_IN_DEPT\", \"updatedBy\": \"admin\", \"description\": \"员工与部门的隶属关系\", \"updatedTime\": \"2026-09-29T22:41:08\", \"propertiesJson\": \"{\\\"properties\\\": []}\", \"knowledgeBaseId\": 11}, {\"kind\": \"RELATION_TYPE\", \"label\": \"职级对应福利\", \"status\": \"ACTIVE\", \"builtIn\": false, \"version\": 1, \"typeCode\": \"LEVEL_HAS_BENEFIT\", \"updatedBy\": \"admin\", \"description\": \"按职级确定的福利标准差异\", \"updatedTime\": \"2026-09-29T22:41:08\", \"propertiesJson\": \"{\\\"properties\\\": []}\", \"knowledgeBaseId\": 11}, {\"kind\": \"RELATION_TYPE\", \"label\": \"制度承载系统\", \"status\": \"ACTIVE\", \"builtIn\": false, \"version\": 1, \"typeCode\": \"POLICY_EXEC_IN_SYSTEM\", \"updatedBy\": \"admin\", \"description\": \"制度落地所依赖的信息系统（如考勤在 OA、报销在财务系统）\", \"updatedTime\": \"2026-09-29T22:41:08\", \"propertiesJson\": \"{\\\"properties\\\": []}\", \"knowledgeBaseId\": 11}, {\"kind\": \"RELATION_TYPE\", \"label\": \"岗位职级要求\", \"status\": \"ACTIVE\", \"builtIn\": false, \"version\": 1, \"typeCode\": \"POSITION_REQUIRES_LEVEL\", \"updatedBy\": \"admin\", \"description\": \"岗位对应的职级区间\", \"updatedTime\": \"2026-09-29T22:41:08\", \"propertiesJson\": \"{\\\"properties\\\": []}\", \"knowledgeBaseId\": 11}], \"knowledgeBaseId\": 11}",
+          "publishedBy": "admin",
+          "delivery": {
+            "delivered": true,
+            "response": {
+              "applied": true,
+              "knowledgeBaseId": 11,
+              "version": "",
+              "relationTypes": [
+                "AFFECTS",
+                "BELONGS_TO",
+                "CAUSES",
+                "CONTAINS",
+                "DEPENDS_ON",
+                "DEPLOYED_IN",
+                "DESCRIBES",
+                "LOCATED_IN",
+                "MANAGES",
+                "PART_OF",
+                "RELATED_TO",
+                "USES",
+                "DEPT_OWNS_POLICY",
+                "EMPLOYEE_HAS_LEVEL",
+                "EMPLOYEE_IN_DEPT",
+                "LEVEL_HAS_BENEFIT",
+                "POLICY_EXEC_IN_SYSTEM",
+                "POSITION_REQUIRES_LEVEL"
+              ],
+              "entityTypes": [
+                "CUSTOMER",
+                "METRIC",
+                "ORG",
+                "PRODUCT",
+                "PROJECT",
+                "ROLE",
+                "SYSTEM",
+                "TERM",
+                "VULNERABILITY",
+                "DEPARTMENT",
+                "EMPLOYEE",
+                "JOB_LEVEL",
+                "POLICY_DOC_CODE",
+                "POSITION",
+                "SYSTEM"
+              ],
+              "knowledgeTypes": [
+                "CONCEPT",
+                "FACT",
+                "PROBLEM_SOLUTION",
+                "PROCEDURE",
+                "RULE",
+                "BENEFIT_ITEM",
+                "EMPLOYEE_HANDBOOK",
+                "POLICY_FAQ",
+                "POLICY_NOTICE",
+                "POLICY_RULE",
+                "REWARD_PENALTY"
+              ]
+            }
+          },
+          "publishedTime": "2026-09-29T22:41:08",
+          "checksum": "2300611f6db45fb4c76a925380ad08b8506ddf7a55a479601e1603ee3d565416",
+          "releaseCode": "SR7c63affc4b98470b8e3ed8b25b4e265d",
+          "knowledgeBaseId": 11,
+          "state": "PUBLISHED",
+          "version": "v1",
+          "validationJson": "{\"valid\": true, \"errors\": [], \"warnings\": [], \"typeCount\": 44, \"violations\": [], \"validatedAt\": \"2026-09-29T22:41:08.443\", \"violationCount\": 0}"
+        }
+      },
+      "profile": {
+        "created": {
+          "active": "default",
+          "profiles": [
+            {
+              "name": "default",
+              "label": "默认策略",
+              "updatedAt": "",
+              "active": true,
+              "summary": {
+                "channels": [
+                  "bm25",
+                  "vector",
+                  "card",
+                  "claim",
+                  "graph"
+                ],
+                "routingEnabled": true,
+                "rerankEnabled": true,
+                "rrfK": 60,
+                "recallMultiplier": 3
+              }
+            },
+            {
+              "name": "公司制度",
+              "label": "制度场景：条款原文与时效口径优先",
+              "updatedAt": "2026-09-29T14:41:08Z",
+              "active": false,
+              "summary": {
+                "channels": [
+                  "bm25",
+                  "vector",
+                  "card",
+                  "claim",
+                  "graph"
+                ],
+                "routingEnabled": true,
+                "rerankEnabled": true,
+                "rrfK": 55,
+                "recallMultiplier": 4
+              }
+            },
+            {
+              "name": "运维知识库",
+              "label": "运维场景：命令与故障精确定位优先",
+              "updatedAt": "2026-09-29T14:41:08Z",
+              "active": false,
+              "summary": {
+                "channels": [
+                  "bm25",
+                  "vector",
+                  "card",
+                  "claim",
+                  "graph"
+                ],
+                "routingEnabled": true,
+                "rerankEnabled": true,
+                "rrfK": 50,
+                "recallMultiplier": 4
+              }
+            }
+          ]
+        },
+        "activated": null
+      }
+    },
+    "engineering-workspace": {
+      "directory": "/root/pub/gitlab/ai-knowledge-os/dataset/engineering-workspace",
+      "fileCount": 19,
+      "knowledgeBase": {
+        "id": 12,
+        "name": "工程协同知识库"
+      },
+      "schema": {
+        "applied": {
+          "knowledgeTypes": [
+            "JIRA_ISSUE_LIST",
+            "CONFLUENCE_DOC",
+            "OA_TICKET",
+            "WORK_REPORT",
+            "PROJECT_PLAN",
+            "JOB_DESCRIPTION",
+            "PERFORMANCE_REVIEW",
+            "RETRO"
+          ],
+          "entityTypes": [
+            "PROJECT",
+            "MODULE",
+            "EMPLOYEE",
+            "SPRINT",
+            "ISSUE",
+            "ENVIRONMENT"
+          ],
+          "relationTypes": [
+            "EMPLOYEE_ASSIGNED_ISSUE",
+            "ISSUE_BELONGS_MODULE",
+            "MODULE_DEPENDS_ON",
+            "SPRINT_CONTAINS_ISSUE",
+            "MODULE_DEPLOYED_IN",
+            "PROJECT_OWNS_MODULE"
+          ]
+        },
+        "publish": {
+          "definitionJson": "{\"types\": [{\"kind\": \"ENTITY_TYPE\", \"label\": \"客户\", \"status\": \"ACTIVE\", \"builtIn\": true, \"version\": 1, \"typeCode\": \"CUSTOMER\", \"updatedBy\": \"system\", \"description\": \"购买或使用交付成果的外部组织\", \"updatedTime\": \"2026-09-24T10:18:31\", \"knowledgeBaseId\": 0}, {\"kind\": \"ENTITY_TYPE\", \"label\": \"指标\", \"status\": \"ACTIVE\", \"builtIn\": true, \"version\": 1, \"typeCode\": \"METRIC\", \"updatedBy\": \"system\", \"description\": \"可度量的业务或技术指标\", \"updatedTime\": \"2026-09-20T23:49:26\", \"knowledgeBaseId\": 0}, {\"kind\": \"ENTITY_TYPE\", \"label\": \"组织\", \"status\": \"ACTIVE\", \"builtIn\": true, \"version\": 1, \"typeCode\": \"ORG\", \"updatedBy\": \"system\", \"description\": \"部门、团队或外部机构\", \"updatedTime\": \"2026-09-20T23:49:26\", \"knowledgeBaseId\": 0}, {\"kind\": \"ENTITY_TYPE\", \"label\": \"产品\", \"status\": \"ACTIVE\", \"builtIn\": true, \"version\": 1, \"typeCode\": \"PRODUCT\", \"updatedBy\": \"system\", \"description\": \"产品、模块或服务\", \"updatedTime\": \"2026-09-20T23:49:26\", \"knowledgeBaseId\": 0}, {\"kind\": \"ENTITY_TYPE\", \"label\": \"项目\", \"status\": \"ACTIVE\", \"builtIn\": true, \"version\": 1, \"typeCode\": \"PROJECT\", \"updatedBy\": \"system\", \"description\": \"交付项目、实施项目或工程\", \"updatedTime\": \"2026-09-24T10:18:31\", \"knowledgeBaseId\": 0}, {\"kind\": \"ENTITY_TYPE\", \"label\": \"角色\", \"status\": \"ACTIVE\", \"builtIn\": true, \"version\": 1, \"typeCode\": \"ROLE\", \"updatedBy\": \"system\", \"description\": \"岗位、职责或使用者\", \"updatedTime\": \"2026-09-20T23:49:26\", \"knowledgeBaseId\": 0}, {\"kind\": \"ENTITY_TYPE\", \"label\": \"系统\", \"status\": \"ACTIVE\", \"builtIn\": true, \"version\": 1, \"typeCode\": \"SYSTEM\", \"updatedBy\": \"system\", \"description\": \"平台、子系统或组件\", \"updatedTime\": \"2026-09-20T23:49:26\", \"knowledgeBaseId\": 0}, {\"kind\": \"ENTITY_TYPE\", \"label\": \"术语\", \"status\": \"ACTIVE\", \"builtIn\": true, \"version\": 1, \"typeCode\": \"TERM\", \"updatedBy\": \"system\", \"description\": \"领域词汇与专有名词\", \"updatedTime\": \"2026-09-20T23:49:26\", \"knowledgeBaseId\": 0}, {\"kind\": \"ENTITY_TYPE\", \"label\": \"漏洞\", \"status\": \"ACTIVE\", \"builtIn\": true, \"version\": 1, \"typeCode\": \"VULNERABILITY\", \"updatedBy\": \"system\", \"description\": \"安全漏洞、缺陷编号与风险项\", \"updatedTime\": \"2026-09-24T10:18:31\", \"knowledgeBaseId\": 0}, {\"kind\": \"ENTITY_TYPE\", \"label\": \"研发人员\", \"status\": \"ACTIVE\", \"builtIn\": false, \"version\": 1, \"typeCode\": \"EMPLOYEE\", \"updatedBy\": \"admin\", \"description\": \"研发、测试、运维与协作方人员\", \"updatedTime\": \"2026-09-29T22:41:08\", \"propertiesJson\": \"{\\\"properties\\\": []}\", \"knowledgeBaseId\": 12}, {\"kind\": \"ENTITY_TYPE\", \"label\": \"环境\", \"status\": \"ACTIVE\", \"builtIn\": false, \"version\": 1, \"typeCode\": \"ENVIRONMENT\", \"updatedBy\": \"admin\", \"description\": \"生产、预发、测试与压测环境\", \"updatedTime\": \"2026-09-29T22:41:08\", \"propertiesJson\": \"{\\\"properties\\\": []}\", \"knowledgeBaseId\": 12}, {\"kind\": \"ENTITY_TYPE\", \"label\": \"问题单\", \"status\": \"ACTIVE\", \"builtIn\": false, \"version\": 1, \"typeCode\": \"ISSUE\", \"updatedBy\": \"admin\", \"description\": \"Jira issue（Story / Bug / Task）与缺陷单\", \"updatedTime\": \"2026-09-29T22:41:08\", \"propertiesJson\": \"{\\\"properties\\\": []}\", \"knowledgeBaseId\": 12}, {\"kind\": \"ENTITY_TYPE\", \"label\": \"服务模块\", \"status\": \"ACTIVE\", \"builtIn\": false, \"version\": 1, \"typeCode\": \"MODULE\", \"updatedBy\": \"admin\", \"description\": \"微服务或前端模块\", \"updatedTime\": \"2026-09-29T22:41:08\", \"propertiesJson\": \"{\\\"properties\\\": []}\", \"knowledgeBaseId\": 12}, {\"kind\": \"ENTITY_TYPE\", \"label\": \"项目\", \"status\": \"ACTIVE\", \"builtIn\": false, \"version\": 1, \"typeCode\": \"PROJECT\", \"updatedBy\": \"admin\", \"description\": \"Jira 项目或产品线\", \"updatedTime\": \"2026-09-29T22:41:08\", \"propertiesJson\": \"{\\\"properties\\\": []}\", \"knowledgeBaseId\": 12}, {\"kind\": \"ENTITY_TYPE\", \"label\": \"迭代\", \"status\": \"ACTIVE\", \"builtIn\": false, \"version\": 1, \"typeCode\": \"SPRINT\", \"updatedBy\": \"admin\", \"description\": \"双周迭代周期\", \"updatedTime\": \"2026-09-29T22:41:08\", \"propertiesJson\": \"{\\\"properties\\\": []}\", \"knowledgeBaseId\": 12}, {\"kind\": \"KNOWLEDGE_TYPE\", \"label\": \"概念\", \"status\": \"ACTIVE\", \"builtIn\": true, \"version\": 1, \"typeCode\": \"CONCEPT\", \"updatedBy\": \"system\", \"description\": \"术语、定义与原理说明\", \"updatedTime\": \"2026-09-20T23:49:26\", \"knowledgeBaseId\": 0}, {\"kind\": \"KNOWLEDGE_TYPE\", \"label\": \"事实\", \"status\": \"ACTIVE\", \"builtIn\": true, \"version\": 1, \"typeCode\": \"FACT\", \"updatedBy\": \"system\", \"description\": \"可直接引用的客观事实与数据\", \"updatedTime\": \"2026-09-20T23:49:26\", \"knowledgeBaseId\": 0}, {\"kind\": \"KNOWLEDGE_TYPE\", \"label\": \"问题方案\", \"status\": \"ACTIVE\", \"builtIn\": true, \"version\": 1, \"typeCode\": \"PROBLEM_SOLUTION\", \"updatedBy\": \"system\", \"description\": \"问题现象与对应解决办法\", \"updatedTime\": \"2026-09-20T23:49:26\", \"knowledgeBaseId\": 0}, {\"kind\": \"KNOWLEDGE_TYPE\", \"label\": \"流程\", \"status\": \"ACTIVE\", \"builtIn\": true, \"version\": 1, \"typeCode\": \"PROCEDURE\", \"updatedBy\": \"system\", \"description\": \"按步骤完成一项工作的操作序列\", \"updatedTime\": \"2026-09-20T23:49:26\", \"knowledgeBaseId\": 0}, {\"kind\": \"KNOWLEDGE_TYPE\", \"label\": \"规则\", \"status\": \"ACTIVE\", \"builtIn\": true, \"version\": 1, \"typeCode\": \"RULE\", \"updatedBy\": \"system\", \"description\": \"约束、规范与判定标准\", \"updatedTime\": \"2026-09-20T23:49:26\", \"knowledgeBaseId\": 0}, {\"kind\": \"KNOWLEDGE_TYPE\", \"label\": \"设计文档\", \"status\": \"ACTIVE\", \"builtIn\": false, \"version\": 1, \"typeCode\": \"CONFLUENCE_DOC\", \"updatedBy\": \"admin\", \"description\": \"架构设计、接口规范、数据库规范、发布检查清单等 Confluence 文档\", \"updatedTime\": \"2026-09-29T22:41:08\", \"propertiesJson\": \"{\\\"properties\\\": []}\", \"knowledgeBaseId\": 12}, {\"kind\": \"KNOWLEDGE_TYPE\", \"label\": \"Jira 问题清单\", \"status\": \"ACTIVE\", \"builtIn\": false, \"version\": 1, \"typeCode\": \"JIRA_ISSUE_LIST\", \"updatedBy\": \"admin\", \"description\": \"按 Epic / 缺陷 / 技术债导出的 issue 清单，含 Key、优先级、经办人、状态与详情\", \"updatedTime\": \"2026-09-29T22:41:08\", \"propertiesJson\": \"{\\\"properties\\\": []}\", \"knowledgeBaseId\": 12}, {\"kind\": \"KNOWLEDGE_TYPE\", \"label\": \"岗位职责\", \"status\": \"ACTIVE\", \"builtIn\": false, \"version\": 1, \"typeCode\": \"JOB_DESCRIPTION\", \"updatedBy\": \"admin\", \"description\": \"岗位说明书：职责、任职要求、KPI、权限与协作接口\", \"updatedTime\": \"2026-09-29T22:41:08\", \"propertiesJson\": \"{\\\"properties\\\": []}\", \"knowledgeBaseId\": 12}, {\"kind\": \"KNOWLEDGE_TYPE\", \"label\": \"OA/ITSM 工单\", \"status\": \"ACTIVE\", \"builtIn\": false, \"version\": 1, \"typeCode\": \"OA_TICKET\", \"updatedBy\": \"admin\", \"description\": \"权限与环境申请、线上故障与变更工单，含审批链与处理时长\", \"updatedTime\": \"2026-09-29T22:41:08\", \"propertiesJson\": \"{\\\"properties\\\": []}\", \"knowledgeBaseId\": 12}, {\"kind\": \"KNOWLEDGE_TYPE\", \"label\": \"绩效评估\", \"status\": \"ACTIVE\", \"builtIn\": false, \"version\": 1, \"typeCode\": \"PERFORMANCE_REVIEW\", \"updatedBy\": \"admin\", \"description\": \"月度/季度绩效评估结果、等级分布与改进计划\", \"updatedTime\": \"2026-09-29T22:41:08\", \"propertiesJson\": \"{\\\"properties\\\": []}\", \"knowledgeBaseId\": 12}, {\"kind\": \"KNOWLEDGE_TYPE\", \"label\": \"项目与迭代计划\", \"status\": \"ACTIVE\", \"builtIn\": false, \"version\": 1, \"typeCode\": \"PROJECT_PLAN\", \"updatedBy\": \"admin\", \"description\": \"季度 OKR、迭代计划与里程碑\", \"updatedTime\": \"2026-09-29T22:41:08\", \"propertiesJson\": \"{\\\"properties\\\": []}\", \"knowledgeBaseId\": 12}, {\"kind\": \"KNOWLEDGE_TYPE\", \"label\": \"复盘报告\", \"status\": \"ACTIVE\", \"builtIn\": false, \"version\": 1, \"typeCode\": \"RETRO\", \"updatedBy\": \"admin\", \"description\": \"项目复盘与迭代回顾：目标达成、根因、改进项与验证方式\", \"updatedTime\": \"2026-09-29T22:41:08\", \"propertiesJson\": \"{\\\"properties\\\": []}\", \"knowledgeBaseId\": 12}, {\"kind\": \"KNOWLEDGE_TYPE\", \"label\": \"工作日报周报\", \"status\": \"ACTIVE\", \"builtIn\": false, \"version\": 1, \"typeCode\": \"WORK_REPORT\", \"updatedBy\": \"admin\", \"description\": \"团队与个人的日报、周报，含进展、风险与下周计划\", \"updatedTime\": \"2026-09-29T22:41:08\", \"propertiesJson\": \"{\\\"properties\\\": []}\", \"knowledgeBaseId\": 12}, {\"kind\": \"RELATION_TYPE\", \"label\": \"受影响于\", \"status\": \"ACTIVE\", \"builtIn\": true, \"version\": 1, \"typeCode\": \"AFFECTS\", \"updatedBy\": \"system\", \"description\": \"漏洞、风险或变更对实体的影响关系\", \"updatedTime\": \"2026-09-24T10:18:31\", \"knowledgeBaseId\": 0}, {\"kind\": \"RELATION_TYPE\", \"label\": \"归属\", \"status\": \"ACTIVE\", \"builtIn\": true, \"version\": 1, \"typeCode\": \"BELONGS_TO\", \"updatedBy\": \"system\", \"description\": \"归属关系\", \"updatedTime\": \"2026-09-20T23:49:26\", \"knowledgeBaseId\": 0}, {\"kind\": \"RELATION_TYPE\", \"label\": \"导致\", \"status\": \"ACTIVE\", \"builtIn\": true, \"version\": 1, \"typeCode\": \"CAUSES\", \"updatedBy\": \"system\", \"description\": \"因果关系\", \"updatedTime\": \"2026-09-20T23:49:26\", \"knowledgeBaseId\": 0}, {\"kind\": \"RELATION_TYPE\", \"label\": \"包含\", \"status\": \"ACTIVE\", \"builtIn\": true, \"version\": 1, \"typeCode\": \"CONTAINS\", \"updatedBy\": \"system\", \"description\": \"容器与内容\", \"updatedTime\": \"2026-09-20T23:49:26\", \"knowledgeBaseId\": 0}, {\"kind\": \"RELATION_TYPE\", \"label\": \"依赖\", \"status\": \"ACTIVE\", \"builtIn\": true, \"version\": 1, \"typeCode\": \"DEPENDS_ON\", \"updatedBy\": \"system\", \"description\": \"功能或运行依赖\", \"updatedTime\": \"2026-09-20T23:49:26\", \"knowledgeBaseId\": 0}, {\"kind\": \"RELATION_TYPE\", \"label\": \"部署于\", \"status\": \"ACTIVE\", \"builtIn\": true, \"version\": 1, \"typeCode\": \"DEPLOYED_IN\", \"updatedBy\": \"system\", \"description\": \"产品、组件或服务在某个项目或环境中的部署关系\", \"updatedTime\": \"2026-09-24T10:18:31\", \"knowledgeBaseId\": 0}, {\"kind\": \"RELATION_TYPE\", \"label\": \"描述\", \"status\": \"ACTIVE\", \"builtIn\": true, \"version\": 1, \"typeCode\": \"DESCRIBES\", \"updatedBy\": \"system\", \"description\": \"实体与描述性知识的关系\", \"updatedTime\": \"2026-09-20T23:49:26\", \"knowledgeBaseId\": 0}, {\"kind\": \"RELATION_TYPE\", \"label\": \"位于\", \"status\": \"ACTIVE\", \"builtIn\": true, \"version\": 1, \"typeCode\": \"LOCATED_IN\", \"updatedBy\": \"system\", \"description\": \"位置或部署关系\", \"updatedTime\": \"2026-09-20T23:49:26\", \"knowledgeBaseId\": 0}, {\"kind\": \"RELATION_TYPE\", \"label\": \"管理\", \"status\": \"ACTIVE\", \"builtIn\": true, \"version\": 1, \"typeCode\": \"MANAGES\", \"updatedBy\": \"system\", \"description\": \"管理或负责关系\", \"updatedTime\": \"2026-09-20T23:49:26\", \"knowledgeBaseId\": 0}, {\"kind\": \"RELATION_TYPE\", \"label\": \"组成部分\", \"status\": \"ACTIVE\", \"builtIn\": true, \"version\": 1, \"typeCode\": \"PART_OF\", \"updatedBy\": \"system\", \"description\": \"整体与部分\", \"updatedTime\": \"2026-09-20T23:49:26\", \"knowledgeBaseId\": 0}, {\"kind\": \"RELATION_TYPE\", \"label\": \"相关\", \"status\": \"ACTIVE\", \"builtIn\": true, \"version\": 1, \"typeCode\": \"RELATED_TO\", \"updatedBy\": \"system\", \"description\": \"通用关联\", \"updatedTime\": \"2026-09-20T23:49:26\", \"knowledgeBaseId\": 0}, {\"kind\": \"RELATION_TYPE\", \"label\": \"使用\", \"status\": \"ACTIVE\", \"builtIn\": true, \"version\": 1, \"typeCode\": \"USES\", \"updatedBy\": \"system\", \"description\": \"使用某项能力或资源\", \"updatedTime\": \"2026-09-20T23:49:26\", \"knowledgeBaseId\": 0}, {\"kind\": \"RELATION_TYPE\", \"label\": \"人员负责问题单\", \"status\": \"ACTIVE\", \"builtIn\": false, \"version\": 1, \"typeCode\": \"EMPLOYEE_ASSIGNED_ISSUE\", \"updatedBy\": \"admin\", \"description\": \"issue 的经办人与报告人\", \"updatedTime\": \"2026-09-29T22:41:08\", \"propertiesJson\": \"{\\\"properties\\\": []}\", \"knowledgeBaseId\": 12}, {\"kind\": \"RELATION_TYPE\", \"label\": \"问题单归属模块\", \"status\": \"ACTIVE\", \"builtIn\": false, \"version\": 1, \"typeCode\": \"ISSUE_BELONGS_MODULE\", \"updatedBy\": \"admin\", \"description\": \"issue 影响的模块\", \"updatedTime\": \"2026-09-29T22:41:08\", \"propertiesJson\": \"{\\\"properties\\\": []}\", \"knowledgeBaseId\": 12}, {\"kind\": \"RELATION_TYPE\", \"label\": \"模块依赖\", \"status\": \"ACTIVE\", \"builtIn\": false, \"version\": 1, \"typeCode\": \"MODULE_DEPENDS_ON\", \"updatedBy\": \"admin\", \"description\": \"模块之间的调用与依赖关系\", \"updatedTime\": \"2026-09-29T22:41:08\", \"propertiesJson\": \"{\\\"properties\\\": []}\", \"knowledgeBaseId\": 12}, {\"kind\": \"RELATION_TYPE\", \"label\": \"模块部署环境\", \"status\": \"ACTIVE\", \"builtIn\": false, \"version\": 1, \"typeCode\": \"MODULE_DEPLOYED_IN\", \"updatedBy\": \"admin\", \"description\": \"模块运行的环境\", \"updatedTime\": \"2026-09-29T22:41:08\", \"propertiesJson\": \"{\\\"properties\\\": []}\", \"knowledgeBaseId\": 12}, {\"kind\": \"RELATION_TYPE\", \"label\": \"项目包含模块\", \"status\": \"ACTIVE\", \"builtIn\": false, \"version\": 1, \"typeCode\": \"PROJECT_OWNS_MODULE\", \"updatedBy\": \"admin\", \"description\": \"项目与模块的归属关系\", \"updatedTime\": \"2026-09-29T22:41:08\", \"propertiesJson\": \"{\\\"properties\\\": []}\", \"knowledgeBaseId\": 12}, {\"kind\": \"RELATION_TYPE\", \"label\": \"迭代包含问题单\", \"status\": \"ACTIVE\", \"builtIn\": false, \"version\": 1, \"typeCode\": \"SPRINT_CONTAINS_ISSUE\", \"updatedBy\": \"admin\", \"description\": \"迭代范围内的 issue\", \"updatedTime\": \"2026-09-29T22:41:08\", \"propertiesJson\": \"{\\\"properties\\\": []}\", \"knowledgeBaseId\": 12}], \"knowledgeBaseId\": 12}",
+          "publishedBy": "admin",
+          "delivery": {
+            "delivered": true,
+            "response": {
+              "applied": true,
+              "knowledgeBaseId": 12,
+              "version": "",
+              "relationTypes": [
+                "AFFECTS",
+                "BELONGS_TO",
+                "CAUSES",
+                "CONTAINS",
+                "DEPENDS_ON",
+                "DEPLOYED_IN",
+                "DESCRIBES",
+                "LOCATED_IN",
+                "MANAGES",
+                "PART_OF",
+                "RELATED_TO",
+                "USES",
+                "EMPLOYEE_ASSIGNED_ISSUE",
+                "ISSUE_BELONGS_MODULE",
+                "MODULE_DEPENDS_ON",
+                "MODULE_DEPLOYED_IN",
+                "PROJECT_OWNS_MODULE",
+                "SPRINT_CONTAINS_ISSUE"
+              ],
+              "entityTypes": [
+                "CUSTOMER",
+                "METRIC",
+                "ORG",
+                "PRODUCT",
+                "PROJECT",
+                "ROLE",
+                "SYSTEM",
+                "TERM",
+                "VULNERABILITY",
+                "EMPLOYEE",
+                "ENVIRONMENT",
+                "ISSUE",
+                "MODULE",
+                "PROJECT",
+                "SPRINT"
+              ],
+              "knowledgeTypes": [
+                "CONCEPT",
+                "FACT",
+                "PROBLEM_SOLUTION",
+                "PROCEDURE",
+                "RULE",
+                "CONFLUENCE_DOC",
+                "JIRA_ISSUE_LIST",
+                "JOB_DESCRIPTION",
+                "OA_TICKET",
+                "PERFORMANCE_REVIEW",
+                "PROJECT_PLAN",
+                "RETRO",
+                "WORK_REPORT"
+              ]
+            }
+          },
+          "publishedTime": "2026-09-29T22:41:08",
+          "checksum": "150219ced6c40fb6eda71dab477878f92252a2dcaf8a499efa8415098d0f5f13",
+          "releaseCode": "SRb64804a534334076b3f8c73e23511fd0",
+          "knowledgeBaseId": 12,
+          "state": "PUBLISHED",
+          "version": "v1",
+          "validationJson": "{\"valid\": true, \"errors\": [], \"warnings\": [], \"typeCount\": 46, \"violations\": [], \"validatedAt\": \"2026-09-29T22:41:08.860\", \"violationCount\": 0}"
+        }
+      },
+      "profile": {
+        "created": {
+          "active": "default",
+          "profiles": [
+            {
+              "name": "default",
+              "label": "默认策略",
+              "updatedAt": "",
+              "active": true,
+              "summary": {
+                "channels": [
+                  "bm25",
+                  "vector",
+                  "card",
+                  "claim",
+                  "graph"
+                ],
+                "routingEnabled": true,
+                "rerankEnabled": true,
+                "rrfK": 60,
+                "recallMultiplier": 3
+              }
+            },
+            {
+              "name": "公司制度",
+              "label": "制度场景：条款原文与时效口径优先",
+              "updatedAt": "2026-09-29T14:41:08Z",
+              "active": false,
+              "summary": {
+                "channels": [
+                  "bm25",
+                  "vector",
+                  "card",
+                  "claim",
+                  "graph"
+                ],
+                "routingEnabled": true,
+                "rerankEnabled": true,
+                "rrfK": 55,
+                "recallMultiplier": 4
+              }
+            },
+            {
+              "name": "工程协同",
+              "label": "研发协同场景：问题单可追溯与时效优先",
+              "updatedAt": "2026-09-29T14:41:08Z",
+              "active": false,
+              "summary": {
+                "channels": [
+                  "bm25",
+                  "vector",
+                  "card",
+                  "claim",
+                  "graph"
+                ],
+                "routingEnabled": true,
+                "rerankEnabled": true,
+                "rrfK": 55,
+                "recallMultiplier": 4
+              }
+            },
+            {
+              "name": "运维知识库",
+              "label": "运维场景：命令与故障精确定位优先",
+              "updatedAt": "2026-09-29T14:41:08Z",
+              "active": false,
+              "summary": {
+                "channels": [
+                  "bm25",
+                  "vector",
+                  "card",
+                  "claim",
+                  "graph"
+                ],
+                "routingEnabled": true,
+                "rerankEnabled": true,
+                "rrfK": 50,
+                "recallMultiplier": 4
+              }
+            }
+          ]
+        },
+        "activated": null
+      }
+    }
+  }
+}

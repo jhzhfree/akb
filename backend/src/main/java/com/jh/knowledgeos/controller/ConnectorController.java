@@ -3,6 +3,7 @@ package com.jh.knowledgeos.controller;
 import com.jh.knowledgeos.common.ApiResponse;
 import com.jh.knowledgeos.dto.ConnectorRequest;
 import com.jh.knowledgeos.service.AuthContext;
+import com.jh.knowledgeos.service.ConnectorCatalogService;
 import com.jh.knowledgeos.service.ConnectorService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -17,6 +18,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import java.util.Collections;
+import java.util.List;
 
 /**
  * HTTP facade for external data-source connectors (design §6.1, first step: connect and list).
@@ -33,8 +35,11 @@ public class ConnectorController {
 
     private final ConnectorService service;
 
-    public ConnectorController(ConnectorService service) {
+    private final ConnectorCatalogService catalog;
+
+    public ConnectorController(ConnectorService service, ConnectorCatalogService catalog) {
         this.service = service;
+        this.catalog = catalog;
     }
 
     @GetMapping("/{kb}")
@@ -79,5 +84,34 @@ public class ConnectorController {
     public ApiResponse<Object> items(@PathVariable Long id, @RequestParam(value = "limit", required = false) Integer limit,
         @RequestParam(value = "offset", required = false) Integer offset) {
         return ApiResponse.ok(service.items(id, limit == null ? 0 : limit, offset == null ? 0 : offset));
+    }
+
+    @PostMapping("/{id}/sync")
+    @Operation(summary = "把连接器当前的知识列表同步落库，供按类型与属性浏览")
+    public ApiResponse<Object> sync(@PathVariable Long id) {
+        return ApiResponse.ok(catalog.sync(id));
+    }
+
+    @GetMapping("/{id}/catalog")
+    @Operation(summary = "浏览已同步的外部知识：按类型、关键词与属性值过滤后分页")
+    public ApiResponse<Object> catalog(@PathVariable Long id,
+        @RequestParam(value = "type", required = false) String type,
+        @RequestParam(value = "keyword", required = false) String keyword,
+        @RequestParam(value = "attr", required = false) List<String> attr,
+        @RequestParam(value = "page", defaultValue = "1") int page,
+        @RequestParam(value = "size", defaultValue = "20") int size) {
+        return ApiResponse.ok(catalog.page(id, type, keyword, attr, page, size));
+    }
+
+    @GetMapping("/{id}/catalog/facets")
+    @Operation(summary = "已同步知识的类型与属性分面（左侧筛选树的取值与计数）")
+    public ApiResponse<Object> catalogFacets(@PathVariable Long id, @RequestParam(value = "type", required = false) String type) {
+        return ApiResponse.ok(catalog.facets(id, type));
+    }
+
+    @GetMapping("/catalog/items/{itemId}")
+    @Operation(summary = "查看单条已同步外部知识的详情与全部属性")
+    public ApiResponse<Object> catalogItem(@PathVariable Long itemId) {
+        return ApiResponse.ok(catalog.detail(itemId));
     }
 }

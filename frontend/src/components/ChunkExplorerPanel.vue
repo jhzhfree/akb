@@ -5,7 +5,8 @@
         <div class="kb-eyebrow">文本分块</div>
         <h1 class="kb-title mt-1">文本分块</h1>
         <p class="kb-muted mt-1">
-          按文档核对切分结果：切分策略、页码 / 字符区间、token 与 revision，重跑后旧版本保留为 SUPERSEDED。
+          按文档核对切分结果：页码 / 字符区间、token 与 revision，重跑后旧版本保留为 SUPERSEDED。
+          切分策略不在这里改——请到上方「拖入资料」右上角的「分块策略」统一配置。
         </p>
       </div>
       <div class="flex shrink-0 items-center gap-2">
@@ -16,68 +17,6 @@
         <button class="kb-btn-outline" :disabled="loading || !selectedId" @click="load">刷新</button>
       </div>
     </header>
-
-    <!-- 切分策略：决定召回粒度，手册与报告不该用同一个窗口（设计 §4.1） -->
-    <article class="kb-card">
-      <div class="kb-card-head">
-        <b class="text-sm">切分策略</b>
-        <span class="kb-muted">
-          {{ policyState.customized ? '已自定义' : '内置默认' }} · 保存后对新接入的文档生效
-        </span>
-      </div>
-      <div class="p-4">
-        <div v-if="policyLoading" class="py-4 text-center text-sm text-ink-500">正在读取分块策略...</div>
-        <div v-else class="space-y-3">
-          <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <label class="block">
-              <span class="mb-1 block text-[11px] text-ink-500">切分算法</span>
-              <select v-model="policy.strategy" class="kb-input w-full">
-                <option v-for="item in strategies" :key="item.name" :value="item.name">{{ item.label }}</option>
-              </select>
-            </label>
-            <label class="block">
-              <span class="mb-1 block text-[11px] text-ink-500">
-                窗口大小（{{ policy.measure==='TOKEN'?'Token':'字符' }}）
-              </span>
-              <input v-model.number="policy.chunkSize" type="number" class="kb-input w-full"
-                :min="ranges.chunkSize?.min ?? 200" :max="ranges.chunkSize?.max ?? 4000" />
-            </label>
-            <label class="block">
-              <span class="mb-1 block text-[11px] text-ink-500">重叠</span>
-              <input v-model.number="policy.chunkOverlap" type="number" class="kb-input w-full"
-                :min="ranges.chunkOverlap?.min ?? 0" :max="ranges.chunkOverlap?.max ?? 1000" />
-            </label>
-            <label class="block">
-              <span class="mb-1 block text-[11px] text-ink-500">最小块（过小则并入相邻块）</span>
-              <input v-model.number="policy.minChunkSize" type="number" class="kb-input w-full"
-                :min="ranges.minChunkSize?.min ?? 0" :max="ranges.minChunkSize?.max ?? 1000" />
-            </label>
-          </div>
-          <div class="flex flex-wrap items-center gap-6">
-            <label class="flex items-center gap-2 text-[12px] text-ink-600">
-              <span>窗口度量</span>
-              <select v-model="policy.measure" class="kb-input w-32">
-                <option v-for="item in measures" :key="item.name" :value="item.name">{{ item.label }}</option>
-              </select>
-            </label>
-            <el-checkbox v-model="policy.keepStructure" label="保留结构（表格 / 代码独立成块）" />
-            <el-checkbox v-model="policy.respectSentence" label="句末断句" />
-            <el-checkbox v-model="policy.parentChild" label="父子分块（章节父块 + 窗口子块）" />
-          </div>
-          <p class="kb-muted">{{ strategyDescription }}</p>
-          <div class="flex flex-wrap items-center gap-2">
-            <button class="kb-btn" :disabled="policySaving" @click="savePolicy">保存策略</button>
-            <button class="kb-btn-outline" :disabled="policySaving" @click="resetPolicy">恢复默认</button>
-            <span v-if="policyState.customized" class="kb-muted">
-              最近由 {{ policyState.updatedBy || '—' }} 于 {{ policyState.updatedTime || '—' }} 修改
-            </span>
-          </div>
-          <p class="kb-muted">
-            已有文档不会自动重切：策略只影响接入之后的解析，需要重切请重新上传该文档。
-          </p>
-        </div>
-      </div>
-    </article>
 
     <!-- 切分结果画像：一眼看出这段文档被切成了什么样 -->
     <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
@@ -180,13 +119,11 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { statusLabel } from '../types'
-import type { ChunkPolicy, ChunkPolicyState, DocumentChunk, KnowledgeDocument } from '../types'
-import {
-  getChunkPolicy, getDocumentChunks, resetChunkPolicy, saveChunkPolicy, unwrap,
-} from '../api/knowledge'
-import { errorMessage as message, notifyError, notifySuccess } from '../utils/feedback'
+import type { DocumentChunk, KnowledgeDocument } from '../types'
+import { getDocumentChunks, unwrap } from '../api/knowledge'
+import { errorMessage as message } from '../utils/feedback'
 import { useShell } from '../shell'
 import PanelState from './PanelState.vue'
 
@@ -209,17 +146,6 @@ const keyword = ref('')
 /** 表格看画像，JSON 看接口原生报文（需求：对象支持原生样式展示）。 */
 const view = ref<'table' | 'json'>('table')
 
-// ---- 切分策略 ----
-const policyState = ref<ChunkPolicyState>({ policy: {} })
-const policy = ref<ChunkPolicy>({})
-const policyLoading = ref(false)
-const policySaving = ref(false)
-
-const strategies = computed(() => policyState.value.schema?.strategies || [])
-const measures = computed(() => policyState.value.schema?.measures || [])
-const ranges = computed(() => policyState.value.schema?.ranges || {})
-const strategyDescription = computed(() =>
-  strategies.value.find(item => item.name === policy.value.strategy)?.description || '')
 const filtered = computed(() => chunks.value.filter(row => {
   if (typeFilter.value && String(row.chunkType || '') !== typeFilter.value) return false
   const key = keyword.value.trim().toLowerCase()
@@ -246,42 +172,6 @@ const avgToken = computed(() => {
 })
 const coveredChars = computed(() => filtered.value.reduce(
   (sum, row) => sum + Math.max(0, Number(row.charEnd || 0) - Number(row.charStart || 0)), 0))
-
-async function loadPolicy() {
-  policyLoading.value = true
-  try {
-    policyState.value = unwrap(await getChunkPolicy(props.knowledgeBaseId), { policy: {} })
-    policy.value = { ...(policyState.value.policy || {}) }
-  } catch (e) {
-    notifyError(message(e))
-  } finally {
-    policyLoading.value = false
-  }
-}
-async function savePolicy() {
-  policySaving.value = true
-  try {
-    policyState.value = unwrap(await saveChunkPolicy(props.knowledgeBaseId, policy.value), { policy: {} })
-    policy.value = { ...(policyState.value.policy || {}) }
-    notifySuccess('分块策略已保存，下次接入生效')
-  } catch (e) {
-    notifyError(message(e))
-  } finally {
-    policySaving.value = false
-  }
-}
-async function resetPolicy() {
-  policySaving.value = true
-  try {
-    policyState.value = unwrap(await resetChunkPolicy(props.knowledgeBaseId), { policy: {} })
-    policy.value = { ...(policyState.value.policy || {}) }
-    notifySuccess('已恢复内置默认分块策略')
-  } catch (e) {
-    notifyError(message(e))
-  } finally {
-    policySaving.value = false
-  }
-}
 
 async function load() {
   if (!selectedId.value) return
@@ -320,8 +210,6 @@ function charRange(row:DocumentChunk) {
   return `${row.charStart}-${row.charEnd ?? row.charStart}`
 }
 
-onMounted(() => { void loadPolicy() })
-watch(() => props.knowledgeBaseId, () => { void loadPolicy() })
 watch([typeFilter, keyword], () => { page.value = 1 })
 watch(view, () => { page.value = 1 })
 /** 外部指定文档时直接选中并加载：从文档行进入的用户不该再选一次。 */

@@ -13,7 +13,7 @@
         </p>
       </div>
       <div class="flex shrink-0 items-center gap-2">
-        <button class="kb-btn-outline" :disabled="loading" @click="load">刷新</button>
+        <button class="kb-btn-outline" :disabled="loading" @click="load()">刷新</button>
         <button class="kb-btn-outline" :disabled="evaluating" @click="evaluateNow">
           {{ evaluating ? '评估中...' : '立即评估告警' }}
         </button>
@@ -42,12 +42,13 @@
     <article v-if="tab==='tasks'" class="kb-card mt-3">
       <div class="kb-card-head">
         <b class="text-sm">任务</b>
+        <span class="kb-muted">共 {{ taskTotal }} 条 · 第 {{ taskPage }} 页</span>
         <div class="flex flex-wrap items-center gap-2">
-          <select v-model="statusFilter" class="kb-input w-36" @change="load">
+          <select v-model="statusFilter" class="kb-input w-36" @change="searchTasks">
             <option value="">全部状态</option>
             <option v-for="s in statuses" :key="s" :value="s">{{ labelOf(s) }}</option>
           </select>
-          <select v-model="typeFilter" class="kb-input w-40" @change="load">
+          <select v-model="typeFilter" class="kb-input w-40" @change="searchTasks">
             <option value="">全部类型</option>
             <option v-for="t in taskTypes" :key="t" :value="t">{{ t }}</option>
           </select>
@@ -80,6 +81,12 @@
             </tr>
           </tbody>
         </table>
+        <div v-if="taskTotal > taskSize" class="mt-3 flex justify-end">
+          <el-pagination
+            small layout="prev,pager,next,total,sizes" :current-page="taskPage" :page-size="taskSize"
+            :page-sizes="[20,50,100]" :total="taskTotal" :pager-count="5"
+            @current-change="setTaskPage" @size-change="setTaskSize" />
+        </div>
       </div>
     </article>
 
@@ -87,7 +94,7 @@
     <article v-else-if="tab==='alerts'" class="kb-card mt-3">
       <div class="kb-card-head">
         <b class="text-sm">告警事件</b>
-        <span class="kb-muted">条件再次命中只累计次数，不刷屏；指标恢复后自动关闭</span>
+        <span class="kb-muted">共 {{ alertTotal }} 条 · 条件再次命中只累计次数，不刷屏；指标恢复后自动关闭</span>
       </div>
       <div class="p-4">
         <div v-if="!alerts.length" class="py-6 text-center text-sm text-ink-500">当前没有告警事件</div>
@@ -117,6 +124,12 @@
             </tr>
           </tbody>
         </table>
+        <div v-if="alertTotal > alertSize" class="mt-3 flex justify-end">
+          <el-pagination
+            small layout="prev,pager,next,total,sizes" :current-page="alertPage" :page-size="alertSize"
+            :page-sizes="[20,50,100]" :total="alertTotal" :pager-count="5"
+            @current-change="setAlertPage" @size-change="setAlertSize" />
+        </div>
       </div>
     </article>
 
@@ -124,6 +137,7 @@
     <article v-else class="kb-card mt-3">
       <div class="kb-card-head">
         <b class="text-sm">告警规则</b>
+        <span class="kb-muted">共 {{ rules.length }} 条</span>
         <button class="kb-btn-outline" @click="openRule()">新增规则</button>
       </div>
       <div class="p-4">
@@ -133,7 +147,7 @@
             <tr><th>规则</th><th>指标</th><th>阈值 / 窗口</th><th>级别</th><th>范围</th><th>状态</th><th></th></tr>
           </thead>
           <tbody>
-            <tr v-for="rule in rules" :key="rule.ruleCode">
+            <tr v-for="rule in pagedRules" :key="rule.ruleCode">
               <td><b class="text-ink-700">{{ rule.name }}</b><div class="kb-muted text-[11px]">{{ rule.ruleCode }}</div></td>
               <td>{{ rule.metricLabel || rule.metric }}</td>
               <td>{{ rule.threshold }} / {{ rule.windowMinutes }} 分钟</td>
@@ -152,6 +166,12 @@
             </tr>
           </tbody>
         </table>
+        <div v-if="rules.length > ruleSize" class="mt-3 flex justify-end">
+          <el-pagination
+            small layout="prev,pager,next,total,sizes" :current-page="rulePage" :page-size="ruleSize"
+            :page-sizes="[20,50,100]" :total="rules.length" :pager-count="5"
+            @current-change="setRulePage" @size-change="setRuleSize" />
+        </div>
       </div>
     </article>
 
@@ -241,6 +261,15 @@ const dictionaries = ref<TaskDictionaries|null>(null)
 const statusFilter = ref('')
 const typeFilter = ref('')
 const statuses = ['QUEUED','RUNNING','SUCCEEDED','FAILED','DEAD','CANCELED']
+/** 任务与告警走服务端分页；规则条数有限（通常几十条），本地切片即可，不再为此加后端参数。 */
+const taskPage = ref(1)
+const taskSize = ref(20)
+const taskTotal = ref(0)
+const alertPage = ref(1)
+const alertSize = ref(20)
+const alertTotal = ref(0)
+const rulePage = ref(1)
+const ruleSize = ref(20)
 
 const detailVisible = ref(false)
 const detail = ref<TaskRun|null>(null)
@@ -269,21 +298,49 @@ function pretty(raw?:string|null) {
   try { return JSON.stringify(JSON.parse(raw), null, 2) } catch { return raw }
 }
 
-async function load() {
+const pagedRules = computed(() => rules.value.slice((rulePage.value - 1) * ruleSize.value, rulePage.value * ruleSize.value))
+
+/** 改筛选条件等于换一次检索：页码必须回到第一页，否则会停在空白页。 */
+function searchTasks() {
+  taskPage.value = 1
+  load()
+}
+function setTaskPage(next:number) { taskPage.value = next; load() }
+function setTaskSize(next:number) { taskSize.value = next; taskPage.value = 1; load() }
+function setAlertPage(next:number) { alertPage.value = next; load() }
+function setAlertSize(next:number) { alertSize.value = next; alertPage.value = 1; load() }
+function setRulePage(next:number) { rulePage.value = next }
+function setRuleSize(next:number) { ruleSize.value = next; rulePage.value = 1 }
+
+async function load(reflow = true) {
   loading.value = true
   error.value = ''
   try {
     const data = unwrap(await getTaskOverview({
       kb:props.knowledgeBaseId, status:statusFilter.value || undefined,
-      taskType:typeFilter.value || undefined, limit:100,
+      taskType:typeFilter.value || undefined, limit:taskSize.value, offset:(taskPage.value - 1) * taskSize.value,
+      alertLimit:alertSize.value, alertOffset:(alertPage.value - 1) * alertSize.value,
     }), null)
     if (data) {
       tasks.value = data.tasks || []
+      taskTotal.value = data.taskTotal || 0
       stats.value = (data.stats || {}) as Record<string,number>
       alerts.value = data.alerts || []
+      alertTotal.value = data.alertTotal || 0
       alertStats.value = (data.alertStats || {}) as Record<string,number>
       rules.value = data.rules || []
       taskTypes.value = data.taskTypes || []
+      // 筛掉一批数据后当前页可能已越界，收回最后一页再看（只回退一次，避免来回空转）。
+      if (reflow && taskPage.value > 1 && !tasks.value.length && taskTotal.value > 0) {
+        taskPage.value = Math.max(1, Math.ceil(taskTotal.value / taskSize.value))
+        await load(false)
+        return
+      }
+      if (reflow && alertPage.value > 1 && !alerts.value.length && alertTotal.value > 0) {
+        alertPage.value = Math.max(1, Math.ceil(alertTotal.value / alertSize.value))
+        await load(false)
+        return
+      }
     }
   } catch (e) {
     error.value = errorMessage(e)

@@ -26,9 +26,13 @@ public interface AclPersistenceMapper {
 
     List<Map<String, Object>> listAclRoles();
 
-    List<Map<String, Object>> listAclAudits(@Param("kb") Long kb, @Param("limit") Integer limit);
+    List<Map<String, Object>> listAclAudits(@Param("kb") Long kb, @Param("limit") Integer limit, @Param("offset") int offset);
 
-    List<Map<String, Object>> listAclChanges(@Param("kb") Long kb, @Param("limit") Integer limit);
+    long countAclAudits(@Param("kb") Long kb);
+
+    List<Map<String, Object>> listAclChanges(@Param("kb") Long kb, @Param("limit") Integer limit, @Param("offset") int offset);
+
+    long countAclChanges(@Param("kb") Long kb);
 
     String getResourcePermissionTags(@Param("kb") Long kb, @Param("type") String type, @Param("code") String code);
 

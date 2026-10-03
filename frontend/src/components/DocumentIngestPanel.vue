@@ -6,6 +6,9 @@
       <div class="kb-card-head">
         <b class="text-sm">拖入资料</b>
         <span class="kb-muted">支持多选 · 来源保存后即进入摄入流水线</span>
+        <!-- 分块策略按知识库生效，覆盖这里上传的文档与连接器同步的数据，
+             因此入口放在资料接入区（策略只影响保存之后的接入）。 -->
+        <button class="kb-btn-outline kb-head-action" @click="policyOpen=true">分块策略</button>
       </div>
       <!-- 关闭内置文件列表：已选文件由下方清单统一呈现并可逐个移除，
            否则同一批文件会在拖拽区下方再叠一层，上传区就不再紧凑。 -->
@@ -199,6 +202,10 @@
       <p v-if="preview.truncated" class="preview-note">已截断显示前 {{ preview.limit }} 字，共 {{ preview.totalChars }} 字。</p>
     </div>
   </el-dialog>
+
+  <!-- 分块策略设置层：由「拖入资料」右上角的按钮打开。
+       策略按知识库保存，接入时下发给解析器，因此上传文档与连接器同步的数据都按它切分。 -->
+  <ChunkPolicyDialog :visible="policyOpen" :knowledge-base-id="knowledgeBaseId" @close="policyOpen=false" />
 </template>
 
 <script setup lang="ts">
@@ -213,6 +220,7 @@ import { confirmAction, notifyError, notifySuccess } from '../utils/feedback'
 import IngestionLogPanel from './IngestionLogPanel.vue'
 import ChunkExplorerPanel from './ChunkExplorerPanel.vue'
 import EntityGovernancePanel from './EntityGovernancePanel.vue'
+import ChunkPolicyDialog from './ChunkPolicyDialog.vue'
 import PanelState from './PanelState.vue'
 
 const props = defineProps<{
@@ -275,6 +283,8 @@ function viewChunks(row:KnowledgeDocument){
   chunkDocId.value = row?.id ?? null
   tool.value = 'chunk'
 }
+/** 分块策略设置层：资料接入区右上角的入口，属于接入前配置而非某个文档的属性。 */
+const policyOpen = ref(false)
 
 /* ---- 批量上传 ---- */
 /** 单次批量上限：与后端 knowledge.batch.max-files 一致，先在此挡住，避免提交后才被拒绝。 */
@@ -445,6 +455,8 @@ async function retryDocumentRow(row:KnowledgeDocument){
 </script>
 
 <style scoped>
+/* 卡片头部的操作按钮：无论标题与说明多长都贴右对齐，保持「右上角操作」的位置稳定。 */
+.kb-head-action{margin-left:auto;flex:none}
 /* 已选文件清单：拖拽区下方一行一个，超出滚动，避免占用过多纵向空间。 */
 .picked-file{display:flex;
 flex-direction:column;

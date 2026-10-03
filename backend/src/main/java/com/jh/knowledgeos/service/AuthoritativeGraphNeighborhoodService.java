@@ -163,11 +163,26 @@ public class AuthoritativeGraphNeighborhoodService {
             }
         });
         Set<String> selected = new LinkedHashSet<String>();
+        // 证据与来源节点的度数来自「一条证据挂一个来源」这种结构边，数量远超知识对象，
+        // 直接按度数取点会把实体之间的关系整片挤出版图（表现为「关系 256 条，图上一条边都没有」）。
+        // 工作台要呈现的是知识对象之间的关系，因此先只取知识对象节点。
         for (String node : ranked) {
             if (selected.size() >= cap) {
                 break;
             }
+            if (isSupportNode(node)) {
+                continue;
+            }
             selected.add(node);
+        }
+        // 兜底：库里只有证据/来源时退化成按度数取，避免整张图空白。
+        if (selected.isEmpty()) {
+            for (String node : ranked) {
+                if (selected.size() >= cap) {
+                    break;
+                }
+                selected.add(node);
+            }
         }
         Map<String, Integer> degree = new HashMap<String, Integer>();
         List<Map<String, Object>> visibleEdges = new ArrayList<Map<String, Object>>();
@@ -209,6 +224,12 @@ public class AuthoritativeGraphNeighborhoodService {
         result.put("limit", cap);
         result.put("truncated", globalDegree.size() > selected.size());
         return result;
+    }
+
+    /** 证据与来源属于证据链的支撑节点，不是知识对象：构图时不参与「最高度节点」选取。 */
+    private boolean isSupportNode(String node) {
+        String nodeType = type(node);
+        return "EVIDENCE".equals(nodeType) || "SOURCE".equals(nodeType);
     }
 
     private List<Edge> loadEdges(Long kb) {

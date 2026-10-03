@@ -91,7 +91,7 @@ public interface GraphMapper {
 
     int updateEntityStatus(@Param("kb") Long kb, @Param("code") String code, @Param("status") String status);
 
-    List<Map<String, Object>> listEntitiesWithUsage(@Param("kb") Long kb);
+    List<Map<String, Object>> listEntitiesWithUsage(@Param("kb") Long kb, @Param("permissionTags") List<String> permissionTags);
 
     Map<String, Object> getEntity(@Param("kb") Long kb, @Param("code") String code);
 

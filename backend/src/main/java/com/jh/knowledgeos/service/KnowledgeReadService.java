@@ -189,8 +189,12 @@ public class KnowledgeReadService {
         return documentMapper.listSources(kb, permissionTags);
     }
 
-    public List<Map<String, Object>> documents(Long kb) {
-        return documentMapper.listDocuments(kb);
+    /**
+     * 文档通过来源归属知识库，因此与来源共用同一套 ACL：
+     * 否则会出现「来源列表为空、文档数却照常显示」。
+     */
+    public List<Map<String, Object>> documents(Long kb, List<String> permissionTags) {
+        return documentMapper.listDocuments(kb, permissionTags);
     }
 
     /**
@@ -200,7 +204,7 @@ public class KnowledgeReadService {
      */
     public Map<String, Object> overview(Long kb, List<String> permissionTags) {
         List<KnowledgeSource> sources = documentMapper.listSources(kb, permissionTags);
-        List<Map<String, Object>> documents = documentMapper.listDocuments(kb);
+        List<Map<String, Object>> documents = documentMapper.listDocuments(kb, permissionTags);
         List<KnowledgeCard> cards = cardClaimMapper.listCards(kb, permissionTags);
         List<Claim> claims = cardClaimMapper.listClaims(kb, permissionTags);
         List<Map<String, Object>> pending = governanceMapper.listPendingReviews(kb);

@@ -23,7 +23,7 @@
 <select id="findDocumentRetryContext" resultType="map">SELECT d.id,d.document_code documentCode,d.title,d.status,d.retry_count retryCount,s.id sourceId,s.name sourceName,s.storage_path storagePath,s.authority_score authorityScore,s.permission_tags permissionTags,s.source_type sourceType,sv.version_no sourceVersion,sv.id sourceVersionId,s.knowledge_base_id knowledgeBaseId,COALESCE((SELECT MAX(cu.revision) FROM t_content_unit cu WHERE cu.document_id=d.id),1) chunkRevision FROM t_document d JOIN t_source_version sv ON sv.id=d.source_version_id JOIN t_source s ON s.id=sv.source_id WHERE d.id=#{id}</select>
 
 
-<select id="listSources" resultType="com.jh.knowledgeos.domain.KnowledgeSource">SELECT id,source_code sourceCode,knowledge_base_id knowledgeBaseId,name,source_type sourceType,source_uri sourceUri,authority_score authorityScore,status,permission_tags permissionTags,created_time createdTime FROM t_source WHERE knowledge_base_id=#{kb}<choose><when test="permissionTags != null and permissionTags.size() > 0"> AND (permission_tags IS NULL OR JSON_LENGTH(permission_tags)=0 OR <foreach collection="permissionTags" item="tag" open="(" separator=" OR " close=")">JSON_CONTAINS(permission_tags, JSON_QUOTE(#{tag}))</foreach>)</when><otherwise> AND (permission_tags IS NULL OR JSON_LENGTH(permission_tags)=0)</otherwise></choose> ORDER BY created_time DESC</select>
+<select id="listSources" resultType="com.jh.knowledgeos.domain.KnowledgeSource">SELECT id,source_code sourceCode,knowledge_base_id knowledgeBaseId,name,source_type sourceType,source_uri sourceUri,authority_score authorityScore,status,permission_tags permissionTags,created_time createdTime FROM t_source WHERE knowledge_base_id=#{kb}<choose><when test="permissionTags == null"></when><when test="permissionTags != null and permissionTags.size() > 0"> AND (permission_tags IS NULL OR JSON_LENGTH(permission_tags)=0 OR <foreach collection="permissionTags" item="tag" open="(" separator=" OR " close=")">JSON_CONTAINS(permission_tags, JSON_QUOTE(#{tag}))</foreach>)</when><otherwise> AND (permission_tags IS NULL OR JSON_LENGTH(permission_tags)=0)</otherwise></choose> ORDER BY created_time DESC</select>
 
 
 <select id="getSourcePreview" resultType="map">
@@ -34,15 +34,15 @@ SELECT s.id sourceId,s.source_code sourceCode,s.name name,s.source_type sourceTy
 FROM t_source s
 LEFT JOIN t_source_version sv ON sv.source_id=s.id AND sv.version_no=1
 LEFT JOIN t_document d ON d.source_version_id=sv.id
-WHERE s.knowledge_base_id=#{kb} AND s.id=#{sourceId} AND (s.permission_tags IS NULL OR JSON_LENGTH(s.permission_tags)=0
+WHERE s.knowledge_base_id=#{kb} AND s.id=#{sourceId}<choose><when test="permissionTags == null"></when><otherwise> AND (s.permission_tags IS NULL OR JSON_LENGTH(s.permission_tags)=0
  <if test="permissionTags != null and permissionTags.size() > 0">
  OR (<foreach collection="permissionTags" item="tag" separator=" OR ">JSON_CONTAINS(s.permission_tags, JSON_QUOTE(#{tag}))</foreach>)
- </if>)
+ </if>)</otherwise></choose>
 LIMIT 1
 </select>
 
 
-<select id="listDocuments" resultType="map">SELECT d.id,d.document_code documentCode,d.title,d.mime_type mimeType,d.parse_status parseStatus,d.status,d.current_stage currentStage,d.error_message errorMessage,d.retry_count retryCount,d.chunk_count chunkCount,s.name sourceName,s.id sourceId,d.created_time createdTime FROM t_document d JOIN t_source_version sv ON sv.id=d.source_version_id JOIN t_source s ON s.id=sv.source_id WHERE s.knowledge_base_id=#{kb} ORDER BY d.created_time DESC</select>
+<select id="listDocuments" resultType="map">SELECT d.id,d.document_code documentCode,d.title,d.mime_type mimeType,d.parse_status parseStatus,d.status,d.current_stage currentStage,d.error_message errorMessage,d.retry_count retryCount,d.chunk_count chunkCount,s.name sourceName,s.id sourceId,d.created_time createdTime FROM t_document d JOIN t_source_version sv ON sv.id=d.source_version_id JOIN t_source s ON s.id=sv.source_id WHERE s.knowledge_base_id=#{kb}<choose><when test="permissionTags == null"></when><when test="permissionTags != null and permissionTags.size() > 0"> AND (s.permission_tags IS NULL OR JSON_LENGTH(s.permission_tags)=0 OR <foreach collection="permissionTags" item="tag" open="(" separator=" OR " close=")">JSON_CONTAINS(s.permission_tags, JSON_QUOTE(#{tag}))</foreach>)</when><otherwise> AND (s.permission_tags IS NULL OR JSON_LENGTH(s.permission_tags)=0)</otherwise></choose> ORDER BY d.created_time DESC</select>
 
 
 <update id="supersedeDocumentChunks">UPDATE t_content_unit SET status='SUPERSEDED' WHERE document_id=#{documentId} AND status='ACTIVE'</update>

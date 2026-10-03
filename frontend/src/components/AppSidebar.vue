@@ -29,7 +29,8 @@
         <span class="kos-side-caret" :class="{up:panel}" aria-hidden="true">⌃</span>
       </button>
 
-      <!-- 角色面板：向上展开，宽度与侧栏同宽；点击面板外 / Esc 关闭 -->
+      <!-- 角色面板：向上展开，宽度与侧栏同宽；点击面板外 / Esc 关闭。
+           系统配置即使无权限也保留入口并置灰，避免普通成员「看不到有这个模块」。 -->
       <div v-if="panel" class="kos-user-panel" role="dialog" aria-label="账号与角色" @click.stop>
         <div class="kos-user-panel-head">
           <span class="kos-user-panel-avatar">{{avatar||'K'}}</span>
@@ -46,8 +47,12 @@
             <NavIcon class="kos-user-panel-ic" :name="a.icon" :size="14"/>{{a.label}}
           </button>
         </div>
+        <p v-if="environment||version" class="kos-user-panel-env">
+          {{[environment,version?`v${version}`:''].filter(Boolean).join(' · ')}}
+        </p>
         <div class="kos-user-panel-foot">
-          <button v-if="canSystem" class="kos-user-panel-link" @click="enterSystem">
+          <button class="kos-user-panel-link" :class="{disabled:!canSystem}" :disabled="!canSystem"
+            :title="systemTitle" @click="enterSystem">
             <NavIcon name="settings" :size="14"/>系统配置
           </button>
           <button v-if="loggedIn" class="kos-user-panel-link danger" @click="logout">⇥ 退出登录</button>
@@ -57,19 +62,19 @@
 
     <!-- 设置图标与用户名同一行：底部工具区只有一行，窄侧栏也保持不换行。
          版本信息已移到主内容底部的统一页脚，侧栏不再占用这一行。 -->
-    <button v-if="canSystem" class="kos-side-icon" :class="{active:systemActive}"
-      title="系统配置" aria-label="系统配置" @click="$emit('enter-system')">
+    <button class="kos-side-icon" :class="{active:systemActive}" :disabled="!canSystem"
+      :title="systemTitle" aria-label="系统配置" @click="enterSystem">
       <NavIcon name="settings" :size="16"/>
     </button>
   </div>
 </aside>
 </template>
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import type {NavGroup, NavSection} from '../navigation'
 import NavIcon from './NavIcon.vue'
 
-defineProps<{
+const props = defineProps<{
   /** 按业务域分组的一级入口：工作台 / 知识库 / 系统集成 */
   groups:NavGroup[];activeSection:string;badge:(section:NavSection)=>string
   /** 底部工具区：用户名 / 头像 / 角色身份色 / 角色名 / 角色职责说明 */
@@ -78,8 +83,12 @@ defineProps<{
   actions?:{key:string;label:string;icon:string;disabled?:boolean}[]
   /** 是否已登录：未登录时不展示退出登录 */
   loggedIn?:boolean
-  /** 系统配置入口：无 system 权限时隐藏；当前停留在系统配置页时高亮 */
+  /** 系统配置入口：无权限时置灰并给出原因，不再整块隐藏；当前停留在系统配置页时高亮 */
   canSystem?:boolean;systemActive?:boolean
+  /** 无系统配置权限时的悬浮说明（外壳带上角色名，说明为什么点不动） */
+  systemHint?:string
+  /** 运行环境与版本号：面板里给一条环境信息，便于排查问题 */
+  environment?:string;version?:string
 }>()
 const emit = defineEmits<{
   (e:'enter',section:NavSection):void
@@ -89,6 +98,8 @@ const emit = defineEmits<{
 }>()
 
 const panel = ref(false)
+const systemTitle = computed(()=>
+  props.canSystem?'系统配置':(props.systemHint||'当前角色无权访问系统配置'))
 
 function go(action:{key:string;disabled?:boolean}){
   if(action.disabled)return
@@ -96,6 +107,7 @@ function go(action:{key:string;disabled?:boolean}){
   emit('go',action.key)
 }
 function enterSystem(){
+  if(!props.canSystem)return
   panel.value=false
   emit('enter-system')
 }

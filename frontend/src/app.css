@@ -248,6 +248,10 @@ body{background:var(--bg-base);color:var(--ink-1)}
 }
 .kos-user-panel-link:hover{text-decoration:underline}
 .kos-user-panel-link.danger{color:var(--danger)}
+/* 无权入口保留可见但置灰：让普通成员知道有这个模块，而不是把它藏起来。 */
+.kos-user-panel-link.disabled{opacity:.45;cursor:not-allowed}
+.kos-user-panel-link.disabled:hover{text-decoration:none}
+.kos-user-panel-env{margin:12px 0 0;font-size:11px;color:var(--ink-3)}
 .kos-side-avatar{
   width:26px;height:26px;border-radius:50%;flex:none;display:grid;place-items:center;font-size:11px;font-weight:700;
   background:linear-gradient(140deg,color-mix(in srgb,var(--role-accent,#4f8cf7) 46%,var(--brand-900)),color-mix(in srgb,var(--role-accent,#4f8cf7) 22%,var(--bg-sunken)));
@@ -267,6 +271,8 @@ body{background:var(--bg-base);color:var(--ink-1)}
   border-color:var(--line);color:var(--accent-text);
 }
 .kos-side-icon:focus-visible{outline:none;box-shadow:var(--ring)}
+.kos-side-icon:disabled{opacity:.4;cursor:not-allowed}
+.kos-side-icon:disabled:hover{background:transparent;border-color:transparent;color:var(--ink-2)}
 
 /* ---------- 主内容底部：版本与授权 ---------- */
 /* 版本与授权信息统一收在主内容最下方：每个页面滚到底都能看到同一条说明，

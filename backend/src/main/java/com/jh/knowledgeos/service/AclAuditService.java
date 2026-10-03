@@ -42,9 +42,13 @@ AclAuditService {
         }
     }
 
-    public List<Map<String, Object>> list(Long kb, Integer limit) {
+    public List<Map<String, Object>> list(Long kb, Integer limit, int offset) {
         int normalized = Math.min(500, Math.max(1, limit == null ? 100 : limit));
-        return mapper.listAclAudits(kb, normalized);
+        return mapper.listAclAudits(kb, normalized, Math.max(offset, 0));
+    }
+
+    public long count(Long kb) {
+        return mapper.countAclAudits(kb);
     }
 
     private String requestUri() {

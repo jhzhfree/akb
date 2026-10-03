@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.jh.knowledgeos.mapper.ConnectorItemMapper">
+
+<sql id="columns">id,connector_id AS connectorId,item_type AS itemType,external_id AS externalId,title,item_url AS itemUrl,excerpt,attributes_json AS attributesJson,raw_json AS rawJson,remote_updated_at AS remoteUpdatedAt,synced_time AS syncedTime,created_time AS createdTime,updated_time AS updatedTime</sql>
+
+<!-- 属性筛选：attributes_json 是无模式的，按 key 取值比较；值在同步时统一存成字符串，
+     因此这里是字符串等值匹配，数字与标签同样成立。
+     同一属性勾选的多个取值之间取 OR（状态 ∈ {已完成, 待办}），不同属性之间取 AND。 -->
+<sql id="filters">
+  <if test="type != null and type != ''">AND item_type = #{type}</if>
+  <if test="keyword != null and keyword != ''">AND (title LIKE CONCAT('%', #{keyword}, '%') OR external_id LIKE CONCAT('%', #{keyword}, '%'))</if>
+  <if test="filters != null">
+    <foreach collection="filters" item="filter">
+      <if test="filter.values != null and filter.values.size() > 0">
+      AND (
+        <foreach collection="filter.values" item="value" separator=" OR ">
+        JSON_UNQUOTE(JSON_EXTRACT(attributes_json, CONCAT('$."', #{filter.key}, '"'))) = #{value}
+        </foreach>
+      )
+      </if>
+    </foreach>
+  </if>
+</sql>
+
+<!-- 同一个外部条目再同步一次只更新内容：external_id 在同一个连接器下唯一。 -->
+<insert id="upsert" parameterType="com.jh.knowledgeos.domain.ConnectorItem">
+INSERT INTO t_connector_item(connector_id,item_type,external_id,title,item_url,excerpt,attributes_json,raw_json,remote_updated_at,synced_time)
+VALUES(#{connectorId},#{itemType},#{externalId},#{title},#{itemUrl},#{excerpt},#{attributesJson},#{rawJson},#{remoteUpdatedAt},CURRENT_TIMESTAMP)
+ON DUPLICATE KEY UPDATE item_type=VALUES(item_type),title=VALUES(title),item_url=VALUES(item_url),excerpt=VALUES(excerpt),attributes_json=VALUES(attributes_json),raw_json=VALUES(raw_json),remote_updated_at=VALUES(remote_updated_at),synced_time=CURRENT_TIMESTAMP
+</insert>
+
+<delete id="deleteByConnector">DELETE FROM t_connector_item WHERE connector_id=#{connectorId}</delete>
+
+<select id="get" resultType="com.jh.knowledgeos.domain.ConnectorItem">SELECT <include refid="columns"/> FROM t_connector_item WHERE id=#{id}</select>
+
+<select id="page" resultType="com.jh.knowledgeos.domain.ConnectorItem">
+  SELECT <include refid="columns"/> FROM t_connector_item
+  WHERE connector_id=#{connectorId}
+  <include refid="filters"/>
+  ORDER BY COALESCE(remote_updated_at, synced_time) DESC, id DESC
+  LIMIT #{offset},#{size}
+</select>
+
+<select id="count" resultType="long">
+  SELECT COUNT(*) FROM t_connector_item
+  WHERE connector_id=#{connectorId}
+  <include refid="filters"/>
+</select>
+
+<select id="countByConnector" resultType="long">SELECT COUNT(*) FROM t_connector_item WHERE connector_id=#{connectorId}</select>
+
+<select id="typeCounts" resultType="map">
+  SELECT item_type AS itemType, COUNT(*) AS total FROM t_connector_item WHERE connector_id=#{connectorId} GROUP BY item_type ORDER BY total DESC, item_type
+</select>
+
+<select id="attributePayloads" resultType="string">
+  SELECT attributes_json FROM t_connector_item
+  WHERE connector_id=#{connectorId}
+  <if test="type != null and type != ''">AND item_type = #{type}</if>
+  ORDER BY id DESC LIMIT #{limit}
+</select>
+
+</mapper>

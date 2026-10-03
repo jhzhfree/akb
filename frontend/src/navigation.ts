@@ -113,6 +113,8 @@ export const NAV_SECTIONS: NavSection[] = [
       { key: 'create.overview', label: '生成概览', icon: 'sparkles', adminOnly: true, permission: PERM.GENERATE_IMPORT },
       { key: 'create.import', label: '文档导入', icon: 'filePlus', focus: 'documents', permission: PERM.GENERATE_IMPORT },
       { key: 'create.connector', label: '连接器', icon: 'link', adminOnly: true, focus: 'sources', permission: PERM.GENERATE_CONNECTOR },
+      /** 连接器的知识目录：按外部系统的类型与属性浏览同步下来的条目。 */
+      { key: 'create.connectorCatalog', label: '外部知识', icon: 'layers', adminOnly: true, permission: PERM.GENERATE_CONNECTOR },
       { key: 'create.jobs', label: '生成任务', icon: 'clock', adminOnly: true, focus: 'ingestion', permission: PERM.GENERATE_IMPORT },
       { key: 'create.judgment', label: '知识裁决', icon: 'scale', badge: 'openConflict', focus: 'judgment', permission: PERM.GENERATE_JUDGE },
       { key: 'create.derive', label: '知识衍生', icon: 'branch', permission: PERM.GENERATE_DERIVE },
