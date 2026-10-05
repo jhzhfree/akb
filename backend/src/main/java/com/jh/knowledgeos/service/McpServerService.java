@@ -105,8 +105,10 @@ public class McpServerService {
 
     public Map<String, Object> toolsList() {
         List<Map<String, Object>> tools = new ArrayList<Map<String, Object>>();
-        tools.add(tool("knowledge_query", "可追溯知识问答：返回答案、引用与 queryId，可用于后续溯源", schema(properties(prop("knowledgeBaseId", "integer", "知识库 ID"),
-            prop("question", "string", "要提问的问题"), prop("topK", "integer", "召回数量，默认 10")), Arrays.asList("knowledgeBaseId", "question"))));
+        tools.add(tool("knowledge_query", "可追溯知识问答：返回答案、引用与 queryId，可用于后续溯源；答案可按 answerFormat 交付成 Markdown / 纯文本 / HTML", schema(properties(prop("knowledgeBaseId", "integer", "知识库 ID"),
+            prop("question", "string", "要提问的问题"), prop("topK", "integer", "召回数量，默认 10"),
+            prop("answerFormat", "string", "答案返回格式：default（不传即此项）/ markdown / text / html；返回值里的 answerFormat 是实际生效的那个")),
+            Arrays.asList("knowledgeBaseId", "question"))));
         tools.add(tool("knowledge_search", "只做检索不生成答案：返回召回候选、重排结果与引用，便于自行装配上下文", schema(properties(prop("knowledgeBaseId", "integer", "知识库 ID"),
             prop("query", "string", "检索语句"), prop("topK", "integer", "召回数量，默认 10")), Arrays.asList("knowledgeBaseId", "query"))));
         tools.add(tool("list_knowledge_bases", "列出当前 API Key 可见的知识库", schema(new LinkedHashMap<String, Object>(), new ArrayList<String>())));
@@ -142,7 +144,7 @@ public class McpServerService {
         if ("knowledge_query".equals(name)) {
             Long kb = resolve(key, args);
             accessService.assertScope(key, ApiKey.SCOPE_READ);
-            value = facade.query(kb, text(args, "question"), integer(args, "topK"), null);
+            value = facade.query(kb, text(args, "question"), integer(args, "topK"), null, text(args, "answerFormat"));
         } else if ("knowledge_search".equals(name)) {
             Long kb = resolve(key, args);
             accessService.assertScope(key, ApiKey.SCOPE_READ);

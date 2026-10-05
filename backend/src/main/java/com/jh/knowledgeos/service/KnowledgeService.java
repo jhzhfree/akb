@@ -1,4 +1,5 @@
 package com.jh.knowledgeos.service;
+import com.jh.knowledgeos.common.AnswerFormat;
 import com.jh.knowledgeos.domain.Claim;
 import com.jh.knowledgeos.domain.KnowledgeCard;
 import com.jh.knowledgeos.domain.KnowledgeSource;
@@ -108,6 +109,10 @@ public class KnowledgeService {
         Map<String, Object> response = queryService.query(request);
         Map<String, Object> result = new LinkedHashMap<String, Object>();
         result.put("queryId", response.get("queryId"));
+        // 实际生效的交付格式要回传：界面上选的是用户点的，这里回的是服务端认下来的那个，
+        // 传了认不出来的取值时二者不一致，前端据此如实显示。
+        result.put("answerFormat", AnswerFormat.normalize(response.get("answerFormat") == null ? null
+            : String.valueOf(response.get("answerFormat"))));
         result.put("answer", response.get("answer"));
         result.put("citations", response.get("citations"));
         result.put("confidence", response.get("confidence"));

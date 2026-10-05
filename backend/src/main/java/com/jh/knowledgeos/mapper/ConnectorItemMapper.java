@@ -1,6 +1,7 @@
 package com.jh.knowledgeos.mapper;
 
 import com.jh.knowledgeos.domain.ConnectorItem;
+import com.jh.knowledgeos.domain.ConnectorItemBinding;
 import org.apache.ibatis.annotations.Param;
 import java.util.List;
 import java.util.Map;
@@ -60,4 +61,28 @@ public interface ConnectorItemMapper {
     List<String> attributePayloads(@Param("connectorId") Long connectorId, @Param("type") String type, @Param("limit") int limit);
 
     long countByConnector(@Param("connectorId") Long connectorId);
+
+    /** Ingestion bookkeeping: what this item became in the knowledge base, if anything yet. */
+    ConnectorItemBinding findBinding(@Param("connectorItemId") Long connectorItemId);
+
+    int upsertBinding(ConnectorItemBinding binding);
+
+    /** Per-item ingestion state for the catalog list, so the console can show what is already in. */
+    List<Map<String, Object>> bindingStatus(@Param("connectorId") Long connectorId);
+
+    int deleteBindingsByConnector(@Param("connectorId") Long connectorId);
+
+    /** id + external_id of everything kept for a connector: what a sync can compare against. */
+    List<Map<String, Object>> externalIndex(@Param("connectorId") Long connectorId);
+
+    /** Newest kept rows, for an automatic pass to pick its candidates from. */
+    List<ConnectorItem> recent(@Param("connectorId") Long connectorId, @Param("limit") int limit);
+
+    int deleteById(@Param("id") Long id);
+
+    /** Items already turned into knowledge, optionally narrowed to one ingestion state. */
+    List<Long> boundItemIds(@Param("connectorId") Long connectorId, @Param("status") String status);
+
+    int updateBindingStatus(@Param("connectorItemId") Long connectorItemId, @Param("ingestStatus") String ingestStatus,
+        @Param("message") String message);
 }

@@ -1,6 +1,8 @@
 import { computed, onUnmounted, reactive, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import type { ApiEnvelope, KnowledgeBase } from '../../types'
+import { ANSWER_FORMATS } from '../../api/contracts'
+import type { AnswerFormat } from '../../api/contracts'
 import { createExternalKey } from '../../api/external'
 import { unwrap } from '../../api/knowledge'
 import { asArray, asRecord, bodySize, isJsonBody, prettyBody, safeJson } from './lab-utils'
@@ -23,6 +25,8 @@ export function useExternalServiceLab(props: ExternalServiceLabProps) {
     knowledgeBaseId:null as number | null,
     question:'报销流程是什么？',
     topK:10,
+    /** 答案交付格式：default / markdown / text / html，服务端回传的 answerFormat 是实际生效的那个。 */
+    answerFormat:'default' as AnswerFormat,
     code:'',
     queryId:'',
   })
@@ -193,9 +197,13 @@ export function useExternalServiceLab(props: ExternalServiceLabProps) {
         const row = asRecord(data)
         const ok = !!row.queryId && !!String(row.answer || '').trim()
         if (row.queryId) cfg.queryId = String(row.queryId)
+        // 实际生效的格式与请求不一致，说明取值没被接受（服务端静默退回 default）。
+        const effective = String(row.answerFormat || 'default')
+        const downgraded = effective !== cfg.answerFormat
         return {
           verdict:(ok ? 'PASS' : 'FAIL') as 'PASS' | 'FAIL',
           note:ok ? `queryId=${row.queryId}，答案 ${String(row.answer).length} 字，引用 ${asArray(row.citations).length} 条`
+            + `，交付格式 ${effective}${downgraded ? `（请求 ${cfg.answerFormat} 未生效，已退回默认）` : ''}`
             : '缺少 queryId 或 answer',
         }
       }
@@ -344,7 +352,9 @@ export function useExternalServiceLab(props: ExternalServiceLabProps) {
     {
       key:'callQuery', label:'tools/call knowledge_query',
       body:() => ({ jsonrpc:'2.0', id:3, method:'tools/call', params:{
-        name:'knowledge_query', arguments:{ knowledgeBaseId:cfg.knowledgeBaseId ?? 1, question:cfg.question, topK:cfg.topK },
+        name:'knowledge_query', arguments:{
+          knowledgeBaseId:cfg.knowledgeBaseId ?? 1, question:cfg.question, topK:cfg.topK, answerFormat:cfg.answerFormat,
+        },
       } }),
     },
     {
@@ -566,6 +576,7 @@ export function useExternalServiceLab(props: ExternalServiceLabProps) {
     if (sseKind.value === 'query') {
       params.set('question', cfg.question)
       params.set('topK', String(cfg.topK))
+      params.set('answerFormat', cfg.answerFormat)
     }
     const path = sseKind.value === 'query' ? '/v1/external/stream/query' : '/v1/external/stream/events'
     return withAuth(`${prefix()}${path}?${params.toString()}`)
@@ -946,6 +957,7 @@ export function useExternalServiceLab(props: ExternalServiceLabProps) {
     judgeMcp,
     sendMcp,
     mcpHandshake,
+    answerFormatOptions:ANSWER_FORMATS,
     sseUrl,
     pushSse,
     toggleSse,

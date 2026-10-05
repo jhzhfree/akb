@@ -61,4 +61,51 @@ ON DUPLICATE KEY UPDATE item_type=VALUES(item_type),title=VALUES(title),item_url
   ORDER BY id DESC LIMIT #{limit}
 </select>
 
+<!-- 入库绑定：一条外部条目最多一条，重复入库只更新它。 -->
+<sql id="bindingColumns">id,connector_id AS connectorId,connector_item_id AS connectorItemId,knowledge_base_id AS knowledgeBaseId,source_id AS sourceId,document_id AS documentId,content_hash AS contentHash,remote_updated_at AS remoteUpdatedAt,ingest_status AS ingestStatus,last_ingest_time AS lastIngestTime,last_ingest_message AS lastIngestMessage</sql>
+
+<select id="findBinding" resultType="com.jh.knowledgeos.domain.ConnectorItemBinding">
+  SELECT <include refid="bindingColumns"/> FROM t_connector_item_binding WHERE connector_item_id=#{connectorItemId}
+</select>
+
+<select id="bindingStatus" resultType="map">
+  SELECT connector_item_id AS itemId, ingest_status AS ingestStatus, document_id AS documentId, content_hash AS contentHash
+  FROM t_connector_item_binding WHERE connector_id=#{connectorId}
+</select>
+
+<insert id="upsertBinding" parameterType="com.jh.knowledgeos.domain.ConnectorItemBinding">
+INSERT INTO t_connector_item_binding(connector_id,connector_item_id,knowledge_base_id,source_id,document_id,content_hash,remote_updated_at,ingest_status,last_ingest_time,last_ingest_message)
+VALUES(#{connectorId},#{connectorItemId},#{knowledgeBaseId},#{sourceId},#{documentId},#{contentHash},#{remoteUpdatedAt},#{ingestStatus},CURRENT_TIMESTAMP,#{lastIngestMessage})
+ON DUPLICATE KEY UPDATE source_id=VALUES(source_id),document_id=VALUES(document_id),content_hash=VALUES(content_hash),remote_updated_at=VALUES(remote_updated_at),ingest_status=VALUES(ingest_status),last_ingest_time=CURRENT_TIMESTAMP,last_ingest_message=VALUES(last_ingest_message)
+</insert>
+
+<delete id="deleteBindingsByConnector">DELETE FROM t_connector_item_binding WHERE connector_id=#{connectorId}</delete>
+
+<!-- 同步后要拿「本地已有」和「本轮拉到」对比，差出来的就是源端删掉的。 -->
+<select id="externalIndex" resultType="map">
+  SELECT id, external_id AS externalId, item_type AS itemType, attributes_json AS attributesJson
+  FROM t_connector_item WHERE connector_id=#{connectorId} ORDER BY id
+</select>
+
+<delete id="deleteById">DELETE FROM t_connector_item WHERE id=#{id}</delete>
+
+<select id="recent" resultType="com.jh.knowledgeos.domain.ConnectorItem">
+  SELECT <include refid="columns"/> FROM t_connector_item WHERE connector_id=#{connectorId}
+  ORDER BY id DESC LIMIT #{limit}
+</select>
+
+<!-- 自动入库扫描：先看哪些已经入库（或等着重抽），没入库的才是候选。 -->
+<select id="boundItemIds" resultType="long">
+  SELECT connector_item_id FROM t_connector_item_binding
+  WHERE connector_id=#{connectorId}
+  <if test="status != null and status != ''">AND ingest_status=#{status}</if>
+  ORDER BY connector_item_id
+</select>
+
+<update id="updateBindingStatus">
+  UPDATE t_connector_item_binding
+  SET ingest_status=#{ingestStatus}, last_ingest_message=#{message}, last_ingest_time=CURRENT_TIMESTAMP
+  WHERE connector_item_id=#{connectorItemId}
+</update>
+
 </mapper>

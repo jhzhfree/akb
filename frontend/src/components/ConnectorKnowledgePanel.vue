@@ -6,7 +6,7 @@
         <h1 class="kb-title mt-1">外部知识</h1>
         <p class="kb-muted mt-1">
           按外部系统自己的类型与属性浏览已同步的知识：左边挑类型与属性，右边看条目，点开看详情。
-          这里只是外部系统当前的样子，不会进入知识库主结构。
+          「入库」会把条目变成普通的文档与知识卡片，走与导入文件完全相同的抽取与检索链路。
         </p>
       </div>
       <div class="flex shrink-0 flex-wrap items-center gap-2">
@@ -22,11 +22,26 @@
         <button class="kb-btn-primary" :disabled="!connectorId || syncing" @click="syncNow">
           {{ syncing ? '同步中…' : '同步' }}
         </button>
+        <button
+          class="kb-btn-outline" :disabled="!connectorId || ingestingSelection"
+          title="按左侧当前的筛选条件入库，最多 20 条"
+          @click="ingestSelection">
+          {{ ingestingSelection ? '入库中…' : '按筛选入库' }}
+        </button>
+        <button
+          class="kb-btn-outline" :disabled="!connectorId || autoingesting"
+          title="按连接器的入库设置跑一轮：范围内的新条目入库，源端内容变化的重抽"
+          @click="autoIngest">
+          {{ autoingesting ? '自动入库中…' : '按设置入库一轮' }}
+        </button>
       </div>
     </header>
 
     <div v-if="syncMessage" class="mb-3 text-[12px]" :class="syncOk ? 'text-emerald-600' : 'text-rose-600'">
       {{ syncMessage }}
+    </div>
+    <div v-if="ingestMessage" class="mb-3 text-[12px] text-emerald-600">
+      {{ ingestMessage }}
     </div>
 
     <div class="grid grid-cols-[268px_1fr] gap-3">
@@ -114,9 +129,26 @@
               <el-table-column label="更新时间" width="150">
                 <template #default="{ row }">{{ attrTime(row.updatedAt) }}</template>
               </el-table-column>
-              <el-table-column label="操作" width="80">
+              <el-table-column label="入库" width="110">
                 <template #default="{ row }">
-                  <button class="kb-btn-ghost" @click.stop="openDetail(row)">详情</button>
+                  <span
+                    class="text-[12px]"
+                    :class="ingestStatus[row.id]?.ingestStatus === 'INGESTED' ? 'text-emerald-600' : 'kb-muted'">
+                    {{ ingestLabel(row) }}
+                  </span>
+                </template>
+              </el-table-column>
+              <el-table-column label="操作" width="150">
+                <template #default="{ row }">
+                  <div class="flex items-center gap-1">
+                    <button class="kb-btn-ghost" @click.stop="openDetail(row)">详情</button>
+                    <button
+                      class="kb-btn-ghost" :disabled="ingestingId === row.id"
+                      :title="ingestStatus[row.id]?.ingestStatus === 'INGESTED' ? '源端已更新或需要重算时点这里，旧版本会被替换' : '入库后生成知识卡片与断言'"
+                      @click.stop="ingestRow(row, ingestStatus[row.id]?.ingestStatus === 'INGESTED')">
+                      {{ ingestingId === row.id ? '入库中' : (ingestStatus[row.id]?.ingestStatus === 'INGESTED' ? '重抽' : '入库') }}
+                    </button>
+                  </div>
                 </template>
               </el-table-column>
             </el-table>
@@ -180,10 +212,12 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import type {
-  CatalogAttribute, CatalogFacets, CatalogItem, CatalogPage, CatalogSyncResult, ConnectorSource,
+  CatalogAttribute, CatalogAutoIngestResult, CatalogFacets, CatalogIngestResult, CatalogIngestSelectionResult,
+  CatalogIngestStatus, CatalogItem, CatalogPage, CatalogSyncResult, ConnectorSource,
 } from '../types'
 import {
-  connectorCatalog, connectorCatalogFacets, connectorCatalogItem, listConnectors, syncConnectorCatalog,
+  connectorCatalog, connectorCatalogFacets, connectorCatalogItem, connectorIngestStatus,
+  ingestConnectorAuto, ingestConnectorItem, ingestConnectorSelection, listConnectors, syncConnectorCatalog,
 } from '../api/knowledge'
 import { unwrap } from '../api/knowledge'
 import { fromNow } from '../utils/time'
@@ -210,6 +244,13 @@ const facets = ref<CatalogFacets>({ types:[], attributes:[], total:0 })
 const syncing = ref(false)
 const syncMessage = ref('')
 const syncOk = ref(true)
+
+/** 每条目的入库状态：未入库的条目不在列表里，因此查不到就是「未入库」。 */
+const ingestStatus = ref<Record<number, CatalogIngestStatus>>({})
+const ingestingId = ref<number|null>(null)
+const ingestingSelection = ref(false)
+const autoingesting = ref(false)
+const ingestMessage = ref('')
 
 /** 详情里的属性按「标签 + 值」逐个卡片展示，键的顺序由后端采集顺序决定。 */
 const detailAttributes = computed<CatalogAttribute[]>(() => {
@@ -257,6 +298,20 @@ async function loadFacets() {
   }
 }
 
+async function loadIngestStatus() {
+  if (connectorId.value === null) return
+  try {
+    const response = await connectorIngestStatus(connectorId.value)
+    const list = unwrap(response, [] as CatalogIngestStatus[])
+    const map:Record<number, CatalogIngestStatus> = {}
+    for (const item of list) map[item.itemId] = item
+    ingestStatus.value = map
+  } catch {
+    // 状态只是列表上的一枚标签，拉不到就当作都未入库，不打断浏览。
+    ingestStatus.value = {}
+  }
+}
+
 async function load() {
   if (connectorId.value === null) return
   loading.value = true
@@ -272,7 +327,7 @@ async function load() {
     const data = unwrap(response, {} as CatalogPage)
     rows.value = data.items || []
     total.value = data.total || 0
-    await loadFacets()
+    await Promise.all([loadFacets(), loadIngestStatus()])
   } catch (e) {
     error.value = (e as Error).message || '知识列表加载失败'
     rows.value = []
@@ -290,7 +345,9 @@ async function syncNow() {
     const response = await syncConnectorCatalog(connectorId.value)
     const result = unwrap(response, {} as CatalogSyncResult)
     syncOk.value = true
-    syncMessage.value = result.message || '同步完成'
+    // 目录同步是同步返回的，入库（每条都要调一次模型）在后台跑：提示要说实话，别假装已完成。
+    syncMessage.value = (result.message || '同步完成')
+      + (result.ingestScheduled ? '（新增与变更条目的入库在后台进行，稍后刷新查看入库状态）' : '')
     notifySuccess(syncMessage.value)
     page.value = 1
     await load()
@@ -300,6 +357,78 @@ async function syncNow() {
     notifyError('同步失败', syncMessage.value)
   } finally {
     syncing.value = false
+  }
+}
+
+/** 单条入库：源端没变时后端直接跳过，不用白等一次抽取。 */
+async function ingestRow(row:CatalogItem, force = false) {
+  if (connectorId.value === null) return
+  ingestingId.value = row.id
+  ingestMessage.value = ''
+  try {
+    const response = await ingestConnectorItem(connectorId.value, row.id, force)
+    const result = unwrap(response, {} as CatalogIngestResult)
+    const status = result.status
+    if (status === 'SKIPPED' || status === 'STALE') {
+      notifySuccess(result.message || '该条目无需重复入库')
+    } else {
+      notifySuccess(`已入库：生成 ${result.chunkCount ?? 0} 个分片`)
+    }
+    await Promise.all([load(), loadIngestStatus()])
+  } catch (e) {
+    notifyError('入库失败', (e as Error).message)
+  } finally {
+    ingestingId.value = null
+  }
+}
+
+/** 按左侧当前筛选批量入库：选什么就入库什么，上限 20 条以免一次请求拖太久。 */
+async function ingestSelection() {
+  if (connectorId.value === null) return
+  ingestingSelection.value = true
+  ingestMessage.value = ''
+  try {
+    const response = await ingestConnectorSelection(connectorId.value, {
+      type:type.value || undefined,
+      keyword:keyword.value || undefined,
+      attr:filters.value.length ? filters.value : undefined,
+      limit:20,
+    })
+    const result = unwrap(response, {} as CatalogIngestSelectionResult)
+    ingestMessage.value = result.message || '入库完成'
+    notifySuccess(ingestMessage.value)
+    await Promise.all([load(), loadIngestStatus()])
+  } catch (e) {
+    notifyError('批量入库失败', (e as Error).message)
+  } finally {
+    ingestingSelection.value = false
+  }
+}
+
+function ingestLabel(row:CatalogItem):string {
+  const status = ingestStatus.value[row.id]?.ingestStatus
+  if (status === 'INGESTED') return '已入库'
+  if (status === 'STALE') return '源端已更新'
+  if (status === 'FAILED') return '入库失败'
+  if (status === 'ARCHIVED') return '源端已删除'
+  return '未入库'
+}
+
+/** 按连接器的入库设置跑一轮：不必先同步，也能把范围内还没入库的条目补进来。 */
+async function autoIngest() {
+  if (connectorId.value === null) return
+  autoingesting.value = true
+  ingestMessage.value = ''
+  try {
+    const response = await ingestConnectorAuto(connectorId.value)
+    const result = unwrap(response, {} as CatalogAutoIngestResult)
+    ingestMessage.value = result.message || '自动入库完成'
+    notifySuccess(ingestMessage.value)
+    await Promise.all([load(), loadIngestStatus()])
+  } catch (e) {
+    notifyError('自动入库失败', (e as Error).message)
+  } finally {
+    autoingesting.value = false
   }
 }
 

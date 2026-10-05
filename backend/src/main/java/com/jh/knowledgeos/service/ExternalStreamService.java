@@ -52,13 +52,13 @@ public class ExternalStreamService {
      * slices; the event contract (stage / delta / citation / done) is what clients depend on,
      * and switching to token-level streaming later needs no client change.</p>
      */
-    public void streamQuery(ApiKey key, Long knowledgeBaseId, String question, Integer topK, SseEmitter emitter) {
+    public void streamQuery(ApiKey key, Long knowledgeBaseId, String question, Integer topK, String answerFormat, SseEmitter emitter) {
         executor.execute(() -> {
             try {
                 for (String stage : ANSWER_STAGES) {
                     emitter.send(SseEmitter.event().name("stage").data(stagePayload(knowledgeBaseId, stage)));
                 }
-                Map<String, Object> result = facade.query(knowledgeBaseId, question, topK, null);
+                Map<String, Object> result = facade.query(knowledgeBaseId, question, topK, null, answerFormat);
                 String answer = result.get("answer") == null ? "" : String.valueOf(result.get("answer"));
                 for (String slice : slices(answer)) {
                     emitter.send(SseEmitter.event().name("delta").data(slice));
@@ -72,6 +72,8 @@ public class ExternalStreamService {
                 done.put("knowledgeBaseId", knowledgeBaseId);
                 done.put("question", question);
                 done.put("answer", answer);
+                // 回传实际生效的格式：流式客户端同样要知道自己的取值有没有被接受。
+                done.put("answerFormat", result.get("answerFormat"));
                 done.put("model", result.get("model"));
                 done.put("trace", result.get("trace"));
                 emitter.send(SseEmitter.event().name("done").data(done));

@@ -54,6 +54,18 @@
                 <span class="kb-muted ml-1">{{ formatTime(row.lastTestTime) }}</span>
               </template>
             </el-table-column>
+            <el-table-column label="自动同步" width="190">
+              <template #default="{ row }">
+                <template v-if="row.syncCron">
+                  <span :title="row.lastError || '按 cron 定时同步目录'">{{ cronText(row.syncCron) }}</span>
+                  <span class="kb-muted ml-1">{{ row.nextFireAt ? formatTime(row.nextFireAt) : '待触发' }}</span>
+                  <span
+                    v-if="row.syncStatus === 'FAILED'" class="kb-state kb-state-danger ml-1"
+                    :title="row.lastError || ''">失败</span>
+                </template>
+                <span v-else class="kb-muted">仅手动</span>
+              </template>
+            </el-table-column>
             <el-table-column label="操作" width="230" fixed="right">
               <template #default="{ row }">
                 <el-button link type="primary" size="small" :loading="testingId === row.id" @click.stop="test(row)">测试连接</el-button>
@@ -186,6 +198,59 @@
             <el-input v-model="headersText" type="textarea" :rows="2" placeholder='{"X-Tenant":"ops"}' />
           </el-form-item>
         </template>
+
+        <!-- 同步设置：决定目录多久追一次源端，自动入库也跟着这个节奏跑。 -->
+        <div class="my-3 flex items-center gap-2">
+          <span class="h-px flex-1 bg-[color:var(--line-soft)]" />
+          <span class="kb-muted text-[11px]">同步设置</span>
+          <span class="h-px flex-1 bg-[color:var(--line-soft)]" />
+        </div>
+        <el-form-item label="自动同步周期">
+          <div class="w-full">
+            <el-input v-model="form.syncCron" placeholder="留空表示只手动同步" />
+            <div class="kb-muted mt-1 text-[11px]">
+              五段 cron（分 时 日 月 周）：{{ CRON_HINT }}；常用：<button
+                class="text-[color:var(--accent-text)] hover:underline" @click="form.syncCron = '0 3 * * *'">每天 03:00</button>
+              · <button class="text-[color:var(--accent-text)] hover:underline" @click="form.syncCron = '0 */6 * * *'">每 6 小时</button>
+              · <button class="text-[color:var(--accent-text)] hover:underline" @click="form.syncCron = ''">仅手动</button>
+            </div>
+          </div>
+        </el-form-item>
+
+        <!-- 入库设置：决定外部条目以什么身份进入知识库，以及是否跟着同步自动进入。 -->
+        <div class="my-3 flex items-center gap-2">
+          <span class="h-px flex-1 bg-[color:var(--line-soft)]" />
+          <span class="kb-muted text-[11px]">入库设置</span>
+          <span class="h-px flex-1 bg-[color:var(--line-soft)]" />
+        </div>
+        <el-form-item label="入库模式">
+          <el-select v-model="form.ingest.ingestMode" class="w-full">
+            <el-option label="手动：同步只刷新目录，由人在列表里点入库" value="MANUAL" />
+            <el-option label="自动：同步后按范围自动入库与重抽" value="AUTO" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="每轮上限">
+          <div class="flex w-full items-center gap-2">
+            <el-input-number v-model="form.ingest.ingestQuota" :min="1" :max="200" size="small" />
+            <span class="kb-muted text-[11px]">自动入库一次最多处理多少条（手动批量入库不受此限）</span>
+          </div>
+        </el-form-item>
+        <el-form-item label="权威度">
+          <div class="flex w-full items-center gap-2">
+            <el-input-number
+              v-model="form.ingest.authorityScore" :min="0.1" :max="1" :step="0.05" :precision="2" size="small" />
+            <span class="kb-muted text-[11px]">外部内容默认 0.7，比导入文件低一档：冲突时以本地文件为准</span>
+          </div>
+        </el-form-item>
+        <el-form-item label="入库类型范围">
+          <el-input v-model="form.ingest.scopeTypes" placeholder="留空表示全部，如：缺陷、需求" />
+        </el-form-item>
+        <el-form-item label="入库属性条件">
+          <el-input v-model="form.ingest.scopeAttributes" placeholder="留空表示不限，如：status=已完成" />
+        </el-form-item>
+        <el-form-item label="权限标签">
+          <el-input v-model="form.ingest.permissionTags" placeholder="逗号分隔，如：ops,pm；留空表示沿用知识库默认可见性" />
+        </el-form-item>
       </el-form>
 
       <div v-if="previewMessage" class="mt-1 flex items-start gap-2">
@@ -220,6 +285,7 @@ import PanelState from './PanelState.vue'
 const props = defineProps<{ knowledgeBaseId:number }>()
 
 const PAGE_SIZE = 20
+const CRON_HINT = '分 时 日 月 周'
 
 const shell = useShell()
 const canWrite = computed(() => shell.can(PERM.GENERATE_CONNECTOR))
@@ -263,6 +329,19 @@ interface ConnectorForm {
     pageParam:string
     sizeParam:string
     insecureSsl:boolean
+  }
+  /** 自动同步周期：与类型、凭据同级，后端单独成列存（调度器要按它查到点的连接器）。 */
+  syncCron:string
+  /** 入库设置单独放：它不随连接器类型变化，也不参与试读，混进 config 容易被当成类型专属字段清掉。 */
+  ingest:{
+    ingestMode:'MANUAL' | 'AUTO'
+    ingestQuota:number
+    authorityScore:number
+    permissionTags:string
+    /** 逗号分隔的类型白名单，留空表示范围不限。 */
+    scopeTypes:string
+    /** 逗号分隔的属性条件，形如 status=已完成。 */
+    scopeAttributes:string
   }
 }
 
@@ -397,6 +476,7 @@ function openEdit(row:ConnectorSource) {
     username:row.username || '',
     secret:'',
     secretConfigured:Boolean(row.secretConfigured),
+    syncCron:row.syncCron || '',
     config:{
       jql:row.config?.jql || '',
       spaceKey:row.config?.spaceKey || '',
@@ -409,6 +489,14 @@ function openEdit(row:ConnectorSource) {
       pageParam:row.config?.pageParam || '',
       sizeParam:row.config?.sizeParam || '',
       insecureSsl:row.config?.insecureSsl === true,
+    },
+    ingest:{
+      ingestMode:row.config?.ingestMode || 'MANUAL',
+      ingestQuota:row.config?.ingestQuota ?? 20,
+      authorityScore:row.config?.authorityScore ?? 0.7,
+      permissionTags:row.config?.permissionTags || '',
+      scopeTypes:(row.config?.ingestScope?.types || []).join('、'),
+      scopeAttributes:(row.config?.ingestScope?.attributes || []).join('、'),
     },
   }
   headersText.value = row.config?.headers ? JSON.stringify(row.config.headers, null, 2) : ''
@@ -458,6 +546,7 @@ async function save() {
 
 function buildPayload():ConnectorPayload {
   const config:ConnectorConfig = { ...form.value.config }
+  applyIngestSettings(config)
   const fields = Object.fromEntries(
     Object.entries(config.fields || {}).filter(([, v]) => String(v || '').trim()),
   ) as Record<string, string>
@@ -515,7 +604,46 @@ function buildPayload():ConnectorPayload {
     // 编辑时留空 = 沿用已保存的凭据，这是后端约定的语义。
     secret:form.value.authType === 'NONE' ? '' : form.value.secret,
     config,
+    syncCron:form.value.syncCron.trim(),
   }
+}
+
+/** 周期原文太抽象，列表上尽量说人话；认不出来的就原样显示，不猜。 */
+function cronText(cron:string):string {
+  const parts = cron.trim().split(/\s+/)
+  if (parts.length !== 5) return cron
+  const [minute, hour, day, month, week] = parts
+  const hh = (v:string) => String(v).padStart(2, '0')
+  if (day === '*' && month === '*' && week === '*') {
+    if (/^\d+$/.test(minute) && /^\d+$/.test(hour)) return `每天 ${hh(hour)}:${hh(minute)}`
+    if (/^\d+$/.test(minute) && /^\*\/\d+$/.test(hour)) return `每 ${hour.slice(2)} 小时`
+    if (/^\*\/\d+$/.test(minute) && hour === '*') return `每 ${minute.slice(2)} 分钟`
+  }
+  return cron
+}
+
+/** 入库设置写进 config：与 JQL、字段映射同层，后端读的是同一份 JSON。 */
+function applyIngestSettings(config:ConnectorConfig) {
+  const ingest = form.value.ingest
+  config.ingestMode = ingest.ingestMode
+  config.ingestQuota = ingest.ingestQuota
+  config.authorityScore = ingest.authorityScore
+  config.permissionTags = ingest.permissionTags.trim()
+  const types = splitList(ingest.scopeTypes)
+  const attributes = splitList(ingest.scopeAttributes)
+  if (types.length || attributes.length) {
+    config.ingestScope = {
+      ...(types.length ? { types } : {}),
+      ...(attributes.length ? { attributes } : {}),
+    }
+  } else {
+    delete config.ingestScope
+  }
+}
+
+/** 中英文顿号、逗号、分号都当分隔符：手填的范围不该因为一个标点失效。 */
+function splitList(value:string):string[] {
+  return value.split(/[、,，;；\n]/).map(v => v.trim()).filter(Boolean)
 }
 
 function emptyForm():ConnectorForm {
@@ -540,6 +668,15 @@ function emptyForm():ConnectorForm {
       sizeParam:'',
       insecureSsl:false,
     },
+    ingest:{
+      ingestMode:'MANUAL',
+      ingestQuota:20,
+      authorityScore:0.7,
+      permissionTags:'',
+      scopeTypes:'',
+      scopeAttributes:'',
+    },
+    syncCron:'',
   }
 }
 

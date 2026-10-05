@@ -27,6 +27,9 @@ public class ConnectorRequest {
 
     private Map<String, Object> config;
 
+    /** 定时同步的 cron；留空表示不自动同步。保存时校验语法，写错当场报错而不是静默不跑。 */
+    private String syncCron;
+
     public Long getKnowledgeBaseId() {
         return knowledgeBaseId;
     }
@@ -89,5 +92,13 @@ public class ConnectorRequest {
 
     public void setConfig(Map<String, Object> config) {
         this.config = config;
+    }
+
+    public String getSyncCron() {
+        return syncCron;
+    }
+
+    public void setSyncCron(String syncCron) {
+        this.syncCron = syncCron;
     }
 }

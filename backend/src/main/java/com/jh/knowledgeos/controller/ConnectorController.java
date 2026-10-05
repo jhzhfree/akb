@@ -4,6 +4,7 @@ import com.jh.knowledgeos.common.ApiResponse;
 import com.jh.knowledgeos.dto.ConnectorRequest;
 import com.jh.knowledgeos.service.AuthContext;
 import com.jh.knowledgeos.service.ConnectorCatalogService;
+import com.jh.knowledgeos.service.ConnectorIngestionService;
 import com.jh.knowledgeos.service.ConnectorService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -17,8 +18,10 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 
 /**
  * HTTP facade for external data-source connectors (design §6.1, first step: connect and list).
@@ -37,9 +40,12 @@ public class ConnectorController {
 
     private final ConnectorCatalogService catalog;
 
-    public ConnectorController(ConnectorService service, ConnectorCatalogService catalog) {
+    private final ConnectorIngestionService ingestion;
+
+    public ConnectorController(ConnectorService service, ConnectorCatalogService catalog, ConnectorIngestionService ingestion) {
         this.service = service;
         this.catalog = catalog;
+        this.ingestion = ingestion;
     }
 
     @GetMapping("/{kb}")
@@ -113,5 +119,50 @@ public class ConnectorController {
     @Operation(summary = "查看单条已同步外部知识的详情与全部属性")
     public ApiResponse<Object> catalogItem(@PathVariable Long itemId) {
         return ApiResponse.ok(catalog.detail(itemId));
+    }
+
+    @PostMapping("/{id}/items/{itemId}/ingest")
+    @Operation(summary = "把一条外部知识入库：生成知识卡片、断言与实体关系，进入与导入文件一致的检索链路")
+    public ApiResponse<Object> ingestItem(@PathVariable Long id, @PathVariable Long itemId,
+        @RequestParam(value = "force", defaultValue = "false") boolean force) {
+        return ApiResponse.ok(ingestion.ingest(id, itemId, force));
+    }
+
+    @PostMapping("/{id}/ingest")
+    @Operation(summary = "按当前筛选条件批量入库；已入库且源端未变化的条目会跳过")
+    public ApiResponse<Object> ingestSelection(@PathVariable Long id, @RequestBody(required = false) Map<String, Object> body) {
+        Map<String, Object> request = body == null ? Collections.<String, Object>emptyMap() : body;
+        String type = request.get("type") == null ? null : String.valueOf(request.get("type"));
+        String keyword = request.get("keyword") == null ? null : String.valueOf(request.get("keyword"));
+        int limit = request.get("limit") == null ? 10 : Integer.parseInt(String.valueOf(request.get("limit")).trim());
+        List<String> attr = new ArrayList<String>();
+        Object attributes = request.get("attr");
+        if (attributes instanceof List) {
+            for (Object item : (List<?>) attributes) {
+                if (item != null) {
+                    attr.add(String.valueOf(item));
+                }
+            }
+        }
+        // 一批条目 = 一串模型调用，同步等待必然撞网关超时：只提交，进度看 /ingest/status。
+        return ApiResponse.ok(ingestion.ingestSelectionDeferred(id, type, keyword, attr, limit));
+    }
+
+    @GetMapping("/{id}/ingest/status")
+    @Operation(summary = "各条目的入库状态：未入库 / 已入库 / 源端已更新待重抽 / 失败 / 源端已删除")
+    public ApiResponse<Object> ingestStatus(@PathVariable Long id) {
+        return ApiResponse.ok(ingestion.statuses(id));
+    }
+
+    @GetMapping("/{id}/ingest/policy")
+    @Operation(summary = "连接器的入库设置：入库模式、每轮上限、权威度、权限标签与入库范围")
+    public ApiResponse<Object> ingestPolicy(@PathVariable Long id) {
+        return ApiResponse.ok(ingestion.policy(id));
+    }
+
+    @PostMapping("/{id}/ingest/auto")
+    @Operation(summary = "按入库设置跑一轮：范围内的新条目入库，源端内容变化的已入库条目重抽")
+    public ApiResponse<Object> ingestAuto(@PathVariable Long id) {
+        return ApiResponse.ok(ingestion.runAutoDeferred(id));
     }
 }

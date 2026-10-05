@@ -89,6 +89,7 @@
     :result="result" :asking="asking"
     :history="queryHistory" :history-loading="historyLoading"
     :graph-code="graphCode" @update:graph-code="graphCode=$event"
+    :answer-format="answerFormat" @update:answer-format="answerFormat=$event"
     @select="selectKey" @ask="ask" @refresh-history="loadQueryHistory"/>
 
   <IntegrationPage
@@ -147,6 +148,7 @@ import type {
   DashboardSummary, DashboardLifecycle, DashboardGovernance,
   BatchIngestStatus, IntegrationCallDetail,
 } from './types'
+import type { AnswerFormat } from './api/contracts'
 import type { AssetType } from './components/AssetBrowserPanel.vue'
 import TaskCenterDrawer from './components/TaskCenterDrawer.vue'
 import SpaceContextBar from'./components/SpaceContextBar.vue';
@@ -240,6 +242,8 @@ const capabilities=ref<Capabilities|null>(null),
     q=ref('知识为什么需要裁决？'),
     result=ref<QueryResult|null>(null),
     graphCode=ref('')
+/** 问答的返回格式：默认 / markdown / 纯文本 / html，随提问一起提交。 */
+const answerFormat=ref<AnswerFormat>('default')
 const runs=ref<IngestionRun[]>([]),
     runDetail=ref<IngestionRunDetail|null>(null),
     selectedRunId=ref<number|null>(null)
@@ -816,7 +820,7 @@ async function retryBatch(code:string){
 }
 async function ask(){if(!q.value.trim())return;
 asking.value=true;
-try{result.value=unwrap(await queryKnowledge(knowledgeBaseId.value,q.value),null);await loadQueryHistory()}catch(e){err(e)}finally{asking.value=false}}
+try{result.value=unwrap(await queryKnowledge(knowledgeBaseId.value,q.value,[],answerFormat.value),null);await loadQueryHistory()}catch(e){err(e)}finally{asking.value=false}}
 async function openEvidence(evidenceCode:string){
 evidenceVisible.value=true;evidenceLoading.value=true
 try{evidenceDetail.value=unwrap(await getEvidenceDetail(knowledgeBaseId.value,evidenceCode),null)}

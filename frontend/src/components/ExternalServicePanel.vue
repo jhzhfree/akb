@@ -164,6 +164,7 @@
               <pre class="code-block">{{ sseExample }}</pre>
             </el-tab-pane>
           </el-tabs>
+          <p class="kb-muted mt-2 text-[11px]">{{ answerFormatHint }}</p>
           <div class="mt-3 border-t border-ink-100 pt-3">
             <div class="flex flex-wrap items-center gap-2">
               <input v-model="probeSecret" class="kb-input flex-1" placeholder="粘贴明文 API 密钥做连通性自检" />
@@ -322,7 +323,9 @@ const probeOk = ref(false)
 const restExample = computed(() => `curl -X POST '${origin()}/api/v1/external/query' \\
   -H 'Content-Type: application/json' \\
   -H 'X-API-Key: <YOUR_API_KEY>' \\
-  -d '{"knowledgeBaseId":1,"question":"报销流程是什么？","topK":10}'`)
+  -d '{"knowledgeBaseId":1,"question":"报销流程是什么？","topK":10,"answerFormat":"markdown"}'`)
+/** answerFormat 可整个省掉（不传即默认格式）：default / markdown / text / html。 */
+const answerFormatHint = '答案返回格式：default（不传即此项，模型原文）/ markdown（正文 + 引用原文章节）/ text（纯文本）/ html（含引用原文）；响应里的 answerFormat 是实际生效的那个'
 const mcpExample = computed(() => `{
   "mcpServers": {
     "knowledge-os": {
@@ -335,6 +338,7 @@ const mcpExample = computed(() => `{
 const sseExample = computed(() => `const es = new EventSource(
   '${origin()}/api/v1/external/stream/query?knowledgeBaseId=1'
   + '&question=' + encodeURIComponent('报销流程是什么？')
+  + '&answerFormat=markdown'
   + '&apiKey=' + encodeURIComponent('<YOUR_API_KEY>'))
 es.addEventListener('stage', e => console.log('阶段', JSON.parse(e.data)))
 es.addEventListener('delta', e => process.stdout.write(JSON.parse(e.data)))

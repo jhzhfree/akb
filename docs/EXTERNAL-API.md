@@ -96,10 +96,12 @@ curl -H 'X-API-Key: kos_ak_S9MP25n3HNv8hgr6VHPrTXkgK2iSBwwC' \
 curl -X POST http://<host>:8080/api/v1/external/query \
   -H 'X-API-Key: kos_ak_xxx' \
   -H 'Content-Type: application/json' \
-  -d '{"knowledgeBaseId": 1, "question": "知识库如何做权限控制", "topK": 3}'
+  -d '{"knowledgeBaseId": 1, "question": "知识库如何做权限控制", "topK": 3, "answerFormat": "markdown"}'
 ```
 
 返回的 `data.answer` 是答案，`data.citations` 是逐条引用，`data.queryId` 可用于链路回放（见 §4.10）。
+
+`answerFormat` 可以整个省掉——不传即默认格式（模型原文）。四种取值见 §4.2；响应里的 `answerFormat` 是**实际生效**的那个，传了认不出来的取值会退回 `default` 而不是报错。
 
 ---
 
@@ -234,13 +236,26 @@ curl -H 'X-API-Key: kos_ak_xxx' http://<host>:8080/api/v1/external/bases
 | `question` | String | **是** | 非空，≤ 4000 字符 | 问题原文 |
 | `topK` | Integer | 否 | 1–50，默认 10 | 召回候选数量 |
 | `permissionTags` | String[] | 否 | — | 调用方侧权限标签，平台仍会叠加自身 ACL |
+| `answerFormat` | String | 否 | `default` / `markdown` / `text` / `html`，默认 `default` | 答案交付格式，取值见下 |
+
+**`answerFormat` 取值**
+
+| 取值 | 交付形状 |
+|---|---|
+| `default`（默认） | 模型生成的原文，引用由调用方按 `citations` 自行展示 |
+| `markdown` | 答案正文 + Markdown 格式的引用原文章节 |
+| `text` | 纯文本：去掉 Markdown 标记与证据章节，只有正文 |
+| `html` | 渲染后的 HTML 片段，答案里直接带上引用原文 |
+
+不传即 `default`；传了认不出来的取值同样退回 `default` 而不报错——一个老调用方或一次拼写错误不该让本来能问出答案的问题变成 400。想知道自己的取值有没有被接受，看响应里的 `answerFormat`（实际生效的那个）。
 
 **返回 `data` 主要字段**
 
 | 字段 | 说明 |
 |---|---|
 | `queryId` | 本次问答 ID，用于 `/queries/{queryId}` 回放 |
-| `answer` | 生成的答案文本（未通过证据校验时会给出拒答说明） |
+| `answer` | 生成的答案文本（未通过证据校验时会给出拒答说明），按 `answerFormat` 交付 |
+| `answerFormat` | 实际生效的交付格式；请求不传时为 `default` |
 | `citations` | 引用数组：`index / title / channel / score / sourceName / sourceUri / contentUnitId / objectType / evidenceHash / pageNo` |
 | `candidates` | 融合后的候选片段：`id / channel / content / score / rrfScore / rerankScore / quality / scoreBreakdown …` |
 | `strategies` | 实际使用的检索策略，如 `["card","bm25","vector"]` |
@@ -260,8 +275,17 @@ curl -H 'X-API-Key: kos_ak_xxx' http://<host>:8080/api/v1/external/bases
 ```bash
 curl -X POST http://<host>:8080/api/v1/external/query \
   -H 'X-API-Key: kos_ak_xxx' -H 'Content-Type: application/json' \
-  -d '{"knowledgeBaseId":1,"question":"知识库如何做权限控制","topK":3}'
+  -d '{"knowledgeBaseId":1,"question":"知识库如何做权限控制","topK":3,"answerFormat":"markdown"}'
 ```
+
+相同的问题、只改 `answerFormat`，拿到的就是三种不同形状的答案：
+
+| 请求 `answerFormat` | `data.answer` 的形状 |
+|---|---|
+| 不传 / `default` | 模型原文，引用另在 `citations` 里 |
+| `markdown` | 答案正文 + `### 引用原文` 章节 |
+| `text` | 纯文本，Markdown 标记与证据章节都已去掉 |
+| `html` | `<p>` 正文 + `<section class="answer-citations">` 引用原文 |
 
 ```json
 {
@@ -278,6 +302,7 @@ curl -X POST http://<host>:8080/api/v1/external/query \
     "durationMs": 3120,
     "confidence": 0.42,
     "answer": "现有知识不足以形成全部可验证的结论；未通过证据完整性与忠实度校验的内容已阻止输出。",
+    "answerFormat": "markdown",
     "citations": [
       {
         "index": 1,
@@ -302,9 +327,11 @@ curl -X POST http://<host>:8080/api/v1/external/query \
 
 > `answer` 出现「证据不足」类表述是答案闸门在起作用：知识不足以支撑结论时平台会拒答，而不是编造。
 
+> `answerFormat` 回传的是实际生效的格式：请求里写 `answerFormat: "pdf"` 时，这里会是 `"default"`——认不出来的取值静默退回默认，调用方据此就知道自己的取值没被接受。
+
 ### 4.3 POST /search — 只检索不生成答案
 
-适合已有自有 Prompt、只想取上下文的系统。入参与 `/query` 相同，返回**不含 `answer`**：
+适合已有自有 Prompt、只想取上下文的系统。入参与 `/query` 相同（`answerFormat` 可传但对返回内容无影响：这里没有答案正文），返回**不含 `answer`**：
 
 `queryId / knowledgeBaseId / question / strategies / router / rewrite / recall / reranker / candidates / citations`
 
@@ -506,7 +533,7 @@ curl -X POST http://<host>:8080/api/mcp \
         "jsonrpc":"2.0","id":2,"method":"tools/call",
         "params":{
           "name":"knowledge_query",
-          "arguments":{"knowledgeBaseId":1,"question":"退款时效是多久","topK":5}
+          "arguments":{"knowledgeBaseId":1,"question":"退款时效是多久","topK":5,"answerFormat":"markdown"}
         }
       }'
 ```
@@ -517,7 +544,7 @@ curl -X POST http://<host>:8080/api/mcp \
   "id": 2,
   "result": {
     "content": [{ "type": "text", "text": "{ …JSON 字符串… }" }],
-    "structuredContent": { "queryId": "Q_xxx", "answer": "…", "citations": [ … ] },
+    "structuredContent": { "queryId": "Q_xxx", "answer": "…", "answerFormat": "markdown", "citations": [ … ] },
     "isError": false
   }
 }
@@ -571,16 +598,16 @@ curl -X POST http://<host>:8080/api/mcp \
 
 ### 6.1 GET /stream/query — 流式问答
 
-**参数**：`question`（**必填**）、`knowledgeBaseId`（可选）、`topK`（可选）。
+**参数**：`question`（**必填**）、`knowledgeBaseId`（可选）、`topK`（可选）、`answerFormat`（可选，同 `/query`，默认 `default`）。
 
 **事件序列**
 
 | 事件 | 载荷 | 说明 |
 |---|---|---|
 | `stage` | `{"knowledgeBaseId":1,"stage":"REWRITE","time":1789970566684}` | 依次 REWRITE → RECALL → FUSION → RERANK → ANSWER |
-| `delta` | 字符串（答案切片） | 逐片输出答案正文 |
+| `delta` | 字符串（答案切片） | 逐片输出答案正文，按 `answerFormat` 交付（不传即默认格式） |
 | `citation` | `{"citations":[ … ]}` | 引用一次性下发 |
-| `done` | `{"queryId","knowledgeBaseId","question","answer","model","trace"}` | 完成帧 |
+| `done` | `{"queryId","knowledgeBaseId","question","answer","answerFormat","model","trace"}` | 完成帧，`answerFormat` 为实际生效的交付格式 |
 | `error` | 错误信息字符串 | 异常结束 |
 
 真实帧（chunked 解码后）：
@@ -595,7 +622,7 @@ data:{"knowledgeBaseId":1,"stage":"RECALL","time":1789970566685}
 
 ```bash
 curl -N -H 'X-API-Key: kos_ak_xxx' -H 'Accept: text/event-stream' \
-  'http://<host>:8080/api/v1/external/stream/query?knowledgeBaseId=1&question=%E7%9F%A5%E8%AF%86%E5%BA%93%E6%9D%83%E9%99%90&topK=3'
+  'http://<host>:8080/api/v1/external/stream/query?knowledgeBaseId=1&question=%E7%9F%A5%E8%AF%86%E5%BA%93%E6%9D%83%E9%99%90&topK=3&answerFormat=markdown'
 ```
 
 浏览器端：
@@ -603,7 +630,7 @@ curl -N -H 'X-API-Key: kos_ak_xxx' -H 'Accept: text/event-stream' \
 ```javascript
 const es = new EventSource(
   'http://<host>:8080/api/v1/external/stream/query?knowledgeBaseId=1&question=' +
-    encodeURIComponent('知识库如何做权限控制')
+    encodeURIComponent('知识库如何做权限控制') + '&answerFormat=markdown'
 );
 // 注意：浏览器 EventSource 不能自定义请求头，请使用 ?apiKey= 或经网关注入鉴权头
 es.addEventListener('stage', e => console.log('阶段', JSON.parse(e.data).stage));
@@ -679,15 +706,27 @@ KEY = "kos_ak_xxx"
 HEADERS = {"X-API-Key": KEY, "Content-Type": "application/json"}
 
 
-def ask(question: str, kb: int = 1, top_k: int = 5):
+def ask(question: str, kb: int = 1, top_k: int = 5, answer_format: str = "default"):
+    """answer_format: default（不传即此项）/ markdown / text / html。"""
     r = requests.post(
-        f"{BASE}/query", headers=HEADERS, json={"knowledgeBaseId": kb, "question": question, "topK": top_k}, timeout=120
+        f"{BASE}/query",
+        headers=HEADERS,
+        json={
+            "knowledgeBaseId": kb,
+            "question": question,
+            "topK": top_k,
+            "answerFormat": answer_format,
+        },
+        timeout=120,
     )
     r.raise_for_status()
     body = r.json()
     if not body["success"]:
         raise RuntimeError(f"{body['code']} {body['message']} traceId={body['traceId']}")
     data = body["data"]
+    # 实际生效的格式：传了认不出来的取值时这里会退回 default。
+    if data.get("answerFormat") != answer_format:
+        print(f"提示：请求的 {answer_format!r} 未生效，实际按 {data.get('answerFormat')!r} 交付")
     print("答案：", data["answer"])
     for c in data.get("citations", []):
         print(f"  [{c['index']}] {c['title']}（{c['sourceUri']}）score={c['score']}")
@@ -700,7 +739,9 @@ def replay(query_id: str):
 
 
 if __name__ == "__main__":
-    qid = ask("知识库如何做权限控制")
+    qid = ask("知识库如何做权限控制")                          # 默认格式
+    qid = ask("知识库如何做权限控制", answer_format="markdown")  # 正文 + 引用原文章节
+    qid = ask("知识库如何做权限控制", answer_format="html")      # 可直接嵌入页面的 HTML 片段
     print("链路：", replay(qid)[:200])
 ```
 
@@ -741,10 +782,11 @@ public class KnowledgeOsClient {
     private final HttpClient http = HttpClient.newBuilder()
             .connectTimeout(Duration.ofSeconds(10)).build();
 
-    public String query(long kb, String question, int topK) throws Exception {
+    /** answerFormat: default（不传即此项）/ markdown / text / html。 */
+    public String query(long kb, String question, int topK, String answerFormat) throws Exception {
         String body = String.format(
-                "{\"knowledgeBaseId\":%d,\"question\":%s,\"topK\":%d}",
-                kb, quote(question), topK);
+                "{\"knowledgeBaseId\":%d,\"question\":%s,\"topK\":%d,\"answerFormat\":%s}",
+                kb, quote(question), topK, quote(answerFormat == null ? "default" : answerFormat));
         HttpRequest req = HttpRequest.newBuilder(URI.create(BASE + "/query"))
                 .timeout(Duration.ofSeconds(120))
                 .header("Content-Type", "application/json")
@@ -770,6 +812,7 @@ public class KnowledgeOsClient {
 const BASE = 'http://<host>:8080/api/v1/external';
 const KEY = 'kos_ak_xxx';
 
+// 检索接口不生成答案正文，answerFormat 对它没有意义；要不同格式的答案请用 /query。
 async function search(question, kb = 1, topK = 5) {
   const res = await fetch(`${BASE}/search`, {
     method: 'POST',

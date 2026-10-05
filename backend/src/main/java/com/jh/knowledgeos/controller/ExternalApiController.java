@@ -65,7 +65,7 @@ public class ExternalApiController {
     @Operation(summary = "可追溯知识问答：返回答案、引用与 queryId")
     public ApiResponse<Object> query(HttpServletRequest request, @Valid @RequestBody ExternalQueryRequest body) throws Exception {
         return call(request, "POST /query", body.getKnowledgeBaseId(), (key, kb) -> facade.query(kb, body.getQuestion(), body.getTopK(),
-            body.getPermissionTags()));
+            body.getPermissionTags(), body.getAnswerFormat()));
     }
 
     @PostMapping("/search")

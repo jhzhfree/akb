@@ -51,6 +51,16 @@ public class ConnectorSource {
 
     private Integer lastSyncCount;
 
+    /** 定时同步的周期：五段 cron，空表示只等人手动点。 */
+    private String syncCron;
+
+    private Date nextFireAt;
+
+    /** 定时同步的运行态：IDLE / RUNNING / FAILED，调度器只认 IDLE 与 FAILED。 */
+    private String syncStatus;
+
+    private String lastError;
+
     private String createdBy;
 
     private Date createdTime;
@@ -205,6 +215,38 @@ public class ConnectorSource {
 
     public void setLastSyncCount(Integer lastSyncCount) {
         this.lastSyncCount = lastSyncCount;
+    }
+
+    public String getSyncCron() {
+        return syncCron;
+    }
+
+    public void setSyncCron(String syncCron) {
+        this.syncCron = syncCron;
+    }
+
+    public Date getNextFireAt() {
+        return nextFireAt;
+    }
+
+    public void setNextFireAt(Date nextFireAt) {
+        this.nextFireAt = nextFireAt;
+    }
+
+    public String getSyncStatus() {
+        return syncStatus;
+    }
+
+    public void setSyncStatus(String syncStatus) {
+        this.syncStatus = syncStatus;
+    }
+
+    public String getLastError() {
+        return lastError;
+    }
+
+    public void setLastError(String lastError) {
+        this.lastError = lastError;
     }
 
     public Date getCreatedTime() {

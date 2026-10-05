@@ -1,5 +1,6 @@
 package com.jh.knowledgeos.service;
 
+import com.jh.knowledgeos.common.AnswerFormat;
 import com.jh.knowledgeos.domain.ApiKey;
 import com.jh.knowledgeos.domain.KnowledgeBase;
 import org.springframework.stereotype.Service;
@@ -57,12 +58,23 @@ public class ExternalKnowledgeFacade {
      * published downstream names its origin — otherwise an operator watching the stream could not
      * tell a console search from an MCP-driven one.</p>
      */
-    public Map<String, Object> query(ApiKey key, Long kb, String question, Integer topK, List<String> permissionTags, String source) throws Exception {
+    public Map<String, Object> query(ApiKey key, Long kb, String question, Integer topK, List<String> permissionTags, String source)
+        throws Exception {
+        return query(key, kb, question, topK, permissionTags, source, AnswerFormat.DEFAULT);
+    }
+
+    /**
+     * 同上，带答案交付格式：一个把答案粘进工单的系统要纯文本，一个导出到文档的系统要 HTML，
+     * 而只想要模型原文的系统什么都不用传。
+     */
+    public Map<String, Object> query(ApiKey key, Long kb, String question, Integer topK, List<String> permissionTags, String source,
+        String answerFormat) throws Exception {
         Map<String, Object> payload = new LinkedHashMap<String, Object>();
         payload.put("knowledgeBaseId", kb);
         payload.put("query", question);
         payload.put("topK", topK == null || topK < 1 ? 10 : Math.min(topK, 50));
         payload.put("source", source == null ? PlatformEventPublisher.SOURCE_REST : source);
+        payload.put("answerFormat", AnswerFormat.normalize(answerFormat));
         if (key != null) {
             payload.put("externalKeyCode", key.getKeyCode());
             payload.put("externalKeyName", key.getName());
@@ -70,14 +82,26 @@ public class ExternalKnowledgeFacade {
         if (permissionTags != null && !permissionTags.isEmpty()) {
             payload.put("permissionTags", permissionTags);
         }
-        return knowledgeService.query(payload);
+        Map<String, Object> result = knowledgeService.query(payload);
+        // 回传实际生效的格式：调用方传了个认不出来的取值时，这里如实说 default，而不是让他以为生效了。
+        result.put("answerFormat", AnswerFormat.normalize(result.get("answerFormat") == null ? null
+            : String.valueOf(result.get("answerFormat"))));
+        return result;
     }
 
     /**
      * Legacy signature kept for internal callers that have no credential to report.
      */
     public Map<String, Object> query(Long kb, String question, Integer topK, List<String> permissionTags) throws Exception {
-        return query(null, kb, question, topK, permissionTags, PlatformEventPublisher.SOURCE_REST);
+        return query(null, kb, question, topK, permissionTags, PlatformEventPublisher.SOURCE_REST, AnswerFormat.DEFAULT);
+    }
+
+    /**
+     * 同上，带答案交付格式：不传即默认格式。
+     */
+    public Map<String, Object> query(Long kb, String question, Integer topK, List<String> permissionTags, String answerFormat)
+        throws Exception {
+        return query(null, kb, question, topK, permissionTags, PlatformEventPublisher.SOURCE_REST, answerFormat);
     }
 
     /**

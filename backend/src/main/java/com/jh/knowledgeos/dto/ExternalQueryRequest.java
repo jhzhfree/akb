@@ -1,5 +1,6 @@
 package com.jh.knowledgeos.dto;
 
+import com.jh.knowledgeos.common.AnswerFormat;
 import javax.validation.constraints.Max;
 import javax.validation.constraints.Min;
 import javax.validation.constraints.NotBlank;
@@ -25,6 +26,14 @@ public class ExternalQueryRequest {
      * Optional caller-side permission tags; the platform still enforces its own ACL.
      */
     private List<String> permissionTags;
+
+    /**
+     * 答案返回格式：{@code default}（模型原文）/ {@code markdown} / {@code text} / {@code html}。
+     *
+     * <p>不传即返回默认格式；认不出来的取值同样退回默认，而不是报错。响应里的
+     * {@code answerFormat} 是实际生效的那个，调用方可以据此判断自己的取值有没有被接受。</p>
+     */
+    private String answerFormat = AnswerFormat.DEFAULT;
 
     public Long getKnowledgeBaseId() {
         return knowledgeBaseId;
@@ -56,5 +65,13 @@ public class ExternalQueryRequest {
 
     public void setPermissionTags(List<String> permissionTags) {
         this.permissionTags = permissionTags;
+    }
+
+    public String getAnswerFormat() {
+        return answerFormat;
+    }
+
+    public void setAnswerFormat(String answerFormat) {
+        this.answerFormat = answerFormat;
     }
 }

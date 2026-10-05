@@ -1,12 +1,15 @@
 package com.jh.knowledgeos.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.jh.knowledgeos.config.ConnectorAsyncExecutorConfig;
 import com.jh.knowledgeos.domain.ConnectorItem;
 import com.jh.knowledgeos.domain.ConnectorSource;
 import com.jh.knowledgeos.mapper.ConnectorItemMapper;
 import com.jh.knowledgeos.mapper.ConnectorMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 import org.springframework.stereotype.Service;
 import java.io.IOException;
 import java.time.Instant;
@@ -19,8 +22,10 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Date;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.TreeMap;
 
 /**
@@ -66,26 +71,54 @@ public class ConnectorCatalogService {
 
     private final KnowledgeBaseAccessService access;
 
+    private final ConnectorIngestionService ingestion;
+
     private final ObjectMapper objectMapper;
 
+    /** 同步后置任务（失效传播、自动入库）的线程池：不在请求线程上跑模型调用。 */
+    private final ThreadPoolTaskExecutor executor;
+
     public ConnectorCatalogService(ConnectorMapper connectorMapper, ConnectorItemMapper itemMapper, ConnectorFetchService fetchService,
-        KnowledgeBaseAccessService access, ObjectMapper objectMapper) {
+        KnowledgeBaseAccessService access, ConnectorIngestionService ingestion, ObjectMapper objectMapper,
+        @Qualifier(ConnectorAsyncExecutorConfig.BEAN_NAME) ThreadPoolTaskExecutor executor) {
         this.connectorMapper = connectorMapper;
         this.itemMapper = itemMapper;
         this.fetchService = fetchService;
         this.access = access;
+        this.ingestion = ingestion;
         this.objectMapper = objectMapper;
+        this.executor = executor;
     }
 
     /**
      * Pulls what the connector currently lists and keeps it. Existing items are updated in place
      * ({@code external_id} is unique per connector), so a second sync refreshes rather than doubles.
      */
+    /**
+     * 人手点的同步：先确认这个人能改这个知识库，再走同步本体。
+     *
+     * <p>这里只把「目录」同步做完就返回：失效传播与自动入库交给后台线程。它们每条都要调一次
+     * AI 抽取，二十条变更就是二十次模型调用，放在请求线程里必然撞上网关超时（504）。</p>
+     */
     public Map<String, Object> sync(Long connectorId) {
         ConnectorSource source = require(connectorId);
         access.assertWrite(source.getKnowledgeBaseId());
+        return runSync(connectorId, true);
+    }
+
+    /**
+     * 同步本体：拉目录 → 源端删掉的移出检索 → 自动入库模式下补齐与重抽。
+     * 定时任务没有用户上下文（也不在乎多等几分钟），因此权限由调用方各自保证。
+     */
+    public Map<String, Object> syncInternal(Long connectorId) {
+        return runSync(connectorId, false);
+    }
+
+    private Map<String, Object> runSync(Long connectorId, boolean deferAfterSync) {
+        ConnectorSource source = require(connectorId);
         int synced = 0;
         Long remoteTotal = null;
+        Set<String> present = new LinkedHashSet<String>();
         for (int offset = 0; offset < MAX_SYNC_ITEMS; ) {
             ConnectorFetchService.Page page = fetchService.fetch(source, SYNC_PAGE, offset);
             List<Map<String, Object>> items = page.getItems();
@@ -96,6 +129,10 @@ public class ConnectorCatalogService {
                 remoteTotal = page.getTotal();
             }
             for (Map<String, Object> item : items) {
+                String externalId = String.valueOf(item.get("externalId"));
+                if (externalId != null) {
+                    present.add(externalId);
+                }
                 itemMapper.upsert(row(source, item));
                 synced++;
             }
@@ -105,14 +142,77 @@ public class ConnectorCatalogService {
             }
         }
         connectorMapper.updateSyncResult(connectorId, synced);
+        // A sync that stopped at the cap never saw the tail of the remote list, so the items it did
+        // not return are unknown rather than deleted — archiving them would be a false positive.
+        boolean complete = remoteTotal == null || remoteTotal <= synced;
+        Map<String, Object> after = deferAfterSync ? deferAfterSync(connectorId, present, complete)
+            : ingestion.afterSync(connectorId, present, complete);
         Map<String, Object> result = new LinkedHashMap<String, Object>();
         result.put("connectorId", connectorId);
         result.put("synced", synced);
         result.put("remoteTotal", remoteTotal);
         result.put("storedTotal", itemMapper.countByConnector(connectorId));
-        result.put("message", "已同步 " + synced + " 条" + (remoteTotal == null ? "" : "（远端共 " + remoteTotal + " 条）"));
-        log.info("connector catalog synced id={} synced={}", connectorId, synced);
+        result.put("archived", after.get("archived"));
+        result.put("autoIngested", after.get("ingested"));
+        result.put("autoRefreshed", after.get("refreshed"));
+        result.put("ingestScheduled", Boolean.TRUE.equals(after.get("ingestScheduled")));
+        result.put("message", "已同步 " + synced + " 条" + (remoteTotal == null ? "" : "（远端共 " + remoteTotal + " 条）")
+            + afterSyncNote(after));
+        log.info("connector catalog synced id={} synced={} archived={} ingested={}", connectorId, synced, after.get("archived"),
+            after.get("ingested"));
         return result;
+    }
+
+    /**
+     * 把失效传播与自动入库交给后台线程，请求先回。
+     * 返回值里带上 ingestScheduled，前端据此提示「入库在后台进行」而不是假装已经完成。
+     */
+    private Map<String, Object> deferAfterSync(Long connectorId, Set<String> present, boolean complete) {
+        Map<String, Object> placeholder = new LinkedHashMap<String, Object>();
+        placeholder.put("archived", 0);
+        placeholder.put("ingested", 0);
+        placeholder.put("refreshed", 0);
+        placeholder.put("ingestScheduled", Boolean.TRUE);
+        final Set<String> ids = new LinkedHashSet<String>(present);
+        try {
+            executor.execute(new Runnable() {
+
+                @Override
+                public void run() {
+                    try {
+                        Map<String, Object> after = ingestion.afterSync(connectorId, ids, complete);
+                        log.info("connector deferred ingest done id={} archived={} ingested={} refreshed={}", connectorId,
+                            after.get("archived"), after.get("ingested"), after.get("refreshed"));
+                    } catch (RuntimeException ex) {
+                        // 后台失败不能吞掉：控制台看不到，只有日志会说话。
+                        log.warn("connector deferred ingest failed id={} message={}", connectorId, ex.getMessage());
+                    }
+                }
+            });
+            return placeholder;
+        } catch (RuntimeException ex) {
+            // 线程池拒收（CallerRuns 已兜底，这里只可能是提交路径本身出错）：退回同步执行，
+            // 至少让这次同步的结果是真的。
+            log.warn("connector deferred ingest rejected id={} message={}", connectorId, ex.getMessage());
+            return ingestion.afterSync(connectorId, ids, complete);
+        }
+    }
+
+    private String afterSyncNote(Map<String, Object> after) {
+        StringBuilder note = new StringBuilder();
+        Object archived = after.get("archived");
+        if (archived instanceof Number && ((Number) archived).intValue() > 0) {
+            note.append("，源端已删除 ").append(archived).append(" 条并移出检索");
+        }
+        Object ingested = after.get("ingested");
+        if (ingested instanceof Number && ((Number) ingested).intValue() > 0) {
+            note.append("，自动入库 ").append(ingested).append(" 条");
+        }
+        Object refreshed = after.get("refreshed");
+        if (refreshed instanceof Number && ((Number) refreshed).intValue() > 0) {
+            note.append("，重抽 ").append(refreshed).append(" 条");
+        }
+        return note.toString();
     }
 
     /** One page of kept items, filtered by type, keyword and any number of {@code key=value} attributes. */
@@ -286,7 +386,8 @@ public class ConnectorCatalogService {
         return out;
     }
 
-    private List<ConnectorItemMapper.AttributeFilter> parseFilters(List<String> attributes) {
+    /** Shared with ingestion: a selection made in the console is re-run as the same query. */
+    public static List<ConnectorItemMapper.AttributeFilter> parseFilters(List<String> attributes) {
         List<ConnectorItemMapper.AttributeFilter> filters = new ArrayList<ConnectorItemMapper.AttributeFilter>();
         if (attributes == null) {
             return filters;
@@ -376,6 +477,11 @@ public class ConnectorCatalogService {
     }
 
     private String label(String key) {
+        return labelOf(key);
+    }
+
+    /** 入库时把属性写成中文行（「状态：已完成」），抽取出的断言才和人工文档一个语气。 */
+    public static String labelOf(String key) {
         String label = ATTRIBUTE_LABELS.get(key);
         return label == null ? key : label;
     }

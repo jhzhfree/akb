@@ -42,6 +42,9 @@ public final class AiApiPaths {
 
     public static final String INDEX_PURGE_PREFIX = "/ai/index/knowledge-base/";
 
+    /** Removes one document's chunks and cards from every engine, before a new version is indexed. */
+    public static final String INDEX_DOCUMENT_PREFIX = "/ai/index/document/";
+
     public static final String ADJUDICATE = "/ai/adjudicate";
 
     public static final String DETECT_CONFLICTS = "/ai/conflicts/detect";

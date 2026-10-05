@@ -6,7 +6,7 @@ import type {
   SourcePreview,
   AnswerQualification, AnswerQualificationSummary,
 } from '../types'
-import type { RetrievalRequest, RetrievalResult, AnswerResult, DocumentRetryResult, AdjudicationRunResult } from './contracts'
+import type { AnswerFormat, RetrievalRequest, RetrievalResult, AnswerResult, DocumentRetryResult, AdjudicationRunResult } from './contracts'
 import type { AssetPage } from '../types/knowledge'
 
 const LONG_TIMEOUT_MS = 180000
@@ -153,11 +153,11 @@ export const retryBatch = (batchCode:string):Promise<ApiResponse<Record<string,u
     {}, { timeout:LONG_TIMEOUT_MS })
 
 export const queryKnowledge = (
-  kb:number, query:string, permissionTags:string[]=[],
+  kb:number, query:string, permissionTags:string[]=[], answerFormat:AnswerFormat='default',
 ):Promise<ApiResponse<QueryResult>> =>
   axios.post(
     '/api/knowledge/query',
-    { knowledgeBaseId:kb, query, topK:10, userId:'console-user', permissionTags },
+    { knowledgeBaseId:kb, query, topK:10, userId:'console-user', permissionTags, answerFormat },
     { timeout:LONG_TIMEOUT_MS },
   )
 

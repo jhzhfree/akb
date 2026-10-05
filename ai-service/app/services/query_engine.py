@@ -21,6 +21,10 @@ from app.core.query_policy import (
     recall_sizes,
 )
 from app.services.answer_evidence_gate import AnswerEvidenceGate
+from app.services.answer_formatting import DEFAULT as DEFAULT_ANSWER_FORMAT
+from app.services.answer_formatting import excerpt as answer_excerpt
+from app.services.answer_formatting import normalize as normalize_answer_format
+from app.services.answer_formatting import render as render_answer
 from app.services.answer_qualification import AnswerQualification
 from app.services.llm_provider import get_llm_provider
 from app.services.query_understanding import QueryRouter, QueryRewriter
@@ -57,7 +61,8 @@ class QueryEngine:
         self.rerank_semaphore = asyncio.Semaphore(max(1, settings.reranker_concurrency))
         self.rewriter = QueryRewriter()
 
-    async def query(self, qid, kb, q, topk, permission_tags=None, generate=True):
+    async def query(self, qid, kb, q, topk, permission_tags=None, generate=True,
+                    answer_format=DEFAULT_ANSWER_FORMAT):
         """Run the pipeline: recall → fusion → rerank, then generation unless `generate` is off.
 
         `generate=False` gives the retrieval-only shape the evaluation center needs — the same
@@ -407,7 +412,10 @@ class QueryEngine:
             "selectedContext": selected_context,
             "context": context,
             "citations": citations,
-            "answer": answer,
+            # 格式在所有门控之后才渲染：门控评判的是模型产出的原文，
+            # 先拼上引用章节会让章节里的字被当成答案自己说的话。
+            "answer": render_answer(answer, citations, answer_format),
+            "answerFormat": normalize_answer_format(answer_format),
             "answerVerification": verification,
             "structuredAnswerVerification": structured_verification,
             "answerQualification": qualification,
@@ -645,6 +653,9 @@ class QueryEngine:
                     "evidenceHash": meta.get("evidence_hash") or meta.get("content_hash"),
                     "generationId": meta.get("generation_id"),
                     "sourceVersion": meta.get("source_version"),
+                    # 引用原文：HTML / Markdown 两种格式要把被引用的那句话带在答案里，
+                    # 否则读者拿到一个 [证据N] 却无处可查。
+                    "excerpt": answer_excerpt(c.get("content", "")),
                 }
             )
         return "\n\n".join(blocks), citations

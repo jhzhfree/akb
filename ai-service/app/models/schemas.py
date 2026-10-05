@@ -14,6 +14,9 @@ class QueryRequest(BaseModel):
     topK: int = Field(default=10, ge=1, le=50)
     userId: str | None = None
     permissionTags: list[str] | None = None
+    # 交付格式：default（模型原文）/ markdown（附引用原文章节）/ text（纯文本、不含证据）/ html（含引用原文）。
+    # 未知取值退回 default：一个老调用方或一次拼写错误不该把能用的问题变成 422。
+    answerFormat: str = "default"
 
 
 class ExtractRequest(BaseModel):

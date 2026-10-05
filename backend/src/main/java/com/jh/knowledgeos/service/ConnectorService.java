@@ -1,6 +1,7 @@
 package com.jh.knowledgeos.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.jh.knowledgeos.common.ScheduleExpression;
 import com.jh.knowledgeos.domain.ConnectorSource;
 import com.jh.knowledgeos.domain.User;
 import com.jh.knowledgeos.dto.ConnectorRequest;
@@ -10,8 +11,11 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import java.io.IOException;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.Date;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -51,15 +55,18 @@ public class ConnectorService {
 
     private final ConnectorFetchService fetchService;
 
+    private final ConnectorIngestionService ingestion;
+
     private final KnowledgeBaseAccessService access;
 
     private final ObjectMapper objectMapper;
 
     public ConnectorService(ConnectorMapper mapper, ConnectorItemMapper itemMapper, ConnectorFetchService fetchService,
-        KnowledgeBaseAccessService access, ObjectMapper objectMapper) {
+        ConnectorIngestionService ingestion, KnowledgeBaseAccessService access, ObjectMapper objectMapper) {
         this.mapper = mapper;
         this.itemMapper = itemMapper;
         this.fetchService = fetchService;
+        this.ingestion = ingestion;
         this.access = access;
         this.objectMapper = objectMapper;
     }
@@ -92,6 +99,10 @@ public class ConnectorService {
             source.setSecret(null);
         }
         source.setConnectorCode(existing.getConnectorCode());
+        // 正在跑的同步不该因为一次编辑被重新拉起：状态保留，只有周期与下次时间被改写。
+        if ("RUNNING".equals(existing.getSyncStatus())) {
+            source.setSyncStatus(existing.getSyncStatus());
+        }
         mapper.update(source);
         return mask(mapper.get(id));
     }
@@ -99,8 +110,12 @@ public class ConnectorService {
     public void delete(Long id) {
         ConnectorSource existing = require(id);
         access.assertWrite(existing.getKnowledgeBaseId());
+        // 连接器没了，它带来的知识也就没了来源与更新通道：留着只会变成永远不更新的旧内容，
+        // 因此与源端删除同等处理——退出检索，历史版本仍留在库里可追溯。
+        ingestion.retireAll(id);
         // 同步下来的条目是连接器的私有副本：连接器没了，副本也该走。
         itemMapper.deleteByConnector(id);
+        itemMapper.deleteBindingsByConnector(id);
         mapper.delete(id);
     }
 
@@ -204,7 +219,26 @@ public class ConnectorService {
         source.setStatus("ACTIVE");
         source.setConfigJson(toJson(request.getConfig()));
         source.setConfig(request.getConfig() == null ? Collections.<String, Object>emptyMap() : request.getConfig());
+        applySchedule(source, trim(request.getSyncCron()));
         return source;
+    }
+
+    /**
+     * 定时同步的周期单独成列，不混进 config_json：调度器要按 next_fire_at 查「谁到点了」，
+     * 放在 JSON 里就只能全表扫描后再解析。
+     */
+    private void applySchedule(ConnectorSource source, String cron) {
+        if (cron.isEmpty()) {
+            source.setSyncCron(null);
+            source.setNextFireAt(null);
+            source.setSyncStatus("IDLE");
+            return;
+        }
+        // 语法不对当场报 400：写错却静默不跑，比没配更糟——用户会以为它在同步。
+        ScheduleExpression expression = ScheduleExpression.of(cron);
+        source.setSyncCron(cron);
+        source.setNextFireAt(Date.from(expression.nextAfter(LocalDateTime.now()).atZone(ZoneId.systemDefault()).toInstant()));
+        source.setSyncStatus("IDLE");
     }
 
     private String toJson(Map<String, Object> config) {

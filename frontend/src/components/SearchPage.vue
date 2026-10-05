@@ -5,7 +5,8 @@
   <QueryPanel
     v-if="active==='search.query'"
     :query="query" @update:query="$emit('update:query',$event)"
-    :result="result" :asking="asking" :history="history"
+    :result="result" :asking="asking" :history="history" :answer-format="answerFormat"
+    @update:answer-format="$emit('update:answerFormat',$event)"
     @ask="$emit('ask')" @open-trace="shell.openTrace" @refresh-history="$emit('refresh-history')"
     @open-citation="shell.openCitation" />
 
@@ -31,6 +32,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import type { QueryHistoryItem, QueryResult } from '../types'
+import type { AnswerFormat } from '../api/contracts'
 import { useShell } from '../shell'
 import ModuleTabs from './ModuleTabs.vue'
 import QueryPanel from './QueryPanel.vue'
@@ -49,11 +51,14 @@ defineProps<{
   history: QueryHistoryItem[]
   historyLoading: boolean
   graphCode: string
+  /** 答案返回格式：跟随问答面板的选择，由 ask 带上一起提交。 */
+  answerFormat: AnswerFormat
 }>()
 defineEmits<{
   select: [key: string]
   'update:query': [value: string]
   'update:graphCode': [value: string]
+  'update:answerFormat': [value: AnswerFormat]
   ask: []
   'refresh-history': []
 }>()

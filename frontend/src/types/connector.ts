@@ -10,7 +10,7 @@ export type ConnectorAuthType = 'NONE' | 'BASIC' | 'BEARER'
  * 类型专属配置。写成自由结构而非每种类型一个字段，是为了让新增连接器类型
  * 不必改动保存逻辑：Jira 用 jql，Confluence 用 spaceKey，REST 用路径与字段映射。
  */
-export interface ConnectorConfig {
+export interface ConnectorConfig extends ConnectorIngestSettings {
   jql?:string
   spaceKey?:string
   path?:string
@@ -26,6 +26,40 @@ export interface ConnectorConfig {
   headers?:Record<string, string>
   /** 跳过 SSL 证书校验：内网自签名证书或 IP 直连的站点需要开启，否则握手直接失败。 */
   insecureSsl?:boolean
+}
+
+/** 入库模式：手动（同步只刷新目录）或自动（同步后按范围与配额自动入库/重抽）。 */
+export type ConnectorIngestMode = 'MANUAL' | 'AUTO'
+
+/** 入库范围：不填表示全部；填了表示只有命中的条目才会被自动入库。 */
+export interface ConnectorIngestScope {
+  types?:string[]
+  /** 形如 status=已完成，多条之间是「且」。 */
+  attributes?:string[]
+}
+
+/** 入库设置：决定外部条目以什么身份进入知识库、以及是否自动进入。 */
+export interface ConnectorIngestSettings {
+  /** 入库模式，默认 MANUAL：远程系统噪声大，抽取也不便宜，默认不自动跑。 */
+  ingestMode?:ConnectorIngestMode
+  /** 自动入库每轮最多处理多少条。 */
+  ingestQuota?:number
+  /** 权威度 0–1：外部内容默认比导入文件低一档（0.7）。 */
+  authorityScore?:number
+  /** 权限标签，逗号分隔：入库产物带上它才能被对应的人检索到。 */
+  permissionTags?:string
+  ingestScope?:ConnectorIngestScope
+}
+
+/** 入库设置视图：后端按当前配置解析出来的生效值，供界面回显。 */
+export interface ConnectorIngestPolicy {
+  mode:ConnectorIngestMode
+  auto:boolean
+  quota:number
+  authorityScore:number
+  permissionTags?:string|null
+  types:string[]
+  attributes:string[]
 }
 
 export interface ConnectorSource {
@@ -44,6 +78,16 @@ export interface ConnectorSource {
   lastTestStatus?:string
   lastTestMessage?:string
   lastTestTime?:string
+  lastSyncTime?:string
+  lastSyncCount?:number
+  /** 定时同步的 cron，留空表示只手动同步。 */
+  syncCron?:string|null
+  /** 下次定时同步的到点时间。 */
+  nextFireAt?:string|null
+  /** 定时同步运行态：IDLE / RUNNING / FAILED。 */
+  syncStatus?:string
+  /** 最近一次定时同步的失败原因。 */
+  lastError?:string|null
   createdBy?:string
   createdTime?:string
 }
@@ -58,6 +102,8 @@ export interface ConnectorPayload {
   /** 留空表示沿用已保存的凭据（编辑时不要回传占位值）。 */
   secret?:string
   config?:ConnectorConfig
+  /** 定时同步的 cron（分 时 日 月 周）；留空表示只手动同步。 */
+  syncCron?:string
 }
 
 /** 三种连接器读出来的都是这个形状，后续转文档时只认这五个字段。 */
@@ -125,6 +171,14 @@ export interface CatalogSyncResult {
   synced:number
   remoteTotal?:number|null
   storedTotal?:number|null
+  /** 源端已删除、本次被移出检索的条数。 */
+  archived?:number
+  /** 自动入库模式下本次顺带入库的条数。 */
+  autoIngested?:number
+  /** 自动入库模式下本次重抽的条数。 */
+  autoRefreshed?:number
+  /** true 表示入库与失效传播已交给后台线程，请求返回时它们还没跑完。 */
+  ingestScheduled?:boolean
   message:string
 }
 
@@ -141,4 +195,50 @@ export interface ConnectorTestResult {
   ok:boolean
   message:string
   itemCount?:number
+}
+
+/**
+ * 入库结果。入库后这条外部知识就是一篇普通文档：同样的切片、卡片、断言与检索链路，
+ * 这里只额外带回它在知识库里的身份，便于从条目跳到文档。
+ */
+export interface CatalogIngestResult {
+  status:'INGESTED' | 'SKIPPED' | 'STALE' | 'FAILED'
+  itemId?:number
+  externalId?:string
+  documentId?:number|null
+  sourceId?:number|null
+  chunkCount?:number
+  message?:string
+}
+
+/** 列表上每一条的入库状态：未入库的不出现在列表里；ARCHIVED 表示源端已删除、已移出检索。 */
+export interface CatalogIngestStatus {
+  itemId:number
+  ingestStatus:'INGESTED' | 'STALE' | 'FAILED' | 'ARCHIVED'
+  documentId?:number|null
+  contentHash?:string|null
+}
+
+/** 跑一轮自动入库的结果：新入库多少、重抽多少、失败多少。 */
+export interface CatalogAutoIngestResult {
+  connectorId:number
+  /** true 表示已提交后台，返回时入库还没跑完（进度看入库状态列）。 */
+  scheduled?:boolean
+  ingested:number
+  refreshed:number
+  failed:number
+  quota:number
+  message:string
+}
+
+export interface CatalogIngestSelectionResult {
+  /** true 表示已提交后台，返回时入库还没跑完（进度看入库状态列）。 */
+  scheduled?:boolean
+  connectorId:number
+  requested:number
+  ingested:number
+  skipped:number
+  failed:number
+  message:string
+  items:{ itemId:number; externalId?:string; status:string; documentId?:number|null; message?:string }[]
 }

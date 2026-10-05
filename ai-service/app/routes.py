@@ -281,7 +281,8 @@ async def retrieval_capabilities():
 @router.post("/ai/query")
 async def query(r: QueryRequest):
     """Execute query routing, hybrid retrieval, reranking, context assembly, and answer generation."""
-    return await engine.query(r.queryId or "", r.knowledgeBaseId, r.query, r.topK, r.permissionTags)
+    return await engine.query(r.queryId or "", r.knowledgeBaseId, r.query, r.topK, r.permissionTags,
+                              answer_format=r.answerFormat)
 
 
 @router.post("/ai/retrieve")

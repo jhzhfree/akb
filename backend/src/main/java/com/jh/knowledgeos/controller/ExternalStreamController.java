@@ -60,12 +60,13 @@ public class ExternalStreamController {
     @GetMapping(value = "/query", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     @Operation(summary = "流式问答：依次推送 stage / delta / citation / done 事件")
     public SseEmitter streamQuery(HttpServletRequest request, @RequestParam(value = "knowledgeBaseId", required = false) Long knowledgeBaseId,
-        @RequestParam("question") String question, @RequestParam(value = "topK", required = false) Integer topK) {
+        @RequestParam("question") String question, @RequestParam(value = "topK", required = false) Integer topK,
+        @RequestParam(value = "answerFormat", required = false) String answerFormat) {
         ApiKey key = open(request, "/stream/query", knowledgeBaseId);
         Long kb = accessService.resolveKnowledgeBase(key, knowledgeBaseId);
         accessService.assertScope(key, ApiKey.SCOPE_READ);
         SseEmitter emitter = new SseEmitter(0L);
-        streamService.streamQuery(key, kb, question, topK, emitter);
+        streamService.streamQuery(key, kb, question, topK, answerFormat, emitter);
         return emitter;
     }
 

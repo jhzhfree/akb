@@ -140,27 +140,49 @@ public class DocumentIngestionService {
             toDouble(context.get("authorityScore")), String.valueOf(context.get("permissionTags")), context));
     }
 
+    /**
+     * Entry point for sources that already arrive as text — a connector item. The parsed model is
+     * produced by {@link ConnectorItemNormalizer} instead of {@code /ai/parse}; from here on the
+     * pipeline is the one an upload runs: same source, document, chunk, evidence and extraction
+     * rows, same outbox events, same retrieval channels.
+     */
+    public Map<String, Object> ingestNormalized(Long knowledgeBaseId, String name, String sourceUri, String sourceType, String mimeType,
+        Double authorityScore, String permissionTags, Map<String, Object> parsed) {
+        String sha256 = parsed == null ? null : String.valueOf(parsed.get("sha256"));
+        IngestionMaterial material = new IngestionMaterial(name, sourceUri, sourceType, mimeType, sha256, null, 0L);
+        try {
+            return runIngestion(knowledgeBaseId, material, parsed, authorityScore, permissionTags, null);
+        } catch (Exception ex) {
+            throw new IllegalArgumentException("连接器条目入库失败：" + ex.getMessage(), ex);
+        }
+    }
+
+    private Map<String, Object> ingest(Long knowledgeBaseId, MultipartFile file, Double authorityScore, String permissionTags,
+        Map<String, Object> retryContext) throws Exception {
+        Map<String, Object> parsed = aiClient.parse(file, chunkPolicyService.policyFor(knowledgeBaseId));
+        IngestionMaterial material = new IngestionMaterial(file.getOriginalFilename(), "upload://" + file.getOriginalFilename(),
+            String.valueOf(parsed.get("extension")), file.getContentType(), String.valueOf(parsed.get("sha256")), file.getBytes(), file.getSize());
+        return runIngestion(knowledgeBaseId, material, parsed, authorityScore, permissionTags, retryContext);
+    }
+
     @SuppressWarnings("unchecked")
-    private Map<String, Object> ingest(Long knowledgeBaseId, MultipartFile file, Double authorityScore, String permissionTags, Map<String, Object>
-        retryContext) throws Exception {
+    private Map<String, Object> runIngestion(Long knowledgeBaseId, IngestionMaterial material, Map<String, Object> parsed, Double authorityScore,
+        String permissionTags, Map<String, Object> retryContext) throws Exception {
         Long retryDocumentId = retryContext == null ? null : toLong(retryContext.get("id"));
         int retryCount = retryContext == null ? 0 : toInt(retryContext.get("retryCount")) + 1;
-        com.jh.knowledgeos.domain.IngestionRun run = observabilityService.start(knowledgeBaseId, file.getOriginalFilename());
+        com.jh.knowledgeos.domain.IngestionRun run = observabilityService.start(knowledgeBaseId, material.name);
         // Mutable holders: a failure has to record the stage it died in, and the document id only
         // exists once the persist transaction ran, but the catch block needs both.
         final String[] stageHolder = new String[] { "PARSE" };
         final Long[] documentIdHolder = new Long[] { retryDocumentId };
         try {
             publisher.emitUser(PlatformEventTypes.INGESTION_DOCUMENT_RECEIVED, knowledgeBaseId, PlatformEventPublisher.SOURCE_UI, "INGESTION_RUN",
-                run.getRunCode(), "文档接收开始解析：" + file.getOriginalFilename(), receivedDetail(run, file, authorityScore), taskContext(run.getRunCode(),
+                run.getRunCode(), "文档接收开始解析：" + material.name, receivedDetail(run, material, authorityScore), taskContext(run.getRunCode(),
                 retryDocumentId, null, retryCount));
             if (retryDocumentId != null) {
                 documentMapper.updateDocumentState(retryDocumentId, "RETRYING", "PARSE", null, retryCount);
             }
             observabilityService.event(run.getId(), "PARSE_STARTED", "PARSE", "RUNNING", "开始解析文档", null);
-            // The knowledge base owns its chunking policy: the parser only applies it, so a
-            // manual can be re-cut by section while a report stays window-based.
-            Map<String, Object> parsed = aiClient.parse(file, chunkPolicyService.policyFor(knowledgeBaseId));
             List<Map<String, Object>> parsedChunks = parsed.get("chunks") instanceof List ? (List<Map<String, Object>>) parsed.get("chunks") : new
                 ArrayList<Map<String, Object>>();
             // The parser returns one canonical model for every source format; chunks are the
@@ -178,8 +200,8 @@ public class DocumentIngestionService {
                     KnowledgeSource source;
                     KnowledgeDocument document;
                     if (retryDocumentId == null) {
-                        source = createSource(knowledgeBaseId, file, parsed, authorityScore, permissionTags);
-                        document = createDocument(source, file);
+                        source = createSource(knowledgeBaseId, material, authorityScore, permissionTags);
+                        document = createDocument(source, material);
                     } else {
                         // A retry keeps the original source and document identity: the chunks are
                         // what gets a new revision, so every Evidence row stays resolvable.
@@ -228,7 +250,7 @@ public class DocumentIngestionService {
             result.put("runCode", run.getRunCode());
             result.put("sourceId", state.source.getId());
             result.put("documentId", state.document.getId());
-            result.put("filename", file.getOriginalFilename());
+            result.put("filename", material.name);
             result.put("chunkCount", state.indexChunks.size());
             result.put("chunkRevision", state.revision);
             result.put("status", "READY");
@@ -241,7 +263,7 @@ public class DocumentIngestionService {
             stageHolder[0] = "READY";
             documentMapper.updateDocumentState(state.document.getId(), "READY", "READY", null, retryCount);
             publisher.emitUser(PlatformEventTypes.INGESTION_COMPLETED, knowledgeBaseId, PlatformEventPublisher.SOURCE_UI, "INGESTION_RUN",
-                run.getRunCode(), "文档摄入完成：" + file.getOriginalFilename(), completedDetail(run, file, state, cardCount, claimCount, knowledgeResult),
+                run.getRunCode(), "文档摄入完成：" + material.name, completedDetail(run, material, state, cardCount, claimCount, knowledgeResult),
                 taskContext(run.getRunCode(), state.document.getId(), String.valueOf(state.revision), retryCount));
             return result;
         } catch (Exception ex) {
@@ -250,13 +272,13 @@ public class DocumentIngestionService {
             if (failedDocument != null) {
                 documentMapper.updateDocumentState(failedDocument, "FAILED", stageHolder[0], abbreviate(ex.getMessage(), 900), retryCount);
             }
-            Map<String, Object> detail = receivedDetail(run, file, authorityScore);
+            Map<String, Object> detail = receivedDetail(run, material, authorityScore);
             detail.put("stage", stageHolder[0]);
             detail.put("documentId", failedDocument);
             detail.put("retryCount", retryCount);
             detail.put("error", ex.getMessage());
             publisher.emitUser(PlatformEventTypes.INGESTION_FAILED, knowledgeBaseId, PlatformEventPublisher.SOURCE_UI, "INGESTION_RUN", run == null ?
-                null : run.getRunCode(), "文档摄入失败：" + file.getOriginalFilename(), detail, taskContext(run == null ? null : run.getRunCode(),
+                null : run.getRunCode(), "文档摄入失败：" + material.name, detail, taskContext(run == null ? null : run.getRunCode(),
                 failedDocument, null, retryCount));
             throw ex;
         }
@@ -280,19 +302,20 @@ public class DocumentIngestionService {
     /**
      * Shared ingestion detail so the received / completed / failed events read the same way.
      */
-    private Map<String, Object> receivedDetail(com.jh.knowledgeos.domain.IngestionRun run, MultipartFile file, Double authorityScore) {
+    private Map<String, Object> receivedDetail(com.jh.knowledgeos.domain.IngestionRun run, IngestionMaterial material, Double authorityScore) {
         Map<String, Object> detail = new LinkedHashMap<String, Object>();
         detail.put("runCode", run == null ? null : run.getRunCode());
-        detail.put("filename", file.getOriginalFilename());
-        detail.put("size", file.getSize());
-        detail.put("contentType", file.getContentType());
+        detail.put("filename", material.name);
+        detail.put("size", material.size);
+        detail.put("contentType", material.mimeType);
+        detail.put("sourceUri", material.sourceUri);
         detail.put("authorityScore", authorityScore);
         return detail;
     }
 
-    private Map<String, Object> completedDetail(com.jh.knowledgeos.domain.IngestionRun run, MultipartFile file, IngestionState state, int cardCount,
-        int claimCount, Map<String, Object> knowledgeResult) {
-        Map<String, Object> detail = receivedDetail(run, file, null);
+    private Map<String, Object> completedDetail(com.jh.knowledgeos.domain.IngestionRun run, IngestionMaterial material, IngestionState state,
+        int cardCount, int claimCount, Map<String, Object> knowledgeResult) {
+        Map<String, Object> detail = receivedDetail(run, material, null);
         detail.put("sourceId", state.source.getId());
         detail.put("documentId", state.document.getId());
         detail.put("chunkCount", state.indexChunks.size());
@@ -367,32 +390,38 @@ public class DocumentIngestionService {
         return codes;
     }
 
-    private KnowledgeSource createSource(Long knowledgeBaseId, MultipartFile file, Map<String, Object> parsed, Double authorityScore, String
-        permissionTags) throws Exception {
+    /**
+     * One source row per ingestion, whatever the bytes came from: a file keeps its original in
+     * storage, a connector item only keeps the URL it can be opened at.
+     */
+    private KnowledgeSource createSource(Long knowledgeBaseId, IngestionMaterial material, Double authorityScore, String permissionTags)
+        throws Exception {
         KnowledgeSource source = new KnowledgeSource();
         source.setSourceCode(idGenerator.next("SRC_"));
         source.setKnowledgeBaseId(knowledgeBaseId);
-        source.setName(file.getOriginalFilename());
-        source.setSourceType(String.valueOf(parsed.get("extension")));
-        source.setSourceUri("upload://" + file.getOriginalFilename());
-        // The original bytes are kept so the console can preview what was imported; a storage
-        // problem only costs preview, so it never aborts an otherwise valid ingestion.
-        source.setStoragePath(sourceFileStorage.store(knowledgeBaseId, source.getSourceCode(), file.getOriginalFilename(), file.getBytes()));
+        source.setName(material.name);
+        source.setSourceType(material.sourceType);
+        source.setSourceUri(material.sourceUri);
+        if (material.bytes != null) {
+            // The original bytes are kept so the console can preview what was imported; a storage
+            // problem only costs preview, so it never aborts an otherwise valid ingestion.
+            source.setStoragePath(sourceFileStorage.store(knowledgeBaseId, source.getSourceCode(), material.name, material.bytes));
+        }
         source.setAuthorityScore(authorityScore == null ? DEFAULT_AUTHORITY_SCORE : authorityScore);
         source.setPermissionTags(normalizePermissionTags(permissionTags));
         source.setStatus("ACTIVE");
         documentMapper.insertSource(source);
-        documentMapper.insertSourceVersion(source.getId(), 1, String.valueOf(parsed.get("sha256")), source.getSourceUri());
+        documentMapper.insertSourceVersion(source.getId(), 1, material.sha256, source.getSourceUri());
         return source;
     }
 
-    private KnowledgeDocument createDocument(KnowledgeSource source, MultipartFile file) {
+    private KnowledgeDocument createDocument(KnowledgeSource source, IngestionMaterial material) {
         Long sourceVersionId = documentMapper.findSourceVersionId(source.getId(), 1);
         KnowledgeDocument document = new KnowledgeDocument();
         document.setSourceVersionId(sourceVersionId);
         document.setDocumentCode(idGenerator.next("DOC_"));
-        document.setTitle(file.getOriginalFilename());
-        document.setMimeType(file.getContentType());
+        document.setTitle(material.name);
+        document.setMimeType(material.mimeType);
         document.setParseStatus("PARSING");
         document.setStatus("PROCESSING");
         document.setCurrentStage("PARSE");
@@ -748,6 +777,38 @@ public class DocumentIngestionService {
             return null;
         }
         return value.length() <= limit ? value : value.substring(0, limit);
+    }
+
+    /**
+     * What is being ingested, independent of where it came from. An upload carries bytes and a
+     * filename; a connector item carries a name, a URL and text already normalized into the parse
+     * model. Everything after this point cannot tell them apart.
+     */
+    private static final class IngestionMaterial {
+
+        private final String name;
+
+        private final String sourceUri;
+
+        private final String sourceType;
+
+        private final String mimeType;
+
+        private final String sha256;
+
+        private final byte[] bytes;
+
+        private final long size;
+
+        private IngestionMaterial(String name, String sourceUri, String sourceType, String mimeType, String sha256, byte[] bytes, long size) {
+            this.name = name;
+            this.sourceUri = sourceUri;
+            this.sourceType = sourceType;
+            this.mimeType = mimeType;
+            this.sha256 = sha256;
+            this.bytes = bytes;
+            this.size = size;
+        }
     }
 
     private static final class IngestionState {

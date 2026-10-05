@@ -11,7 +11,20 @@
           placeholder="向企业知识库提问…" @input="$emit('update:query',($event.target as HTMLTextAreaElement).value)" />
         <footer class="flex items-center justify-between border-t border-ink-100 bg-ink-50/70 px-4 py-2.5">
           <span class="text-[11px] text-ink-500">回答必须可追溯到 证据 / 来源</span>
-          <button class="kb-btn-primary" :disabled="asking" @click="$emit('ask')">{{ asking ? '检索中…' : '发送问题' }}</button>
+          <div class="flex items-center gap-2">
+            <label class="flex items-center gap-1 text-[11px] text-ink-500">
+              返回格式
+              <select
+                class="rounded border border-ink-200 bg-white px-1.5 py-1 text-[11px] text-ink-700 outline-none"
+                :value="answerFormat"
+                @change="$emit('update:answerFormat',($event.target as HTMLSelectElement).value as AnswerFormat)">
+                <option v-for="option in ANSWER_FORMATS" :key="option.value" :value="option.value" :title="option.hint">
+                  {{ option.label }}
+                </option>
+              </select>
+            </label>
+            <button class="kb-btn-primary" :disabled="asking" @click="$emit('ask')">{{ asking ? '检索中…' : '发送问题' }}</button>
+          </div>
         </footer>
       </article>
 
@@ -30,9 +43,13 @@
 
         <!-- 助手回答卡片 -->
         <article class="kb-card mt-4 p-4">
-          <!-- 安全：utils/markdown.ts 的 renderMarkdown 先 escapeHtml 再生成 Markdown 标签 -->
+          <!-- 安全：两种 HTML 来源都先转义再生成标签——服务端的 html 格式如此，
+               utils/markdown.ts 的 renderMarkdown 同样先 escapeHtml。 -->
           <!-- eslint-disable-next-line vue/no-v-html -->
-          <div class="md-answer" v-html="renderedAnswer"></div>
+          <div v-if="isHtml" class="md-answer" v-html="props.result?.answer || ''"></div>
+          <pre v-else-if="isText" class="text-answer">{{ props.result?.answer || '' }}</pre>
+          <!-- eslint-disable-next-line vue/no-v-html -->
+          <div v-else class="md-answer" v-html="renderedAnswer"></div>
 
           <!-- 结论来源：这句话是查到的、走图谱走出来的，还是规则推出来的 -->
           <p v-if="conclusionLabel" class="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px]">
@@ -129,10 +146,28 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import type { QueryCitation, QueryHistoryItem, QueryResult, QuerySupportClaim } from '../types'
+import { ANSWER_FORMATS } from '../api/contracts'
+import type { AnswerFormat } from '../api/contracts'
 import { renderMarkdown } from '../utils/markdown'
 
-const props = defineProps<{ query:string; result:QueryResult|null; asking:boolean; history:QueryHistoryItem[] }>()
-defineEmits<{ ask:[]; 'update:query':[value:string]; 'open-trace':[qid:string]; 'refresh-history':[]; 'open-citation':[citation:QueryCitation] }>()
+const props = defineProps<{
+  query:string; result:QueryResult|null; asking:boolean; history:QueryHistoryItem[]
+  /** 请求与展示共用：服务端回传实际生效的格式，避免未知取值被当成默认。 */
+  answerFormat:AnswerFormat
+}>()
+defineEmits<{
+  ask:[]; 'update:query':[value:string]; 'update:answerFormat':[value:AnswerFormat]
+  'open-trace':[qid:string]; 'refresh-history':[]; 'open-citation':[citation:QueryCitation]
+}>()
+
+/** 以服务端回传的为准：它把无法识别的取值退回 default 后原样带回。 */
+const effectiveFormat = computed<AnswerFormat>(() => {
+  const delivered = props.result?.answerFormat
+  if (delivered === 'markdown' || delivered === 'text' || delivered === 'html') return delivered
+  return props.answerFormat
+})
+const isHtml = computed(() => effectiveFormat.value === 'html')
+const isText = computed(() => effectiveFormat.value === 'text')
 /** 历史行内的时间只到「月-日 时:分」：列表单行排布，完整时间戳会挤掉问题文本。 */
 const time=(v?:string)=>{
   if(!v)return '—'
@@ -203,4 +238,14 @@ const citationTitle = (citation:QueryCitation) => {
 .md-answer :deep(.md-code){border-radius:4px;background:var(--bg-sub);padding:0.1rem 0.3rem;font-family:ui-monospace,monospace;font-size:12px}
 .md-answer :deep(.md-pre){margin:0.5rem 0;border-radius:8px;background:var(--bg-sunken);color:var(--ink-2);padding:0.75rem 1rem;overflow:auto;font-size:12px;line-height:1.6}
 .md-answer :deep(.md-cite){margin-left:2px;color:var(--accent-text);font-weight:600;cursor:help}
+/* 纯文本格式：保留换行与空行，不套 Markdown 排版 */
+.text-answer{margin:0;font-size:14px;line-height:1.8;color:var(--ink-1);white-space:pre-wrap;word-break:break-word;font-family:inherit}
+/* HTML 格式自带的引用原文小节（由服务端渲染并转义后插入） */
+.md-answer :deep(.answer-citations){margin-top:1rem;border-top:1px solid var(--line-soft);padding-top:0.75rem}
+.md-answer :deep(.answer-citations h3){margin:0 0 0.4rem;font-size:12px;font-weight:600;color:var(--ink-2)}
+.md-answer :deep(.answer-citations ol){margin:0;padding-left:1.2rem;list-style:decimal}
+.md-answer :deep(.answer-citation){margin:0.35rem 0;font-size:13px}
+.md-answer :deep(.answer-citation-head){display:flex;flex-wrap:wrap;gap:0.4rem;align-items:baseline}
+.md-answer :deep(.answer-citation-source){margin-left:auto;font-size:11px;color:var(--ink-3)}
+.md-answer :deep(.answer-citation-excerpt){margin:0.2rem 0 0.5rem;border-left:3px solid var(--line-soft);padding:0.1rem 0 0.1rem 0.75rem;color:var(--ink-2);font-size:12.5px;line-height:1.7}
 </style>

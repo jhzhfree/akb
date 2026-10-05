@@ -52,6 +52,14 @@
           <input v-model.number="cfg.topK" type="number" class="kb-input mt-1" />
         </label>
         <label class="block">
+          <span class="kb-field-label">返回格式 answerFormat</span>
+          <select v-model="cfg.answerFormat" class="kb-input mt-1">
+            <option v-for="option in answerFormatOptions" :key="option.value" :value="option.value">
+              {{ option.label }}
+            </option>
+          </select>
+        </label>
+        <label class="block">
           <span class="kb-field-label">对象编码 code</span>
           <input v-model="cfg.code" class="kb-input mt-1" placeholder="卡片 / 断言 / 证据编码" />
         </label>
@@ -293,6 +301,7 @@
               </div>
               <p class="kb-muted mt-3">
                 stream/query 期望 stage(REWRITE→RECALL→FUSION→RERANK→ANSWER) → delta → citation → done；
+                done 帧带 answerFormat（实际生效的交付格式，与上方选择的取值不一致说明已退回默认）；
                 stream/events 期望 open → ingestion / knowledge → 心跳注释。
               </p>
             </div>
@@ -456,6 +465,7 @@ const {
   judgeMcp,
   sendMcp,
   mcpHandshake,
+  answerFormatOptions,
   sseUrl,
   pushSse,
   toggleSse,

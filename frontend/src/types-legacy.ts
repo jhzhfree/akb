@@ -239,6 +239,8 @@ export interface QueryResult {
   reranked?:boolean; confidence?:number; claims?:QuerySupportClaim[]; citations?:QueryCitation[]
   model?:string; answerQualification?:{gateStatus?:string;[key:string]:unknown}
   conclusionSource?:QueryConclusionSource
+  /** 答案交付格式：服务端实际生效的格式（default / markdown / text / html）。 */
+  answerFormat?:string
   [key:string]:unknown
 }
 export interface GraphNode {

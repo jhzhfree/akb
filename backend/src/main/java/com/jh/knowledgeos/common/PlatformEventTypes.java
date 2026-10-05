@@ -75,6 +75,13 @@ public final class PlatformEventTypes {
 
     public static final String KNOWLEDGE_GAP_DETECTED = "KNOWLEDGE_GAP_DETECTED";
 
+    // 外部知识的生命周期：条目入库、被新版替换、源端删除后归档
+    public static final String CONNECTOR_ITEM_INGESTED = "CONNECTOR_ITEM_INGESTED";
+
+    public static final String CONNECTOR_ITEM_SUPERSEDED = "CONNECTOR_ITEM_SUPERSEDED";
+
+    public static final String CONNECTOR_ITEM_ARCHIVED = "CONNECTOR_ITEM_ARCHIVED";
+
     private PlatformEventTypes() {
     }
 

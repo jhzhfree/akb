@@ -1,7 +1,8 @@
 import axios, { type AxiosResponse } from 'axios'
 import type {
-  ApiEnvelope, CatalogFacets, CatalogItem, CatalogPage, CatalogSyncResult,
-  ConnectorItemPage, ConnectorPayload, ConnectorSource, ConnectorTestResult,
+  ApiEnvelope, CatalogAutoIngestResult, CatalogFacets, CatalogIngestResult, CatalogIngestSelectionResult,
+  CatalogIngestStatus, CatalogItem, CatalogPage, CatalogSyncResult, ConnectorIngestPolicy, ConnectorItemPage,
+  ConnectorPayload, ConnectorSource, ConnectorTestResult,
 } from '../../types'
 
 type ApiResponse<T> = AxiosResponse<ApiEnvelope<T>>
@@ -65,3 +66,25 @@ export const connectorCatalogFacets = (id:number, type?:string):Promise<ApiRespo
 
 export const connectorCatalogItem = (itemId:number):Promise<ApiResponse<CatalogItem>> =>
   axios.get(`/api/knowledge/connectors/catalog/items/${itemId}`)
+
+/** 入库要走抽取与索引，比预览慢得多，因此给最长的等待时间。 */
+const INGEST_TIMEOUT_MS = 180000
+
+export const ingestConnectorItem = (id:number, itemId:number, force = false):Promise<ApiResponse<CatalogIngestResult>> =>
+  axios.post(`/api/knowledge/connectors/${id}/items/${itemId}/ingest?force=${force}`, {}, { timeout:INGEST_TIMEOUT_MS })
+
+export const ingestConnectorSelection = (
+  id:number,
+  payload:{ type?:string; keyword?:string; attr?:string[]; limit?:number },
+):Promise<ApiResponse<CatalogIngestSelectionResult>> =>
+  axios.post(`/api/knowledge/connectors/${id}/ingest`, payload, { timeout:INGEST_TIMEOUT_MS })
+
+export const connectorIngestStatus = (id:number):Promise<ApiResponse<CatalogIngestStatus[]>> =>
+  axios.get(`/api/knowledge/connectors/${id}/ingest/status`)
+
+export const connectorIngestPolicy = (id:number):Promise<ApiResponse<ConnectorIngestPolicy>> =>
+  axios.get(`/api/knowledge/connectors/${id}/ingest/policy`)
+
+/** 自动入库一轮可能连抽几十条，等待时间与批量入库一致。 */
+export const ingestConnectorAuto = (id:number):Promise<ApiResponse<CatalogAutoIngestResult>> =>
+  axios.post(`/api/knowledge/connectors/${id}/ingest/auto`, {}, { timeout:INGEST_TIMEOUT_MS })

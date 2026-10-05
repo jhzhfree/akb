@@ -1,11 +1,8 @@
 package com.jh.knowledgeos.config;
 
-import com.jh.knowledgeos.domain.User;
-import com.jh.knowledgeos.service.AuthContext;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.core.task.TaskDecorator;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 import java.util.concurrent.ThreadPoolExecutor;
 
@@ -44,32 +41,5 @@ public class BatchIngestionExecutorConfig {
         executor.setAwaitTerminationSeconds(60);
         executor.initialize();
         return executor;
-    }
-
-    /**
-     * Carries the signed-in user into the worker thread.
-     *
-     * <p>{@link AuthContext} is a {@code ThreadLocal} filled by the authentication interceptor, so
-     * a worker would otherwise attribute its documents to {@code system} — every manual batch
-     * would lose its author, and task ownership would be wrong on every row.</p>
-     */
-    static final class AuthPropagationDecorator implements TaskDecorator {
-
-        @Override
-        public Runnable decorate(Runnable runnable) {
-            final User submitter = AuthContext.get();
-            return new Runnable() {
-
-                @Override
-                public void run() {
-                    try {
-                        AuthContext.set(submitter);
-                        runnable.run();
-                    } finally {
-                        AuthContext.clear();
-                    }
-                }
-            };
-        }
     }
 }
