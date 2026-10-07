@@ -57,12 +57,14 @@ public class DocumentIngestionService {
 
     private final ChunkPolicyService chunkPolicyService;
 
+    private final KbScenarioService kbScenarioService;
+
     private final TaskCenterService taskCenterService;
 
     public DocumentIngestionService(KnowledgeMapper mapper, AiClient aiClient, KnowledgeExtractionService extractionService, ObjectMapper
         objectMapper, IdGenerator idGenerator, TransactionRunner transactionRunner, IndexOutboxService outboxService, IngestionObservabilityService
         observabilityService, SourceFileStorageService sourceFileStorage, PlatformEventPublisher publisher, ChunkPolicyService chunkPolicyService,
-        @Lazy TaskCenterService taskCenterService, DocumentMapper documentMapper, EvidenceMapper evidenceMapper) {
+        KbScenarioService kbScenarioService, @Lazy TaskCenterService taskCenterService, DocumentMapper documentMapper, EvidenceMapper evidenceMapper) {
         this.evidenceMapper = evidenceMapper;
         this.documentMapper = documentMapper;
         this.mapper = mapper;
@@ -76,6 +78,7 @@ public class DocumentIngestionService {
         this.sourceFileStorage = sourceFileStorage;
         this.publisher = publisher;
         this.chunkPolicyService = chunkPolicyService;
+        this.kbScenarioService = kbScenarioService;
         this.taskCenterService = taskCenterService;
     }
 
@@ -159,13 +162,25 @@ public class DocumentIngestionService {
 
     private Map<String, Object> ingest(Long knowledgeBaseId, MultipartFile file, Double authorityScore, String permissionTags,
         Map<String, Object> retryContext) throws Exception {
-        Map<String, Object> parsed = aiClient.parse(file, chunkPolicyService.policyFor(knowledgeBaseId));
+        Map<String, Object> parsed = aiClient.parse(file, chunkPolicy(knowledgeBaseId));
         IngestionMaterial material = new IngestionMaterial(file.getOriginalFilename(), "upload://" + file.getOriginalFilename(),
             String.valueOf(parsed.get("extension")), file.getContentType(), String.valueOf(parsed.get("sha256")), file.getBytes(), file.getSize());
         return runIngestion(knowledgeBaseId, material, parsed, authorityScore, permissionTags, retryContext);
     }
 
     @SuppressWarnings("unchecked")
+    /**
+     * Chunking for this upload: an edited chunk policy wins, otherwise the scenario template's.
+     *
+     * <p>A library created as 运维知识库 cuts a runbook into heading-sized parent/child units
+     * without anybody touching the slider; the moment somebody does touch it, the explicit
+     * choice wins, because a stored answer is worth more than a template guess.</p>
+     */
+    private Map<String, Object> chunkPolicy(Long knowledgeBaseId) {
+        return chunkPolicyService.customized(knowledgeBaseId) ? chunkPolicyService.policyFor(knowledgeBaseId)
+            : kbScenarioService.chunkPolicy(knowledgeBaseId);
+    }
+
     private Map<String, Object> runIngestion(Long knowledgeBaseId, IngestionMaterial material, Map<String, Object> parsed, Double authorityScore,
         String permissionTags, Map<String, Object> retryContext) throws Exception {
         Long retryDocumentId = retryContext == null ? null : toLong(retryContext.get("id"));

@@ -28,13 +28,31 @@ public class KnowledgeQueryService {
 
     private final PlatformEventPublisher publisher;
 
-    public KnowledgeQueryService(TraceMapper traceMapper, AiClient aiClient, ObjectMapper objectMapper, IdGenerator idGenerator, PlatformEventPublisher
-        publisher) {
+    private final KbScenarioService scenarios;
+
+    public KnowledgeQueryService(TraceMapper traceMapper, AiClient aiClient, ObjectMapper objectMapper, IdGenerator idGenerator,
+        PlatformEventPublisher publisher, KbScenarioService scenarios) {
         this.traceMapper = traceMapper;
         this.aiClient = aiClient;
         this.objectMapper = objectMapper;
         this.idGenerator = idGenerator;
         this.publisher = publisher;
+        this.scenarios = scenarios;
+    }
+
+    private static Long toLong(Object value) {
+        if (value == null) {
+            return null;
+        }
+        try {
+            return Long.valueOf(String.valueOf(value).trim());
+        } catch (NumberFormatException e) {
+            return null;
+        }
+    }
+
+    private static boolean isBlank(Object value) {
+        return value == null || String.valueOf(value).trim().isEmpty();
     }
 
     /**
@@ -46,6 +64,21 @@ public class KnowledgeQueryService {
         Map<String, Object> payload = new LinkedHashMap<String, Object>(request);
         String queryId = idGenerator.next("Q_");
         payload.put("queryId", queryId);
+        // Every channel funnels through this method, so it is the one place that can hand the
+        // knowledge base its own strategy: a library created as 漏洞库 answers CVE questions with
+        // the channels and thresholds that suit it, while an untouched library keeps following the
+        // platform policy.
+        Long kbId = toLong(payload.get("knowledgeBaseId"));
+        Map<String, Object> override = kbId == null ? null : scenarios.queryOverride(kbId);
+        if (override != null) {
+            payload.put("policyOverride", override);
+        }
+        if (kbId != null && isBlank(payload.get("answerFormat"))) {
+            String format = scenarios.answerFormat(kbId);
+            if (!format.isEmpty()) {
+                payload.put("answerFormat", format);
+            }
+        }
         long startedAt = System.currentTimeMillis();
         Map<String, Object> response = aiClient.post(AiApiPaths.QUERY, payload);
         long clientLatencyMs = System.currentTimeMillis() - startedAt;

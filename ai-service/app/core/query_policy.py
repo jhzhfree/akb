@@ -379,6 +379,71 @@ def default_policy() -> QueryPolicy:
     return QueryPolicy()
 
 
+# What a knowledge base may override, and nothing else. The list is deliberately short: a
+# library decides how it wants to be asked (channels, weights, fusion, rerank, evidence
+# floor), while routing rules, rewrite behaviour and the refusal sentence stay platform
+# policy — one library cannot quietly change what "no answer" means for everybody else.
+OVERRIDABLE_FIELDS = (
+    ("route", "defaultStrategies"),
+    ("recall", "channels"),
+    ("recall", "recallMultiplier"),
+    ("recall", "minRecallCandidates"),
+    ("fusion", "rrfK"),
+    ("fusion", "qualitySignalsEnabled"),
+    ("fusion", "chunkBoost", "enabled"),
+    ("rerank", "enabled"),
+    ("rerank", "topN"),
+    ("answer", "contextMaxChars"),
+    ("answer", "minChunkEvidence"),
+)
+
+
+def merge_override(policy: QueryPolicy, override: dict[str, Any] | None) -> QueryPolicy:
+    """Merge a knowledge base's scenario settings onto the platform policy.
+
+    Unknown keys are dropped rather than merged, and an override that fails validation falls
+    back to the platform policy: a bad value in one library's profile must degrade that
+    library to the defaults, never turn a question into a 500.
+    """
+    if not isinstance(override, dict) or not override:
+        return policy
+    allowed: dict[str, Any] = {}
+    for path in OVERRIDABLE_FIELDS:
+        value = _dig(override, path)
+        if value is None:
+            continue
+        _put(allowed, path, value)
+    if not allowed:
+        return policy
+    try:
+        return QueryPolicy.model_validate(_deep_merge(policy.model_dump(), allowed))
+    except Exception as exc:  # noqa: BLE001 - a bad profile degrades, it does not fail
+        logger.warning("kb policy override rejected, falling back to platform policy: %s", exc)
+        return policy
+
+
+def _dig(source: dict[str, Any], path: tuple[str, ...]) -> Any:
+    """Read a nested value without assuming the levels exist."""
+    current: Any = source
+    for key in path:
+        if not isinstance(current, dict):
+            return None
+        current = current.get(key)
+    return current
+
+
+def _put(target: dict[str, Any], path: tuple[str, ...], value: Any) -> None:
+    """Write a nested value, creating the levels on the way down."""
+    current = target
+    for key in path[:-1]:
+        nxt = current.get(key)
+        if not isinstance(nxt, dict):
+            nxt = {}
+            current[key] = nxt
+        current = nxt
+    current[path[-1]] = value
+
+
 DEFAULT_PROFILE = "default"
 
 

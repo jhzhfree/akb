@@ -57,11 +57,14 @@ public class KnowledgeExtractionService {
 
     private final PlatformEventPublisher publisher;
 
+    private final KbScenarioService scenarios;
+
     private final SimpleDateFormat dateTimeFormatter = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
 
     public KnowledgeExtractionService(KnowledgeMapper mapper, AiClient aiClient, ObjectMapper objectMapper, IdGenerator idGenerator, TransactionRunner
         transactionRunner, IndexOutboxService outboxService, EntityResolutionService entityResolutionService, PlatformEventPublisher publisher,
-        EvidenceMapper evidenceMapper, GovernanceMapper governanceMapper, GraphMapper graphMapper, IndexMapper indexMapper, CardClaimMapper cardClaimMapper) {
+        EvidenceMapper evidenceMapper, GovernanceMapper governanceMapper, GraphMapper graphMapper, IndexMapper indexMapper, CardClaimMapper cardClaimMapper,
+        KbScenarioService scenarios) {
         this.cardClaimMapper = cardClaimMapper;
         this.evidenceMapper = evidenceMapper;
         this.governanceMapper = governanceMapper;
@@ -75,6 +78,24 @@ public class KnowledgeExtractionService {
         this.outboxService = outboxService;
         this.entityResolutionService = entityResolutionService;
         this.publisher = publisher;
+        this.scenarios = scenarios;
+    }
+
+    /** Graph step skipped because the library's scenario builds no graph. */
+    private Map<String, Object> skippedGraph() {
+        Map<String, Object> graph = new LinkedHashMap<String, Object>();
+        graph.put("skipped", "GRAPH_DISABLED");
+        graph.put("entities", 0);
+        graph.put("relations", 0);
+        return graph;
+    }
+
+    /** Entity resolution skipped because the scenario does not want it. */
+    private Map<String, Object> skippedResolution() {
+        Map<String, Object> resolution = new LinkedHashMap<String, Object>();
+        resolution.put("skipped", "ENTITY_RESOLUTION_DISABLED");
+        resolution.put("merged", 0);
+        return resolution;
     }
 
     /**
@@ -95,31 +116,46 @@ public class KnowledgeExtractionService {
         // entity rows in a different order — MySQL then rolls this transaction back whole and asks
         // it to restart. Every statement inside is an idempotent upsert and the AI call above sits
         // outside the transaction, so redoing it neither duplicates rows nor pays for the model twice.
+        // What this library wants derived is a property of the library, not of the pipeline: a
+        // policy handbook needs versioned assertions and conflict detection but no graph walk,
+        // while a company directory wants exactly the opposite.
+        Map<String, Object> extractPolicy = scenarios.extraction(knowledgeBaseId);
+        boolean graphEnabled = scenarios.graphEnabled(knowledgeBaseId);
+        boolean claimsEnabled = Boolean.TRUE.equals(extractPolicy.get("claims"));
         PersistedKnowledge persisted = transactionRunner.retryingOnDeadlock(() -> {
             List<Map<String, Object>> cards = persistCards(knowledgeBaseId, documentId, response.get("cards"), permissionTags, authorityScore);
-            List<Map<String, Object>> claims = persistClaims(knowledgeBaseId, documentId, response.get("claims"), permissionTags, authorityScore);
-            Map<String, Object> graph = persistAuthoritativeGraph(knowledgeBaseId, documentId, response, permissionTags);
+            List<Map<String, Object>> claims = claimsEnabled
+                ? persistClaims(knowledgeBaseId, documentId, response.get("claims"), permissionTags, authorityScore)
+                : new ArrayList<Map<String, Object>>();
+            Map<String, Object> graph = graphEnabled ? persistAuthoritativeGraph(knowledgeBaseId, documentId, response, permissionTags)
+                : skippedGraph();
             return new PersistedKnowledge(cards, claims, graph);
         });
         List<Map<String, Object>> savedCards = persisted.cards;
         List<Map<String, Object>> savedClaims = persisted.claims;
         response.put("authoritativeGraph", persisted.graph);
-        Map<String, Object> graphPayload = buildKnowledgeIndexPayload(knowledgeBaseId, new ArrayList<Map<String, Object>>(), new ArrayList<Map<String,
-            Object>>(), withPermissionTags(response.get("entities"), permissionTags), withPermissionTags(response.get("relations"), permissionTags));
-        String graphKey = "KB:" + knowledgeBaseId + ":GRAPH:" + (documentId == null ? "MANUAL" : documentId);
-        Map<String, Object> graphEvent = transactionRunner.required(() -> outboxService.enqueue(knowledgeBaseId, "GRAPH", graphKey,
-            "GRAPH_BATCH_UPSERT", AiApiPaths.INDEX_KNOWLEDGE, graphPayload, documentId == null ? "GRAPH_EXTRACT:" + graphKey + ":" +
-            UUID.randomUUID().toString() : "GRAPH_EXTRACT:" + graphKey + ":1"));
+        Map<String, Object> graphEvent = null;
+        if (graphEnabled) {
+            Map<String, Object> graphPayload = buildKnowledgeIndexPayload(knowledgeBaseId, new ArrayList<Map<String, Object>>(),
+                new ArrayList<Map<String, Object>>(), withPermissionTags(response.get("entities"), permissionTags),
+                withPermissionTags(response.get("relations"), permissionTags));
+            String graphKey = "KB:" + knowledgeBaseId + ":GRAPH:" + (documentId == null ? "MANUAL" : documentId);
+            graphEvent = transactionRunner.required(() -> outboxService.enqueue(knowledgeBaseId, "GRAPH", graphKey,
+                "GRAPH_BATCH_UPSERT", AiApiPaths.INDEX_KNOWLEDGE, graphPayload, documentId == null ? "GRAPH_EXTRACT:" + graphKey + ":" +
+                UUID.randomUUID().toString() : "GRAPH_EXTRACT:" + graphKey + ":1"));
+        }
         Map<String, Object> indexSummary = new LinkedHashMap<String, Object>();
         indexSummary.put("mode", "transactional-outbox");
         indexSummary.put("cardEvents", savedCards.size());
         indexSummary.put("claimEvents", savedClaims.size());
         indexSummary.put("graphEvent", graphEvent);
         response.put("knowledgeIndex", indexSummary);
-        response.put("conflicts", detectAndPersistConflicts(knowledgeBaseId, savedClaims));
+        response.put("conflicts", Boolean.TRUE.equals(extractPolicy.get("conflictDetection"))
+            ? detectAndPersistConflicts(knowledgeBaseId, savedClaims) : new ArrayList<Object>());
         // Entity resolution runs here, outside the persistence transaction: it issues an external
         // AI call and then merges duplicate graph nodes (design V1.1 §5.4).
-        response.put("entityResolution", entityResolutionService.resolveAndMerge(knowledgeBaseId, response.get("entities")));
+        response.put("entityResolution", Boolean.TRUE.equals(extractPolicy.get("entityResolution"))
+            ? entityResolutionService.resolveAndMerge(knowledgeBaseId, response.get("entities")) : skippedResolution());
         announceExtraction(knowledgeBaseId, documentId, savedCards, savedClaims);
         return response;
     }

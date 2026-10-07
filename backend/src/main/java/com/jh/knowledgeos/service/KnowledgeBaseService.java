@@ -1,5 +1,6 @@
 package com.jh.knowledgeos.service;
 
+import com.jh.knowledgeos.common.KbScenarioTemplates;
 import com.jh.knowledgeos.common.KnowledgeBaseVisibility;
 import com.jh.knowledgeos.common.PlatformEventTypes;
 import com.jh.knowledgeos.common.UserRole;
@@ -32,11 +33,15 @@ public class KnowledgeBaseService {
 
     private final KnowledgeDerivationService derivation;
 
-    public KnowledgeBaseService(KnowledgeMapper mapper, IdGenerator ids, PlatformEventPublisher publisher, KnowledgeDerivationService derivation) {
+    private final KbScenarioService scenarios;
+
+    public KnowledgeBaseService(KnowledgeMapper mapper, IdGenerator ids, PlatformEventPublisher publisher, KnowledgeDerivationService derivation,
+        KbScenarioService scenarios) {
         this.mapper = mapper;
         this.ids = ids;
         this.publisher = publisher;
         this.derivation = derivation;
+        this.scenarios = scenarios;
     }
 
     public List<KnowledgeBase> list() {
@@ -53,6 +58,18 @@ public class KnowledgeBaseService {
     }
 
     public KnowledgeBase create(String name, String description, String visibility, Long ownerGroupId, User creator) {
+        return create(name, description, visibility, ownerGroupId, null, creator);
+    }
+
+    /**
+     * Create a workspace with a scenario.
+     *
+     * <p>The scenario decides how the library cuts documents, what it derives and how it answers,
+     * so it is part of creation rather than a setting somebody discovers later: a library created
+     * as "漏洞库" answers CVE questions correctly from its first upload, and one created as
+     * "制度条款" quotes clauses instead of summarising them.</p>
+     */
+    public KnowledgeBase create(String name, String description, String visibility, Long ownerGroupId, String scenario, User creator) {
         if (creator != null && !UserRole.of(creator.getRole()).canWriteKnowledge()) {
             throw new SecurityException("当前角色无权创建知识库");
         }
@@ -66,9 +83,10 @@ public class KnowledgeBaseService {
         base.setVisibility(scope.visibility.name());
         base.setOwnerGroupId(scope.ownerGroupId);
         mapper.insertKnowledgeBase(base);
-        seedDerivationPresets(base.getId());
+        seedScenario(base.getId(), scenario);
         Map<String, Object> detail = describe(base);
         detail.put("description", base.getDescription());
+        detail.put("scenario", KbScenarioTemplates.normalizeCode(scenario));
         publisher.emitUser(PlatformEventTypes.KNOWLEDGE_BASE_CREATED, base.getId(), PlatformEventPublisher.SOURCE_UI, "KNOWLEDGE_BASE",
             base.getBaseCode(), "创建知识库：" + base.getName(), detail);
         return base;
@@ -79,6 +97,15 @@ public class KnowledgeBaseService {
      * in one request, so the console edits a knowledge base the way it created it.
      */
     public KnowledgeBase update(Long id, String name, String description, String visibility, Long ownerGroupId) {
+        return update(id, name, description, visibility, ownerGroupId, null);
+    }
+
+    /**
+     * Edit a workspace and, when the scenario changes, re-seed it: moving a library to another
+     * template has to move its chunking, derivation rules and query strategy with it, or the
+     * label says "漏洞库" while the library still answers like a generic one.
+     */
+    public KnowledgeBase update(Long id, String name, String description, String visibility, Long ownerGroupId, String scenario) {
         User user = AuthContext.get();
         KnowledgeBase base = mapper.getKnowledgeBase(id);
         if (base == null) {
@@ -100,13 +127,35 @@ public class KnowledgeBaseService {
         String previousVisibility = base.getVisibility();
         mapper.updateKnowledgeBase(id, name.trim(), description, scope.visibility.name(), scope.ownerGroupId);
         KnowledgeBase updated = mapper.getKnowledgeBase(id);
+        String applied = applyScenario(id, scenario);
         Map<String, Object> detail = describe(updated);
         detail.put("description", updated.getDescription());
         detail.put("previousName", previousName);
         detail.put("previousVisibility", previousVisibility);
+        if (applied != null) {
+            detail.put("scenario", applied);
+        }
         publisher.emitUser(PlatformEventTypes.KNOWLEDGE_BASE_UPDATED, id, PlatformEventPublisher.SOURCE_UI, "KNOWLEDGE_BASE",
             updated.getBaseCode(), "编辑知识库：" + updated.getName(), detail);
         return updated;
+    }
+
+    /**
+     * Re-seed only when the scenario actually changes: an edit that renames a library must not
+     * silently throw away a profile somebody tuned, so an unchanged scenario is left alone.
+     */
+    private String applyScenario(Long id, String scenario) {
+        if (scenario == null || scenario.trim().isEmpty()) {
+            return null;
+        }
+        String code = KbScenarioTemplates.normalizeCode(scenario);
+        Map<String, Object> stored = mapper.getKbScenario(id);
+        String current = stored == null ? null : String.valueOf(stored.get("scenario"));
+        if (code.equals(current)) {
+            return null;
+        }
+        seedScenario(id, code);
+        return code;
     }
 
     /**
@@ -161,11 +210,21 @@ public class KnowledgeBaseService {
      * <p>Seeding is idempotent and best effort: a workspace that could not be seeded still
      * works, and the same rules can be installed later from the console.</p>
      */
-    private void seedDerivationPresets(Long kb) {
+    /**
+     * Install the scenario a library was created with: its profile row, its derivation rules and
+     * the chunking its documents will be cut with. Best-effort on purpose: a library must exist
+     * even if one of those steps fails, and each of them can be corrected from the console.
+     */
+    private void seedScenario(Long kb, String scenario) {
         try {
-            derivation.seed(kb, null);
+            scenarios.seed(kb, scenario);
         } catch (RuntimeException e) {
-            LOG.warn("知识库 {} 启用常用衍生规则失败：{}", kb, e.getMessage());
+            LOG.warn("知识库 {} 应用场景模板失败，回退为常用衍生规则：{}", kb, e.getMessage());
+            try {
+                derivation.seed(kb, null);
+            } catch (RuntimeException inner) {
+                LOG.warn("知识库 {} 启用常用衍生规则失败：{}", kb, inner.getMessage());
+            }
         }
     }
 

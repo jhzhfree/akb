@@ -70,6 +70,8 @@ public class ConnectorIngestionService {
 
     private final ChunkPolicyService chunkPolicy;
 
+    private final KbScenarioService scenarios;
+
     private final KnowledgeBaseAccessService access;
 
     private final DocumentMapper documentMapper;
@@ -83,8 +85,16 @@ public class ConnectorIngestionService {
     /** 批量入库的线程池：一条条目一次模型抽取，一批就是一串模型调用，不能在请求线程上跑。 */
     private final ThreadPoolTaskExecutor executor;
 
+    /**
+     * Chunking for a connector item: an edited chunk policy wins, otherwise the scenario's.
+     */
+    private Map<String, Object> chunkPolicyFor(Long knowledgeBaseId) {
+        return chunkPolicy.customized(knowledgeBaseId) ? chunkPolicy.policyFor(knowledgeBaseId) : scenarios.chunkPolicy(knowledgeBaseId);
+    }
+
     public ConnectorIngestionService(ConnectorMapper connectorMapper, ConnectorItemMapper itemMapper, ConnectorItemNormalizer normalizer,
-        DocumentIngestionService ingestion, ChunkPolicyService chunkPolicy, KnowledgeBaseAccessService access, DocumentMapper documentMapper,
+        DocumentIngestionService ingestion, ChunkPolicyService chunkPolicy, KbScenarioService scenarios, KnowledgeBaseAccessService access,
+        DocumentMapper documentMapper,
         AiClient aiClient, TaskCenterService taskCenterService, PlatformEventPublisher events, ObjectMapper objectMapper,
         @Qualifier(ConnectorAsyncExecutorConfig.BEAN_NAME) ThreadPoolTaskExecutor executor) {
         this.executor = executor;
@@ -93,6 +103,7 @@ public class ConnectorIngestionService {
         this.normalizer = normalizer;
         this.ingestion = ingestion;
         this.chunkPolicy = chunkPolicy;
+        this.scenarios = scenarios;
         this.access = access;
         this.documentMapper = documentMapper;
         this.aiClient = aiClient;
@@ -112,7 +123,7 @@ public class ConnectorIngestionService {
         if (item == null || item.getConnectorId() == null || !item.getConnectorId().equals(connectorId)) {
             throw new IllegalArgumentException("条目不存在：" + itemId);
         }
-        Map<String, Object> parsed = normalizer.normalize(source, item, chunkPolicy.policyFor(source.getKnowledgeBaseId()));
+        Map<String, Object> parsed = normalizer.normalize(source, item, chunkPolicyFor(source.getKnowledgeBaseId()));
         String hash = String.valueOf(parsed.get("sha256"));
         ConnectorIngestConfig policy = ConnectorIngestConfig.of(source, objectMapper);
         ConnectorItemBinding existing = itemMapper.findBinding(itemId);
@@ -475,7 +486,7 @@ public class ConnectorIngestionService {
         if (binding == null || binding.getContentHash() == null) {
             return false;
         }
-        Map<String, Object> parsed = normalizer.normalize(source, item, chunkPolicy.policyFor(source.getKnowledgeBaseId()));
+        Map<String, Object> parsed = normalizer.normalize(source, item, chunkPolicyFor(source.getKnowledgeBaseId()));
         return !binding.getContentHash().equals(String.valueOf(parsed.get("sha256")));
     }
 

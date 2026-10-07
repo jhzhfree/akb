@@ -7,23 +7,34 @@ import type {
   AnswerQualification, AnswerQualificationSummary,
 } from '../types'
 import type { AnswerFormat, RetrievalRequest, RetrievalResult, AnswerResult, DocumentRetryResult, AdjudicationRunResult } from './contracts'
-import type { AssetPage } from '../types/knowledge'
+import type { AssetPage, KbScenarioProfile, KbScenarioSettings } from '../types/knowledge'
 
 const LONG_TIMEOUT_MS = 180000
 type ApiResponse<T> = AxiosResponse<ApiEnvelope<T>>
 
 export const getKnowledgeBases = ():Promise<ApiResponse<KnowledgeBase[]>> =>
   axios.get('/api/knowledge/bases')
-/** 创建知识库：visibility 为 PUBLIC / PRIVATE / GROUP，GROUP 时须传 ownerGroupId。 */
+/** 创建知识库：visibility 为 PUBLIC / PRIVATE / GROUP，GROUP 时须传 ownerGroupId；scenario 为场景模板编码。 */
 export const createKnowledgeBase = (
-  name:string, description='', visibility='PUBLIC', ownerGroupId:number|null=null,
+  name:string, description='', visibility='PUBLIC', ownerGroupId:number|null=null, scenario='',
 ):Promise<ApiResponse<KnowledgeBase>> =>
-  axios.post('/api/knowledge/bases', { name, description, visibility, ownerGroupId })
+  axios.post('/api/knowledge/bases', { name, description, visibility, ownerGroupId, scenario })
 /** 编辑知识库：改名 / 改描述，并可在同一次提交中调整可见范围（GROUP 时须传 ownerGroupId）。 */
 export const updateKnowledgeBase = (
-  id:number, payload:{name:string; description?:string; visibility?:string; ownerGroupId?:number|null},
+  id:number, payload:{name:string; description?:string; visibility?:string; ownerGroupId?:number|null; scenario?:string},
 ):Promise<ApiResponse<KnowledgeBase>> =>
   axios.put(`/api/knowledge/bases/${id}`, payload)
+/** 读取知识库场景配置：模板目录、字段取值范围与当前生效档案。 */
+export const getKbScenario = (kb:number):Promise<ApiResponse<KbScenarioSettings>> =>
+  axios.get('/api/knowledge/settings/scenario', { params:{ kb } })
+/** 保存知识库场景配置：生成 / 衍生 / 查询三段，保存后对该库立即生效。 */
+export const saveKbScenario = (
+  kb:number, payload:{scenario:string; profile:KbScenarioProfile},
+):Promise<ApiResponse<Record<string, unknown>>> =>
+  axios.put('/api/knowledge/settings/scenario', payload, { params:{ kb } })
+/** 恢复所选场景模板的内置默认值。 */
+export const resetKbScenario = (kb:number):Promise<ApiResponse<Record<string, unknown>>> =>
+  axios.post('/api/knowledge/settings/scenario/reset', null, { params:{ kb } })
 export const updateKnowledgeBaseAccess = (
   id:number, visibility:string, ownerGroupId:number|null=null,
 ):Promise<ApiResponse<KnowledgeBase>> =>

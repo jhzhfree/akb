@@ -82,6 +82,17 @@ public class ChunkPolicyService {
     }
 
     /**
+     * Whether this knowledge base ever edited its chunking.
+     *
+     * <p>An untouched library follows the chunking of its scenario template; only an edit turns
+     * the stored row into the answer, so a library that never touched the slider still benefits
+     * when the template improves.</p>
+     */
+    public boolean customized(Long kb) {
+        return kb != null && mapper.getChunkPolicy(kb) != null;
+    }
+
+    /**
      * Policy handed to the parser on upload: never null, always bounded.
      */
     public Map<String, Object> policyFor(Long kb) {

@@ -19,6 +19,12 @@ public class KnowledgeBaseRequest {
 
     private Long ownerGroupId;
 
+    /**
+     * Scenario template: GENERAL, OPS, POLICY, BUSINESS or VULN. Blank means the generic
+     * template, so an older caller or a script that never heard of scenarios keeps working.
+     */
+    private String scenario;
+
     public String getName() {
         return name;
     }
@@ -49,5 +55,13 @@ public class KnowledgeBaseRequest {
 
     public void setOwnerGroupId(Long v) {
         ownerGroupId = v;
+    }
+
+    public String getScenario() {
+        return scenario;
+    }
+
+    public void setScenario(String v) {
+        scenario = v;
     }
 }

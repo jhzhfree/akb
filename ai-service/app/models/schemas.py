@@ -17,6 +17,10 @@ class QueryRequest(BaseModel):
     # 交付格式：default（模型原文）/ markdown（附引用原文章节）/ text（纯文本、不含证据）/ html（含引用原文）。
     # 未知取值退回 default：一个老调用方或一次拼写错误不该把能用的问题变成 422。
     answerFormat: str = "default"
+    # 知识库自带的策略覆盖：后端按知识库场景模板下发，合并到部署级策略之上。
+    # 只有白名单内的字段生效（见 app.core.query_policy.merge_override），所以一个知识库
+    # 无法改写与它无关的全局行为，也无法用一个坏值把整次查询变成 500。
+    policyOverride: dict[str, Any] | None = None
 
 
 class ExtractRequest(BaseModel):

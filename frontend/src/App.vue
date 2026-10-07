@@ -149,6 +149,12 @@ import type {
   BatchIngestStatus, IntegrationCallDetail,
 } from './types'
 import type { AnswerFormat } from './api/contracts'
+import type { KbScenarioProfile } from './types/knowledge'
+/** 建库 / 改库提交体：基础信息 + 场景模板 + 该库的生成 / 衍生 / 查询配置。 */
+type KbBasePayload={
+  name:string;description:string;visibility:string;ownerGroupId:number|null
+  scenario:string;profile:KbScenarioProfile|null
+}
 import type { AssetType } from './components/AssetBrowserPanel.vue'
 import TaskCenterDrawer from './components/TaskCenterDrawer.vue'
 import SpaceContextBar from'./components/SpaceContextBar.vue';
@@ -556,17 +562,17 @@ basesLoading.value=true
 try{bases.value=unwrap(await getKnowledgeBases(),[]);
 if(!bases.value.some(v=>v.id===knowledgeBaseId.value)&&bases.value.length)knowledgeBaseId.value=bases.value[0].id}
 finally{basesLoading.value=false}}
-async function createBase(payload:{name:string;description:string;visibility:string;ownerGroupId:number|null}){
+async function createBase(payload:KbBasePayload){
 try{
   const base=unwrap(
-    await createKnowledgeBase(payload.name,payload.description,payload.visibility,payload.ownerGroupId),
+    await createKnowledgeBase(payload.name,payload.description,payload.visibility,payload.ownerGroupId,payload.scenario),
     null as unknown as KnowledgeBase)
 await loadBases();
 selectBase(base.id);
 showBases.value=false;
 ElMessage.success('知识库已创建')}catch(e){err(e)}}
 /** 编辑知识库：改名 / 改描述 / 调整可见范围，改的是当前库时顺带刷新概览。 */
-async function updateBase(payload:{id:number;name:string;description:string;visibility:string;ownerGroupId:number|null}){
+async function updateBase(payload:KbBasePayload&{id:number}){
 try{
   unwrap(
     await updateKnowledgeBase(payload.id,{
@@ -574,6 +580,7 @@ try{
       description:payload.description,
       visibility:payload.visibility,
       ownerGroupId:payload.ownerGroupId,
+      scenario:payload.scenario,
     }),
     null as unknown as KnowledgeBase)
 await loadBases();

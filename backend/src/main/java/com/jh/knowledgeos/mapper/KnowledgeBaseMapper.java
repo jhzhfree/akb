@@ -34,4 +34,11 @@ public interface KnowledgeBaseMapper {
         @Param("visibility") String visibility, @Param("ownerGroupId") Long ownerGroupId);
 
     int updateKnowledgeBaseOwner(@Param("id") Long id, @Param("createdBy") Long createdBy);
+
+    Map<String, Object> getKbScenario(@Param("kb") Long kb);
+
+    int saveKbScenario(@Param("kb") Long kb, @Param("scenario") String scenario, @Param("profileJson") String profileJson,
+        @Param("updatedBy") String updatedBy);
+
+    int resetKbScenario(@Param("kb") Long kb);
 }

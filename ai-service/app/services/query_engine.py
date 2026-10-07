@@ -16,6 +16,7 @@ from app.core.query_policy import (
     chunk_boost_weights,
     effective_strategies,
     load_policy,
+    merge_override,
     policy_summary,
     quality_weights,
     recall_sizes,
@@ -62,14 +63,21 @@ class QueryEngine:
         self.rewriter = QueryRewriter()
 
     async def query(self, qid, kb, q, topk, permission_tags=None, generate=True,
-                    answer_format=DEFAULT_ANSWER_FORMAT):
+                    answer_format=DEFAULT_ANSWER_FORMAT, policy_override=None):
         """Run the pipeline: recall → fusion → rerank, then generation unless `generate` is off.
 
         `generate=False` gives the retrieval-only shape the evaluation center needs — the same
         candidates and the same trace timeline, without an LLM call whose latency would otherwise
         be counted as retrieval latency.
+
+        `policy_override` carries the knowledge base's own scenario settings (merged in
+        :func:`app.core.query_policy.merge_override`): a library created as 漏洞库 asks with the
+        channels and thresholds that suit CVE questions without changing what any other library
+        sees.
         """
         policy = load_policy()
+        if policy_override:
+            policy = merge_override(policy, policy_override)
         total_started = time.perf_counter()
         rewrite_started = time.perf_counter()
         normalized = " ".join((q or "").strip().split())
@@ -78,7 +86,15 @@ class QueryEngine:
             rewritten = [normalized]
         rewrite_ms = int((time.perf_counter() - rewrite_started) * 1000)
         route = self.router.route(q, enabled=policy.route.enabled, defaultStrategies=policy.route.defaultStrategies)
-        strategies = effective_strategies(policy, route["strategies"])
+        strategies = list(effective_strategies(policy, route["strategies"]))
+        # The library's declared channels are a floor, not a suggestion: the router may add
+        # channels it thinks the question needs, but it must not drop one the library relies on.
+        # An operations library asking "CHG-2024-0117 影响了哪些服务" is routed to the graph, and
+        # without BM25 that question returns nothing — the identifier is only in the text.
+        if policy_override:
+            for name in getattr(policy.route, "defaultStrategies", None) or []:
+                if name not in strategies:
+                    strategies.append(name)
 
         retrieval_started = time.perf_counter()
         result_sets, retrieval_diagnostics, used_rewrite = await self._recall(

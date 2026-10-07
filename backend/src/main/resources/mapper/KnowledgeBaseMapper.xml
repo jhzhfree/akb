@@ -16,4 +16,10 @@
 
 <update id="updateKnowledgeBaseOwner">UPDATE t_knowledge_base SET created_by=#{createdBy} WHERE id=#{id} AND created_by IS NULL</update>
 
+<select id="getKbScenario" resultType="map">SELECT knowledge_base_id knowledgeBaseId,scenario,profile_json profileJson,updated_by updatedBy,updated_time updatedTime FROM t_kb_scenario WHERE knowledge_base_id=#{kb}</select>
+
+<insert id="saveKbScenario">INSERT INTO t_kb_scenario(knowledge_base_id,scenario,profile_json,updated_by) VALUES(#{kb},#{scenario},#{profileJson},#{updatedBy}) ON DUPLICATE KEY UPDATE scenario=#{scenario},profile_json=#{profileJson},updated_by=#{updatedBy}</insert>
+
+<delete id="resetKbScenario">DELETE FROM t_kb_scenario WHERE knowledge_base_id=#{kb}</delete>
+
 </mapper>

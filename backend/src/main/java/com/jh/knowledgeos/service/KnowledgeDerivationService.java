@@ -838,7 +838,7 @@ public class KnowledgeDerivationService {
      * The relation vocabulary a rule may walk: the platform defaults plus whatever this
      * knowledge base declared for itself.
      */
-    private List<String> relationTypes(Long kb) {
+    public List<String> relationTypes(Long kb) {
         List<String> types = new ArrayList<String>();
         for (Map<String, Object> row : mapper.listSchemaTypes(kb == null ? Long.valueOf(0) : kb, KnowledgeSchemaService.KIND_RELATION)) {
             String code = text(row.get("typeCode"));
