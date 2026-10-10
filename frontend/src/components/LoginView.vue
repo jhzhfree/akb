@@ -1,7 +1,7 @@
 <template>
 <!-- 登录页是全站唯一的无框架页：左右分栏（左品牌 / 右表单）对齐原型 login.html。
      mode=admin 为管理员控制台入口，mode=user 为普通用户登录；两页共用这一套结构与样式，
-     差异只在标题、副标题、第三方登录区与底部互相切换的入口。 -->
+     差异只在标题、副标题与底部互相切换的入口。 -->
 <div class="lv-page">
   <section class="lv-brand" aria-label="产品介绍">
     <!-- 品牌底图：深蓝渐变 + 细网格 + 知识网络装饰，配色取自 logo（深蓝底 / 亮蓝点缀）。
@@ -33,8 +33,8 @@
       <KosBrandLogo :size="38" tone="onDark"/>
     </div>
     <div class="lv-brand-body">
-      <h1>让团队的知识，随时随地被 AI 调用</h1>
-      <p>统一沉淀产品、研发、运营与客服知识，构建可检索、可共享、可被智能问答触达的团队知识中枢。</p>
+      <h1>让知识随时被 AI 调用</h1>
+      <p>统一沉淀产品、研发、运营与客服知识，构建可检索、可共享、可追溯的团队知识中枢；文档、表格与工单一处接入，供团队与 AI 随时调用。</p>
       <ul class="lv-points">
         <li><span class="lv-check">✓</span>集中管理文档与知识库，告别信息孤岛</li>
         <li><span class="lv-check">✓</span>全文检索 + AI 问答，知识秒级触达</li>
@@ -75,15 +75,6 @@
           {{loading?'登录中…':'登 录'}}
         </button>
       </form>
-
-      <template v-if="mode==='user'">
-        <div class="lv-divider"><span>或使用以下方式</span></div>
-        <div class="lv-third">
-          <button type="button" class="lv-third-btn" @click="notReady('企业微信登录')">企业微信登录</button>
-          <button type="button" class="lv-third-btn" @click="notReady('SSO 单点登录')">SSO 单点登录</button>
-        </div>
-      </template>
-      <p v-else class="lv-note">管理员通道仅使用账号密码登录，第三方登录不对管理员开放。</p>
 
       <div class="lv-foot">
         <template v-if="mode==='admin'">
@@ -135,9 +126,6 @@ function switchMode(mode: LoginMode) {
 }
 function forgot() {
   ElMessage.info('请联系平台管理员重置密码')
-}
-function notReady(name: string) {
-  ElMessage.info(`${name} 暂未接入，请先用账号密码登录`)
 }
 
 async function submit() {
@@ -252,16 +240,6 @@ async function submit() {
 .lv-submit:hover{opacity:.94}
 .lv-submit:active{transform:translateY(1px)}
 .lv-submit:disabled{opacity:.55;cursor:not-allowed}
-.lv-divider{display:flex;align-items:center;gap:12px;margin:20px 0 14px;font-size:11.5px;color:var(--ink-400)}
-.lv-divider::before,.lv-divider::after{content:'';flex:1;height:1px;background:var(--line-d)}
-.lv-third{display:grid;grid-template-columns:1fr 1fr;gap:12px}
-.lv-third-btn{
-  height:36px;border-radius:8px;cursor:pointer;font-family:inherit;font-size:12.5px;
-  background:var(--bg-base);border:1px solid var(--line);color:var(--ink-700);
-  transition:background .16s var(--ease),border-color .16s var(--ease);
-}
-.lv-third-btn:hover{background:var(--bg-sub);border-color:var(--line-soft)}
-.lv-note{margin:16px 0 0;font-size:11.5px;line-height:1.7;color:var(--ink-400)}
 .lv-foot{
   margin-top:20px;padding-top:16px;border-top:1px solid var(--line-d);
   font-size:12px;color:var(--ink-500);text-align:center;

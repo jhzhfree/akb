@@ -47,7 +47,7 @@
         </div>
         <pre
           class="mt-2 max-h-96 overflow-auto whitespace-pre-wrap break-all rounded-lg border border-black/10 bg-black/[0.03] p-3 text-[12px] leading-relaxed">
-          {{ pretty(item.raw) }}</pre>
+          {{ pretty(item.raw, item.empty) }}</pre>
       </section>
 
       <!-- 原始行：调用留给运维的每一个字段，一个都不少。 -->
@@ -77,9 +77,9 @@ defineEmits<{ close:[] }>()
 
 const failed = computed(() => props.detail?.status != null && props.detail.status >= 400)
 
-/** 服务端以紧凑 JSON 文本存参，还原成缩进格式；空值或非 JSON（如原始查询串）原样展示。 */
-function pretty(raw?:string|null) {
-  if (!raw) return '—'
+/** 服务端以紧凑 JSON 文本存参，还原成缩进格式；空值或非 JSON（如被截断的报文）原样展示。 */
+function pretty(raw?:string|null, empty = '—') {
+  if (!raw) return empty
   try {
     return JSON.stringify(JSON.parse(raw), null, 2)
   } catch {
@@ -88,9 +88,11 @@ function pretty(raw?:string|null) {
 }
 
 const payloads = computed(() => [
-  { title:'请求参数', hint:'查询串与请求体已合并为一个视图；密钥、token 等字段入库前已替换为 ***',
+  { title:'请求参数', hint:'查询串、路径参数与请求体合并后的明文视图；仅密钥、token 等凭证字段入库前替换为 ***',
+    empty:'本次调用没有查询串或请求体（GET 无参调用）',
     raw:props.detail?.requestParams },
-  { title:'返回数据', hint:'本次实际返回给调用方的报文；SSE 只记录握手与错误，不记录流式正文',
+  { title:'返回数据', hint:'本次实际返回给调用方的完整报文；SSE 只记录握手结果，不记录流式正文',
+    empty:'本次调用没有返回报文（失败调用见上方错误信息）',
     raw:props.detail?.responseData },
 ])
 

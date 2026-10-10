@@ -1,0 +1,129 @@
+{
+  "exportedAt": "2026-10-09 06:57:14",
+  "mysql": {
+    "file": "mysql/knowledge_os.sql",
+    "bytes": 13854835
+  },
+  "elasticsearch": [
+    {
+      "index": "llmkb_knowledge_v1",
+      "docs": 1588,
+      "parts": 1,
+      "mapping": "es/llmkb_knowledge_v1.mapping.json"
+    },
+    {
+      "index": "llmkb_standard_doc_v1",
+      "docs": 554,
+      "parts": 1,
+      "mapping": "es/llmkb_standard_doc_v1.mapping.json"
+    }
+  ],
+  "milvus": {
+    "collection": "llmkb_knowledge_v1",
+    "rows": 1588,
+    "parts": 4,
+    "dimension": 2048,
+    "metricType": "COSINE"
+  },
+  "neo4j": {
+    "files": [
+      {
+        "file": "neo4j/nodes-Entity.json",
+        "kind": "nodes",
+        "label": "Entity",
+        "count": 1894,
+        "key": "code"
+      },
+      {
+        "file": "neo4j/nodes-KnowledgeCard.json",
+        "kind": "nodes",
+        "label": "KnowledgeCard",
+        "count": 519,
+        "key": "code"
+      },
+      {
+        "file": "neo4j/nodes-Claim.json",
+        "kind": "nodes",
+        "label": "Claim",
+        "count": 515,
+        "key": "code"
+      },
+      {
+        "file": "neo4j/rels-RELATED_TO.json",
+        "kind": "rels",
+        "type": "RELATED_TO",
+        "count": 623
+      },
+      {
+        "file": "neo4j/rels-USES.json",
+        "kind": "rels",
+        "type": "USES",
+        "count": 15
+      },
+      {
+        "file": "neo4j/rels-ABOUT.json",
+        "kind": "rels",
+        "type": "ABOUT",
+        "count": 515
+      },
+      {
+        "file": "neo4j/rels-AFFECTS.json",
+        "kind": "rels",
+        "type": "AFFECTS",
+        "count": 9
+      },
+      {
+        "file": "neo4j/rels-BELONGS_TO.json",
+        "kind": "rels",
+        "type": "BELONGS_TO",
+        "count": 17
+      },
+      {
+        "file": "neo4j/rels-CAUSES.json",
+        "kind": "rels",
+        "type": "CAUSES",
+        "count": 11
+      },
+      {
+        "file": "neo4j/rels-CONTAINS.json",
+        "kind": "rels",
+        "type": "CONTAINS",
+        "count": 35
+      },
+      {
+        "file": "neo4j/rels-DEPENDS_ON.json",
+        "kind": "rels",
+        "type": "DEPENDS_ON",
+        "count": 5
+      },
+      {
+        "file": "neo4j/rels-DESCRIBES.json",
+        "kind": "rels",
+        "type": "DESCRIBES",
+        "count": 114
+      },
+      {
+        "file": "neo4j/rels-LOCATED_IN.json",
+        "kind": "rels",
+        "type": "LOCATED_IN",
+        "count": 5
+      },
+      {
+        "file": "neo4j/rels-MANAGES.json",
+        "kind": "rels",
+        "type": "MANAGES",
+        "count": 8
+      },
+      {
+        "file": "neo4j/rels-PART_OF.json",
+        "kind": "rels",
+        "type": "PART_OF",
+        "count": 5
+      }
+    ]
+  },
+  "sourceFiles": {
+    "file": "source-files.tar.gz",
+    "bytes": 93235
+  }
+}

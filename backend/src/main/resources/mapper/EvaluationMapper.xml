@@ -33,6 +33,16 @@ SELECT id,case_code caseCode,dataset_id datasetId,question,expected_object_codes
 FROM t_evaluation_case WHERE dataset_id=#{datasetId} AND status='ACTIVE' ORDER BY id
 </select>
 
+<!-- 检索面板的示例问题：只取该知识库最新的评测数据集，避免跨库借用别的场景的语句。 -->
+<select id="listSampleQuestions" resultType="map">
+SELECT c.question, c.difficulty, c.expected_object_codes_json expectedObjectCodesJson
+FROM t_evaluation_case c
+WHERE c.status='ACTIVE'
+  AND c.dataset_id = (SELECT MAX(id) FROM t_evaluation_dataset WHERE knowledge_base_id=#{kb})
+ORDER BY c.id
+LIMIT #{limit}
+</select>
+
 <delete id="deleteEvaluationCase">DELETE FROM t_evaluation_case WHERE id=#{id}</delete>
 
 <insert id="insertEvaluationRun" parameterType="com.jh.knowledgeos.domain.EvaluationRun" useGeneratedKeys="true" keyProperty="id">

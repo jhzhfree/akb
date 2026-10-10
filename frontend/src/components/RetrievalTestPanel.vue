@@ -13,6 +13,7 @@
           {{ running ? '检索中…' : '执行检索' }}
         </button>
       </div>
+      <SampleQuestionChips :items="samples || []" @pick="pickQuestion" />
       <p class="kb-muted mt-2">纯检索不调用生成模型，适合对比不同 topK 与改写结果下的召回质量。</p>
     </template>
 
@@ -98,15 +99,22 @@ import { errorMessage as message } from '../utils/feedback'
 import DebugLayout from './DebugLayout.vue'
 import PanelState from './PanelState.vue'
 import ScoreBreakdownPanel from './ScoreBreakdownPanel.vue'
+import SampleQuestionChips from './SampleQuestionChips.vue'
+import type { SampleQuestion } from '../api/knowledge'
 import type { ScoreBreakdown, ScoreChannelHit } from '../types'
 
 type Candidate = Record<string, unknown>
 
-const props = defineProps<{ knowledgeBaseId:number }>()
+const props = defineProps<{ knowledgeBaseId:number; samples?:SampleQuestion[] }>()
 const emit = defineEmits<{ 'open-trace':[qid:string] }>()
 
 const question = ref('')
 const topK = ref(8)
+/** 点选场景测试语句后直接跑一次检索，省去复制粘贴。 */
+function pickQuestion(text:string) {
+  question.value = text
+  run()
+}
 const running = ref(false)
 const error = ref('')
 const result = ref<Record<string, unknown> | null>(null)

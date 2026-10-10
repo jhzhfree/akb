@@ -170,6 +170,7 @@
         </span>
         <span class="kb-meta">
           <em class="kb-owner">创建人：{{base.createdByName||'—'}}</em>
+          <el-tag v-if="base.scenario" size="small" effect="plain" type="success">{{scenarioLabel(base.scenario)}}</el-tag>
           <el-tag size="small" effect="plain">{{visibilityLabel(base.visibility)}}</el-tag>
         </span>
         <el-tag v-if="base.id===activeId" size="small">当前</el-tag>
@@ -222,6 +223,11 @@ const answerFormats=computed(()=>schema.value?.answerFormats||[])
 const chunkStrategies=computed(()=>schema.value?.chunk?.strategies||[])
 const derivationPresets=computed(()=>schema.value?.derivation?.presets||[])
 const strategyHint=computed(()=>chunkStrategies.value.find(s=>s.name===profile.value.generation.chunk.strategy)?.description||'')
+/** 列表里的场景标签必须与编辑区选中的模板同源：模板目录取不到时退回编码，不臆造名称。 */
+function scenarioLabel(code:string){
+  const item=templates.value.find(v=>v.code===code)
+  return item?item.label:code
+}
 
 function emptyProfile():KbScenarioProfile{
   return{

@@ -5,7 +5,8 @@
     "name": "公司制度知识库",
     "description": "员工手册、考勤休假、薪酬福利、报销差旅、绩效晋升、信息安全、采购合同、奖惩与离职交接等制度",
     "visibility": "PUBLIC",
-    "permissionTags": "hr,finance,all"
+    "permissionTags": "hr,finance,all",
+    "scenario": "POLICY"
   },
   "knowledgeTypes": [
     {
@@ -15,13 +16,46 @@
       "description": "公司级制度与管理办法：考勤、薪酬、报销、绩效、晋升、安全、采购等",
       "properties": {
         "properties": [
-          { "name": "docCode", "type": "STRING", "label": "文件编号" },
-          { "name": "version", "type": "STRING", "label": "版本" },
-          { "name": "effectiveFrom", "type": "DATE", "label": "生效日期" },
-          { "name": "effectiveTo", "type": "DATE", "label": "有效期至" },
-          { "name": "ownerDept", "type": "STRING", "label": "归口部门" },
-          { "name": "approver", "type": "STRING", "label": "审批机构" },
-          { "name": "confidential", "type": "ENUM", "label": "密级", "values": ["公开", "内部", "机密"] }
+          {
+            "name": "docCode",
+            "type": "STRING",
+            "label": "文件编号"
+          },
+          {
+            "name": "version",
+            "type": "STRING",
+            "label": "版本"
+          },
+          {
+            "name": "effectiveFrom",
+            "type": "DATE",
+            "label": "生效日期"
+          },
+          {
+            "name": "effectiveTo",
+            "type": "DATE",
+            "label": "有效期至"
+          },
+          {
+            "name": "ownerDept",
+            "type": "STRING",
+            "label": "归口部门"
+          },
+          {
+            "name": "approver",
+            "type": "STRING",
+            "label": "审批机构"
+          },
+          {
+            "name": "confidential",
+            "type": "ENUM",
+            "label": "密级",
+            "values": [
+              "公开",
+              "内部",
+              "机密"
+            ]
+          }
         ]
       }
     },
@@ -32,10 +66,26 @@
       "description": "面向全员的综合性手册，规定价值观、入职、考勤、福利与行为红线",
       "properties": {
         "properties": [
-          { "name": "docCode", "type": "STRING", "label": "文件编号" },
-          { "name": "version", "type": "STRING", "label": "版本" },
-          { "name": "effectiveFrom", "type": "DATE", "label": "生效日期" },
-          { "name": "scope", "type": "STRING", "label": "适用对象" }
+          {
+            "name": "docCode",
+            "type": "STRING",
+            "label": "文件编号"
+          },
+          {
+            "name": "version",
+            "type": "STRING",
+            "label": "版本"
+          },
+          {
+            "name": "effectiveFrom",
+            "type": "DATE",
+            "label": "生效日期"
+          },
+          {
+            "name": "scope",
+            "type": "STRING",
+            "label": "适用对象"
+          }
         ]
       }
     },
@@ -46,10 +96,26 @@
       "description": "员工高频问答，答案引用制度编号并说明冲突时的取值规则",
       "properties": {
         "properties": [
-          { "name": "docCode", "type": "STRING", "label": "文件编号" },
-          { "name": "questionCount", "type": "NUMBER", "label": "问题数" },
-          { "name": "maintainer", "type": "STRING", "label": "维护部门" },
-          { "name": "updatedAt", "type": "DATE", "label": "最近更新" }
+          {
+            "name": "docCode",
+            "type": "STRING",
+            "label": "文件编号"
+          },
+          {
+            "name": "questionCount",
+            "type": "NUMBER",
+            "label": "问题数"
+          },
+          {
+            "name": "maintainer",
+            "type": "STRING",
+            "label": "维护部门"
+          },
+          {
+            "name": "updatedAt",
+            "type": "DATE",
+            "label": "最近更新"
+          }
         ]
       }
     },
@@ -60,11 +126,36 @@
       "description": "与现行制度存在差异的临时口径调整，含生效日期、差异对照与失效条件（用于冲突裁决）",
       "properties": {
         "properties": [
-          { "name": "noticeCode", "type": "STRING", "label": "通知编号" },
-          { "name": "effectiveFrom", "type": "DATE", "label": "生效日期" },
-          { "name": "conflictsWith", "type": "STRING", "label": "冲突文件" },
-          { "name": "changeType", "type": "ENUM", "label": "调整方向", "values": ["放宽", "收紧", "维持"] },
-          { "name": "expireCondition", "type": "TEXT", "label": "失效条件" }
+          {
+            "name": "noticeCode",
+            "type": "STRING",
+            "label": "通知编号"
+          },
+          {
+            "name": "effectiveFrom",
+            "type": "DATE",
+            "label": "生效日期"
+          },
+          {
+            "name": "conflictsWith",
+            "type": "STRING",
+            "label": "冲突文件"
+          },
+          {
+            "name": "changeType",
+            "type": "ENUM",
+            "label": "调整方向",
+            "values": [
+              "放宽",
+              "收紧",
+              "维持"
+            ]
+          },
+          {
+            "name": "expireCondition",
+            "type": "TEXT",
+            "label": "失效条件"
+          }
         ]
       }
     },
@@ -75,10 +166,32 @@
       "description": "福利类别、标准与适用对象",
       "properties": {
         "properties": [
-          { "name": "benefitName", "type": "STRING", "label": "福利名称" },
-          { "name": "standard", "type": "STRING", "label": "标准" },
-          { "name": "scope", "type": "STRING", "label": "适用对象" },
-          { "name": "cycle", "type": "ENUM", "label": "发放周期", "values": ["月度", "季度", "年度", "一次性"] }
+          {
+            "name": "benefitName",
+            "type": "STRING",
+            "label": "福利名称"
+          },
+          {
+            "name": "standard",
+            "type": "STRING",
+            "label": "标准"
+          },
+          {
+            "name": "scope",
+            "type": "STRING",
+            "label": "适用对象"
+          },
+          {
+            "name": "cycle",
+            "type": "ENUM",
+            "label": "发放周期",
+            "values": [
+              "月度",
+              "季度",
+              "年度",
+              "一次性"
+            ]
+          }
         ]
       }
     },
@@ -89,10 +202,30 @@
       "description": "奖励类别与违规分级对照，含处理措施",
       "properties": {
         "properties": [
-          { "name": "category", "type": "ENUM", "label": "类别", "values": ["奖励", "违规"] },
-          { "name": "level", "type": "STRING", "label": "级别" },
-          { "name": "condition", "type": "TEXT", "label": "情形" },
-          { "name": "action", "type": "TEXT", "label": "处理措施" }
+          {
+            "name": "category",
+            "type": "ENUM",
+            "label": "类别",
+            "values": [
+              "奖励",
+              "违规"
+            ]
+          },
+          {
+            "name": "level",
+            "type": "STRING",
+            "label": "级别"
+          },
+          {
+            "name": "condition",
+            "type": "TEXT",
+            "label": "情形"
+          },
+          {
+            "name": "action",
+            "type": "TEXT",
+            "label": "处理措施"
+          }
         ]
       }
     }
@@ -105,9 +238,21 @@
       "description": "公司组织架构中的部门与中心",
       "properties": {
         "properties": [
-          { "name": "deptName", "type": "STRING", "label": "部门名" },
-          { "name": "owner", "type": "STRING", "label": "负责人" },
-          { "name": "duty", "type": "TEXT", "label": "核心职责" }
+          {
+            "name": "deptName",
+            "type": "STRING",
+            "label": "部门名"
+          },
+          {
+            "name": "owner",
+            "type": "STRING",
+            "label": "负责人"
+          },
+          {
+            "name": "duty",
+            "type": "TEXT",
+            "label": "核心职责"
+          }
         ]
       }
     },
@@ -118,9 +263,21 @@
       "description": "岗位名称与职级区间",
       "properties": {
         "properties": [
-          { "name": "positionName", "type": "STRING", "label": "岗位名" },
-          { "name": "levelRange", "type": "STRING", "label": "职级区间" },
-          { "name": "duty", "type": "TEXT", "label": "核心职责" }
+          {
+            "name": "positionName",
+            "type": "STRING",
+            "label": "岗位名"
+          },
+          {
+            "name": "levelRange",
+            "type": "STRING",
+            "label": "职级区间"
+          },
+          {
+            "name": "duty",
+            "type": "TEXT",
+            "label": "核心职责"
+          }
         ]
       }
     },
@@ -131,9 +288,25 @@
       "description": "P4–P9 与 M1–M4 职级体系",
       "properties": {
         "properties": [
-          { "name": "levelCode", "type": "STRING", "label": "职级码" },
-          { "name": "channel", "type": "ENUM", "label": "通道", "values": ["专业P", "管理M"] },
-          { "name": "salaryBand", "type": "STRING", "label": "薪酬带宽" }
+          {
+            "name": "levelCode",
+            "type": "STRING",
+            "label": "职级码"
+          },
+          {
+            "name": "channel",
+            "type": "ENUM",
+            "label": "通道",
+            "values": [
+              "专业P",
+              "管理M"
+            ]
+          },
+          {
+            "name": "salaryBand",
+            "type": "STRING",
+            "label": "薪酬带宽"
+          }
         ]
       }
     },
@@ -144,10 +317,26 @@
       "description": "员工主体与任职信息",
       "properties": {
         "properties": [
-          { "name": "name", "type": "STRING", "label": "姓名" },
-          { "name": "employeeId", "type": "STRING", "label": "工号" },
-          { "name": "dept", "type": "STRING", "label": "所属部门" },
-          { "name": "level", "type": "STRING", "label": "职级" }
+          {
+            "name": "name",
+            "type": "STRING",
+            "label": "姓名"
+          },
+          {
+            "name": "employeeId",
+            "type": "STRING",
+            "label": "工号"
+          },
+          {
+            "name": "dept",
+            "type": "STRING",
+            "label": "所属部门"
+          },
+          {
+            "name": "level",
+            "type": "STRING",
+            "label": "职级"
+          }
         ]
       }
     },
@@ -158,9 +347,21 @@
       "description": "OA、财务、HR、堡垒主机等业务系统",
       "properties": {
         "properties": [
-          { "name": "systemName", "type": "STRING", "label": "系统名" },
-          { "name": "purpose", "type": "STRING", "label": "用途" },
-          { "name": "ownerDept", "type": "STRING", "label": "归口部门" }
+          {
+            "name": "systemName",
+            "type": "STRING",
+            "label": "系统名"
+          },
+          {
+            "name": "purpose",
+            "type": "STRING",
+            "label": "用途"
+          },
+          {
+            "name": "ownerDept",
+            "type": "STRING",
+            "label": "归口部门"
+          }
         ]
       }
     },
@@ -171,9 +372,21 @@
       "description": "制度文件的编号体系（HR-HB-xx / FIN-POL-xx / SEC-POL-xx 等）",
       "properties": {
         "properties": [
-          { "name": "code", "type": "STRING", "label": "编号" },
-          { "name": "series", "type": "STRING", "label": "系列" },
-          { "name": "title", "type": "STRING", "label": "文件标题" }
+          {
+            "name": "code",
+            "type": "STRING",
+            "label": "编号"
+          },
+          {
+            "name": "series",
+            "type": "STRING",
+            "label": "系列"
+          },
+          {
+            "name": "title",
+            "type": "STRING",
+            "label": "文件标题"
+          }
         ]
       }
     }
@@ -185,7 +398,14 @@
       "label": "部门归口制度",
       "description": "制度的归口责任部门",
       "properties": {
-        "constraints": { "fromKinds": ["DEPARTMENT"], "toKinds": ["POLICY_DOC_CODE"] }
+        "constraints": {
+          "fromKinds": [
+            "DEPARTMENT"
+          ],
+          "toKinds": [
+            "POLICY_DOC_CODE"
+          ]
+        }
       }
     },
     {
@@ -194,7 +414,14 @@
       "label": "员工隶属部门",
       "description": "员工与部门的隶属关系",
       "properties": {
-        "constraints": { "fromKinds": ["EMPLOYEE"], "toKinds": ["DEPARTMENT"] }
+        "constraints": {
+          "fromKinds": [
+            "EMPLOYEE"
+          ],
+          "toKinds": [
+            "DEPARTMENT"
+          ]
+        }
       }
     },
     {
@@ -203,7 +430,14 @@
       "label": "员工职级",
       "description": "员工当前职级",
       "properties": {
-        "constraints": { "fromKinds": ["EMPLOYEE"], "toKinds": ["JOB_LEVEL"] }
+        "constraints": {
+          "fromKinds": [
+            "EMPLOYEE"
+          ],
+          "toKinds": [
+            "JOB_LEVEL"
+          ]
+        }
       }
     },
     {
@@ -212,7 +446,14 @@
       "label": "岗位职级要求",
       "description": "岗位对应的职级区间",
       "properties": {
-        "constraints": { "fromKinds": ["POSITION"], "toKinds": ["JOB_LEVEL"] }
+        "constraints": {
+          "fromKinds": [
+            "POSITION"
+          ],
+          "toKinds": [
+            "JOB_LEVEL"
+          ]
+        }
       }
     },
     {
@@ -221,7 +462,14 @@
       "label": "制度承载系统",
       "description": "制度落地所依赖的信息系统（如考勤在 OA、报销在财务系统）",
       "properties": {
-        "constraints": { "fromKinds": ["POLICY_DOC_CODE"], "toKinds": ["SYSTEM"] }
+        "constraints": {
+          "fromKinds": [
+            "POLICY_DOC_CODE"
+          ],
+          "toKinds": [
+            "SYSTEM"
+          ]
+        }
       }
     },
     {
@@ -230,7 +478,14 @@
       "label": "职级对应福利",
       "description": "按职级确定的福利标准差异",
       "properties": {
-        "constraints": { "fromKinds": ["JOB_LEVEL"], "toKinds": ["EMPLOYEE"] }
+        "constraints": {
+          "fromKinds": [
+            "JOB_LEVEL"
+          ],
+          "toKinds": [
+            "EMPLOYEE"
+          ]
+        }
       }
     }
   ]

@@ -5,7 +5,8 @@
     "name": "工程协同知识库",
     "description": "Jira 问题清单、Confluence 设计文档、OA/ITSM 工单、日报周报、岗位职责、迭代计划与绩效评估",
     "visibility": "PUBLIC",
-    "permissionTags": "rd,pm,qa,sre"
+    "permissionTags": "rd,pm,qa,sre",
+    "scenario": "BUSINESS"
   },
   "knowledgeTypes": [
     {
@@ -15,11 +16,31 @@
       "description": "按 Epic / 缺陷 / 技术债导出的 issue 清单，含 Key、优先级、经办人、状态与详情",
       "properties": {
         "properties": [
-          { "name": "exportAt", "type": "DATE", "label": "导出时间" },
-          { "name": "filter", "type": "TEXT", "label": "筛选条件" },
-          { "name": "issueCount", "type": "NUMBER", "label": "问题数" },
-          { "name": "epicKey", "type": "STRING", "label": "关联Epic" },
-          { "name": "project", "type": "STRING", "label": "项目" }
+          {
+            "name": "exportAt",
+            "type": "DATE",
+            "label": "导出时间"
+          },
+          {
+            "name": "filter",
+            "type": "TEXT",
+            "label": "筛选条件"
+          },
+          {
+            "name": "issueCount",
+            "type": "NUMBER",
+            "label": "问题数"
+          },
+          {
+            "name": "epicKey",
+            "type": "STRING",
+            "label": "关联Epic"
+          },
+          {
+            "name": "project",
+            "type": "STRING",
+            "label": "项目"
+          }
         ]
       }
     },
@@ -30,11 +51,37 @@
       "description": "架构设计、接口规范、数据库规范、发布检查清单等 Confluence 文档",
       "properties": {
         "properties": [
-          { "name": "docCode", "type": "STRING", "label": "文档编号" },
-          { "name": "version", "type": "STRING", "label": "版本" },
-          { "name": "status", "type": "ENUM", "label": "状态", "values": ["草稿", "已评审", "生效", "废弃"] },
-          { "name": "owner", "type": "STRING", "label": "Owner" },
-          { "name": "reviewers", "type": "STRING", "label": "评审人" }
+          {
+            "name": "docCode",
+            "type": "STRING",
+            "label": "文档编号"
+          },
+          {
+            "name": "version",
+            "type": "STRING",
+            "label": "版本"
+          },
+          {
+            "name": "status",
+            "type": "ENUM",
+            "label": "状态",
+            "values": [
+              "草稿",
+              "已评审",
+              "生效",
+              "废弃"
+            ]
+          },
+          {
+            "name": "owner",
+            "type": "STRING",
+            "label": "Owner"
+          },
+          {
+            "name": "reviewers",
+            "type": "STRING",
+            "label": "评审人"
+          }
         ]
       }
     },
@@ -45,11 +92,38 @@
       "description": "权限与环境申请、线上故障与变更工单，含审批链与处理时长",
       "properties": {
         "properties": [
-          { "name": "ticketCode", "type": "STRING", "label": "工单号" },
-          { "name": "ticketType", "type": "ENUM", "label": "类型", "values": ["权限", "环境", "故障", "变更", "数据导出"] },
-          { "name": "applicant", "type": "STRING", "label": "申请人" },
-          { "name": "status", "type": "STRING", "label": "状态" },
-          { "name": "duration", "type": "STRING", "label": "处理时长" }
+          {
+            "name": "ticketCode",
+            "type": "STRING",
+            "label": "工单号"
+          },
+          {
+            "name": "ticketType",
+            "type": "ENUM",
+            "label": "类型",
+            "values": [
+              "权限",
+              "环境",
+              "故障",
+              "变更",
+              "数据导出"
+            ]
+          },
+          {
+            "name": "applicant",
+            "type": "STRING",
+            "label": "申请人"
+          },
+          {
+            "name": "status",
+            "type": "STRING",
+            "label": "状态"
+          },
+          {
+            "name": "duration",
+            "type": "STRING",
+            "label": "处理时长"
+          }
         ]
       }
     },
@@ -60,10 +134,31 @@
       "description": "团队与个人的日报、周报，含进展、风险与下周计划",
       "properties": {
         "properties": [
-          { "name": "period", "type": "STRING", "label": "统计周期" },
-          { "name": "team", "type": "STRING", "label": "团队" },
-          { "name": "author", "type": "STRING", "label": "汇报人" },
-          { "name": "reportType", "type": "ENUM", "label": "类型", "values": ["日报", "周报", "月报"] }
+          {
+            "name": "period",
+            "type": "STRING",
+            "label": "统计周期"
+          },
+          {
+            "name": "team",
+            "type": "STRING",
+            "label": "团队"
+          },
+          {
+            "name": "author",
+            "type": "STRING",
+            "label": "汇报人"
+          },
+          {
+            "name": "reportType",
+            "type": "ENUM",
+            "label": "类型",
+            "values": [
+              "日报",
+              "周报",
+              "月报"
+            ]
+          }
         ]
       }
     },
@@ -74,11 +169,31 @@
       "description": "季度 OKR、迭代计划与里程碑",
       "properties": {
         "properties": [
-          { "name": "planCode", "type": "STRING", "label": "计划编号" },
-          { "name": "period", "type": "STRING", "label": "周期" },
-          { "name": "sprint", "type": "STRING", "label": "迭代" },
-          { "name": "owner", "type": "STRING", "label": "负责人" },
-          { "name": "status", "type": "STRING", "label": "状态" }
+          {
+            "name": "planCode",
+            "type": "STRING",
+            "label": "计划编号"
+          },
+          {
+            "name": "period",
+            "type": "STRING",
+            "label": "周期"
+          },
+          {
+            "name": "sprint",
+            "type": "STRING",
+            "label": "迭代"
+          },
+          {
+            "name": "owner",
+            "type": "STRING",
+            "label": "负责人"
+          },
+          {
+            "name": "status",
+            "type": "STRING",
+            "label": "状态"
+          }
         ]
       }
     },
@@ -89,11 +204,31 @@
       "description": "岗位说明书：职责、任职要求、KPI、权限与协作接口",
       "properties": {
         "properties": [
-          { "name": "jdCode", "type": "STRING", "label": "岗位编号" },
-          { "name": "positionName", "type": "STRING", "label": "岗位名" },
-          { "name": "levelRange", "type": "STRING", "label": "职级区间" },
-          { "name": "dept", "type": "STRING", "label": "所属部门" },
-          { "name": "reportTo", "type": "STRING", "label": "汇报对象" }
+          {
+            "name": "jdCode",
+            "type": "STRING",
+            "label": "岗位编号"
+          },
+          {
+            "name": "positionName",
+            "type": "STRING",
+            "label": "岗位名"
+          },
+          {
+            "name": "levelRange",
+            "type": "STRING",
+            "label": "职级区间"
+          },
+          {
+            "name": "dept",
+            "type": "STRING",
+            "label": "所属部门"
+          },
+          {
+            "name": "reportTo",
+            "type": "STRING",
+            "label": "汇报对象"
+          }
         ]
       }
     },
@@ -104,10 +239,26 @@
       "description": "月度/季度绩效评估结果、等级分布与改进计划",
       "properties": {
         "properties": [
-          { "name": "period", "type": "STRING", "label": "评估周期" },
-          { "name": "team", "type": "STRING", "label": "团队" },
-          { "name": "reviewer", "type": "STRING", "label": "评估人" },
-          { "name": "gradeDistribution", "type": "TEXT", "label": "等级分布" }
+          {
+            "name": "period",
+            "type": "STRING",
+            "label": "评估周期"
+          },
+          {
+            "name": "team",
+            "type": "STRING",
+            "label": "团队"
+          },
+          {
+            "name": "reviewer",
+            "type": "STRING",
+            "label": "评估人"
+          },
+          {
+            "name": "gradeDistribution",
+            "type": "TEXT",
+            "label": "等级分布"
+          }
         ]
       }
     },
@@ -118,10 +269,26 @@
       "description": "项目复盘与迭代回顾：目标达成、根因、改进项与验证方式",
       "properties": {
         "properties": [
-          { "name": "retroCode", "type": "STRING", "label": "复盘编号" },
-          { "name": "scope", "type": "STRING", "label": "复盘范围" },
-          { "name": "host", "type": "STRING", "label": "主持" },
-          { "name": "improvements", "type": "NUMBER", "label": "改进项数" }
+          {
+            "name": "retroCode",
+            "type": "STRING",
+            "label": "复盘编号"
+          },
+          {
+            "name": "scope",
+            "type": "STRING",
+            "label": "复盘范围"
+          },
+          {
+            "name": "host",
+            "type": "STRING",
+            "label": "主持"
+          },
+          {
+            "name": "improvements",
+            "type": "NUMBER",
+            "label": "改进项数"
+          }
         ]
       }
     }
@@ -134,9 +301,21 @@
       "description": "Jira 项目或产品线",
       "properties": {
         "properties": [
-          { "name": "projectKey", "type": "STRING", "label": "项目Key" },
-          { "name": "projectName", "type": "STRING", "label": "项目名" },
-          { "name": "owner", "type": "STRING", "label": "负责人" }
+          {
+            "name": "projectKey",
+            "type": "STRING",
+            "label": "项目Key"
+          },
+          {
+            "name": "projectName",
+            "type": "STRING",
+            "label": "项目名"
+          },
+          {
+            "name": "owner",
+            "type": "STRING",
+            "label": "负责人"
+          }
         ]
       }
     },
@@ -147,10 +326,26 @@
       "description": "微服务或前端模块",
       "properties": {
         "properties": [
-          { "name": "moduleName", "type": "STRING", "label": "模块名" },
-          { "name": "repo", "type": "STRING", "label": "仓库" },
-          { "name": "owner", "type": "STRING", "label": "负责人" },
-          { "name": "techStack", "type": "STRING", "label": "技术栈" }
+          {
+            "name": "moduleName",
+            "type": "STRING",
+            "label": "模块名"
+          },
+          {
+            "name": "repo",
+            "type": "STRING",
+            "label": "仓库"
+          },
+          {
+            "name": "owner",
+            "type": "STRING",
+            "label": "负责人"
+          },
+          {
+            "name": "techStack",
+            "type": "STRING",
+            "label": "技术栈"
+          }
         ]
       }
     },
@@ -161,10 +356,26 @@
       "description": "研发、测试、运维与协作方人员",
       "properties": {
         "properties": [
-          { "name": "name", "type": "STRING", "label": "姓名" },
-          { "name": "employeeId", "type": "STRING", "label": "工号" },
-          { "name": "role", "type": "STRING", "label": "角色" },
-          { "name": "level", "type": "STRING", "label": "职级" }
+          {
+            "name": "name",
+            "type": "STRING",
+            "label": "姓名"
+          },
+          {
+            "name": "employeeId",
+            "type": "STRING",
+            "label": "工号"
+          },
+          {
+            "name": "role",
+            "type": "STRING",
+            "label": "角色"
+          },
+          {
+            "name": "level",
+            "type": "STRING",
+            "label": "职级"
+          }
         ]
       }
     },
@@ -175,10 +386,26 @@
       "description": "双周迭代周期",
       "properties": {
         "properties": [
-          { "name": "sprintName", "type": "STRING", "label": "迭代名" },
-          { "name": "period", "type": "STRING", "label": "周期" },
-          { "name": "committedPoints", "type": "NUMBER", "label": "承诺点数" },
-          { "name": "donePoints", "type": "NUMBER", "label": "完成点数" }
+          {
+            "name": "sprintName",
+            "type": "STRING",
+            "label": "迭代名"
+          },
+          {
+            "name": "period",
+            "type": "STRING",
+            "label": "周期"
+          },
+          {
+            "name": "committedPoints",
+            "type": "NUMBER",
+            "label": "承诺点数"
+          },
+          {
+            "name": "donePoints",
+            "type": "NUMBER",
+            "label": "完成点数"
+          }
         ]
       }
     },
@@ -189,11 +416,46 @@
       "description": "Jira issue（Story / Bug / Task）与缺陷单",
       "properties": {
         "properties": [
-          { "name": "issueKey", "type": "STRING", "label": "Key" },
-          { "name": "issueType", "type": "ENUM", "label": "类型", "values": ["Epic", "Story", "Bug", "Task"] },
-          { "name": "priority", "type": "ENUM", "label": "优先级", "values": ["P0", "P1", "P2", "P3", "Highest", "High", "Medium"] },
-          { "name": "status", "type": "STRING", "label": "状态" },
-          { "name": "points", "type": "NUMBER", "label": "点数" }
+          {
+            "name": "issueKey",
+            "type": "STRING",
+            "label": "Key"
+          },
+          {
+            "name": "issueType",
+            "type": "ENUM",
+            "label": "类型",
+            "values": [
+              "Epic",
+              "Story",
+              "Bug",
+              "Task"
+            ]
+          },
+          {
+            "name": "priority",
+            "type": "ENUM",
+            "label": "优先级",
+            "values": [
+              "P0",
+              "P1",
+              "P2",
+              "P3",
+              "Highest",
+              "High",
+              "Medium"
+            ]
+          },
+          {
+            "name": "status",
+            "type": "STRING",
+            "label": "状态"
+          },
+          {
+            "name": "points",
+            "type": "NUMBER",
+            "label": "点数"
+          }
         ]
       }
     },
@@ -204,9 +466,21 @@
       "description": "生产、预发、测试与压测环境",
       "properties": {
         "properties": [
-          { "name": "envName", "type": "STRING", "label": "环境名" },
-          { "name": "endpoint", "type": "STRING", "label": "入口" },
-          { "name": "spec", "type": "STRING", "label": "规格" }
+          {
+            "name": "envName",
+            "type": "STRING",
+            "label": "环境名"
+          },
+          {
+            "name": "endpoint",
+            "type": "STRING",
+            "label": "入口"
+          },
+          {
+            "name": "spec",
+            "type": "STRING",
+            "label": "规格"
+          }
         ]
       }
     }
@@ -218,7 +492,14 @@
       "label": "人员负责问题单",
       "description": "issue 的经办人与报告人",
       "properties": {
-        "constraints": { "fromKinds": ["EMPLOYEE"], "toKinds": ["ISSUE"] }
+        "constraints": {
+          "fromKinds": [
+            "EMPLOYEE"
+          ],
+          "toKinds": [
+            "ISSUE"
+          ]
+        }
       }
     },
     {
@@ -227,7 +508,14 @@
       "label": "问题单归属模块",
       "description": "issue 影响的模块",
       "properties": {
-        "constraints": { "fromKinds": ["ISSUE"], "toKinds": ["MODULE"] }
+        "constraints": {
+          "fromKinds": [
+            "ISSUE"
+          ],
+          "toKinds": [
+            "MODULE"
+          ]
+        }
       }
     },
     {
@@ -236,7 +524,14 @@
       "label": "模块依赖",
       "description": "模块之间的调用与依赖关系",
       "properties": {
-        "constraints": { "fromKinds": ["MODULE"], "toKinds": ["MODULE"] }
+        "constraints": {
+          "fromKinds": [
+            "MODULE"
+          ],
+          "toKinds": [
+            "MODULE"
+          ]
+        }
       }
     },
     {
@@ -245,7 +540,14 @@
       "label": "迭代包含问题单",
       "description": "迭代范围内的 issue",
       "properties": {
-        "constraints": { "fromKinds": ["SPRINT"], "toKinds": ["ISSUE"] }
+        "constraints": {
+          "fromKinds": [
+            "SPRINT"
+          ],
+          "toKinds": [
+            "ISSUE"
+          ]
+        }
       }
     },
     {
@@ -254,7 +556,14 @@
       "label": "模块部署环境",
       "description": "模块运行的环境",
       "properties": {
-        "constraints": { "fromKinds": ["MODULE"], "toKinds": ["ENVIRONMENT"] }
+        "constraints": {
+          "fromKinds": [
+            "MODULE"
+          ],
+          "toKinds": [
+            "ENVIRONMENT"
+          ]
+        }
       }
     },
     {
@@ -263,7 +572,14 @@
       "label": "项目包含模块",
       "description": "项目与模块的归属关系",
       "properties": {
-        "constraints": { "fromKinds": ["PROJECT"], "toKinds": ["MODULE"] }
+        "constraints": {
+          "fromKinds": [
+            "PROJECT"
+          ],
+          "toKinds": [
+            "MODULE"
+          ]
+        }
       }
     }
   ]

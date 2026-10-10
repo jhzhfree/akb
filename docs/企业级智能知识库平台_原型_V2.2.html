@@ -40,26 +40,26 @@ pre{background:#111a2b;color:#dce8f8;border-radius:8px;padding:14px;overflow:aut
 /* ---- 主题 token：与产品实现一致，同一语义在深浅两主题下取不同值 ----
    原型默认浅色；顶栏可切换到深色，选择写入 localStorage 后保持。 */
 :root{
-  --bg:#f4f6fb;--surface:#fff;--surface-2:#eef2f9;--line:#e2e8f0;--line-d:#edf1f6;--line-soft:#cbd5e1;
-  --text:#0f172a;--text-2:#475569;--text-3:#64748b;
-  --brand-600:#2563eb;--on-brand:#fff;--accent:#1d4ed8;--accent-bg:#dbeafe;
-  --ok:#047857;--ok-bg:#d1fae5;--ok-bd:#a7f3d0;
-  --warn:#b45309;--warn-bg:#fef3c7;--warn-bd:#fcd34d;
-  --danger:#dc2626;--danger-bg:#fee2e2;--danger-bd:#fecaca;
-  --info:#1d4ed8;--info-bg:#dbeafe;--info-bd:#bfdbfe;
+  --bg:#f7f8fc;--surface:#fff;--surface-2:#f1f3f9;--line:#cbd2e0;--line-d:#e3e6f0;--line-soft:#d2d6e5;
+  --text:#101326;--text-2:#475569;--text-3:#6a7085;
+  --brand-500:#6f6cf7;--brand-600:#5b5cff;--brand-700:#4748e0;--on-brand:#fff;--accent:#4748e0;--accent-bg:#eff0ff;
+  --ok:#22a06b;--ok-bg:#e7f7ef;--ok-bd:#b7e7cf;
+  --warn:#d97706;--warn-bg:#fdf3e3;--warn-bd:#f8d9a8;
+  --danger:#e5484d;--danger-bg:#fdecec;--danger-bd:#f8c9cb;
+  --info:#4748e0;--info-bg:#eff0ff;--info-bd:#d9d9ff;
   --neutral-fg:#475569;--neutral-bg:#eef2f9;--neutral-bd:#e2e8f0;
-  --gc-bg:#fbfcfe;--code-bg:#0f1b2d;--code-fg:#dce8f8;
+  --gc-bg:#fbfcfe;--code-bg:#0f1b2d;--code-fg:#dce8f8;--ring:0 0 0 3px rgba(91,92,255,.25);
 }
 :root[data-theme='dark']{
   --bg:#0b1220;--surface:#111a30;--surface-2:#1a2440;--line:#27355a;--line-d:#1e2a45;--line-soft:#2a3757;
   --text:#eaf0fa;--text-2:#aab7cc;--text-3:#6b7a93;
-  --brand-600:#3b6fe0;--on-brand:#fff;--accent:#93b4fd;--accent-bg:#1d3f8c;
+  --brand-500:#4f8cf7;--brand-600:#3b6fe0;--brand-700:#2b56b8;--on-brand:#fff;--accent:#93b4fd;--accent-bg:#1d3f8c;
   --ok:#34d399;--ok-bg:#12352a;--ok-bd:#1f5c48;
   --warn:#fbbf24;--warn-bg:#3b2f14;--warn-bd:#5a4718;
   --danger:#f87171;--danger-bg:#3a1626;--danger-bd:#5c2130;
   --info:#60a5fa;--info-bg:#1d3f8c;--info-bd:#2a4f9c;
   --neutral-fg:#aab7cc;--neutral-bg:#1a2440;--neutral-bd:#27355a;
-  --gc-bg:#0e1728;--code-bg:#070c18;--code-fg:#e5edf7;
+  --gc-bg:#0e1728;--code-bg:#070c18;--code-fg:#e5edf7;--ring:0 0 0 3px rgba(79,140,247,.35);
 }
 body{background:var(--bg);color:var(--text)}
 header{background:var(--surface);border-bottom:1px solid var(--line)}
@@ -103,23 +103,97 @@ pre{background:var(--code-bg);color:var(--code-fg)}
 .vsbtn.active{background:var(--surface);color:var(--accent);font-weight:700;border:1px solid var(--line-soft)}
 /* 主内容底部页脚：版本与授权信息统一显示区 */
 .appfooter{grid-column:1/3;border-top:1px solid var(--line);padding:12px 20px;display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;background:var(--surface);color:var(--text-3);font-size:12px}
+/* ---- 登录页：全站唯一的无框架页（左品牌 / 右表单）；第三方登录已移除 ---- */
+.loginpage{position:fixed;inset:0;z-index:60;background:var(--bg);overflow:auto}
+.loginpage.hide{display:none}
+.lv-page{display:grid;grid-template-columns:1.05fr .95fr;min-height:100vh}
+.lv-brand{position:relative;overflow:hidden;display:flex;flex-direction:column;justify-content:center;padding:46px 52px;color:#fff;background:radial-gradient(120% 78% at 88% 6%,rgba(47,107,255,.5),rgba(47,107,255,0) 62%),radial-gradient(96% 62% at 4% 100%,rgba(24,184,200,.24),rgba(24,184,200,0) 64%),linear-gradient(158deg,#071227 0%,#0b1d3e 44%,#12306b 100%)}
+.lv-brand-body h1{margin:0;font-size:30px;line-height:1.35}
+.lv-brand-body p{margin:14px 0 0;font-size:13.5px;line-height:1.8;color:rgba(255,255,255,.86)}
+.lv-points{margin:22px 0 0;padding:0;list-style:none;display:flex;flex-direction:column;gap:11px}
+.lv-points li{display:flex;align-items:center;gap:9px;font-size:13px;color:rgba(255,255,255,.94)}
+.lv-check{width:18px;height:18px;border-radius:50%;display:grid;place-items:center;flex:none;background:rgba(255,255,255,.22);font-size:11px}
+.lv-brand-foot{margin-top:28px;font-size:11.5px;color:rgba(255,255,255,.72)}
+.lv-panel{display:grid;place-items:center;padding:40px 32px}
+.lv-card{width:400px;max-width:100%;padding:30px 30px 24px;border-radius:14px;background:var(--surface);border:1px solid var(--line)}
+.lv-head h2{margin:0;font-size:22px;color:var(--text)}
+.lv-head p{margin:7px 0 0;font-size:12.5px;color:var(--text-3)}
+.lv-form{display:flex;flex-direction:column;gap:14px;margin-top:20px}
+.lv-field{display:flex;flex-direction:column;gap:6px}
+.lv-label{font-size:12px;font-weight:600;color:var(--text-2)}
+.lv-input{height:40px;padding:0 12px;border-radius:8px;font:inherit;font-size:13px;color:var(--text);background:var(--surface);border:1px solid var(--line)}
+.lv-row{display:flex;align-items:center;justify-content:space-between;font-size:12px;color:var(--text-2)}
+.lv-link{background:none;border:0;padding:0;font:inherit;font-size:12px;font-weight:600;color:var(--accent);cursor:pointer}
+.lv-submit{height:42px;margin-top:4px;border:0;border-radius:8px;cursor:pointer;font:inherit;font-size:14px;font-weight:600;letter-spacing:.14em;color:#fff;background:var(--brand-600)}
+.lv-foot{margin-top:20px;padding-top:16px;border-top:1px solid var(--line-d);font-size:12px;color:var(--text-3);text-align:center}
+aside{display:flex;flex-direction:column}
+.navgroup{padding:12px 14px 6px;font-size:11px;font-weight:700;color:var(--text-3)}
+.sidefoot{margin-top:auto;display:flex;align-items:center;gap:8px;padding:10px 8px 0;border-top:1px solid var(--line-d)}
+.side-user{display:flex;align-items:center;gap:8px;flex:1;min-width:0}
+.side-user-copy{display:flex;flex-direction:column;line-height:1.25}
+.side-user-copy b{font-size:12px;color:var(--text)}
+.side-user-copy small{font-size:11px;color:var(--text-3)}
+.avatar.sm{width:26px;height:26px;font-size:12px}
+.sideicon{border:1px solid var(--line);background:var(--surface);color:var(--text-2);border-radius:8px;width:30px;height:30px;flex:none}
+.brand{display:flex;align-items:center;gap:8px}
+.brand-copy{display:flex;flex-direction:column;line-height:1.15}
+.brand-copy b{font-size:16px}
+.brand-copy small{font-size:11px;color:var(--text-3)}
+.kbswitch{border:1px solid var(--line);background:var(--surface);color:var(--text);border-radius:8px;padding:8px 11px;display:flex;align-items:center;gap:6px}
+.uname{font-size:13px;color:var(--text)}
+.logout{border:1px solid var(--line-soft);background:var(--surface);color:var(--text-2);border-radius:7px;padding:7px 10px;font-size:12px}
+code{font-family:ui-monospace,Consolas,monospace;font-size:12px}
 </style></head>
-<body><div class="app">
-<header><div class="brand">▣ 智能知识平台</div>
+<body>
+<div class="loginpage" id="login">
+<div class="lv-page">
+  <section class="lv-brand">
+    <div class="lv-brand-body">
+      <h1>让知识随时被 AI 调用</h1>
+      <p>统一沉淀产品、研发、运营与客服知识，构建可检索、可共享、可追溯的团队知识中枢；文档、表格与工单一处接入，供团队与 AI 随时调用。</p>
+      <ul class="lv-points"><li><span class="lv-check">✓</span>集中管理文档与知识库，告别信息孤岛</li><li><span class="lv-check">✓</span>全文检索 + AI 问答，知识秒级触达</li><li><span class="lv-check">✓</span>精细的角色权限控制，安全可控</li></ul>
+    </div>
+    <div class="lv-brand-foot">© 2026 智能知识平台 · Knowledge OS</div>
+  </section>
+  <section class="lv-panel">
+    <div class="lv-card">
+      <div class="lv-head"><h2>欢迎回来</h2><p>登录以访问你的知识库</p></div>
+      <form class="lv-form" onsubmit="event.preventDefault();enterApp()">
+        <label class="lv-field"><span class="lv-label">用户名 / 邮箱</span><input class="lv-input" value="zhangsan" autocomplete="username"></label>
+        <label class="lv-field"><span class="lv-label">密码</span><input class="lv-input" type="password" value="********" autocomplete="current-password"></label>
+        <div class="lv-row"><label><input type="checkbox" checked>记住账号</label><button type="button" class="lv-link" onclick="toast(&quot;请联系平台管理员重置密码&quot;)">忘记密码？</button></div>
+        <button type="submit" class="lv-submit">登 录</button>
+      </form>
+      <div class="lv-foot">需要管理控制台？<button type="button" class="lv-link" onclick="toast(&quot;已切换到管理员入口&quot;)">管理员入口 →</button></div>
+    </div>
+  </section>
+</div>
+</div>
+<div class="app">
+<header><div class="brand"><span>▣</span><span class="brand-copy"><b>智能知识平台</b><small>Knowledge OS</small></span></div>
 <div class="viewswitch" title="管理视图含运维与配置入口；用户视图只保留日常使用入口"><button class="vsbtn" id="viewUser" onclick="setViewMode('user')">用户视图</button><button class="vsbtn active" id="viewAdmin" onclick="setViewMode('admin')">管理视图</button></div>
-<select class="space"><option>产品知识中心</option><option>制度知识中心</option><option>项目知识中心</option></select><input class="global" placeholder="全局搜索知识、文档、卡片、断言、实体…"><button class="themebtn" id="themeBtn" onclick="toggleTheme()">◐ 深色</button><div class="avatar">张</div><span>张三</span></header>
+<button class="kbswitch" onclick="toast(&quot;切换知识库&quot;)">知识库：<b>产品知识中心</b><i>▾</i></button><input class="global" placeholder="搜索知识…"><button class="themebtn" id="themeBtn" onclick="cycleTheme()" title="浅色 → 深色 → 跟随系统">☀ 浅色</button><div class="avatar">张</div><b class="uname">张三</b><button class="logout" onclick="showLogin()">退出</button></header>
 <aside>
+<div class="navgroup">工作台</div>
 <button class="nav active" onclick="go('workbench')" data-page="workbench">▣　知识概览</button>
+<div class="navgroup">知识库</div>
 <button class="nav" onclick="go('create')" data-page="create">＋　知识生成</button>
 <button class="nav" onclick="go('search')" data-page="search">⌕　知识检索</button>
+<div class="navgroup">系统集成</div>
 <button class="nav" onclick="go('integration')" data-page="integration">⌘　接口服务</button>
-<button class="nav" onclick="go('system')" data-page="system">⚙　系统配置</button>
+<div class="sidefoot"><span class="side-user"><span class="avatar sm">张</span><span class="side-user-copy"><b>张三</b><small>知识管理员</small></span></span><button class="sideicon" data-page="system" title="系统配置" onclick="go('system')">⚙</button></div>
 </aside><main>
 
 <section id="workbench" class="page active">
 <div class="head"><div><h1>知识概览</h1><p>一个页面掌握企业知识资产、生命周期、治理状态与待办（两种视图一致）</p></div><div><button class="btn" onclick="go('search')">知识搜索</button> <button class="btn primary" onclick="go('create')">＋ 生成知识</button></div></div>
-<div class="tabs"><div class="tab active" data-wtab="home" onclick="setWorkbenchTab('home')">工作台</div><div class="tab" data-wtab="assets" onclick="setWorkbenchTab('assets')">资产浏览</div><div class="tab" data-wtab="version" onclick="setWorkbenchTab('version')">版本</div><div class="tab" data-wtab="quality" onclick="setWorkbenchTab('quality')">质量</div></div>
-<div class="tabpane active" data-wpane="home">
+<div class="tabs"><div class="tab active" data-wtab="homeIndex" onclick="setWorkbenchTab('homeIndex')">首页</div><div class="tab" data-wtab="home" onclick="setWorkbenchTab('home')">工作台</div><div class="tab" data-wtab="assets" onclick="setWorkbenchTab('assets')">资产浏览</div><div class="tab" data-wtab="version" onclick="setWorkbenchTab('version')">版本</div><div class="tab" data-wtab="quality" onclick="setWorkbenchTab('quality')">质量</div></div>
+<div class="tabpane active" data-wpane="homeIndex"><div class="panel"><h3>最近访问的知识库</h3>
+<div class="cards"><div class="card" onclick="toast(&quot;打开 产品知识中心&quot;)"><b>产品知识中心</b><p>1,284 文档 · 更新 2 小时前</p></div>
+<div class="card" onclick="toast(&quot;打开 制度知识中心&quot;)"><b>制度知识中心</b><p>326 文档 · 更新 昨天</p></div>
+<div class="card" onclick="toast(&quot;打开 项目知识中心&quot;)"><b>项目知识中心</b><p>872 文档 · 更新 3 天前</p></div></div>
+<p class="muted" style="margin-top:12px">登录后默认进入首页：先给最近访问的知识库；完整指标、生命周期与治理待办在「工作台」。</p>
+</div></div>
+<div class="tabpane" data-wpane="home">
 <div class="kpis">
 <div class="panel kpi" onclick="asset('来源')"><span>数据来源</span><b>28</b><i class="up">↑12%</i></div><div class="panel kpi" onclick="asset('文档')"><span>文档</span><b>12,580</b><i class="up">↑8%</i></div><div class="panel kpi" onclick="asset('知识卡片')"><span>知识卡片</span><b>8,342</b><i class="up">↑15%</i></div><div class="panel kpi" onclick="asset('断言')"><span>断言</span><b>24,680</b><i class="up">↑22%</i></div><div class="panel kpi" onclick="asset('实体')"><span>实体</span><b>6,328</b><i class="up">↑18%</i></div><div class="panel kpi" onclick="asset('关系')"><span>关系</span><b>12,456</b><i class="up">↑20%</i></div>
 </div>
@@ -149,10 +223,16 @@ pre{background:var(--code-bg);color:var(--code-fg)}
 <section id="create" class="page">
 <div class="head"><div><h1>知识生成</h1><p>文档、连接器、生成任务、裁决与衍生集中在一个知识生成工作区</p></div><button class="btn primary" onclick="openModal('快速生成知识')">＋ 生成知识</button></div>
 <div class="heroactions"><div class="action" onclick="setCreateTab('import')"><b>导入文档</b><small>文件 / URL / 文本</small></div><div class="action" data-admin="1" onclick="setCreateTab('connector')"><b>连接数据源</b><small>数据库 / API / 对象存储 / SaaS</small></div><div class="action" onclick="setCreateTab('judgment')"><b>知识裁决</b><small>待审核 / 冲突 / Evidence</small></div><div class="action" onclick="setCreateTab('derive')"><b>知识衍生</b><small>规则 / 计算 / Graph / AI</small></div></div>
-<div class="panel section"><div class="tabs"><div class="tab active" data-ctab="overview" data-admin="1" onclick="setCreateTab('overview')">生成概览</div><div class="tab" data-ctab="import" onclick="setCreateTab('import')">文档导入</div><div class="tab" data-ctab="connector" data-admin="1" onclick="setCreateTab('connector')">连接器</div><div class="tab" data-ctab="tasks" data-admin="1" onclick="setCreateTab('tasks')">生成任务</div><div class="tab" data-ctab="judgment" onclick="setCreateTab('judgment')">知识裁决</div><div class="tab" data-ctab="derive" onclick="setCreateTab('derive')">知识衍生</div></div>
+<div class="panel section"><div class="tabs"><div class="tab active" data-ctab="overview" data-admin="1" onclick="setCreateTab('overview')">生成概览</div><div class="tab" data-ctab="import" onclick="setCreateTab('import')">文档导入</div><div class="tab" data-ctab="connector" data-admin="1" onclick="setCreateTab('connector')">连接器</div><div class="tab" data-ctab="catalog" data-admin="1" onclick="setCreateTab('catalog')">外部知识</div><div class="tab" data-ctab="tasks" data-admin="1" onclick="setCreateTab('tasks')">生成任务</div><div class="tab" data-ctab="judgment" onclick="setCreateTab('judgment')">知识裁决</div><div class="tab" data-ctab="derive" onclick="setCreateTab('derive')">知识衍生</div></div>
 <div class="tabpane active" data-cpane="overview"><div class="pipeline"><span class="on">接入</span><span class="on">解析</span><span class="on">Chunk</span><span class="on">抽取</span><span>Evidence</span><span>衍生</span><span>裁决</span><span>发布</span></div><div class="cards section"><div class="card"><b>今日导入</b><h2>186</h2><span class="tag">成功 178</span></div><div class="card"><b>运行任务</b><h2>12</h2><span class="tag warn">3 需关注</span></div><div class="card"><b>待裁决</b><h2>21</h2><button class="btn ghost" onclick="setCreateTab('judgment')">处理</button></div><div class="card"><b>候选衍生</b><h2>8</h2><button class="btn ghost" onclick="setCreateTab('derive')">查看</button></div></div></div>
 <div class="tabpane" data-cpane="import"><div class="form"><label>导入方式</label><select><option>本地文件</option><option>Web URL</option><option>手工文本</option></select><label>文件</label><input type="file" multiple><label>知识类型</label><select><option>产品知识</option><option>技术知识</option><option>制度规范</option></select><label>权限</label><select><option>继承当前空间</option><option>指定用户/部门</option></select><label>处理模式</label><select><option>标准模式（推荐）</option><option>高质量模式</option><option>自定义高级模式</option></select></div><p><button class="btn">保存草稿</button> <button class="btn primary" onclick="setCreateTab('tasks')">开始知识生成</button></p></div>
 <div class="tabpane" data-cpane="connector"><div class="cards"><div class="card"><b>数据库</b><p>MySQL / PostgreSQL</p><span class="tag">3 已连接</span></div><div class="card"><b>REST API</b><p>企业业务接口</p><span class="tag">5 已连接</span></div><div class="card"><b>对象存储</b><p>S3 / OSS / MinIO</p><span class="tag">2 已连接</span></div><div class="card"><b>企业协作</b><p>Wiki / SharePoint</p><button class="btn">＋连接</button></div></div></div>
+<div class="tabpane" data-cpane="catalog"><div class="panel"><h3>外部知识</h3>
+<p class="muted">按外部系统的类型与属性浏览连接器同步下来的条目（管理视图）。</p>
+<table><tr><th>条目</th><th>来源系统</th><th>类型</th><th>同步时间</th><th>状态</th></tr>
+<tr><td>ZT5000 产品规格 V3</td><td>Confluence</td><td>文档</td><td>10:24</td><td><span class="tag">已同步</span></td></tr>
+<tr><td>客户工单 #8821</td><td>Jira</td><td>工单</td><td>10:02</td><td><span class="tag warn">待确认</span></td></tr></table>
+</div></div>
 <div class="tabpane" data-cpane="tasks"><table><tr><th>任务</th><th>类型</th><th>进度</th><th>输出</th><th>状态</th><th>操作</th></tr><tr><td>job_10023</td><td>Document Pipeline</td><td>82%</td><td>94 Assertions</td><td><span class="tag warn">运行中</span></td><td>详情</td></tr><tr><td>job_10018</td><td>Connector Sync</td><td>43%</td><td>—</td><td><span class="tag bad">失败</span></td><td>重试</td></tr></table></div>
 <div class="tabpane" data-cpane="judgment"><div class="cols"><div><h3>Assertion 对比</h3><table><tr><th></th><th>A</th><th>B</th></tr><tr><td>值</td><td>50,000</td><td><b>80,000</b></td></tr><tr><td>来源</td><td>规格 V2</td><td>规格 V3</td></tr><tr><td>置信度</td><td>0.94</td><td>0.97</td></tr></table><p><button class="btn primary">采用 A</button> <button class="btn primary">采用 B</button> <button class="btn">合并</button> <button class="btn">拒绝</button></p></div><div><h3>Evidence</h3><b>《ZT5000 产品规格 V3》P38</b><blockquote>标准配置最大支持 80,000 并发连接……</blockquote><p class="muted">系统建议：B 版本更新且 Evidence 直接。</p></div></div></div>
 <div class="tabpane" data-cpane="derive"><table><tr><th>候选衍生知识</th><th>方法</th><th>基础断言</th><th>置信度</th><th>状态</th></tr><tr><td>ZT5000 约支持 800 名典型用户</td><td>Calculation</td><td>2</td><td>0.92</td><td><span class="tag warn">待审核</span></td></tr><tr><td>CVE-2026-xxx 影响产品 A/B</td><td>Graph Path</td><td>6</td><td>0.89</td><td><span class="tag">候选</span></td></tr></table></div>
@@ -235,7 +315,7 @@ event: citation    {"evidenceId":"ev_38","page":38}
 event: delta       {"text":"ZT5000 标准配置..."}
 event: complete    {"latencyMs":820}</pre></div>
 <div class="tabpane" data-ipane="credential"><table><tr><th>名称</th><th>类型</th><th>Scope</th><th>尾号</th><th>有效期</th><th>状态</th></tr><tr><td>项目助手生产</td><td>API_KEY</td><td>retrieve,answer</td><td>••••9A2F</td><td>2027-01-01</td><td><span class="tag">正常</span></td></tr></table></div>
-<div class="tabpane" data-ipane="logs"><table><tr><th>时间</th><th>服务</th><th>协议</th><th>状态</th><th>延迟</th><th>Trace</th></tr><tr><td>15:42</td><td>企业知识问答</td><td>SSE</td><td>200</td><td>820ms</td><td><a onclick="go('search');setSearchTab('trace')">tr_001</a></td></tr><tr><td>15:41</td><td>项目助手上下文</td><td>MCP</td><td>200</td><td>142ms</td><td><a onclick="go('search');setSearchTab('trace')">tr_002</a></td></tr></table></div>
+<div class="tabpane" data-ipane="logs"><p class="muted" style="margin:0 0 10px">调用日志展示明文的传入参数与返回数据，便于排查接入问题；敏感字段按系统配置的脱敏规则处理。</p><table><tr><th>时间</th><th>服务</th><th>协议</th><th>状态</th><th>延迟</th><th>传入参数</th><th>返回数据</th><th>Trace</th></tr><tr><td>15:42</td><td>企业知识问答</td><td>SSE</td><td>200</td><td>820ms</td><td><code>{"query":"ZT5000 并发能力"}</code></td><td><code>{"answer":"…80,000…","citations":2}</code></td><td><a onclick="go('search');setSearchTab('trace')">tr_001</a></td></tr><tr><td>15:41</td><td>项目助手上下文</td><td>MCP</td><td>200</td><td>142ms</td><td><code>{"tool":"retrieve_context","topK":5}</code></td><td><code>{"results":5,"evidence":3}</code></td><td><a onclick="go('search');setSearchTab('trace')">tr_002</a></td></tr></table></div>
 </div></section>
 
 <section id="system" class="page">
@@ -246,14 +326,14 @@ event: complete    {"latencyMs":820}</pre></div>
 </div>
 </section>
 </main>
-<footer class="appfooter"><span>▣ 智能知识平台　<b>V2.2</b>　生产环境 · 服务 1.2.0</span><span>企业自部署 · 版本与授权由部署镜像管理　<button class="btn ghost" onclick="toast('版本信息：产品 V2.2 · 服务 1.2.0 · 已核对')">版本信息</button></span></footer>
+<footer class="appfooter"><span>智能知识平台　<b>V2.2</b>　生产环境</span><span>企业自部署 · 版本与授权由部署镜像管理　<button class="btn ghost" onclick="toast(&quot;版本信息：产品 V2.2 · 服务版本由部署镜像实时核对&quot;)">版本信息</button></span></footer>
 </div>
 
 <div class="drawer" id="drawer"><div class="drawerhead"><h2 id="drawerTitle">详情</h2><button class="btn" onclick="closeDrawer()">关闭</button></div><div id="drawerBody"></div></div>
 <div class="modal" id="modal"><div class="dialog"><div class="drawerhead"><h2 id="modalTitle">创建</h2><button class="btn" onclick="closeModal()">关闭</button></div><div class="form"><label>名称</label><input placeholder="请输入名称"><label>知识空间</label><select><option>产品知识中心</option></select><label>说明</label><textarea rows="3"></textarea></div><p style="text-align:right"><button class="btn" onclick="closeModal()">取消</button> <button class="btn primary" onclick="closeModal();toast('已创建（原型）')">创建</button></p></div></div>
 <div id="toast"></div>
 <script>
-function go(id){document.querySelectorAll('.page').forEach(x=>x.classList.remove('active'));const page=document.getElementById(id);if(!page)return;page.classList.add('active');document.querySelectorAll('.nav').forEach(x=>x.classList.toggle('active',x.dataset.page===id));history.replaceState(null,'','#'+id);window.scrollTo(0,0)}
+function go(id){document.querySelectorAll('.page').forEach(x=>x.classList.remove('active'));const page=document.getElementById(id);if(!page)return;page.classList.add('active');document.querySelectorAll('[data-page]').forEach(x=>x.classList.toggle('active',x.dataset.page===id));history.replaceState(null,'','#'+id);window.scrollTo(0,0)}
 function tab(group, pane, name){document.querySelectorAll('[data-'+group+'tab]').forEach(x=>x.classList.toggle('active',x.dataset[group+'tab']===name));document.querySelectorAll('[data-'+group+'pane]').forEach(x=>x.classList.toggle('active',x.dataset[group+'pane']===name))}
 function setCreateTab(n){tab('c','pane',n)} function setSearchTab(n){tab('s','pane',n)} function setIntegrationTab(n){tab('i','pane',n)} function setWorkbenchTab(n){tab('w','pane',n)}
 /* ---- 用户视图 / 管理视图：data-admin="1" 的 Tab 与区块只在管理视图出现 ---- */
@@ -275,7 +355,11 @@ function closeDrawer(){document.getElementById('drawer').classList.remove('show'
 function toast(t){let e=document.getElementById('toast');e.textContent=t;e.style.display='block';setTimeout(()=>e.style.display='none',1500)}
 let h=location.hash.slice(1);if(['workbench','create','search','integration','system'].includes(h))go(h);
 /* 主题切换：写入根节点的 data-theme，样式层全部消费 CSS 变量，无需改任何组件 */
-function applyTheme(t){document.documentElement.setAttribute('data-theme',t);var b=document.getElementById('themeBtn');if(b)b.textContent=t==='dark'?'◑ 浅色':'◐ 深色'}
-function toggleTheme(){var cur=document.documentElement.getAttribute('data-theme')||'light';var next=cur==='dark'?'light':'dark';applyTheme(next);try{localStorage.setItem('kos-prototype-theme',next)}catch(e){}}
-(function(){var t='light';try{t=localStorage.getItem('kos-prototype-theme')||((window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches)?'dark':'light')}catch(e){}applyTheme(t)})();
+/* 主题三档循环：浅色 → 深色 → 跟随系统，与产品 useTheme().cycleTheme 一致 */
+var themeMode='light';
+function applyTheme(){var t=themeMode==='system'?((window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches)?'dark':'light'):themeMode;document.documentElement.setAttribute('data-theme',t);var b=document.getElementById('themeBtn');if(b)b.textContent=t==='dark'?'☾ 深色':'☀ 浅色'}
+function cycleTheme(){themeMode=themeMode==='light'?'dark':(themeMode==='dark'?'system':'light');applyTheme();try{localStorage.setItem('kos-prototype-theme',themeMode)}catch(e){}toast('主题：'+({light:'浅色',dark:'深色',system:'跟随系统'})[themeMode])}
+function enterApp(){document.getElementById('login').classList.add('hide');toast('已登录：张三 · 知识管理员')}
+function showLogin(){document.getElementById('login').classList.remove('hide')}
+(function(){try{var s=localStorage.getItem('kos-prototype-theme');if(s==='dark'||s==='light'||s==='system')themeMode=s}catch(e){}applyTheme()})();
 </script></body></html>

@@ -1,0 +1,12 @@
+{
+  "collectionName": "llmkb_knowledge_v1",
+  "dimension": 2048,
+  "metricType": "COSINE",
+  "primaryField": "id",
+  "vectorField": "vector",
+  "fields": [
+    "id",
+    "vector"
+  ],
+  "enableDynamicField": false
+}

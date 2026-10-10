@@ -1,32 +1,32 @@
 <!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>企业级智能知识库平台 产品详细设计说明书 V2.1</title><style>
-:root{--navy:#103b68;--blue:#1769aa;--cyan:#0b8ea8;--green:#0c8c72;--orange:#d97706;--purple:#6d4bc3;--ink:#1f2937;--muted:#64748b;--line:#dce6f0;--bg:#f4f8fc;--card:#fff}
+:root{--navy:#3a3ab3;--blue:#4748e0;--cyan:#0b8ea8;--green:#0c8c72;--orange:#d97706;--purple:#6d4bc3;--ink:#1f2937;--muted:#64748b;--line:#dcdcff;--bg:#f4f8fc;--card:#fff}
 *{box-sizing:border-box} html{scroll-behavior:smooth} body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.75 "Microsoft YaHei","PingFang SC",Arial,sans-serif}
-.page{max-width:1260px;margin:auto;background:#fff;min-height:100vh;box-shadow:0 10px 36px #103b6814}
-.cover{padding:64px 72px;background:linear-gradient(135deg,#0d3764,#1769aa 58%,#0b8e88);color:#fff}
+.page{max-width:1260px;margin:auto;background:#fff;min-height:100vh;box-shadow:0 10px 36px #3a3ab314}
+.cover{padding:64px 72px;background:linear-gradient(135deg,#0b1d3e,#4748e0 58%,#0b8e88);color:#fff}
 .cover h1{font-size:38px;margin:0 0 8px} .cover h2{font-size:20px;font-weight:400;margin:0;opacity:.92}
 .meta{display:flex;gap:10px;flex-wrap:wrap;margin-top:28px} .meta span{border:1px solid #ffffff55;border-radius:999px;padding:5px 11px;font-size:13px}
-main{padding:42px 68px 80px} h2{color:var(--navy);font-size:28px;margin-top:52px;border-bottom:2px solid #d8e8f6;padding-bottom:9px}
-h3{color:#205b8d;font-size:20px;margin-top:30px} h4{color:#27617d;font-size:16px;margin-bottom:6px}
-.toc{background:#f6faff;border:1px solid #d9e8f6;border-radius:14px;padding:22px 26px} .toc ol{columns:2} .toc a{color:#225f91;text-decoration:none}
-.lead{font-size:17px;color:#40566b} .note{background:#eef8ff;border-left:4px solid var(--blue);padding:14px 17px;border-radius:7px;margin:16px 0}
+main{padding:42px 68px 80px} h2{color:var(--navy);font-size:28px;margin-top:52px;border-bottom:2px solid #dcdcff;padding-bottom:9px}
+h3{color:#4748e0;font-size:20px;margin-top:30px} h4{color:#3a3ab3;font-size:16px;margin-bottom:6px}
+.toc{background:#f8f8ff;border:1px solid #dcdcff;border-radius:14px;padding:22px 26px} .toc ol{columns:2} .toc a{color:#4748e0;text-decoration:none}
+.lead{font-size:17px;color:#40566b} .note{background:#f0f0ff;border-left:4px solid var(--blue);padding:14px 17px;border-radius:7px;margin:16px 0}
 .ok{background:#eefaf6;border-left-color:var(--green)} .warn{background:#fff8e8;border-left-color:var(--orange)}
 .grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px} .card{border:1px solid var(--line);border-radius:12px;padding:17px 19px;background:#fff}
-table{width:100%;border-collapse:collapse;margin:15px 0 25px;font-size:13.5px} th,td{border:1px solid #dce5ee;padding:9px 10px;vertical-align:top} th{background:#edf6fd;color:#174e7d;text-align:left}
+table{width:100%;border-collapse:collapse;margin:15px 0 25px;font-size:13.5px} th,td{border:1px solid #dcdcff;padding:9px 10px;vertical-align:top} th{background:#f0f0ff;color:#3a3ab3;text-align:left}
 .flow,.code{background:#0f1b2d;color:#e5edf7;padding:18px 20px;border-radius:12px;white-space:pre-wrap;font:13px/1.65 Consolas,"Microsoft YaHei",monospace;overflow:auto}
 .code.light{background:#f6f8fb;color:#25364a;border:1px solid var(--line)}
-.badge{display:inline-block;padding:2px 7px;border-radius:999px;background:#eaf4ff;color:#1b62a0;font-size:12px;margin:2px}
+.badge{display:inline-block;padding:2px 7px;border-radius:999px;background:#efefff;color:#4748e0;font-size:12px;margin:2px}
 .p0{background:#eaf7f2;color:#08735d} .p1{background:#fff5dd;color:#a05a00} .p2{background:#f1ebff;color:#6541b2}
-.archimg{width:100%;border:1px solid var(--line);border-radius:12px;box-shadow:0 5px 18px #103b6815} .cap{text-align:center;color:var(--muted);font-size:13px;margin:7px 0 20px}
+.archimg{width:100%;border:1px solid var(--line);border-radius:12px;box-shadow:0 5px 18px #3a3ab315} .cap{text-align:center;color:var(--muted);font-size:13px;margin:7px 0 20px}
 footer{padding:28px;text-align:center;border-top:1px solid var(--line);color:#7a8b9b;font-size:12px}
 @media(max-width:820px){main,.cover{padding-left:24px;padding-right:24px}.toc ol{columns:1}.grid{grid-template-columns:1fr}}
 @media print{body{background:#fff}.page{max-width:none;box-shadow:none} h2,h3{page-break-after:avoid} table,.card{page-break-inside:avoid}}
 
 .menu5{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px;margin:18px 0}
-.menu5>div{border:1px solid #d5e4f2;border-radius:12px;padding:14px;background:#f8fbff;text-align:center}
-.menu5 b{display:block;color:#174e7d;font-size:16px}.small{font-size:12px;color:#64748b}
-.screen{border:1px solid #dbe5ef;border-radius:12px;overflow:hidden;margin:14px 0 22px}
-.screen .bar{background:#eef6fd;padding:10px 14px;color:#174e7d;font-weight:700}
+.menu5>div{border:1px solid #dcdcff;border-radius:12px;padding:14px;background:#f8fbff;text-align:center}
+.menu5 b{display:block;color:#3a3ab3;font-size:16px}.small{font-size:12px;color:#64748b}
+.screen{border:1px solid #dcdcff;border-radius:12px;overflow:hidden;margin:14px 0 22px}
+.screen .bar{background:#f0f0ff;padding:10px 14px;color:#3a3ab3;font-weight:700}
 .screen .body{padding:14px;background:#fff}
 </style></head>
 <body><div class="page">
@@ -44,7 +44,11 @@ footer{padding:28px;text-align:center;border-top:1px solid var(--line);color:#7a
 ④ “知识集成”更名为 <b>接口服务</b>：对外交付的是 API / MCP / SSE 接口能力；
 ⑤ 新增 <b>用户视图 / 管理视图</b>：顶栏提供切换，模块内 Tab 按视图裁剪（详见 2.3）；
 ⑥ 顶栏去掉“任务”入口与服务连接状态，顶栏序列为 <b>视图切换 / 知识库 / 全局搜索 / 主题 / 用户</b>；
-⑦ 版本与授权信息统一收进主内容底部页脚（2.4），侧栏底部不再显示版本号。
+⑦ 版本与授权信息统一收进主内容底部页脚（2.4），侧栏底部不再显示版本号；
+⑧ 左侧导航按业务域分组（工作台 / 知识库 / 系统集成），系统配置收在侧栏底部工具区的设置图标（2.1、7）；
+⑨ 新增登录页（2.0）：左右分栏，<b>不提供第三方登录</b>；
+⑩ 知识生成新增「外部知识」Tab（4.3），调用日志展示明文入参与返回（6.8）；
+⑪ 主题切换改为浅色 / 深色 / 跟随系统三档（2.2.1），品牌主色与状态色取值对齐实现（2.2.2、2.2.4）。
 </div>
 
 <div class="toc"><strong>目录</strong><ol>
@@ -78,12 +82,15 @@ footer{padding:28px;text-align:center;border-top:1px solid var(--line);color:#7a
 <section id="d2"><h2>2. 全局框架与导航</h2>
 <div class="flow">┌ Logo | [用户视图|管理视图] | [知识库 ▼] | 全局搜索        | 主题 | 用户 ┐
 ├──────────────────────────────────────────────────────────────────────┤
-│ 左侧导航        │ 主内容区                                            │
-│ 知识概览        │ 知识库上下文条（知识库 / 环境 / 索引状态）           │
-│ 知识生成        │ 模块 Tab（按视图裁剪）                              │
-│ 知识检索        │                                                     │
-│ 接口服务        │ Page Content                                        │
-│ 系统配置(底部)  │                                                     │
+│ 左侧导航（分组）│ 主内容区                                            │
+│ 工作台          │ 知识库上下文条（知识库 / 环境 / 索引状态）           │
+│   知识概览      │ 模块 Tab（按视图裁剪）                              │
+│ 知识库          │                                                     │
+│   知识生成      │ Page Content                                        │
+│   知识检索      │                                                     │
+│ 系统集成        │                                                     │
+│   接口服务      │                                                     │
+│ 底部：用户+设置 │                                                     │
 │                 │ ── 底部页脚：产品版本 / 运行环境 / 授权说明 ──       │
 └──────────────────────────────────────────────────────────────────────┘</div>
 <h3>2.1 顶栏</h3>
@@ -99,7 +106,7 @@ footer{padding:28px;text-align:center;border-top:1px solid var(--line);color:#7a
 <p>视图是角色之上的一层“信息密度开关”：角色决定能不能操作，视图决定看到多少入口。实现上由外壳统一计算当前视图（<code>adminView = 管理员角色 && 视图模式='admin'</code>），页面内 Tab 与区块按它裁剪，页面自身不重复判定角色。</p>
 <table><thead><tr><th>模块</th><th>用户视图</th><th>管理视图增量</th></tr></thead><tbody>
 <tr><td>知识概览</td><td>首页 / 工作台 / 资产浏览 / 版本 / 质量</td><td>—</td></tr>
-<tr><td>知识生成</td><td>文档导入（默认进入）/ 知识裁决 / 知识衍生</td><td>生成概览、连接器、生成任务</td></tr>
+<tr><td>知识生成</td><td>文档导入（默认进入）/ 知识裁决 / 知识衍生</td><td>生成概览、连接器、外部知识、生成任务</td></tr>
 <tr><td>知识检索</td><td>搜索 / 检索测试 / 检索策略 / 知识图谱</td><td>检索链路追踪、检索评测</td></tr>
 <tr><td>接口服务</td><td>服务（默认进入）</td><td>接口概览、API、MCP、SSE、凭证、调用日志</td></tr>
 <tr><td>系统配置</td><td>按权限可见的配置页</td><td>用户与组织等管理员入口</td></tr>
@@ -114,21 +121,23 @@ footer{padding:28px;text-align:center;border-top:1px solid var(--line);color:#7a
 
 <h3>2.2.1 主题切换与作用域</h3>
 <table><thead><tr><th>项</th><th>规则</th></tr></thead><tbody>
-<tr><td>切换入口</td><td>顶栏右侧；切换后整站（含顶栏、侧栏、弹窗、抽屉、表格、图谱画布）同步变化。</td></tr>
-<tr><td>持久化</td><td>本地存储保存选择，刷新与重新登录保持；未选择时跟随系统 <code>prefers-color-scheme</code>。</td></tr>
+<tr><td>切换入口</td><td>顶栏右侧；切换后整站（含顶栏、侧栏、弹窗、抽屉、表格、图谱画布、登录页）同步变化。</td></tr>
+<tr><td>三档循环</td><td>点击在 <b>浅色 → 深色 → 跟随系统</b> 三档间循环（图标 ☀ / ☾ / ◐），与实现一致；跟随系统档实时响应 <code>prefers-color-scheme</code>。</td></tr>
+<tr><td>持久化</td><td>本地存储保存选择（<code>dark</code> / <code>light</code> / <code>system</code>），刷新与重新登录保持；未选择时默认浅色。</td></tr>
 <tr><td>作用域</td><td>主题作用于根节点的 <code>data-theme</code>，所有变量在该作用域下重定义；组件无需感知当前主题。</td></tr>
 <tr><td>对比度</td><td>正文与背景对比度不低于 4.5:1；弱化文字不低于 3:1；状态色在两种主题下都必须落在“可读”区间。</td></tr>
 </tbody></table>
 
 <h3>2.2.2 语义色阶与表面</h3>
 <table><thead><tr><th>语义</th><th>深色取值</th><th>浅色取值</th><th>用途</th></tr></thead><tbody>
-<tr><td>页面底色</td><td><code>#0b1220</code></td><td><code>#f4f6fb</code></td><td>应用最外层背景</td></tr>
+<tr><td>页面底色</td><td><code>#0b1220</code></td><td><code>#f7f8fc</code></td><td>应用最外层背景</td></tr>
 <tr><td>卡片 / 面板</td><td><code>#111a30</code></td><td><code>#ffffff</code></td><td>卡片、弹窗、抽屉</td></tr>
-<tr><td>次级表面</td><td><code>#1a2440</code></td><td><code>#eef2f9</code></td><td>表头、行 hover、内嵌块</td></tr>
-<tr><td>凹陷面</td><td><code>#070c18</code></td><td><code>#e7ecf5</code></td><td>代码块、只读区</td></tr>
-<tr><td>主文本 / 次级 / 弱化</td><td><code>#eaf0fa</code> / <code>#aab7cc</code> / <code>#6b7a93</code></td><td><code>#0f172a</code> / <code>#475569</code> / <code>#64748b</code></td><td>标题、正文、说明与占位</td></tr>
-<tr><td>细分割线 / 常规边框 / 悬浮边框</td><td><code>#1e2a45</code> / <code>#27355a</code> / <code>#2a3757</code></td><td><code>#e2e8f0</code> / <code>#cbd5e1</code> / <code>#d8e0ec</code></td><td>分割、卡片边、可交互元素边</td></tr>
-<tr><td>强调文字</td><td><code>#93b4fd</code></td><td><code>#1d4ed8</code></td><td>链接、激活项、可点文字（禁止直接使用品牌色原色）</td></tr>
+<tr><td>次级表面</td><td><code>#1a2440</code></td><td><code>#f1f3f9</code></td><td>表头、行 hover、内嵌块</td></tr>
+<tr><td>凹陷面</td><td><code>#070c18</code></td><td><code>#eef1f8</code></td><td>代码块、只读区</td></tr>
+<tr><td>主文本 / 次级 / 弱化</td><td><code>#eaf0fa</code> / <code>#aab7cc</code> / <code>#6b7a93</code></td><td><code>#101326</code> / <code>#475569</code> / <code>#6a7085</code></td><td>标题、正文、说明与占位</td></tr>
+<tr><td>细分割线 / 常规边框 / 悬浮边框</td><td><code>#1e2a45</code> / <code>#27355a</code> / <code>#2a3757</code></td><td><code>#e3e6f0</code> / <code>#cbd2e0</code> / <code>#d2d6e5</code></td><td>分割、卡片边、可交互元素边</td></tr>
+<tr><td>品牌主色（500 / 600 / 700）</td><td><code>#4f8cf7</code> / <code>#3b6fe0</code> / <code>#2b56b8</code></td><td><code>#6f6cf7</code> / <code>#5b5cff</code> / <code>#4748e0</code></td><td>主操作按钮、品牌标识、焦点环（浅色为蓝紫 <code>#5b5cff</code> 系）</td></tr>
+<tr><td>强调文字</td><td><code>#93b4fd</code></td><td><code>#4748e0</code></td><td>链接、激活项、可点文字（禁止直接使用品牌色原色）</td></tr>
 </tbody></table>
 <div class="note">色阶采用“语义编号”而非“明暗编号”：<code>text-ink-900</code> 永远表示主文本，在深色下是亮色、浅色下是深色。组件因此不需要写任何主题分支。</div>
 
@@ -144,10 +153,10 @@ footer{padding:28px;text-align:center;border-top:1px solid var(--line);color:#7a
 <h3>2.2.4 状态三件套与状态胶囊</h3>
 <p>任何位置展示“成功 / 警告 / 失败 / 进行中 / 中性”，一律使用同一枚状态胶囊：底色 + 字色 + 边框三件套由主题给出，深浅各一套。</p>
 <table><thead><tr><th>状态</th><th>深色（字 / 底 / 边）</th><th>浅色（字 / 底 / 边）</th><th>典型场景</th></tr></thead><tbody>
-<tr><td>成功</td><td><code>#34d399</code> / <code>#12352a</code> / <code>#1f5c48</code></td><td><code>#047857</code> / <code>#d1fae5</code> / <code>#a7f3d0</code></td><td>解析成功、已发布、启用、健康</td></tr>
-<tr><td>警告</td><td><code>#fbbf24</code> / <code>#3b2f14</code> / <code>#5a4718</code></td><td><code>#b45309</code> / <code>#fef3c7</code> / <code>#fcd34d</code></td><td>运行中、待审核、待处理、降级</td></tr>
-<tr><td>失败</td><td><code>#f87171</code> / <code>#3a1626</code> / <code>#5c2130</code></td><td><code>#dc2626</code> / <code>#fee2e2</code> / <code>#fecaca</code></td><td>解析失败、冲突、异常、停用</td></tr>
-<tr><td>信息</td><td><code>#60a5fa</code> / <code>#1d3f8c</code> / <code>#2a4f9c</code></td><td><code>#1d4ed8</code> / <code>#dbeafe</code> / <code>#bfdbfe</code></td><td>排队中、进行中提示、类型标签</td></tr>
+<tr><td>成功</td><td><code>#34d399</code> / <code>#12352a</code> / <code>#1f5c48</code></td><td><code>#22a06b</code> / <code>#e7f7ef</code> / <code>#b7e7cf</code></td><td>解析成功、已发布、启用、健康</td></tr>
+<tr><td>警告</td><td><code>#fbbf24</code> / <code>#3b2f14</code> / <code>#5a4718</code></td><td><code>#d97706</code> / <code>#fdf3e3</code> / <code>#f8d9a8</code></td><td>运行中、待审核、待处理、降级</td></tr>
+<tr><td>失败</td><td><code>#f87171</code> / <code>#3a1626</code> / <code>#5c2130</code></td><td><code>#e5484d</code> / <code>#fdecec</code> / <code>#f8c9cb</code></td><td>解析失败、冲突、异常、停用</td></tr>
+<tr><td>信息</td><td><code>#60a5fa</code> / <code>#1d3f8c</code> / <code>#2a4f9c</code></td><td><code>#4748e0</code> / <code>#eff0ff</code> / <code>#d9d9ff</code></td><td>排队中、进行中提示、类型标签</td></tr>
 <tr><td>中性</td><td><code>#aab7cc</code> / <code>#1a2440</code> / <code>#27355a</code></td><td><code>#475569</code> / <code>#eef2f9</code> / <code>#e2e8f0</code></td><td>已取消、未知、编码类标签</td></tr>
 </tbody></table>
 <table><thead><tr><th>形态</th><th>使用位置</th><th>规则</th></tr></thead><tbody>
@@ -202,7 +211,7 @@ footer{padding:28px;text-align:center;border-top:1px solid var(--line);color:#7a
 </section>
 
 <section id="d4"><h2>4. 知识生成详细设计</h2>
-<p>路由：<code>/knowledge/generate</code>。页面顶部 Tab：<b>生成概览 / 文档导入 / 连接器 / 生成任务 / 知识裁决 / 知识衍生</b>。</p>
+<p>路由：<code>/knowledge/generate</code>。页面顶部 Tab：<b>生成概览 / 文档导入 / 连接器 / 外部知识 / 生成任务 / 知识裁决 / 知识衍生</b>。</p>
 <div class="note ok"><b>视图裁剪：</b>用户视图只渲染 <b>文档导入 / 知识裁决 / 知识衍生</b>，且默认落在「文档导入」；生成概览、连接器、生成任务仅管理视图可见。过滤后剩下的第一个可见 Tab 即用户视图的默认落点，不需要额外配置默认页。</div>
 <h3>4.1 文档导入向导</h3>
 <div class="flow">Step 1 来源 → Step 2 文件/URL/文本 → Step 3 知识属性 → Step 4 处理策略 → Step 5 执行与结果</div>
@@ -215,9 +224,11 @@ footer{padding:28px;text-align:center;border-top:1px solid var(--line);color:#7a
 </tbody></table>
 <h3>4.2 连接器</h3>
 <p>连接器列表使用卡片+表格混合视图：类型、名称、同步状态、最后同步、对象数、权限策略。创建流程统一为“选择类型 → 认证 → 范围 → 字段/权限映射 → 同步策略 → 测试连接 → 创建”。</p>
-<h3>4.3 解析/抽取结果</h3>
+<h3>4.3 外部知识</h3>
+<p>按外部系统的类型与属性浏览连接器同步下来的原始条目，用于核对「同步进来了什么」。列表字段：条目、来源系统、类型、同步时间、状态（已同步 / 待确认 / 失败）。属于连接器的伴生视图，随连接器一起只对管理视图开放。</p>
+<h3>4.4 解析/抽取结果</h3>
 <p>用户点击生成任务进入任务详情，展示 Document → Parse → Chunk → Extraction → Evidence → Candidate Knowledge。专业用户可打开“原文/结构/Chunk”三栏工作台。</p>
-<h3>4.4 知识裁决</h3>
+<h3>4.5 知识裁决</h3>
 <div class="screen"><div class="bar">知识裁决</div><div class="body"><div class="flow">左：冲突/待审核列表
 中：Assertion A                 Assertion B
     值 / 条件 / 版本 / 置信度       值 / 条件 / 版本 / 置信度
@@ -225,14 +236,14 @@ footer{padding:28px;text-align:center;border-top:1px solid var(--line);color:#7a
 
 系统建议（辅助，不自动决定）
 [采用 A] [采用 B] [合并] [全部拒绝] [要求补充证据]</div></div></div>
-<h3>4.5 知识衍生</h3>
+<h3>4.6 知识衍生</h3>
 <p>包含三个 Tab：衍生规则、候选衍生知识、运行记录。候选详情必须展示 baseAssertionIds、derivationType、rule/algorithmVersion、graphPath、confidence 和 Evidence；基础知识变更后标记 STALE。</p>
-<h3>4.6 摄入运行日志</h3>
+<h3>4.7 摄入运行日志</h3>
 <p>左列为已上传文件 / 运行记录，右列为该次运行的时间线（接入 → 解析 → 入库 → 抽取 → 建索引）。左列每行展示状态点 + 文件名 + 阶段与时间 + 状态胶囊；状态胶囊显示<b>中文</b>状态（成功 / 失败 / 进行中 / 排队中 / 已取消），不展示后端枚举原文。选中行使用强调底色 + 左侧强调竖条，与 hover 态区分。上传进行中时日志跟随最新事件滚动。</p>
 </section>
 
 <section id="d5"><h2>5. 知识检索详细设计</h2>
-<p>路由：<code>/knowledge/search</code>，顶部 Tab：<b>搜索（智能问答）｜检索测试｜检索策略｜知识图谱｜检索链路追踪（Query Trace）｜检索评测（Benchmark）</b>。「检索测试」与「检索链路追踪」属于调试类页面：配置区 + 结果区 + Trace 抽屉。</p>
+<p>路由：<code>/knowledge/search</code>，顶部 Tab：<b>搜索（智能问答）｜检索测试｜检索策略｜检索链路追踪（Query Trace）｜知识图谱｜检索评测（Benchmark）</b>。「检索测试」与「检索链路追踪」属于调试类页面：配置区 + 结果区 + Trace 抽屉。</p>
 <div class="note ok"><b>视图裁剪：</b>用户视图只渲染 <b>搜索 / 检索测试 / 检索策略 / 知识图谱</b>；<b>检索链路追踪</b>与<b>检索评测</b>属于检索质量的调试与测评入口，仅管理视图可见——普通成员不需要用它们完成“找知识”。</div>
 <div class="note"><b>菜单去重：</b>搜索（智能问答）页内不再重复一排与顶部 Tab 相同的导航菜单。检索模块的所有入口统一由页面顶部 Tab 承载；单次问答的链路详情从结果卡片的「查看完整链路」进入 Trace 抽屉，问答历史列同样可点开完整链路。</div>
 <h3>5.1 搜索（智能问答）</h3>
@@ -349,12 +360,14 @@ data: {"code":"...","message":"..."}</div>
 <h3>6.7 凭证</h3>
 <p>凭证字段：credentialId、name、type(API_KEY/OAUTH/JWT)、serviceIds、scopes、ipAllowlist、rateLimit、expireAt、status。Secret 仅创建时显示一次；列表只显示尾号。</p>
 <h3>6.8 调用日志</h3>
-<p>字段：time、service、protocol、client、requestId、traceId、status、latency、retrievalCount、tokenUsage、errorCode。点击 traceId 跳转 Query Trace，形成“外部调用 → 检索 → Evidence → Answer”的完整追溯。</p>
+<p>字段：time、service、protocol、client、requestId、traceId、status、latency、retrievalCount、tokenUsage、errorCode，以及<b>传入参数（requestParams）与返回数据（responseData）</b>。点击 traceId 跳转 Query Trace，形成“外部调用 → 检索 → Evidence → Answer”的完整追溯。</p>
+<div class="note ok"><b>明文入参与返回（对齐当前实现）：</b>调用日志在列表与详情中直接展示传入参数与返回数据的<b>明文内容</b>（REST 的请求体与响应体、MCP 的工具入参与结果、SSE 的增量与完成事件），便于调用方自查；展示前按系统配置的脱敏规则处理敏感字段。REST / MCP / SSE 三种协议的调用统一落库，协议的入参与返回由请求体缓存与响应包装统一采集，避免不同协议各写一套。</div>
 </section>
 
 <section id="d7"><h2>7. 系统配置详细设计</h2>
 <p>页面顶部 Tab：<b>配置总览 / 模型配置 / 用户与组织 / 角色与权限 / 知识 Schema / 存储与索引 / 任务与告警 / 审计日志 / 知识空间</b>。低频平台配置集中在此，收在侧栏底部的设置图标进入，不占用业务导航；「用户与组织」仅管理视图可见。</p>
 <table><thead><tr><th>模块</th><th>页面</th><th>关键设计</th></tr></thead><tbody>
+<tr><td>配置总览</td><td>平台健康 / 版本 / 容量 / 最近变更</td><td>各配置页的统一入口与平台状态一览</td></tr>
 <tr><td>模型配置</td><td>LLM / Embedding / Reranker / OCR</td><td>Provider、Endpoint、Model、Key、Timeout、默认模型、连通性测试</td></tr>
 <tr><td>用户组织</td><td>用户 / 部门 / 用户组</td><td>启停、同步、批量授权</td></tr>
 <tr><td>角色权限</td><td>平台角色 / 空间角色 / ACL</td><td>权限矩阵与对象继承</td></tr>

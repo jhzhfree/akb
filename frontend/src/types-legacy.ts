@@ -18,6 +18,8 @@ export interface KnowledgeBase {
   /** 可见范围：PUBLIC 公开 / PRIVATE 私有 / GROUP 用户组。 */
   visibility?:'PUBLIC'|'PRIVATE'|'GROUP'|string
   ownerGroupId?:number|null; ownerGroupName?:string|null
+  /** 场景模板编码：GENERAL / OPS / POLICY / BUSINESS / VULN，与编辑弹窗里选中的模板一致。 */
+  scenario?:string|null
 }
 export interface Overview {
   knowledgeBaseId:number; sourceCount:number; documentCount:number; chunkCount:number
@@ -712,6 +714,10 @@ export interface McpCallAudit {
   id:number; keyId:number|null; keyCode:string|null; channel:string; method:string
   knowledgeBaseId:number|null; statusCode:number; durationMs:number
   traceId:string|null; message:string|null; createdTime:string
+  /** 传入参数：tools/call 记为工具名 + arguments，其他方法记为 params。 */
+  requestParams?:string|null
+  /** 返回数据：tools/call 记为工具的业务结果，tools/list 只记工具名清单，错误记 error。 */
+  responseData?:string|null
 }
 
 /* ---- 知识工作台聚合（详细设计 §3 / §11） ---- */
@@ -765,9 +771,9 @@ export interface IntegrationCallRow {
   status?:number|null; latencyMs?:number|null; traceId?:string|null; message?:string|null
   /** 调用方名称：凭证自命名的接入方，便于人工辨认。 */
   caller?:string|null
-  /** 脱敏后的传入参数 JSON 文本。 */
+  /** 明文传入参数（查询串 + 路径变量 + 请求体）；仅密钥、token 等凭证字段替换为 ***。 */
   requestParams?:string|null
-  /** 脱敏后的返回数据 JSON 文本；流式通道不采集。 */
+  /** 明文返回数据；SSE 只记录握手结果，不记录流式正文。列表接口超过长度时会截断并标注。 */
   responseData?:string|null
 }
 /** 单次调用的全部属性：调用日志点「查看 Trace」后展示的完整明细。 */

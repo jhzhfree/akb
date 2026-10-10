@@ -2,20 +2,20 @@
 <html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>企业级智能知识库平台 产品规格说明书 PRD V2.2</title>
 <style>
-:root{--primary:#0f4c81;--primary2:#1769aa;--cyan:#0b8ea8;--green:#0c8c72;--orange:#d97706;--purple:#6d4bc3;--text:#1f2937;--muted:#64748b;--line:#dbe5ef;--bg:#f5f8fc}
+:root{--primary:#5b5cff;--primary2:#4748e0;--cyan:#0b8ea8;--green:#0c8c72;--orange:#d97706;--purple:#6d4bc3;--text:#1f2937;--muted:#64748b;--line:#dcdcff;--bg:#f5f8fc}
 *{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;background:var(--bg);color:var(--text);font:15px/1.75 "Microsoft YaHei","PingFang SC",Arial,sans-serif}
-.page{max-width:1220px;margin:auto;background:#fff;min-height:100vh;box-shadow:0 8px 30px #0f4c8114}
-.hero{padding:58px 72px 44px;background:linear-gradient(135deg,#eef6ff,#fbfdff 58%,#eefaf8);border-bottom:1px solid var(--line)}
-.hero h1{margin:0;color:#123f6b;font-size:36px}.hero .sub{margin-top:10px;color:var(--muted);font-size:18px}.meta{display:flex;gap:10px;flex-wrap:wrap;margin-top:26px}
-.badge{padding:5px 11px;border:1px solid #cfe0f1;border-radius:999px;background:#fff;color:#335f87;font-size:13px}
-main{padding:42px 70px 80px}h2{margin-top:52px;padding-bottom:9px;border-bottom:2px solid #d9e8f6;color:#164c7f;font-size:28px}h3{margin-top:30px;color:#245d8d;font-size:20px}h4{color:#2a5f7f;font-size:16px;margin-bottom:6px}
-.toc{background:#f8fbff;border:1px solid #d7e6f6;border-radius:14px;padding:22px 28px}.toc ol{columns:2}.toc a{color:#285f91;text-decoration:none}
+.page{max-width:1220px;margin:auto;background:#fff;min-height:100vh;box-shadow:0 8px 30px #5b5cff14}
+.hero{padding:58px 72px 44px;background:linear-gradient(135deg,#f0f0ff,#fbfdff 58%,#eefaf8);border-bottom:1px solid var(--line)}
+.hero h1{margin:0;color:#26266e;font-size:36px}.hero .sub{margin-top:10px;color:var(--muted);font-size:18px}.meta{display:flex;gap:10px;flex-wrap:wrap;margin-top:26px}
+.badge{padding:5px 11px;border:1px solid #cbcafe;border-radius:999px;background:#fff;color:#4748e0;font-size:13px}
+main{padding:42px 70px 80px}h2{margin-top:52px;padding-bottom:9px;border-bottom:2px solid #dcdcff;color:#3a3ab3;font-size:28px}h3{margin-top:30px;color:#4748e0;font-size:20px}h4{color:#3a3ab3;font-size:16px;margin-bottom:6px}
+.toc{background:#f8f8ff;border:1px solid #dcdcff;border-radius:14px;padding:22px 28px}.toc ol{columns:2}.toc a{color:#4748e0;text-decoration:none}
 .lead{font-size:17px;color:#40566b}.note{border-left:4px solid var(--primary2);background:#eef8ff;padding:14px 17px;border-radius:7px;margin:16px 0}.ok{border-left-color:var(--green);background:#eefaf6}.warn{border-left-color:var(--orange);background:#fff8e8}
-.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}.card{border:1px solid var(--line);border-radius:12px;padding:17px 19px;background:#fff}.card strong{color:#164c7f}
-.menu-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px;margin:18px 0}.menu{border:1px solid #d5e4f2;border-radius:12px;padding:15px;background:#f8fbff;text-align:center}.menu b{display:block;color:#174e7d;font-size:16px;margin-bottom:6px}.menu small{color:#64748b}
+.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}.card{border:1px solid var(--line);border-radius:12px;padding:17px 19px;background:#fff}.card strong{color:#3a3ab3}
+.menu-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px;margin:18px 0}.menu{border:1px solid #dcdcff;border-radius:12px;padding:15px;background:#f8f8ff;text-align:center}.menu b{display:block;color:#3a3ab3;font-size:16px;margin-bottom:6px}.menu small{color:#64748b}
 .flow{background:#0f172a;color:#e2e8f0;border-radius:12px;padding:18px 20px;white-space:pre-wrap;font:13px/1.65 Consolas,"Microsoft YaHei",monospace;overflow:auto}
-table{width:100%;border-collapse:collapse;margin:15px 0 25px;font-size:13.5px}th,td{border:1px solid #dce5ee;padding:9px 10px;vertical-align:top}th{background:#eef6fd;color:#174e7d;text-align:left}
-.arch{width:100%;border:1px solid var(--line);border-radius:12px;box-shadow:0 4px 14px #0f4c8114}.cap{text-align:center;color:#6b7f92;font-size:13px}
+table{width:100%;border-collapse:collapse;margin:15px 0 25px;font-size:13.5px}th,td{border:1px solid #dce5ee;padding:9px 10px;vertical-align:top}th{background:#f0f0ff;color:#3a3ab3;text-align:left}
+.arch{width:100%;border:1px solid var(--line);border-radius:12px;box-shadow:0 4px 14px #5b5cff14}.cap{text-align:center;color:#6b7f92;font-size:13px}
 .pill{display:inline-block;padding:2px 7px;border-radius:999px;background:#edf7f5;color:#176e66;font-size:12px;margin:2px}
 footer{padding:28px;text-align:center;border-top:1px solid var(--line);color:#7a8b9b;font-size:12px}
 @media(max-width:900px){main,.hero{padding-left:24px;padding-right:24px}.toc ol{columns:1}.grid,.menu-grid{grid-template-columns:1fr}}
@@ -77,18 +77,17 @@ footer{padding:28px;text-align:center;border-top:1px solid var(--line);color:#7a
 </div>
 <div class="flow">企业级智能知识库
 ├─ 01 知识概览（工作台）
-│  ├─ 总览
-│  ├─ 知识来源
-│  ├─ 文档
-│  ├─ 知识卡片
-│  ├─ 知识断言
-│  ├─ 知识生命周期
-│  └─ 治理状态
+│  ├─ 首页                         两种视图（登录后默认进入）
+│  ├─ 工作台                       两种视图
+│  ├─ 资产浏览                     两种视图
+│  ├─ 版本                         两种视图
+│  └─ 质量                         两种视图
 │
 ├─ 02 知识生成
 │  ├─ 生成概览                     管理视图
 │  ├─ 文档导入                     用户视图 / 管理视图（用户视图默认进入）
 │  ├─ 连接器                       管理视图
+│  ├─ 外部知识                     管理视图
 │  ├─ 生成任务 / 知识生成流水线    管理视图
 │  ├─ 知识裁决                     用户视图 / 管理视图
 │  └─ 知识衍生                     用户视图 / 管理视图
@@ -97,9 +96,9 @@ footer{padding:28px;text-align:center;border-top:1px solid var(--line);color:#7a
 │  ├─ 知识搜索                     用户视图 / 管理视图
 │  ├─ 检索测试                     用户视图 / 管理视图
 │  ├─ 检索策略                     用户视图 / 管理视图
-│  ├─ Query Trace（检索链路追踪）  管理视图
+│  ├─ 检索链路追踪                 管理视图
 │  ├─ 知识图谱                     用户视图 / 管理视图
-│  └─ Benchmark（检索评测）        管理视图
+│  └─ 检索评测                     管理视图
 │
 ├─ 04 接口服务
 │  ├─ 接口概览                     管理视图
@@ -110,34 +109,45 @@ footer{padding:28px;text-align:center;border-top:1px solid var(--line);color:#7a
 │  ├─ 凭证                         管理视图
 │  └─ 调用日志                     管理视图
 │
-└─ 05 系统配置
+└─ 05 系统配置（侧栏底部工具区入口，不占业务导航）
+   ├─ 配置总览
    ├─ 模型配置
-   ├─ 用户 / 组织 / 角色
-   ├─ 权限与安全
-   ├─ 存储 / 索引
-   ├─ 字典 / Ontology
+   ├─ 用户与组织                   管理视图
+   ├─ 角色与权限
+   ├─ 知识 Schema
+   ├─ 存储与索引
    ├─ 任务与告警
-   └─ 审计日志</div>
+   ├─ 审计日志
+   └─ 知识空间</div>
 
-<div class="note ok"><b>V2.2 原型对齐：</b>左侧导航严格保留五个一级菜单：<b>知识概览（工作台）/ 知识生成 / 知识检索 / 接口服务 / 系统配置</b>。原二十余个功能入口全部进入对应主页面，以 Tab、卡片、快捷操作、Drawer 和对象详情承载；其中“知识图谱”归入“知识检索”，“知识集成”更名为“接口服务”。</div>
+<div class="note ok"><b>左侧导航（对齐当前实现）：</b>业务入口按业务域分组展示——<b>工作台：知识概览</b>；<b>知识库：知识生成、知识检索</b>；<b>系统集成：接口服务</b>。系统配置属于低频平台配置，不进业务分组，收在侧栏底部工具区的齿轮入口（与用户区同一行）。原二十余个功能入口全部进入对应主页面，以 Tab、卡片、快捷操作、Drawer 和对象详情承载；其中“知识图谱”归入“知识检索”，“知识集成”更名为“接口服务”。</div>
 <div class="note"><b>知识库（Knowledge Base）不再作为一级菜单。</b>它作为全局作用域存在于顶部知识库选择器中。切换知识库后，五个一级菜单均自动作用于当前知识库；平台管理员可切换“全部知识库”。</div>
 <div class="note ok"><b>3.x 两种视图（本次新增）：</b>同一套 IA 按登录人角色呈现两种视图，差异只体现在“模块内 Tab 与管理类入口”，一级菜单保持不变。
 <div style="margin-top:8px"><b>用户视图</b>（普通用户默认）：知识概览与当前一致；知识生成只保留 <b>文档导入（默认进入）/ 知识裁决 / 知识衍生</b>；知识检索保留 <b>搜索 / 检索测试 / 检索策略 / 知识图谱</b>，不含检索链路追踪与检索评测；接口服务只保留 <b>服务</b>。</div>
 <div><b>管理视图</b>（管理员默认）：模块内完整 Tab，包含生成概览、连接器、生成任务、检索链路追踪、检索评测、接口服务的协议配置 / 凭证 / 调用日志等运维入口。</div>
 <div>管理员可在顶栏随时切换两种视图用于核对普通成员看到的界面；切换后若当前页在目标视图不可见，自动回落到该模块的默认页。</div></div>
+<div class="note"><b>3.z 登录页（对齐当前实现）：</b>登录是全站唯一的无框架页，采用左右分栏：左侧品牌区（主标题“让知识随时被 AI 调用” + 副标题 + 三条价值点），右侧表单区（用户名 / 邮箱、密码、记住账号、忘记密码、登录按钮）。<b>不提供任何第三方登录方式</b>：企业微信与 SSO 入口已移除，登录只用账号密码；管理员入口与普通用户登录共用同一页，通过页脚入口互相切换。登录后默认进入“知识概览 · 首页”。</div>
 <div class="note"><b>3.y 顶栏与底部（本次调整）：</b>顶栏从左到右为 <b>品牌 → 视图切换 → 知识库切换 → 全局搜索 → 主题切换 → 用户（头像 / 姓名 / 退出）</b>；任务入口与服务连接状态不再占用顶栏，异步任务在“知识生成 · 生成任务”页内查看与跟踪。版本与授权信息统一显示在主内容底部页脚（产品版本 + 运行环境 / 服务版本 + “企业自部署 · 版本与授权由部署镜像管理” + 版本信息入口），侧栏底部不再单独显示版本号。</div>
 </section>
 
 <section id="p4"><h2>4. 一级菜单一：知识概览（工作台）</h2>
 <p class="lead">知识概览是产品默认首页，目标不是展示系统功能，而是在一个页面回答：<b>“当前企业知识资产有多少？从哪里来？处于什么生命周期？是否可信？哪里需要处理？”</b></p>
-<h3>4.1 页面布局</h3>
+<h3>4.1 页面 Tab 构成</h3>
+<table><thead><tr><th>Tab</th><th>回答什么</th><th>主要内容</th></tr></thead><tbody>
+<tr><td>首页</td><td>我最近在用哪些知识库</td><td>最近访问的知识库卡片与快捷进入；登录后默认落点</td></tr>
+<tr><td>工作台</td><td>知识现在怎么样</td><td>KPI、增长趋势、生命周期、治理健康度、知识资产、治理待办、快速操作</td></tr>
+<tr><td>资产浏览</td><td>有哪些知识对象</td><td>按来源 / 文档 / 卡片 / 断言 / 实体浏览，状态统一用状态胶囊</td></tr>
+<tr><td>版本</td><td>改了什么</td><td>同一知识对象的版本对比：变更字段、Evidence、裁决与生效状态</td></tr>
+<tr><td>质量</td><td>找得到、答得准吗</td><td>Hit@5、Citation Accuracy、P95 延迟、低置信断言占比</td></tr>
+</tbody></table>
+<h3>4.2 页面布局</h3>
 <div class="flow">┌ 顶部：当前知识空间 / 时间范围 / 全局搜索 / 创建知识 ┐
 ├ KPI：来源 | 文档 | 卡片 | 断言 | 实体 | 关系 ┤
 ├ 知识生命周期：接入 → 解析 → 抽取 → 派生 → 裁决 → 发布 → 使用 ┤
 ├ 左：知识资产分布        ┃ 右：知识治理状态 ┤
 ├ 最近更新 / 热门知识     ┃ 待处理任务 / 冲突 / 过期 ┤
 └ 快速入口：来源 文档 卡片 断言 实体 裁决 衍生 检索 ┘</div>
-<h3>4.2 核心指标</h3>
+<h3>4.3 核心指标</h3>
 <table><thead><tr><th>区域</th><th>指标/内容</th><th>点击行为</th></tr></thead><tbody>
 <tr><td>知识来源</td><td>来源总数、正常/异常、最近同步</td><td>进入来源抽屉或连接器详情</td></tr>
 <tr><td>文档</td><td>总数、READY、处理中、失败、过期</td><td>进入文档列表并自动带状态过滤</td></tr>
@@ -145,7 +155,7 @@ footer{padding:28px;text-align:center;border-top:1px solid var(--line);color:#7a
 <tr><td>知识断言</td><td>Approved、Pending、Conflicted、Expired</td><td>进入断言资产视图/裁决</td></tr>
 <tr><td>治理状态</td><td>待审核、冲突、无证据、低置信、失效派生</td><td>进入对应治理任务</td></tr>
 </tbody></table>
-<h3>4.3 生命周期视图</h3>
+<h3>4.4 生命周期视图</h3>
 <p>以漏斗/流水线展示当前知识资产处于哪个阶段。用户点击阶段即可进入对应对象集合。生命周期统一定义为：</p>
 <div class="flow">Source → Document → Parse/Clean → Chunk → Extract
 → Assertion / Entity / Relation
@@ -156,7 +166,7 @@ footer{padding:28px;text-align:center;border-top:1px solid var(--line);color:#7a
 → Retrieve / Apply
 → Evaluate / Feedback
 → Update / Expire</div>
-<h3>4.4 快速入口</h3>
+<h3>4.5 快速入口</h3>
 <p>工作台提供 <span class="pill">导入文档</span><span class="pill">新增连接器</span><span class="pill">待裁决</span><span class="pill">知识衍生</span><span class="pill">知识搜索</span><span class="pill">检索测试</span>。专业对象不再占用左侧一级导航。</p>
 </section>
 
@@ -188,9 +198,18 @@ footer{padding:28px;text-align:center;border-top:1px solid var(--line);color:#7a
 <tr><td>API</td><td>P1</td><td>Endpoint、认证、分页、字段映射</td></tr>
 <tr><td>SaaS/协作平台</td><td>P1/P2</td><td>授权、范围、同步周期、ACL 映射</td></tr>
 </tbody></table>
-<h3>5.4 知识裁决</h3>
+<h3>5.4 外部知识</h3>
+<p>按外部系统的类型与属性浏览连接器同步下来的条目（文档、工单、记录等），用于核对“同步进来了什么、哪些还没进知识生产”。该入口是连接器的伴生视图，属于生产流水线运维范围，只在管理视图开放。</p>
+<table><thead><tr><th>列</th><th>说明</th></tr></thead><tbody>
+<tr><td>条目</td><td>外部系统中的原始条目名称</td></tr>
+<tr><td>来源系统</td><td>Confluence / Jira / 数据库 / API 等连接器实例</td></tr>
+<tr><td>类型</td><td>文档 / 工单 / 记录等</td></tr>
+<tr><td>同步时间</td><td>最近一次同步时间</td></tr>
+<tr><td>状态</td><td>已同步 / 待确认 / 失败</td></tr>
+</tbody></table>
+<h3>5.5 知识裁决</h3>
 <p>裁决不是单独的后台管理模块，而是“知识生成完成前的可信化环节”。页面采用冲突列表 + Assertion 对比 + Evidence 原文 + 系统建议 + 人工决策。</p>
-<h3>5.5 知识衍生</h3>
+<h3>5.6 知识衍生</h3>
 <p>衍生页分为“衍生规则”“候选衍生知识”“衍生记录”。系统必须区分原文直接知识与派生知识；派生项保存 derivedFrom、方法、规则/算法版本、证据链、置信度和状态。</p>
 </section>
 
@@ -201,8 +220,8 @@ footer{padding:28px;text-align:center;border-top:1px solid var(--line);color:#7a
 ├─ 搜索（智能问答）    默认入口：自然语言 / 关键词        两种视图
 ├─ 检索测试            对召回结果与 Score 进行调试          两种视图
 ├─ 检索策略            Retrieval Profile                    两种视图
-├─ 知识图谱            实体关系探索、路径分析、图谱检索      两种视图
 ├─ 检索链路追踪        查看一次查询完整链路                  仅管理视图
+├─ 知识图谱            实体关系探索、路径分析、图谱检索      两种视图
 └─ 检索评测            批量评测与回归                        仅管理视图</div>
 <div class="note"><b>菜单去重：</b>智能问答（搜索）页面内部不再重复一排“检索测试 / 检索策略 / 检索链路追踪 / 检索评测”的菜单，检索模块的所有入口统一由页面顶部的模块 Tab 承载；一次问答的链路详情通过结果卡片上的“查看完整链路”进入 Trace 抽屉。</div>
 <h3>6.2 知识搜索</h3>
@@ -250,18 +269,20 @@ footer{padding:28px;text-align:center;border-top:1px solid var(--line);color:#7a
 <p>SSE 用于 Answer/Agent 类长耗时调用的流式输出。事件至少包含 start、retrieval、citation、delta、complete、error；前端可逐步展示“正在检索 → 已找到证据 → 正在生成 → 完成”。</p>
 <h3>7.6 凭证与调用日志</h3>
 <p>集成服务级管理 AppKey/Token、允许来源、限流、过期时间和权限范围。调用日志支持 traceId 反查 Query、检索结果、引用、耗时和错误。</p>
+<div class="note ok"><b>调用日志（对齐当前实现）：</b>日志列表除时间、服务、协议、状态码、延迟与 Trace 外，直接展示<b>明文的传入参数与返回数据</b>（如 <code>{"query":"…"}</code>、<code>{"results":5,"evidence":3}</code>），便于调用方自查接入问题；敏感字段按系统配置的脱敏规则处理。REST / MCP / SSE 三种协议的调用统一落库，明细可在调用日志中展开查看。</div>
 </section>
 
 <section id="p8"><h2>8. 一级菜单五：系统配置</h2>
 <table><thead><tr><th>二级模块</th><th>主要能力</th></tr></thead><tbody>
+<tr><td>配置总览</td><td>平台健康、版本与容量、最近变更；各配置页的统一入口</td></tr>
 <tr><td>模型配置</td><td>LLM、Embedding、Reranker、OCR/Vision；模型别名、Endpoint、Key、超时、默认模型</td></tr>
-<tr><td>用户管理</td><td>用户、部门、用户组、状态、同步</td></tr>
+<tr><td>用户与组织</td><td>用户、部门、用户组、状态、同步（管理视图）</td></tr>
 <tr><td>角色与权限</td><td>平台角色、空间角色、对象 ACL、数据源权限继承</td></tr>
-<tr><td>知识类型 / Ontology</td><td>知识类型、实体类型、关系类型、属性 Schema；高级 Ontology P2</td></tr>
+<tr><td>知识 Schema</td><td>知识类型、实体类型、关系类型、属性 Schema；高级 Ontology P2</td></tr>
 <tr><td>存储与索引</td><td>全文、向量、图、对象存储状态及重建策略</td></tr>
 <tr><td>任务与告警</td><td>解析、抽取、Embedding、索引、同步、评测任务及异常告警</td></tr>
 <tr><td>审计日志</td><td>知识变更、裁决、权限、模型配置、API 调用审计</td></tr>
-<tr><td>平台参数</td><td>默认空间策略、文件限制、生命周期、质量阈值等</td></tr>
+<tr><td>知识空间</td><td>空间列表、成员、默认权限策略</td></tr>
 </tbody></table>
 <div class="note"><b>原则：</b>系统配置只承载“平台怎么运行”，不承载“企业知识是什么”。Card、Assertion、Document、Graph 等业务知识对象始终在工作台/创建/检索的业务语境中访问。</div>
 </section>
@@ -339,7 +360,7 @@ Evaluation / Feedback / Gap / Rebuild / Expire</div>
 <tr><td>知识生成</td><td>文档导入（默认进入）/ 知识裁决 / 知识衍生</td><td>+ 生成概览、连接器、生成任务</td></tr>
 <tr><td>知识检索</td><td>搜索 / 检索测试 / 检索策略 / 知识图谱</td><td>+ 检索链路追踪、检索评测</td></tr>
 <tr><td>接口服务</td><td>服务（默认进入）</td><td>+ 接口概览、API、MCP、SSE、凭证、调用日志</td></tr>
-<tr><td>系统配置</td><td>按权限可见的配置页（不含用户与组织）</td><td>+ 用户与组织等管理员专属入口</td></tr>
+<tr><td>系统配置</td><td>按权限可见的配置页（不含用户与组织）</td><td>+ 用户与组织等管理员专属入口；入口位于侧栏底部工具区齿轮</td></tr>
 </tbody></table>
 <div class="note"><b>切换时的落点：</b>从管理视图切到用户视图时，若当前页面在用户视图不可见（例如检索评测），自动回落到该模块的默认页，不停留在无权页面上；页面内的快捷入口同步按目标视图裁剪，不留下点了没反应的死链。</div>
 </section>

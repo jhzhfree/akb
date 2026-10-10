@@ -149,6 +149,20 @@ services:
       DB_URL: jdbc:mysql://mysql:3306/knowledge_os?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true
       REDIS_HOST: redis
       AI_SERVICE_BASE_URL: http://ai-service:12000
+      # 演示数据：auto=业务表为空时自动灌入内置快照，部署后即可直接演示；false=保持空系统
+      DEMO_SEED: ${DEMO_SEED:-auto}
+      MYSQL_HOST: mysql
+      MYSQL_PORT: 3306
+      MYSQL_USER: ${MYSQL_USER:-knowledge}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-knowledge123}
+      MYSQL_DB: ${MYSQL_DATABASE:-knowledge_os}
+      ES_URL: ${ELASTICSEARCH_URL:-http://elasticsearch:9200}
+      ES_USER: ${ELASTICSEARCH_USERNAME:-elastic}
+      ES_PASSWORD: ${ELASTICSEARCH_INITIAL_ADMIN_PASSWORD:-eucwdo0h4IlxoHdErDsa}
+      MILVUS_URL: http://milvus:19530
+      NEO4J_URL: http://neo4j:7474
+      NEO4J_USER: ${NEO4J_USER:-neo4j}
+      NEO4J_PASSWORD: ${NEO4J_PASSWORD:-knowledge123}
     ports:
     - 8080:8080
     depends_on:

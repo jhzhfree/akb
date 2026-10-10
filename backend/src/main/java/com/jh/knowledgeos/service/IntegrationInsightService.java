@@ -21,6 +21,11 @@ import java.util.Map;
 @Service
 public class IntegrationInsightService {
 
+    /**
+     * 列表行里一条报文最多展示的字符数；完整报文仍由详情接口返回。
+     */
+    private static final int LIST_PAYLOAD_CHARS = 1500;
+
     private final ExternalApiMapper mapper;
 
     private final ApiKeyService apiKeyService;
@@ -96,14 +101,26 @@ public class IntegrationInsightService {
             row.put("latencyMs", audit.getDurationMs());
             row.put("traceId", audit.getTraceId());
             row.put("message", audit.getMessage());
-            row.put("requestParams", audit.getRequestParams());
-            row.put("responseData", audit.getResponseData());
+            // 列表一次给几十行，完整报文会让这一屏变成几 MB；清单里给足够判断的开头，
+            // 完整内容留给「查看 Trace」的详情接口。
+            row.put("requestParams", digest(audit.getRequestParams()));
+            row.put("responseData", digest(audit.getResponseData()));
             rows.add(row);
             if (rows.size() >= max) {
                 break;
             }
         }
         return rows;
+    }
+
+    /**
+     * 列表里的报文摘要：超过上限时明确标出，避免读者把截断的 JSON 当成乱码。
+     */
+    private String digest(String value) {
+        if (value == null || value.length() <= LIST_PAYLOAD_CHARS) {
+            return value;
+        }
+        return value.substring(0, LIST_PAYLOAD_CHARS) + "…[列表仅显示前 " + LIST_PAYLOAD_CHARS + " 字符，完整报文见「查看 Trace」]";
     }
 
     /**

@@ -20,6 +20,7 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 import javax.servlet.http.HttpServletRequest;
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
 
@@ -62,7 +63,11 @@ public class ExternalStreamController {
     public SseEmitter streamQuery(HttpServletRequest request, @RequestParam(value = "knowledgeBaseId", required = false) Long knowledgeBaseId,
         @RequestParam("question") String question, @RequestParam(value = "topK", required = false) Integer topK,
         @RequestParam(value = "answerFormat", required = false) String answerFormat) {
-        ApiKey key = open(request, "/stream/query", knowledgeBaseId);
+        Map<String, Object> resolved = new LinkedHashMap<String, Object>();
+        resolved.put("question", question);
+        resolved.put("topK", topK);
+        resolved.put("answerFormat", answerFormat);
+        ApiKey key = open(request, "/stream/query", knowledgeBaseId, handshake("/stream/query", resolved));
         Long kb = accessService.resolveKnowledgeBase(key, knowledgeBaseId);
         accessService.assertScope(key, ApiKey.SCOPE_READ);
         SseEmitter emitter = new SseEmitter(0L);
@@ -83,7 +88,12 @@ public class ExternalStreamController {
     public SseEmitter streamEvents(HttpServletRequest request, @RequestParam(value = "knowledgeBaseId", required = false) Long knowledgeBaseId,
         @RequestParam(value = "types", required = false) String types, @RequestParam(value = "sinceEventId", required = false) Long sinceEventId,
         @RequestParam(value = "legacy", defaultValue = "false") boolean legacy) {
-        ApiKey key = open(request, "/stream/events", knowledgeBaseId);
+        Long since = sinceEventId != null ? sinceEventId : lastEventId(request);
+        Map<String, Object> resolved = new LinkedHashMap<String, Object>();
+        resolved.put("types", splitTypes(types));
+        resolved.put("sinceEventId", since);
+        resolved.put("legacy", legacy);
+        ApiKey key = open(request, "/stream/events", knowledgeBaseId, handshake("/stream/events", resolved));
         Long kb = accessService.resolveKnowledgeBase(key, knowledgeBaseId);
         accessService.assertScope(key, ApiKey.SCOPE_READ);
         if (legacy) {
@@ -91,7 +101,6 @@ public class ExternalStreamController {
             streamService.streamEvents(key, kb, emitter);
             return emitter;
         }
-        Long since = sinceEventId != null ? sinceEventId : lastEventId(request);
         return hub.subscribe("key:" + key.getId(), kb, splitTypes(types), since, visibility.forApiKey(key, kb));
     }
 
@@ -127,16 +136,31 @@ public class ExternalStreamController {
     /**
      * Same credential gate as REST, but audited once when the stream opens.
      */
-    private ApiKey open(HttpServletRequest request, String method, Long knowledgeBaseId) {
+    private ApiKey open(HttpServletRequest request, String method, Long knowledgeBaseId, Map<String, Object> responseData) {
         if (!properties.isEnabled() || !properties.isSseEnabled()) {
             throw new SecurityException("SSE 推送服务已关闭");
         }
         long start = System.currentTimeMillis();
         ApiKey key = accessService.authenticate(request);
         // The stream itself is not captured — it never ends and would outgrow any column — but the
-        // subscription parameters say which events the caller asked to follow.
+        // subscription parameters say which events the caller asked to follow, and the handshake
+        // result says what the subscription actually resolved to (types, resume point). Without the
+        // second half a row can only prove a stream was opened, never what it was opened for.
         Map<String, Object> params = auditService.requestParamsOf(request);
-        auditService.record(key, ApiCallAudit.CHANNEL_SSE, method, knowledgeBaseId, 200, System.currentTimeMillis() - start, "stream opened", params, null);
+        auditService.record(key, ApiCallAudit.CHANNEL_SSE, method, knowledgeBaseId, 200, System.currentTimeMillis() - start, "stream opened", params,
+            responseData);
         return key;
+    }
+
+    /**
+     * What the caller got back from the handshake: the stream it is now attached to and the
+     * parameters the server resolved for it.
+     */
+    private Map<String, Object> handshake(String stream, Map<String, Object> resolved) {
+        Map<String, Object> payload = new LinkedHashMap<String, Object>();
+        payload.put("result", "STREAM_OPENED");
+        payload.put("stream", stream);
+        payload.putAll(resolved);
+        return payload;
     }
 }

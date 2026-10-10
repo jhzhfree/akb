@@ -1,0 +1,33 @@
+{
+  "baseUrl": "http://localhost:8080",
+  "finishedAt": "2026-10-09 06:55:56",
+  "scenarios": {
+    "ops-knowledge": {
+      "directory": "/root/pub/gitlab/ai-knowledge-os/dataset/ops-knowledge",
+      "fileCount": 19,
+      "knowledgeBase": {
+        "id": 2,
+        "name": "运维知识库",
+        "scenario": "OPS"
+      }
+    },
+    "company-policy": {
+      "directory": "/root/pub/gitlab/ai-knowledge-os/dataset/company-policy",
+      "fileCount": 16,
+      "knowledgeBase": {
+        "id": 3,
+        "name": "公司制度知识库",
+        "scenario": "POLICY"
+      }
+    },
+    "engineering-workspace": {
+      "directory": "/root/pub/gitlab/ai-knowledge-os/dataset/engineering-workspace",
+      "fileCount": 20,
+      "knowledgeBase": {
+        "id": 4,
+        "name": "工程协同知识库",
+        "scenario": "BUSINESS"
+      }
+    }
+  }
+}

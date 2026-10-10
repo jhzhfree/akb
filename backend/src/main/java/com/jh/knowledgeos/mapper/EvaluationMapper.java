@@ -33,6 +33,11 @@ public interface EvaluationMapper {
 
     List<Map<String, Object>> listEvaluationCases(@Param("datasetId") Long datasetId);
 
+    /**
+     * 当前知识库最新评测数据集的用例，供检索面板作为场景示例问题展示。
+     */
+    List<Map<String, Object>> listSampleQuestions(@Param("kb") Long kb, @Param("limit") int limit);
+
     int deleteEvaluationCase(@Param("id") Long id);
 
     int insertEvaluationRun(EvaluationRun run);

@@ -2,24 +2,24 @@
 <html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>企业级智能知识库产品技术解决方案 V1.2</title>
 <style>
-:root{--navy:#103b68;--blue:#1769aa;--cyan:#0b8ea8;--green:#0c8c72;--orange:#d97706;--purple:#6d4bc3;--ink:#1f2937;--muted:#64748b;--line:#dce6f0;--bg:#f4f8fc;--card:#fff}
+:root{--navy:#3a3ab3;--blue:#4748e0;--cyan:#0b8ea8;--green:#0c8c72;--orange:#d97706;--purple:#6d4bc3;--ink:#1f2937;--muted:#64748b;--line:#dcdcff;--bg:#f4f8fc;--card:#fff}
 *{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.75 "Microsoft YaHei","PingFang SC",Arial,sans-serif}
-.page{max-width:1220px;margin:auto;background:#fff;min-height:100vh;box-shadow:0 10px 36px #103b6814}
-.cover{padding:64px 72px;background:linear-gradient(135deg,#0d3764,#1769aa 58%,#0b8e88);color:#fff}
+.page{max-width:1220px;margin:auto;background:#fff;min-height:100vh;box-shadow:0 10px 36px #3a3ab314}
+.cover{padding:64px 72px;background:linear-gradient(135deg,#0d3764,#4748e0 58%,#0b8e88);color:#fff}
 .cover h1{font-size:38px;margin:0 0 10px} .cover h2{font-size:21px;font-weight:400;margin:0;opacity:.9}
 .meta{display:flex;gap:10px;flex-wrap:wrap;margin-top:28px} .meta span{border:1px solid #ffffff55;border-radius:999px;padding:5px 11px;font-size:13px}
-main{padding:42px 70px 80px} h2{color:var(--navy);font-size:28px;margin-top:52px;border-bottom:2px solid #d8e8f6;padding-bottom:9px}
+main{padding:42px 70px 80px} h2{color:var(--navy);font-size:28px;margin-top:52px;border-bottom:2px solid #dcdcff;padding-bottom:9px}
 h3{color:#205b8d;font-size:20px;margin-top:30px} h4{color:#27617d;font-size:16px}
-.toc{background:#f6faff;border:1px solid #d9e8f6;border-radius:14px;padding:22px 26px} .toc ol{columns:2} .toc a{color:#225f91;text-decoration:none}
-.lead{font-size:17px;color:#40566b} .note{background:#eef8ff;border-left:4px solid var(--blue);padding:14px 17px;border-radius:7px;margin:16px 0}
+.toc{background:#f8f8ff;border:1px solid #dcdcff;border-radius:14px;padding:22px 26px} .toc ol{columns:2} .toc a{color:#225f91;text-decoration:none}
+.lead{font-size:17px;color:#40566b} .note{background:#f0f0ff;border-left:4px solid var(--blue);padding:14px 17px;border-radius:7px;margin:16px 0}
 .warn{background:#fff8e8;border-left-color:var(--orange)} .ok{background:#eefaf6;border-left-color:var(--green)}
-.archimg{width:100%;border:1px solid var(--line);border-radius:12px;box-shadow:0 5px 18px #103b6815}
+.archimg{width:100%;border:1px solid var(--line);border-radius:12px;box-shadow:0 5px 18px #3a3ab315}
 .cap{text-align:center;color:var(--muted);font-size:13px;margin:7px 0 20px}
 .flow{background:#0f1b2d;color:#e5edf7;padding:18px 20px;border-radius:12px;white-space:pre-wrap;font:13px/1.65 Consolas,"Microsoft YaHei",monospace;overflow:auto}
 .grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px} .card{border:1px solid var(--line);border-radius:12px;padding:17px 19px;background:#fff}
-.card strong{color:var(--navy)} table{width:100%;border-collapse:collapse;margin:15px 0 25px;font-size:13.5px} th,td{border:1px solid #dce5ee;padding:9px 10px;vertical-align:top} th{background:#edf6fd;color:#174e7d;text-align:left}
-.badge{display:inline-block;padding:2px 7px;border-radius:999px;background:#eaf4ff;color:#1b62a0;font-size:12px;margin:2px}
-.stack{display:grid;grid-template-columns:170px 1fr;gap:0;border:1px solid var(--line);border-radius:12px;overflow:hidden;margin:15px 0} .stack .l{background:#edf6fd;color:#164d7b;font-weight:700;padding:15px} .stack .r{padding:15px 18px}
+.card strong{color:var(--navy)} table{width:100%;border-collapse:collapse;margin:15px 0 25px;font-size:13.5px} th,td{border:1px solid #dcdcff;padding:9px 10px;vertical-align:top} th{background:#f0f0ff;color:#174e7d;text-align:left}
+.badge{display:inline-block;padding:2px 7px;border-radius:999px;background:#efefff;color:#1b62a0;font-size:12px;margin:2px}
+.stack{display:grid;grid-template-columns:170px 1fr;gap:0;border:1px solid var(--line);border-radius:12px;overflow:hidden;margin:15px 0} .stack .l{background:#f0f0ff;color:#164d7b;font-weight:700;padding:15px} .stack .r{padding:15px 18px}
 .code{background:#f6f8fb;border:1px solid var(--line);padding:14px;border-radius:9px;font:13px/1.6 Consolas,monospace;white-space:pre-wrap}
 footer{padding:28px;text-align:center;border-top:1px solid var(--line);color:#7a8b9b;font-size:12px}
 @media(max-width:800px){main,.cover{padding-left:24px;padding-right:24px}.toc ol{columns:1}.grid{grid-template-columns:1fr}.stack{grid-template-columns:1fr}}
@@ -100,12 +100,12 @@ Python Knowledge Intelligence Engine
 </tbody></table>
 
 <h4>2.4.1 主题 token 化</h4>
-<p>颜色不写在组件里，而是定义一层语义变量：表面（页面 / 卡片 / 次级 / 凹陷）、文字（主 / 次 / 弱）、边框（细 / 常规 / 悬浮）、强调色、状态色。深色与浅色各提供一组取值，切换主题只切换变量作用域，组件零改动；新增主题只需新增一组变量。</p>
+<p>颜色不写在组件里，而是定义一层语义变量：表面（页面 / 卡片 / 次级 / 凹陷）、文字（主 / 次 / 弱）、边框（细 / 常规 / 悬浮）、强调色、状态色。深色与浅色各提供一组取值，切换主题只切换变量作用域，组件零改动；新增主题只需新增一组变量。</p><div class="note ok"><b>当前取值基线：</b>品牌主色为蓝紫系——浅色 <code>brand-500 #6f6cf7 / brand-600 #5b5cff / brand-700 #4748e0</code>，深色 <code>#4f8cf7 / #3b6fe0 / #2b56b8</code>；强调文字浅色 <code>#4748e0</code>、深色 <code>#93b4fd</code>（禁止用品牌原色直接写文字）。表面与文字：浅色页面底 <code>#f7f8fc</code>、卡片 <code>#ffffff</code>、次级 <code>#f1f3f9</code>、主文本 <code>#101326</code>；深色页面底 <code>#0b1220</code>、卡片 <code>#111a30</code>、次级 <code>#1a2440</code>、主文本 <code>#eaf0fa</code>。主题切换为<b>浅色 → 深色 → 跟随系统</b>三档循环，选择写入本地存储。</div>
 <table><thead><tr><th>状态</th><th>深色（字 / 底 / 边）</th><th>浅色（字 / 底 / 边）</th></tr></thead><tbody>
-<tr><td>成功</td><td>#34d399 / #12352a / #1f5c48</td><td>#047857 / #d1fae5 / #a7f3d0</td></tr>
-<tr><td>警告</td><td>#fbbf24 / #3b2f14 / #5a4718</td><td>#b45309 / #fef3c7 / #fcd34d</td></tr>
-<tr><td>失败</td><td>#f87171 / #3a1626 / #5c2130</td><td>#dc2626 / #fee2e2 / #fecaca</td></tr>
-<tr><td>信息</td><td>#60a5fa / #1d3f8c / #2a4f9c</td><td>#1d4ed8 / #dbeafe / #bfdbfe</td></tr>
+<tr><td>成功</td><td>#34d399 / #12352a / #1f5c48</td><td>#22a06b / #e7f7ef / #b7e7cf</td></tr>
+<tr><td>警告</td><td>#fbbf24 / #3b2f14 / #5a4718</td><td>#d97706 / #fdf3e3 / #f8d9a8</td></tr>
+<tr><td>失败</td><td>#f87171 / #3a1626 / #5c2130</td><td>#e5484d / #fdecec / #f8c9cb</td></tr>
+<tr><td>信息</td><td>#60a5fa / #1d3f8c / #2a4f9c</td><td>#4748e0 / #eff0ff / #d9d9ff</td></tr>
 <tr><td>中性</td><td>#aab7cc / #1a2440 / #27355a</td><td>#475569 / #eef2f9 / #e2e8f0</td></tr>
 </tbody></table>
 <div class="note">状态色采用“三件套”（字色 + 底色 + 边框）而非单一色值，保证在深色与浅色下都落在可读区间；列表状态列、日志运行列表、详情头部、结果卡片共用同一枚状态胶囊，避免同一状态在不同页面出现不同绿/红。</div>
@@ -116,9 +116,9 @@ Python Knowledge Intelligence Engine
 <h4>2.4.3 构建与交付</h4>
 <p>Vite 构建为静态资源，由 Nginx 容器提供；前端、后端、AI 服务统一打同一版本标签，与编排文件一起交付（见第 10 章）。主题、样式与前端资源全部打包进镜像，运行环境无需额外构建。</p>
 <h4>2.4.4 视图与入口裁剪（前端呈现层）</h4>
-<p>呈现层在角色之上增加一层<b>视图</b>（用户视图 / 管理视图）：角色决定“能不能操作”，视图决定“看到多少入口”。外壳统一计算 <code>adminView = 管理员角色 && 视图模式='admin'</code> 并通过依赖注入下发，模块页面与面板不再重复判定角色；导航叶子以 <code>adminOnly</code> 声明运维与测评类入口（生成概览 / 连接器 / 生成任务、检索链路追踪 / 检索评测、接口服务的协议配置 / 凭证 / 调用日志、用户与组织），用户视图下直接不渲染。视图选择写入本地存储；切换后若当前页在目标视图不可见，回落到该模块的默认页，避免停留在无权页面而触发一批 403。</p>
+<p>呈现层在角色之上增加一层<b>视图</b>（用户视图 / 管理视图）：角色决定“能不能操作”，视图决定“看到多少入口”。外壳统一计算 <code>adminView = 管理员角色 && 视图模式='admin'</code> 并通过依赖注入下发，模块页面与面板不再重复判定角色；导航叶子以 <code>adminOnly</code> 声明运维与测评类入口（生成概览 / 连接器 / 外部知识 / 生成任务、检索链路追踪 / 检索评测、接口服务的协议配置 / 凭证 / 调用日志、用户与组织），用户视图下直接不渲染。视图选择写入本地存储；切换后若当前页在目标视图不可见，回落到该模块的默认页，避免停留在无权页面而触发一批 403。</p>
 <div class="note"><strong>视图只是呈现层裁剪，不是权限边界。</strong>被视图隐藏的入口，其写接口仍由后端权限码校验（与 <code>/api/auth/me</code> 下发的 permissions 同源）。前端裁剪的目标是“界面上看不到的操作不会成为日常路径”，而不是替代后端鉴权。</div>
-<p>顶栏收敛为<b>视图切换 / 知识库切换 / 全局搜索 / 主题 / 用户</b>：异步任务不再以顶栏红点承载，统一在“知识生成 · 生成任务”页内跟踪（列表、阶段、重试），避免同一任务状态两处维护；服务连接状态由页面内空态、错误提示与 Trace 表达。产品版本与授权信息统一显示在主内容底部页脚：产品版本来自前端构建常量，服务版本与运行环境来自 <code>/api/knowledge/env</code>，版本详情弹窗在打开时实时核对一次——这与 10.4 的“版本由镜像标签管理”一致，前端不提供自动更新能力。</p>
+<p>顶栏收敛为<b>视图切换 / 知识库切换 / 全局搜索 / 主题 / 用户</b>：异步任务不再以顶栏红点承载，统一在“知识生成 · 生成任务”页内跟踪（列表、阶段、重试），避免同一任务状态两处维护；服务连接状态由页面内空态、错误提示与 Trace 表达。产品版本与授权信息统一显示在主内容底部页脚：产品版本来自前端构建常量，服务版本与运行环境来自 <code>/api/knowledge/env</code>，版本详情弹窗在打开时实时核对一次——这与 10.4 的“版本由镜像标签管理”一致，前端不提供自动更新能力。</p><div class="note ok"><b>登录页与导航分组（对齐当前实现）：</b>登录是全站唯一的无框架页（不渲染顶栏 / 侧栏 / 页脚），左右分栏：左品牌区（主标题“让知识随时被 AI 调用” + 副标题 + 三条价值点），右表单区（账号、密码、记住账号、忘记密码、登录）。<b>不提供第三方登录</b>（企业微信 / SSO 入口已移除）。左侧导航按业务域分组——工作台（知识概览）、知识库（知识生成、知识检索）、系统集成（接口服务）；系统配置为低频平台配置，不进业务分组，收在侧栏底部工具区与用户区同行的设置图标中。</div>
 </section>
 
 <section id="a3"><h2>3. 知识全生命周期技术设计</h2>
@@ -397,7 +397,7 @@ Derived Knowledge 发布</div>
 <tr><td>离线交付</td><td>目标机无外网时，从内网镜像仓库拉取后以「不构建」方式启动；需将仓库加入 <code>insecure-registries</code>（HTTP 私有仓库）</td></tr>
 <tr><td>环境分层</td><td>开发编排可接入外部模型服务（Ollama / Model Gateway）；生产环境模型服务独立部署，不与应用同机</td></tr>
 </tbody></table>
-<div class="note">升级方式：重建变更服务的镜像并推送同版本或新版本标签 → 目标机拉取 → 以「不构建」方式重建容器。<b>只改前端时只需重推前端镜像</b>，后端与 AI 服务镜像无需变动。</div>
+<div class="note">升级方式：重建变更服务的镜像并推送同版本或新版本标签 → 目标机拉取 → 以「不构建」方式重建容器。<b>只改前端时只需重推前端镜像</b>，后端与 AI 服务镜像无需变动。</div><div class="note ok"><b>当前发布参数：</b>应用镜像统一使用版本标签 <code>1.1.0</code>（前端 / 后端 / AI 服务同标签）；内网私有仓库为 <code>192.168.22.6:5000</code>，通过 <code>REGISTRY</code> 变量在构建时打前缀后推送，目标机拉取后 <code>docker tag</code> 回 <code>knowledge-os/*</code> 原名再启动，编排文件无需改写。产品版本常量（IA 基线）为 <code>V2.2</code>，与镜像标签相互独立：前者由前端构建常量给出，后者由部署镜像管理。</div>
 
 <div class="note ok"><strong>最终技术基线：</strong>以 Knowledge Card + Assertion + Evidence + Entity/Relation/Graph 作为统一知识模型；以 MySQL 保存权威状态；以 FullText + Vector + Graph 构建多路检索；以 Query Planner + RRF + Reranker + Context Assembly 构建统一知识消费引擎；以 Conflict/Judgment + Version + ACL + Trace + Evaluation 构建可信治理闭环。</div>
 </section>

@@ -26,6 +26,9 @@
             <button class="kb-btn-primary" :disabled="asking" @click="$emit('ask')">{{ asking ? '检索中…' : '发送问题' }}</button>
           </div>
         </footer>
+        <div class="px-4 pb-3">
+          <SampleQuestionChips :items="samples || []" @pick="pickQuestion" />
+        </div>
       </article>
 
       <div v-if="asking" class="kb-card mt-4 flex items-center gap-2 p-4 text-sm text-ink-500">
@@ -144,21 +147,31 @@
 </section>
 </template>
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, nextTick } from 'vue'
 import type { QueryCitation, QueryHistoryItem, QueryResult, QuerySupportClaim } from '../types'
 import { ANSWER_FORMATS } from '../api/contracts'
 import type { AnswerFormat } from '../api/contracts'
+import type { SampleQuestion } from '../api/knowledge'
 import { renderMarkdown } from '../utils/markdown'
+import SampleQuestionChips from './SampleQuestionChips.vue'
 
 const props = defineProps<{
   query:string; result:QueryResult|null; asking:boolean; history:QueryHistoryItem[]
   /** 请求与展示共用：服务端回传实际生效的格式，避免未知取值被当成默认。 */
   answerFormat:AnswerFormat
+  /** 当前知识库的场景测试语句：换库即换示例，点选后直接提问。 */
+  samples?:SampleQuestion[]
 }>()
-defineEmits<{
+const emit = defineEmits<{
   ask:[]; 'update:query':[value:string]; 'update:answerFormat':[value:AnswerFormat]
   'open-trace':[qid:string]; 'refresh-history':[]; 'open-citation':[citation:QueryCitation]
 }>()
+
+/** 点选示例后等 query 回写到父级再发起提问，避免用旧问题检索。 */
+function pickQuestion(text:string) {
+  emit('update:query', text)
+  nextTick(() => emit('ask'))
+}
 
 /** 以服务端回传的为准：它把无法识别的取值退回 default 后原样带回。 */
 const effectiveFormat = computed<AnswerFormat>(() => {

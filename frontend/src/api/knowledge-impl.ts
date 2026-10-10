@@ -446,6 +446,13 @@ export const updateEvaluationDataset = (
 ):Promise<ApiResponse<number>> => axios.put(`/api/knowledge/evaluations/datasets/${code}`, payload)
 export const listEvaluationCases = (code:string):Promise<ApiResponse<EvalRow[]>> =>
   axios.get(`/api/knowledge/evaluations/datasets/${code}/cases`)
+
+/** 场景测试语句：来自该知识库自己的评测用例，用于检索面板的示例问题。 */
+export type SampleQuestion = {
+  question:string; difficulty:string; expectedObjectCodes:string[]
+}
+export const listSampleQuestions = (kb:number, limit=6):Promise<ApiResponse<SampleQuestion[]>> =>
+  axios.get(`/api/knowledge/evaluations/samples/${kb}`, { params:{ limit } })
 export const createEvaluationCase = (
   code:string, payload:{
     question:string; expectedObjectCodes:string[]; expectedEvidenceCodes?:string[]

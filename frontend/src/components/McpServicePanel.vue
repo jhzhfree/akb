@@ -102,6 +102,19 @@
                 </div>
                 <div v-if="call.message" class="mt-1 text-[11px] text-[color:var(--danger)]">{{ call.message }}</div>
                 <div v-if="call.traceId" class="mt-0.5 truncate text-[11px] text-ink-500">trace {{ call.traceId }}</div>
+                <button class="mt-1 text-[11px] text-accent" @click="openCall = openCall === call.id ? null : call.id">
+                  {{ openCall === call.id ? '收起报文' : '查看入参与返回' }}
+                </button>
+                <div v-if="openCall === call.id" class="mt-1 space-y-2">
+                  <div>
+                    <b class="text-[11px] font-normal text-ink-500">传入参数（工具名与 arguments）</b>
+                    <pre class="mt-0.5 max-h-56 overflow-auto whitespace-pre-wrap break-all rounded border border-black/10 bg-black/[0.03] p-2 text-[11px] leading-5">{{ pretty(call.requestParams, '本次调用没有入参') }}</pre>
+                  </div>
+                  <div>
+                    <b class="text-[11px] font-normal text-ink-500">返回数据（工具的业务结果）</b>
+                    <pre class="mt-0.5 max-h-56 overflow-auto whitespace-pre-wrap break-all rounded border border-black/10 bg-black/[0.03] p-2 text-[11px] leading-5">{{ pretty(call.responseData, '本次调用没有返回数据') }}</pre>
+                  </div>
+                </div>
               </li>
             </ul>
           </PanelState>
@@ -123,6 +136,8 @@ const calls = ref<McpCallAudit[]>([])
 const loading = ref(false)
 const error = ref('')
 const opened = ref('')
+/** 展开的那一条调用的报文；同一时刻只看一条，列表才不至于被大段返回撑变形。 */
+const openCall = ref<number | null>(null)
 
 const tools = computed<McpTool[]>(() => manifest.value?.tools || [])
 const avgDuration = computed(() => {
@@ -133,6 +148,12 @@ const avgDuration = computed(() => {
 const initSample = computed(() => manifest.value?.initialize ? JSON.stringify(manifest.value.initialize, null, 2) : '—')
 const time = (value?:string) => value ? new Date(value).toLocaleString() : '—'
 const requiredCount = (tool:McpTool) => (tool.inputSchema?.required || []).length
+
+/** 服务端以 JSON 文本存报文，这里还原成缩进格式；截断或空值原样展示。 */
+const pretty = (raw?:string|null, empty = '—') => {
+  if (!raw) return empty
+  try { return JSON.stringify(JSON.parse(raw), null, 2) } catch { return raw }
+}
 const toggle = (name:string) => { opened.value = opened.value === name ? '' : name }
 
 /** 示例请求按 schema 生成必填占位：直接复制就能跑，比手填字段名少一半出错机会。 */

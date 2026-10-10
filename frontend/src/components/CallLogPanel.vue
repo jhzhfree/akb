@@ -5,8 +5,8 @@
         <div class="kb-eyebrow">调用日志</div>
         <h1 class="kb-title mt-1">调用日志</h1>
         <p class="kb-muted mt-1">
-          外部系统调用集成服务的全量记录：按协议与结果过滤，展开任一行可见调用方名称、脱敏后的传入参数与返回数据；
-          点「查看 Trace」可在抽屉里看到这次调用的全部属性，请求与返回均以 JSON 格式化呈现。
+          外部系统调用集成服务的全量记录：按协议与结果过滤，展开任一行可见调用方名称、明文传入参数与返回数据；
+          点「查看 Trace」可在抽屉里看到完整报文与这次调用的全部属性，请求与返回均以 JSON 格式化呈现。
         </p>
       </div>
       <div class="flex shrink-0 items-center gap-2">
@@ -55,13 +55,13 @@
                     <b class="w-20 shrink-0 font-normal text-ink-500">传入参数</b>
                     <pre
                       class="max-h-56 flex-1 overflow-auto whitespace-pre-wrap break-all rounded border border-black/10 bg-black/[0.03] p-2 text-[11px] leading-relaxed">
-          {{ pretty(row.requestParams) }}</pre>
+          {{ pretty(row.requestParams, '本次调用没有查询串或请求体（GET 无参调用）') }}</pre>
                   </div>
                   <div class="flex gap-2">
                     <b class="w-20 shrink-0 font-normal text-ink-500">返回数据</b>
                     <pre
                       class="max-h-56 flex-1 overflow-auto whitespace-pre-wrap break-all rounded border border-black/10 bg-black/[0.03] p-2 text-[11px] leading-relaxed">
-          {{ pretty(row.responseData) }}</pre>
+          {{ pretty(row.responseData, '调用失败时以「错误信息」列为准，成功调用必有返回报文') }}</pre>
                   </div>
                 </div>
               </template>
@@ -119,11 +119,12 @@ const protocol = ref('')
 const status = ref('')
 
 /** 服务端以 JSON 文本存参，这里还原成缩进格式；空值或非 JSON 原样展示。 */
-function pretty(raw?:string|null) {
-  if (!raw) return '—'
+function pretty(raw?:string|null, empty = '—') {
+  if (!raw) return empty
   try {
     return JSON.stringify(JSON.parse(raw), null, 2)
   } catch {
+    // 被审计上限截断的报文不是合法 JSON，原样输出即可，末尾自带截断说明。
     return raw
   }
 }

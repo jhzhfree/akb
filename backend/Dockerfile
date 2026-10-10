@@ -6,8 +6,13 @@ COPY src ./src
 RUN mvn -q -DskipTests package
 
 FROM eclipse-temurin:8-jre
-RUN apt-get update && apt-get install -y --no-install-recommends curl && rm -rf /var/lib/apt/lists/*
+# mysql-client 供内置演示快照恢复使用（DEMO_SEED=auto 时只在业务表为空时执行一次）
+RUN apt-get update && apt-get install -y --no-install-recommends curl default-mysql-client && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY --from=build /workspace/target/*.jar app.jar
+# 演示快照：由 scripts/demo/export-snapshot.py 产出，可在部署后直接演示
+COPY demo-seed /opt/demo-seed
+COPY entrypoint.sh /app/entrypoint.sh
+RUN chmod +x /app/entrypoint.sh
 EXPOSE 8080
-ENTRYPOINT ["java","-XX:+ExitOnOutOfMemoryError","-jar","/app/app.jar"]
+ENTRYPOINT ["/app/entrypoint.sh"]

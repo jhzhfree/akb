@@ -23,6 +23,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import javax.servlet.http.HttpServletRequest;
 import javax.validation.Valid;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -158,22 +159,42 @@ public class ExternalApiController {
             auditService.record(key, ApiCallAudit.CHANNEL_REST, method, kb, 200, System.currentTimeMillis() - start, null, params, data);
             return ApiResponse.ok(data);
         } catch (UnauthorizedException e) {
-            auditService.record(key, ApiCallAudit.CHANNEL_REST, method, requestedKb, 401, System.currentTimeMillis() - start, e.getMessage(), params, null);
+            auditService.record(key, ApiCallAudit.CHANNEL_REST, method, requestedKb, 401, System.currentTimeMillis() - start, e.getMessage(), params,
+                errorBody(401, e));
             throw e;
         } catch (SecurityException e) {
-            auditService.record(key, ApiCallAudit.CHANNEL_REST, method, requestedKb, 403, System.currentTimeMillis() - start, e.getMessage(), params, null);
+            auditService.record(key, ApiCallAudit.CHANNEL_REST, method, requestedKb, 403, System.currentTimeMillis() - start, e.getMessage(), params,
+                errorBody(403, e));
             throw e;
         } catch (RateLimitException e) {
-            auditService.record(key, ApiCallAudit.CHANNEL_REST, method, requestedKb, 429, System.currentTimeMillis() - start, e.getMessage(), params, null);
+            auditService.record(key, ApiCallAudit.CHANNEL_REST, method, requestedKb, 429, System.currentTimeMillis() - start, e.getMessage(), params,
+                errorBody(429, e));
             throw e;
         } catch (IllegalArgumentException e) {
             // 调用方漏传 knowledgeBaseId 或参数非法属于 400，不应记成服务端故障。
-            auditService.record(key, ApiCallAudit.CHANNEL_REST, method, requestedKb, 400, System.currentTimeMillis() - start, e.getMessage(), params, null);
+            auditService.record(key, ApiCallAudit.CHANNEL_REST, method, requestedKb, 400, System.currentTimeMillis() - start, e.getMessage(), params,
+                errorBody(400, e));
             throw e;
         } catch (Exception e) {
-            auditService.record(key, ApiCallAudit.CHANNEL_REST, method, requestedKb, 500, System.currentTimeMillis() - start, e.getMessage(), params, null);
+            auditService.record(key, ApiCallAudit.CHANNEL_REST, method, requestedKb, 500, System.currentTimeMillis() - start, e.getMessage(), params,
+                errorBody(500, e));
             throw e;
         }
+    }
+
+    /**
+     * The answer a failed call really returned, not just the status code.
+     *
+     * <p>A rejection is the call an operator has to explain to the caller, so the audit row carries
+     * the same body the caller received: the code it can be quoted back by, and the message that
+     * says which parameter was missing. Nothing here is secret — it is what the caller already saw.</p>
+     */
+    private Map<String, Object> errorBody(int status, Exception e) {
+        Map<String, Object> payload = new LinkedHashMap<String, Object>();
+        payload.put("success", Boolean.FALSE);
+        payload.put("status", status);
+        payload.put("message", e.getMessage());
+        return payload;
     }
 
     private interface ExternalCall {

@@ -10,6 +10,7 @@ import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+import org.springframework.web.servlet.HandlerMapping;
 import javax.servlet.http.HttpServletRequest;
 import java.net.URLDecoder;
 import java.util.ArrayList;
@@ -61,7 +62,7 @@ public class ExternalAuditService {
 
     private final int payloadLimit;
 
-    public ExternalAuditService(ExternalApiMapper mapper, ObjectMapper json, @Value("${knowledge.external.audit-payload-chars:4000}") int payloadChars) {
+    public ExternalAuditService(ExternalApiMapper mapper, ObjectMapper json, @Value("${knowledge.external.audit-payload-chars:10000}") int payloadChars) {
         this.mapper = mapper;
         this.json = json;
         this.payloadLimit = Math.max(200, payloadChars);
@@ -103,31 +104,137 @@ public class ExternalAuditService {
     /**
      * What an external caller sent, structured for reading.
      *
-     * <p>Query parameters and JSON body are flattened into one object, because that is how the
-     * caller thinks about its request — the transport split is incidental detail.</p>
+     * <p>Query parameters, path variables and JSON body are flattened into one object, because that
+     * is how the caller thinks about its request — the transport split is incidental detail. Path
+     * variables matter as much as the query string: {@code GET /cards/{code}} carries everything it
+     * was asked for in the path, so a log that only read the query string would show an empty
+     * request for exactly the calls an operator most wants to inspect.</p>
      */
     public Map<String, Object> requestParamsOf(HttpServletRequest request) {
-        Map<String, String> parts = ExternalCallPayloadFilter.payload(request);
-        if (parts == null) {
-            return null;
-        }
         Map<String, Object> params = new LinkedHashMap<String, Object>();
-        String query = parts.get("query");
-        if (query != null) {
-            params.putAll(parseQuery(query));
-        }
-        String body = parts.get("body");
-        if (body != null) {
-            Object parsed = parseJson(body);
-            if (parsed instanceof Map) {
-                for (Map.Entry<?, ?> entry : ((Map<?, ?>) parsed).entrySet()) {
-                    params.put(String.valueOf(entry.getKey()), entry.getValue());
+        Map<String, String> parts = ExternalCallPayloadFilter.payload(request);
+        if (parts != null) {
+            String query = parts.get("query");
+            if (query != null) {
+                params.putAll(parseQuery(query));
+            }
+            String body = parts.get("body");
+            if (body != null) {
+                Object parsed = parseJson(body);
+                if (parsed instanceof Map) {
+                    for (Map.Entry<?, ?> entry : ((Map<?, ?>) parsed).entrySet()) {
+                        params.put(String.valueOf(entry.getKey()), entry.getValue());
+                    }
+                } else {
+                    params.put("body", parsed == null ? body : parsed);
                 }
-            } else {
-                params.put("body", parsed == null ? body : parsed);
+            }
+        }
+        Object uriVariables = request == null ? null : request.getAttribute(HandlerMapping.URI_TEMPLATE_VARIABLES_ATTRIBUTE);
+        if (uriVariables instanceof Map) {
+            for (Map.Entry<?, ?> entry : ((Map<?, ?>) uriVariables).entrySet()) {
+                String name = String.valueOf(entry.getKey());
+                if (!params.containsKey(name)) {
+                    params.put(name, entry.getValue());
+                }
             }
         }
         return params.isEmpty() ? null : params;
+    }
+
+    /**
+     * What an MCP call asked for, in the terms the caller thinks in.
+     *
+     * <p>{@code tools/call} is the method that does real work, and its payload is two levels deep:
+     * the tool name and its arguments sit inside {@code params}. Storing the raw envelope would make
+     * every row read {@code {"jsonrpc":"2.0","params":{...}}} — technically complete, useless when
+     * scanning. So a tool call is audited as the tool plus its arguments; anything else keeps its
+     * params as they arrived.</p>
+     */
+    public Object mcpRequestParams(Map<String, Object> body) {
+        if (body == null || body.isEmpty()) {
+            return null;
+        }
+        Map<String, Object> params = asMap(body.get("params"));
+        String method = String.valueOf(body.get("method"));
+        Map<String, Object> view = new LinkedHashMap<String, Object>();
+        if ("tools/call".equals(method)) {
+            view.put("tool", params == null ? null : params.get("name"));
+            view.put("arguments", params == null ? null : params.get("arguments"));
+            return view;
+        }
+        view.put("method", method);
+        view.put("params", params);
+        return view;
+    }
+
+    /**
+     * What an MCP call got back, with the protocol envelope taken off.
+     *
+     * <p>A {@code tools/call} answer carries the business object in {@code structuredContent} and
+     * the same thing again as a text blob in {@code content}; the log keeps the object, which is
+     * what anyone reading it is after. A {@code tools/list} answer would swamp the column with ten
+     * full tool schemas, so it is reduced to the names. Errors are kept whole: their code and
+     * message are the answer.</p>
+     */
+    public Object mcpResponseData(Map<String, Object> response) {
+        if (response == null || response.isEmpty()) {
+            return null;
+        }
+        Object error = response.get("error");
+        if (error != null) {
+            Map<String, Object> view = new LinkedHashMap<String, Object>();
+            view.put("error", error);
+            return view;
+        }
+        Map<String, Object> result = asMap(response.get("result"));
+        if (result == null) {
+            // 通知类消息没有返回，不是"丢了返回"。
+            return null;
+        }
+        Object structured = result.get("structuredContent");
+        if (structured != null) {
+            return structured;
+        }
+        Object tools = result.get("tools");
+        if (tools instanceof List) {
+            List<Object> names = new ArrayList<Object>();
+            for (Object tool : (List<?>) tools) {
+                if (tool instanceof Map) {
+                    names.add(((Map<?, ?>) tool).get("name"));
+                }
+            }
+            Map<String, Object> view = new LinkedHashMap<String, Object>();
+            view.put("toolCount", names.size());
+            view.put("tools", names);
+            return view;
+        }
+        return result;
+    }
+
+    /**
+     * The knowledge base a tool call was aimed at, so the row can be filtered like any other call.
+     */
+    public Long mcpKnowledgeBaseId(Map<String, Object> body) {
+        Map<String, Object> params = body == null ? null : asMap(body.get("params"));
+        if (params == null) {
+            return null;
+        }
+        Object arguments = params.get("arguments");
+        Object raw = arguments instanceof Map ? ((Map<?, ?>) arguments).get("knowledgeBaseId") : params.get("knowledgeBaseId");
+        if (raw == null) {
+            return null;
+        }
+        try {
+            return Long.valueOf(String.valueOf(raw).trim());
+        } catch (NumberFormatException e) {
+            return null;
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> asMap(Object value) {
+        return value instanceof Map ? (Map<String, Object>) value : null;
     }
 
     public List<ApiCallAudit> recent(Long keyId, int limit) {
@@ -172,7 +279,12 @@ public class ExternalAuditService {
             // 无法序列化的入参（例如流式句柄）不能让审计失效，退化为字符串描述。
             text = String.valueOf(value);
         }
-        return truncate(text, payloadLimit);
+        if (text.length() <= payloadLimit) {
+            return text;
+        }
+        // 截断要说出来：一个被切掉一半的 JSON 看上去只是"乱码"，而标注长度后读者立刻知道
+        // 是审计上限截的，不是调用方发的怪东西。
+        return truncate(text, payloadLimit) + "…[已截断，完整长度 " + text.length() + " 字符]";
     }
 
     /**

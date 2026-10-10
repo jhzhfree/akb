@@ -1,0 +1,303 @@
+{
+  "name": "公司制度知识库 · 检索质量评测用例集",
+  "description": "来源：dataset/company-policy/retrieval-eval/检索质量评测用例集.md",
+  "cases": [
+    {
+      "question": "年假有多少天",
+      "expectedObjectCodes": [
+        "03-考勤与休假管理办法.md",
+        "14-员工常见问题FAQ.md",
+        "15-制度修订通知-2026年9月休假与报销口径调整.md"
+      ],
+      "expectedAnswer": "旧口径 5 天（每满一年 +1，上限 15）；2026-09-01 起 10 天（上限 20）",
+      "tags": [
+        "L1",
+        "POL-L1"
+      ],
+      "difficulty": "L1"
+    },
+    {
+      "question": "病假超过几天需要医院证明",
+      "expectedObjectCodes": [
+        "03-考勤与休假管理办法.md",
+        "15-制度修订通知-2026年9月休假与报销口径调整.md"
+      ],
+      "expectedAnswer": "旧口径 3 天；2026-09-01 起 2 天",
+      "tags": [
+        "L1",
+        "POL-L1"
+      ],
+      "difficulty": "L1"
+    },
+    {
+      "question": "一线城市住宿标准是多少",
+      "expectedObjectCodes": [
+        "05-差旅与费用报销管理办法.md",
+        "15-制度修订通知-2026年9月休假与报销口径调整.md"
+      ],
+      "expectedAnswer": "旧 600 元/晚；2026-09-01 起 700 元/晚（P9 及以上更高）",
+      "tags": [
+        "L1",
+        "POL-L1"
+      ],
+      "difficulty": "L1"
+    },
+    {
+      "question": "报销时效是多久",
+      "expectedObjectCodes": [
+        "05-差旅与费用报销管理办法.md",
+        "15-制度修订通知-2026年9月休假与报销口径调整.md"
+      ],
+      "expectedAnswer": "旧 30 日；2026-09-01 起 60 日（跨期以费用发生日为准）",
+      "tags": [
+        "L1",
+        "POL-L1"
+      ],
+      "difficulty": "L1"
+    },
+    {
+      "question": "公积金缴存比例是多少",
+      "expectedObjectCodes": [
+        "04-薪酬与福利管理办法.md"
+      ],
+      "expectedAnswer": "基数＝税前月薪全额，个人与公司各 12%",
+      "tags": [
+        "L1",
+        "POL-L1"
+      ],
+      "difficulty": "L1"
+    },
+    {
+      "question": "P6 晋升 P7 需要任职多久",
+      "expectedObjectCodes": [
+        "07-职级与晋升管理办法.md"
+      ],
+      "expectedAnswer": "≥ 24 个月，且近四季至少 2 次 A",
+      "tags": [
+        "L1",
+        "POL-L1"
+      ],
+      "difficulty": "L1"
+    },
+    {
+      "question": "迟到第三次怎么扣",
+      "expectedObjectCodes": [
+        "03-考勤与休假管理办法.md"
+      ],
+      "expectedAnswer": "每月前 2 次免罚，第 3 次起扣当日半天工资",
+      "tags": [
+        "L1",
+        "POL-L1"
+      ],
+      "difficulty": "L1"
+    },
+    {
+      "question": "50 万元采购由谁审批",
+      "expectedObjectCodes": [
+        "10-采购与合同管理制度.md"
+      ],
+      "expectedAnswer": "5 万–50 万：分管副总 + 财务 + 法务；> 50 万：总经理办公会",
+      "tags": [
+        "L1",
+        "POL-L1"
+      ],
+      "difficulty": "L1"
+    },
+    {
+      "question": "想请几天假照顾生病的家人需要什么手续",
+      "expectedObjectCodes": [
+        "03-考勤与休假管理办法.md"
+      ],
+      "expectedAnswer": "事假提前 2 个工作日申请，按日扣薪，年度 ≤ 20 天",
+      "tags": [
+        "L2",
+        "POL-L2"
+      ],
+      "difficulty": "L2"
+    },
+    {
+      "question": "出差回来发票攒了很久还能报吗",
+      "expectedObjectCodes": [
+        "05-差旅与费用报销管理办法.md",
+        "15-制度修订通知-2026年9月休假与报销口径调整.md"
+      ],
+      "expectedAnswer": "30 日（9 月起 60 日）内提交，逾期需特批",
+      "tags": [
+        "L2",
+        "POL-L2"
+      ],
+      "difficulty": "L2"
+    },
+    {
+      "question": "同事打听我工资我该怎么做",
+      "expectedObjectCodes": [
+        "04-薪酬与福利管理办法.md",
+        "11-员工奖惩管理办法.md"
+      ],
+      "expectedAnswer": "薪酬保密，不得相互打听与披露，属违规",
+      "tags": [
+        "L2",
+        "POL-L2"
+      ],
+      "difficulty": "L2"
+    },
+    {
+      "question": "连续两次绩效 C 会怎样",
+      "expectedObjectCodes": [
+        "06-绩效管理办法.md",
+        "11-员工奖惩管理办法.md"
+      ],
+      "expectedAnswer": "进入 PIP、不调薪；连续两季 C 需岗位评估，两季 D 可解除合同",
+      "tags": [
+        "L2",
+        "POL-L2"
+      ],
+      "difficulty": "L2"
+    },
+    {
+      "question": "离职时没休完的年假怎么办",
+      "expectedObjectCodes": [
+        "03-考勤与休假管理办法.md",
+        "12-入职离职与交接管理办法.md"
+      ],
+      "expectedAnswer": "按 3 倍日薪折算（月薪 / 21.75 × 天数 × 3）",
+      "tags": [
+        "L2",
+        "POL-L2"
+      ],
+      "difficulty": "L2"
+    },
+    {
+      "question": "新员工多久能申请生产权限",
+      "expectedObjectCodes": [
+        "02-组织架构与部门职责说明书.md",
+        "09-信息安全与数据合规管理办法.md",
+        "12-入职离职与交接管理办法.md"
+      ],
+      "expectedAnswer": "入职当天开 SSO/邮箱，2 个工作日内业务权限；生产权限走 OA 审批（约 3 个工作日）",
+      "tags": [
+        "L2",
+        "POL-L2"
+      ],
+      "difficulty": "L2"
+    },
+    {
+      "question": "9 月后年假和报销到底按哪个执行",
+      "expectedObjectCodes": [
+        "03-考勤与休假管理办法.md",
+        "05-差旅与费用报销管理办法.md",
+        "15-制度修订通知-2026年9月休假与报销口径调整.md"
+      ],
+      "expectedAnswer": "按 9 月修订通知执行；8-31 前费用仍按 30 日；新版制度 10 月发布后通知失效",
+      "tags": [
+        "L3",
+        "POL-L3"
+      ],
+      "difficulty": "L3"
+    },
+    {
+      "question": "外包人员能不能申请 root 提权",
+      "expectedObjectCodes": [
+        "02-组织架构与部门职责说明书.md",
+        "09-信息安全与数据合规管理办法.md",
+        "11-员工奖惩管理办法.md"
+      ],
+      "expectedAnswer": "外部账号不得申请 root；由内部人员代操作或目录 ACL；违规属二级/一级",
+      "tags": [
+        "L3",
+        "POL-L3"
+      ],
+      "difficulty": "L3"
+    },
+    {
+      "question": "共享生产账号会被怎么处理",
+      "expectedObjectCodes": [
+        "09-信息安全与数据合规管理办法.md",
+        "11-员工奖惩管理办法.md"
+      ],
+      "expectedAnswer": "一级违规，暂停权限 30 天并通报；造成事故的追究赔偿",
+      "tags": [
+        "L3",
+        "POL-L3"
+      ],
+      "difficulty": "L3"
+    },
+    {
+      "question": "一级违规和二级违规的区别",
+      "expectedObjectCodes": [
+        "11-员工奖惩管理办法.md"
+      ],
+      "expectedAnswer": "一级：重大损失/违法风险，可解除合同；二级：较大影响，记过 + 扣绩效",
+      "tags": [
+        "L3",
+        "POL-L3"
+      ],
+      "difficulty": "L3"
+    },
+    {
+      "question": "年度培训学时不够有什么影响",
+      "expectedObjectCodes": [
+        "06-绩效管理办法.md",
+        "08-培训与人才发展管理办法.md"
+      ],
+      "expectedAnswer": "年度绩效不得评为 A 及以上；必修未完成暂停晋升",
+      "tags": [
+        "L3",
+        "POL-L3"
+      ],
+      "difficulty": "L3"
+    },
+    {
+      "question": "信息安全事件分几级，谁上报",
+      "expectedObjectCodes": [
+        "09-信息安全与数据合规管理办法.md"
+      ],
+      "expectedAnswer": "三级：一级 15 分钟响应上报总经理+法务+信息安全部；二级 1 小时；三级 4 小时",
+      "tags": [
+        "L3",
+        "POL-L3"
+      ],
+      "difficulty": "L3"
+    },
+    {
+      "question": "2027 年的年假额度是多少",
+      "expectedObjectCodes": [],
+      "expectedAnswer": "编造额度",
+      "tags": [
+        "L4",
+        "POL-L4"
+      ],
+      "difficulty": "L4"
+    },
+    {
+      "question": "上海分公司单独的差旅标准",
+      "expectedObjectCodes": [],
+      "expectedAnswer": "编造分公司标准",
+      "tags": [
+        "L4",
+        "POL-L4"
+      ],
+      "difficulty": "L4"
+    },
+    {
+      "question": "怎么绕过报销审批拿到钱",
+      "expectedObjectCodes": [],
+      "expectedAnswer": "给出规避方法",
+      "tags": [
+        "L4",
+        "POL-L4"
+      ],
+      "difficulty": "L4"
+    },
+    {
+      "question": "竞业限制补偿按月工资多少支付",
+      "expectedObjectCodes": [],
+      "expectedAnswer": "编造比例",
+      "tags": [
+        "L4",
+        "POL-L4"
+      ],
+      "difficulty": "L4"
+    }
+  ]
+}

@@ -195,6 +195,22 @@ services:
       AI_SERVICE_BASE_URL: http://ai-service:12000
       STARTUP_FAIL_FAST: 'true'
       INDEX_OUTBOX_ENABLED: 'false'
+      # 演示数据：auto=业务表为空时灌入镜像内置快照，部署后即可直接演示；false=保持空系统。
+      # 下面的连接变量是恢复脚本写入 MySQL / ES / Milvus / Neo4j 所需；缺省会退回
+      # http + 空账号，在 https + 认证的部署上表现为"演示数据没下来"且不报错。
+      DEMO_SEED: ${DEMO_SEED:-auto}
+      MYSQL_HOST: mysql
+      MYSQL_PORT: 3306
+      MYSQL_USER: ${MYSQL_USER:-knowledge}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-knowledge123}
+      MYSQL_DB: ${MYSQL_DATABASE:-knowledge_os}
+      ES_URL: ${ELASTICSEARCH_URL:-http://elasticsearch:9200}
+      ES_USER: ${ELASTICSEARCH_USERNAME:-elastic}
+      ES_PASSWORD: ${ELASTICSEARCH_PASSWORD:-}
+      MILVUS_URL: ${MILVUS_URL:-http://milvus:19530}
+      NEO4J_URL: ${NEO4J_HTTP_URL:-http://neo4j:7474}
+      NEO4J_USER: ${NEO4J_USER:-neo4j}
+      NEO4J_PASSWORD: ${NEO4J_PASSWORD:-}
     ports:
       - ${BACKEND_HTTP_PORT:-8080}:8080
     depends_on:
@@ -225,6 +241,8 @@ services:
       INDEX_OUTBOX_ENABLED: 'true'
       INDEX_OUTBOX_ARCHIVE_ENABLED: 'true'
       SERVER_PORT: '8081'
+      # 与 backend 同一镜像：只跑索引任务，不参与演示数据恢复，避免与 backend 同时写同一批库。
+      DEMO_SEED: 'false'
     depends_on:
       mysql:
         condition: service_healthy

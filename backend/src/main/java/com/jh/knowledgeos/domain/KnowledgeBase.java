@@ -30,6 +30,12 @@ public class KnowledgeBase {
 
     private String ownerGroupName;
 
+    /**
+     * 场景模板编码（GENERAL / OPS / POLICY / BUSINESS / VULN）：决定该库的切分、衍生与检索策略。
+     * 由 t_kb_scenario 联表带出，无配置行时为 GENERAL，保证列表与编辑弹窗看到的是同一个值。
+     */
+    private String scenario;
+
     private java.time.LocalDateTime createdTime;
 
     public Long getId() {
@@ -110,6 +116,14 @@ public class KnowledgeBase {
 
     public void setOwnerGroupName(String v) {
         ownerGroupName = v;
+    }
+
+    public String getScenario() {
+        return scenario;
+    }
+
+    public void setScenario(String v) {
+        scenario = v;
     }
 
     public java.time.LocalDateTime getCreatedTime() {

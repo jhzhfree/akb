@@ -103,6 +103,59 @@ public class EvaluationService {
         return mapper.listEvaluationCases(longValue(dataset.get("id")));
     }
 
+    /**
+     * 检索面板的示例问题：取当前知识库自己的测试语句，并按难度轮转挑选。
+     *
+     * <p>每个场景的提问方式差别很大——运维是命令与主机号，制度是天数与金额，研发是 issue 与工单号，
+     * 用一套通用示例问题演示不出场景差异。同时按 L1/L2/L3 轮转取样，保证示例既覆盖字面检索，
+     * 也覆盖口语化改写与多跳问题，而不是清一色最简单的那几条。</p>
+     */
+    public List<Map<String, Object>> sampleQuestions(Long kb, int limit) {
+        int size = Math.min(Math.max(limit, 1), 12);
+        List<Map<String, Object>> rows = mapper.listSampleQuestions(kb, 120);
+        if (rows.isEmpty()) {
+            return new ArrayList<Map<String, Object>>();
+        }
+        Map<String, List<Map<String, Object>>> byLevel = new LinkedHashMap<String, List<Map<String, Object>>>();
+        for (Map<String, Object> row : rows) {
+            String level = defaultString(row.get("difficulty"), "L1");
+            List<Map<String, Object>> group = byLevel.get(level);
+            if (group == null) {
+                group = new ArrayList<Map<String, Object>>();
+                byLevel.put(level, group);
+            }
+            group.add(row);
+        }
+        List<Map<String, Object>> picked = new ArrayList<Map<String, Object>>();
+        int cursor = 0;
+        while (picked.size() < size) {
+            boolean progressed = false;
+            for (List<Map<String, Object>> group : byLevel.values()) {
+                if (cursor >= group.size()) {
+                    continue;
+                }
+                picked.add(group.get(cursor));
+                progressed = true;
+                if (picked.size() >= size) {
+                    break;
+                }
+            }
+            if (!progressed) {
+                break;
+            }
+            cursor++;
+        }
+        List<Map<String, Object>> result = new ArrayList<Map<String, Object>>();
+        for (Map<String, Object> row : picked) {
+            Map<String, Object> item = new LinkedHashMap<String, Object>();
+            item.put("question", string(row.get("question")));
+            item.put("difficulty", defaultString(row.get("difficulty"), "L1"));
+            item.put("expectedObjectCodes", readCodes(row.get("expectedObjectCodesJson")));
+            result.add(item);
+        }
+        return result;
+    }
+
     public Map<String, Object> createCase(String datasetCode, Map<String, Object> body) {
         Map<String, Object> dataset = mapper.getEvaluationDataset(datasetCode);
         if (dataset == null) {

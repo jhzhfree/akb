@@ -42,6 +42,13 @@ public class EvaluationController {
         return ApiResponse.ok(service.listDatasets(kb));
     }
 
+    @GetMapping("/samples/{kb}")
+    @Operation(summary = "列出知识库的示例检索问题", description = "取自该知识库自己的评测用例，按难度轮转挑选，供检索面板展示场景测试语句")
+    public ApiResponse<List<Map<String, Object>>> samples(@PathVariable Long kb,
+                                                          @RequestParam(defaultValue = "6") int limit) {
+        return ApiResponse.ok(service.sampleQuestions(kb, limit));
+    }
+
     @PostMapping("/datasets/{kb}")
     @Operation(summary = "创建评测数据集")
     public ApiResponse<Map<String, Object>> createDataset(@PathVariable Long kb, @RequestBody Map<String, Object> body) {

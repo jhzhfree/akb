@@ -83,10 +83,13 @@ public class KnowledgeBaseService {
         base.setVisibility(scope.visibility.name());
         base.setOwnerGroupId(scope.ownerGroupId);
         mapper.insertKnowledgeBase(base);
-        seedScenario(base.getId(), scenario);
+        // 场景是建库的一部分：这里不落库，列表就会显示通用模板而编辑弹窗里看到的是另一套策略。
+        String code = KbScenarioTemplates.normalizeCode(scenario);
+        seedScenario(base.getId(), code);
+        base.setScenario(code);
         Map<String, Object> detail = describe(base);
         detail.put("description", base.getDescription());
-        detail.put("scenario", KbScenarioTemplates.normalizeCode(scenario));
+        detail.put("scenario", code);
         publisher.emitUser(PlatformEventTypes.KNOWLEDGE_BASE_CREATED, base.getId(), PlatformEventPublisher.SOURCE_UI, "KNOWLEDGE_BASE",
             base.getBaseCode(), "创建知识库：" + base.getName(), detail);
         return base;
@@ -128,6 +131,8 @@ public class KnowledgeBaseService {
         mapper.updateKnowledgeBase(id, name.trim(), description, scope.visibility.name(), scope.ownerGroupId);
         KnowledgeBase updated = mapper.getKnowledgeBase(id);
         String applied = applyScenario(id, scenario);
+        // 回写生效场景：没换模板时也要把当前模板带回去，界面上标注的才是库真正在跑的那套。
+        updated.setScenario(applied != null ? applied : currentScenario(id));
         Map<String, Object> detail = describe(updated);
         detail.put("description", updated.getDescription());
         detail.put("previousName", previousName);
@@ -156,6 +161,12 @@ public class KnowledgeBaseService {
         }
         seedScenario(id, code);
         return code;
+    }
+
+    /** Scenario a library currently runs: the stored one, or the generic template when untouched. */
+    private String currentScenario(Long id) {
+        Map<String, Object> stored = mapper.getKbScenario(id);
+        return KbScenarioTemplates.normalizeCode(stored == null ? null : String.valueOf(stored.get("scenario")));
     }
 
     /**

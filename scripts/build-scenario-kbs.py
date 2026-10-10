@@ -39,10 +39,13 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 DATASET_DIR = REPO_ROOT / "dataset"
 SCENARIO_DIR = DATASET_DIR / "_scenarios"
 
+# 场景数据集 -> 知识库场景模板码（与后端 KbScenarioTemplates 一致）。
+# 建库时不下发模板码，库就会被建成通用库：列表标着“运维”，切分与检索仍按综合模板跑，
+# 编辑弹窗里也就只能回显“综合知识库”。模板码缺省时按下面的兜底值，schema 里可覆盖。
 SCENARIOS = {
-    "ops": ("ops-knowledge", "运维知识库"),
-    "policy": ("company-policy", "公司制度知识库"),
-    "eng": ("engineering-workspace", "工程协同知识库"),
+    "ops": ("ops-knowledge", "运维知识库", "OPS"),
+    "policy": ("company-policy", "公司制度知识库", "POLICY"),
+    "eng": ("engineering-workspace", "工程协同知识库", "BUSINESS"),
 }
 
 TERMINAL_STATES = {"SUCCEEDED", "SUCCESS", "FAILED", "CANCELLED", "CANCELED", "SKIPPED", "DONE"}
@@ -110,21 +113,56 @@ class Client:
 
 
 # ---------------------------------------------------------------------- steps
-def ensure_base(client: Client, scenario_key: str, schema: dict[str, Any]) -> dict[str, Any]:
-    """Create the knowledge base when it does not exist yet; reuse it otherwise."""
+def ensure_base(client: Client, scenario_key: str, schema: dict[str, Any]) -> tuple[dict[str, Any], str]:
+    """Create the knowledge base with its scenario template, or align an existing one to it.
+
+    The scenario is part of creation, not a setting applied afterwards: a library created
+    without it is stored as a generic one and keeps answering like a generic one. Existing
+    libraries are aligned too, so re-running this script repairs a demo built by an older
+    version instead of silently reusing a mislabelled library.
+    """
     meta = schema.get("knowledgeBase") or {}
     name = meta.get("name") or SCENARIOS[scenario_key][1]
+    scenario = str(meta.get("scenario") or SCENARIOS[scenario_key][2] or "GENERAL").strip().upper()
     for base in client.get("/api/knowledge/bases") or []:
-        if isinstance(base, dict) and base.get("name") == name:
-            print("  · 复用已存在的知识库：%s（id=%s）" % (name, base.get("id")))
-            return base
+        if not (isinstance(base, dict) and base.get("name") == name):
+            continue
+        print("  · 复用已存在的知识库：%s（id=%s）" % (name, base.get("id")))
+        return base, align_scenario(client, base, scenario)
     created = client.post("/api/knowledge/bases", {
         "name": name,
         "description": meta.get("description") or "",
         "visibility": meta.get("visibility") or "PUBLIC",
+        "scenario": scenario,
     })
-    print("  · 已创建知识库：%s（id=%s）" % (name, created.get("id")))
-    return created
+    print("  · 已创建知识库：%s（id=%s，场景 %s）" % (name, created.get("id"), scenario))
+    return created, scenario
+
+
+def align_scenario(client: Client, base: dict[str, Any], scenario: str) -> str:
+    """Move an existing library onto the scenario its dataset expects when it drifted."""
+    kb_id = base.get("id")
+    if kb_id is None:
+        return scenario
+    if str(base.get("scenario") or "").strip().upper() == scenario:
+        return scenario
+    try:
+        current = client.get("/api/knowledge/settings/scenario", kb=kb_id) or {}
+    except SystemExit as exc:
+        print("    ! 读取场景失败（%s），跳过对齐" % str(exc)[:120])
+        return scenario
+    applied = str(current.get("scenario") or "").strip().upper()
+    if applied == scenario:
+        return scenario
+    client.put("/api/knowledge/bases/%s" % kb_id, {
+        "name": base.get("name") or "",
+        "visibility": base.get("visibility") or "PUBLIC",
+        "ownerGroupId": base.get("ownerGroupId"),
+        "scenario": scenario,
+    })
+    print("  · 已将知识库 %s 的场景从 %s 对齐为 %s（重新下发该模板的切分 / 衍生 / 检索配置）"
+          % (base.get("name"), applied or "GENERAL", scenario))
+    return scenario
 
 
 def upload_scenario(client: Client, kb_id: int, files: list[Path], batch_size: int, authority: float | None,
@@ -268,7 +306,7 @@ def main() -> int:
     report: dict[str, Any] = {"baseUrl": args.base_url, "finishedAt": None, "scenarios": {}}
 
     for key in selected:
-        directory_name, fallback_name = SCENARIOS[key]
+        directory_name, fallback_name = SCENARIOS[key][0], SCENARIOS[key][1]
         source_dir = DATASET_DIR / directory_name
         schema = load_json(SCENARIO_DIR / ("%s.schema.json" % directory_name))
         profile_path = SCENARIO_DIR / ("%s.profile.json" % directory_name)
@@ -279,9 +317,9 @@ def main() -> int:
             continue
 
         entry: dict[str, Any] = {"directory": str(source_dir), "fileCount": len(files)}
-        base = ensure_base(client, key, schema)
+        base, scenario = ensure_base(client, key, schema)
         kb_id = base.get("id")
-        entry["knowledgeBase"] = {"id": kb_id, "name": base.get("name")}
+        entry["knowledgeBase"] = {"id": kb_id, "name": base.get("name"), "scenario": scenario}
 
         if not args.skip_upload:
             entry["batches"] = upload_scenario(client, kb_id, files, args.batch_size, args.authority,
