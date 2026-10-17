@@ -90,8 +90,9 @@ public class ExternalKnowledgeFacade {
         result.put("answerFormat", AnswerFormat.normalize(result.get("answerFormat") == null ? null
             : String.valueOf(result.get("answerFormat"))));
         // 同理回传实际生效的 topK——但**不能**写回 `topK`：那是 AI 服务自己的字段，语义是
-        // "选中送入答案生成的上下文条数"（一次请求 topK=3 的调用里它返回 1），覆盖掉会让
-        // 已按下游语义解析的调用方拿到完全不同的东西。用独立名字并存，两边都不破坏。
+        // "本次生效的召回上限"（即请求值夹到 1~50 之后的结果，通常与本值相同）；实际给出的
+        // 条数是 AI 服务返回的 `returned`（融合重排与 minScore 过滤之后的数量，可能大于也可能
+        // 小于 topK）。用独立名字并存，两个口径都保留。
         result.put("effectiveTopK", effectiveTopK(topK));
         return result;
     }
@@ -185,7 +186,7 @@ public class ExternalKnowledgeFacade {
         search.put("queryId", result.get("queryId"));
         search.put("knowledgeBaseId", kb);
         search.put("question", question);
-        // `topK` 沿用 AI 服务的语义（选中上下文条数），夹取后的请求值另放在 effectiveTopK。
+        // `topK` 沿用 AI 服务的语义（本次生效的召回上限），夹取后的请求值另放在 effectiveTopK。
         search.put("topK", result.get("topK"));
         search.put("effectiveTopK", result.get("effectiveTopK"));
         search.put("returned", result.get("returned"));

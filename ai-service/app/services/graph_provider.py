@@ -12,6 +12,7 @@ from functools import lru_cache
 from typing import Any
 
 from app.core.config import settings
+from app.core.contracts import RETRIEVABLE_STATUSES
 
 
 class GraphProvider(ABC):
@@ -585,14 +586,15 @@ class Neo4jGraphProvider(GraphProvider):
         permission_tags=None,
     ) -> list[dict[str, Any]]:
         """Search only the active governed graph generation with pre-TopK ACL."""
+        recallable = ", ".join("'%s'" % item for item in sorted(RETRIEVABLE_STATUSES))
         records, _ = self._execute(
             "MATCH (p:IndexGenerationPointer {knowledgeBaseId:$kb}) "
             "MATCH (n:KnowledgeObject {knowledgeBaseId:$kb, generationId:p.activeGenerationId}) "
             "WHERE (size(coalesce(n.permissionTags, []))=0 OR any(tag IN coalesce(n.permissionTags, []) WHERE tag IN $permissionTags)) "
-            "AND (n.status IS NULL OR n.status IN ['APPROVED','EFFECTIVE']) "
+            "AND (n.status IS NULL OR n.status IN [%s]) "
             "AND (toLower(coalesce(n.title,'')) CONTAINS toLower($q) OR toLower(coalesce(n.content,'')) CONTAINS toLower($q)) "
             "RETURN n.objectType AS nodeType,n.objectId AS code,n.title AS title,n.content AS content,n.generationId AS generationId "
-            "LIMIT $limit",
+            "LIMIT $limit" % recallable,
             {"kb": knowledge_base_id, "q": query, "limit": int(top_k), "permissionTags": list(permission_tags or [])},
         )
         result = []

@@ -218,6 +218,11 @@ services:
     image: docker.elastic.co/elasticsearch/elasticsearch:9.5.3
     container_name: kos-dev-es
     restart: unless-stopped
+    # 数据卷被清空后 ES 会重新跑安全自动配置并给 HTTP 层也套上 TLS，
+    # 而后端/ai-service 与这里的健康检查都走 http，故显式关掉 HTTP TLS。
+    command:
+      - elasticsearch
+      - -Expack.security.http.ssl.enabled=false
     environment:
       discovery.type: single-node
       DISABLE_INSTALL_DEMO_CONFIG: 'true'
@@ -225,6 +230,8 @@ services:
       # 变量名与 prod/release 编排保持一致，首次启动用它初始化 elastic，健康检查也用它探活。
       # 默认值与现有 es 数据卷里的密码一致，重建容器后 ai-service 保存的凭证无需改动。
       ELASTICSEARCH_INITIAL_ADMIN_PASSWORD: ${ELASTICSEARCH_INITIAL_ADMIN_PASSWORD:-eucwdo0h4IlxoHdErDsa}
+      # 同上，兼容不同版本镜像读取的变量名，保证重建容器后密码仍是上面这个值。
+      ELASTIC_PASSWORD: ${ELASTICSEARCH_INITIAL_ADMIN_PASSWORD:-eucwdo0h4IlxoHdErDsa}
       ES_JAVA_OPTS: -Xms1g -Xmx1g
       TZ: Asia/Shanghai
     ports:

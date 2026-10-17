@@ -70,7 +70,19 @@ make dev-ai OLLAMA_URL=http://192.168.22.6:11434 LLM_MODEL=qwen2.5:7b
 > 本地无 Maven 时，`make dev-backend` 会直接报错退出，此时改用
 > `make dev-backend-up` 以容器方式启动后端。
 
-### 1.4 访问地址
+### 1.4 停止本地裸跑服务
+
+```bash
+pkill -f "uvicorn app.main:app"   # ai-service，:12000
+pkill -f "spring-boot:run"        # backend 的 Maven 包装进程
+pkill -f "com.jh.knowledgeos"     # backend 的 Java 进程
+ss -ltn | grep -E ":8080|:12000"  # 无输出即端口已释放
+```
+
+`pkill` 默认发 `TERM`，进程未退出时再 `pkill -9 -f`。中间件容器不受影响，
+`make dev-ps` 仍应显示 healthy。
+
+### 1.5 访问地址
 
 | 服务 | 本地裸跑 | 容器模式 |
 | --- | --- | --- |
@@ -205,3 +217,123 @@ Non-resolvable parent POM ... Unknown host repo.maven.apache.org: Temporary fail
 | `org.flywaydb:flyway-mysql` | Flyway 8.x 把 MySQL 支持从 `flyway-core` 拆出，缺它会抛 `Unsupported Database: MySQL 8.0` |
 
 两者版本均由父 POM 统一管理，不要在子 POM 里另写版本号，否则会与 Spring Boot 依赖管理脱节。
+
+### 6.4 改了 MyBatis mapper XML 必须重启后端
+
+`make dev-backend` 走 `mvn spring-boot:run`，只热加载编译产物，`src/main/resources/**/*.xml`
+不在监听范围内。改完 `IndexMapper.xml` 等 mapper 不重启，接口仍执行旧 SQL——
+表现为「代码已改、行为未变」，重建索引也会得到与代码不符的结果。
+
+### 6.5 代理环境下调用本机接口要绕开代理
+
+shell 里若导出过 `http_proxy`（尤其 SOCKS 代理），`curl` 会把 `127.0.0.1` 也走代理导致连接失败。
+统一加 `--noproxy '*'`；Python 侧用 `requests.Session()` 后设 `trust_env = False`。
+
+## 七、索引镜像：重建 / 激活 / 回滚
+
+蓝绿索引（ES + Milvus + Neo4j）以「知识库 × `schemaVersion`」为单位发布，重建写蓝环境、
+激活才切读别名。以下场景**必须重建**，只改代码不重建不会生效：
+
+- 检索状态白名单变更（如把 DRAFT / UNCERTAIN 纳入可召回集合）
+- 更换 Embedding provider 或维度
+- 检索契约、字段结构变更，或索引漂移修复
+
+```bash
+# 1) 取 console token
+TOKEN=$(curl -s --noproxy '*' -X POST http://127.0.0.1:8080/api/auth/login \
+  -H 'Content-Type: application/json' -d '{"username":"admin","password":"admin123"}' \
+  | python3 -c 'import sys,json;print(json.load(sys.stdin)["data"]["token"])')
+
+# 2) 重建：逐个知识库执行，单库耗时随语料增长，超时放到分钟级
+curl -s --noproxy '*' -X POST -H "Authorization: Bearer $TOKEN" \
+  "http://127.0.0.1:8080/api/knowledge/index/schema/6/rebuild?schemaVersion=vfix5"
+
+# 3) 确认 state=READY 且三引擎条数一致后激活（RELEASE_ID 取自上一步返回的 releaseId）
+curl -s --noproxy '*' -X POST -H "Authorization: Bearer $TOKEN" \
+  "http://127.0.0.1:8080/api/knowledge/index/schema/6/activate/$RELEASE_ID"
+
+# 异常时回滚到上一个 ACTIVE 版本
+curl -s --noproxy '*' -X POST -H "Authorization: Bearer $TOKEN" \
+  "http://127.0.0.1:8080/api/knowledge/index/schema/6/rollback/$RELEASE_ID"
+```
+
+核对激活结果：
+
+```bash
+docker exec kos-dev-mysql mysql -uknowledge -pknowledge123 knowledge_os -e \
+  "select knowledge_base_id kb, schema_version, state, integrity_state,
+          elasticsearch_count es, milvus_count mv, snapshot_count snap
+   from t_index_schema_release where knowledge_base_id in (6,7,8,9,10)
+   order by id desc limit 10;"
+```
+
+`state=ACTIVE` 且 `integrity_state=VERIFIED` 即成功，上一版本会被自动置为 `RETIRED`。
+旧版本的目标索引 / 集合不再有别名指向，确认无用后可自行删除。
+
+> **重建报 `COUNT_MISMATCH`**：权威快照 SQL（`IndexMapper.listAuthoritativeIndexSnapshot`）
+> 与预期行数 SQL（`IndexMapper.countIndexableObjects`）的**状态集合必须逐字一致**。
+> 只放宽快照而漏改 count，快照行数会大于预期，完整性校验直接判失败。
+
+## 八、数据镜像：制作与发布
+
+把开发机上「已灌好数据」的中间件打包成镜像，目标机拉起即自带指定知识库。
+镜像以官方中间件为基线，tag 与 `VERSION` 保持一致（`1.1.0`）：
+
+| 镜像 | 数据目录 | 说明 |
+| --- | --- | --- |
+| `mysql-data` | `/var/lib/mysql` | 知识库主数据（卡片 / 断言 / 文档 / 关系） |
+| `es-data` | `/usr/share/elasticsearch/data` | BM25 与 typed 检索索引 |
+| `neo4j-data` | `/data` | 权威图谱 |
+| `milvus-data` | `/var/lib/milvus` | 向量索引 |
+| `milvus-etcd-data` | `/etcd` | Milvus 元数据，**必须**与 milvus-data 同批替换 |
+| `milvus-minio-data` | `/minio_data` | Milvus 对象存储，同上 |
+
+### 8.1 制作步骤
+
+```bash
+# 1) 停应用与中间件，保证落盘一致（顺序：应用 → milvus → etcd/minio → 其它）
+pkill -f "uvicorn app.main:app"; pkill -f "spring-boot:run"; pkill -f "com.jh.knowledgeos"
+docker stop kos-dev-milvus kos-dev-etcd kos-dev-minio kos-dev-neo4j kos-dev-mysql kos-dev-es
+
+# 2) 导出数据卷（用 tar 才能保留 uid/gid，docker cp 会把属主改成 root）
+mkdir -p /root/data-export/build/{mysql,es,neo4j,milvus,etcd,minio}
+for v in mysql es neo4j milvus etcd minio; do
+  docker run --rm -v ai-knowledge-os_dev_${v}_data:/data \
+    -v /root/data-export/build/$v:/out alpine tar -cf /out/$v.tar -C /data .
+done
+docker cp kos-dev-es:/usr/share/elasticsearch/config/. /root/data-export/build/es/config/
+```
+
+每个镜像用多阶段构建（`--chown` 保持原属主，tar 不进入最终镜像）：
+
+```dockerfile
+FROM alpine AS data
+COPY es.tar /src.tar
+RUN mkdir -p /data && tar -xpf /src.tar -C /data
+FROM docker.elastic.co/elasticsearch/elasticsearch:9.5.3
+USER root
+COPY config/ /usr/share/elasticsearch/config/
+COPY --from=data --chown=1000:0 /data /usr/share/elasticsearch/data
+USER 1000:0
+```
+
+```bash
+R=192.168.22.6:5000/knowledge-os
+for v in mysql es neo4j milvus etcd minio; do
+  docker build -t $R/${v}-data:1.1.0 /root/data-export/build/$v
+  docker push  $R/${v}-data:1.1.0
+done
+```
+
+### 8.2 使用约束（踩过的坑，别踩第二次）
+
+1. **ES 必须挂数据卷跑**：数据放在镜像的 overlay 层时 Lucene 起不来
+   （`AlreadyClosedException`）；挂命名卷后 Docker 会把镜像内数据带属主复制进卷，可正常启动。
+2. **ES 的 `config` 要一起打包**：安全自动配置状态与 `elasticsearch.keystore` 在
+   `/usr/share/elasticsearch/config`（容器层）。只搬数据目录会让新容器重跑自动配置、
+   重置 `elastic` 密码，表现为镜像拉起后 401。
+3. **Milvus 的三份数据（milvus / etcd / minio）必须同一时刻快照**：分开导出会出现
+   元数据与对象不一致。
+4. **不要清 ES 数据目录里的"残留"索引 UUID**：`.security-7` 等系统索引也在
+   `indices/` 下，按业务索引列表求差集删除会连带删掉安全索引，导致认证失效。
+5. MySQL 镜像可直接跑（不挂卷也可用），Neo4j 同理；但生产编排本来就有卷，保持一致即可。

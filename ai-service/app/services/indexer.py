@@ -548,8 +548,8 @@ class KnowledgeIndexer:
 
         elasticsearch = get_elasticsearch_provider()
         milvus = get_milvus_provider()
-        os_target = elasticsearch.schema_target(schema_version)
-        qd_target = milvus.schema_target(schema_version)
+        os_target = elasticsearch.schema_target(schema_version, knowledge_base_id)
+        qd_target = milvus.schema_target(schema_version, knowledge_base_id)
         graph = get_graph_provider()
         if reset:
             # The width has to come from a real vector, not from settings.embedding_dim. When
@@ -661,8 +661,8 @@ class KnowledgeIndexer:
         schema_version: str,
     ) -> dict[str, Any]:
         """Atomically activate validated Elasticsearch and Milvus green targets."""
-        os_result = await get_elasticsearch_provider().activate_target(schema_version)
-        qd_result = await get_milvus_provider().activate_target(schema_version)
+        os_result = await get_elasticsearch_provider().activate_target(schema_version, knowledge_base_id)
+        qd_result = await get_milvus_provider().activate_target(schema_version, knowledge_base_id)
         graph = get_graph_provider()
         graph_result = (
             await asyncio.to_thread(graph.activate_generation, knowledge_base_id, schema_version)

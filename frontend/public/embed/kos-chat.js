@@ -17,12 +17,14 @@
  *  - 只持有一枚短期嵌入令牌（X-Embed-Token），API Key 不出现在浏览器中；
  *  - 消费后端 SSE 流，实时展示服务端检索过程（改写/召回/融合/重排/生成/引用校验）；
  *  - 答案里的 [证据N] 上标与下方「引用来源」卡片一一对应，点开可看证据原文，
- *    排版与控制台问答页保持一致：同一套信息层次，只是装进了一个 420px 的面板。
+ *    排版与控制台问答页保持一致：同一套信息层次，只是装进了一个 420px 的面板；
+ *  - 引用默认只露标号：引用来源是一排 [N]，正文里的「引用原文」小节默认收起成一行，
+ *    原文一律点开才铺开 —— 420px 的面板放不下「结论 + 全文」，结论优先。
  */
 (function (root, doc) {
   'use strict';
 
-  var VERSION = '1.3.6';
+  var VERSION = '1.3.7';
   /**
    * apiBase 的写法在各接入方手里并不统一：控制台示例与文档给的是
    * https://<host>/api/v1/external，也有只写到 https://<host> 的。
@@ -840,17 +842,33 @@
       '.md-badge.md-tone-info { background: var(--kos-info-bg); color: var(--kos-info); border-color: var(--kos-info-bd); }',
       '.md-badge.md-tone-warn { background: var(--kos-warn-bg); color: var(--kos-warn); border-color: var(--kos-warn-bd); }',
       '.md-badge.md-tone-danger { background: var(--kos-danger-bg); color: var(--kos-danger); border-color: var(--kos-danger-bd); }',
-      /* 引用来源：与控制台「引用来源」同一形态 —— [N] 标题 的朴素 accent 文字按钮，
-         点击在本卡片内联展开详情（窄面板里比抽屉更实用），hover 与控制台同：浅底 + 下划线 */
+      /* 引用来源：默认是一排 [N] 标号，点标号才在这条下面铺开原文（窄面板里比抽屉更实用）。
+         标号做成胶囊：纯文字的 [1] 看不出能点，也看不出是"一条引用"。 */
       '.md-cites { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--kos-line-soft); }',
       '.md-cites-head { font-size: 11px; font-weight: 600; color: var(--kos-ink-3);',
       '  margin: 0 0 6px; text-transform: uppercase; letter-spacing: .05em; }',
-      '.md-cite-list { display: flex; flex-wrap: wrap; gap: 2px 6px; }',
-      '.md-cite-chip { border: none; background: none; color: var(--kos-accent);',
-      '  padding: 2px 6px; border-radius: 4px; font-size: 12px; font-family: inherit;',
-      '  cursor: pointer; transition: background .12s ease; }',
-      '.md-cite-chip:hover { background: var(--kos-info-bg); text-decoration: underline; }',
-      '.md-cite-chip.md-selected { background: var(--kos-primary-soft); text-decoration: underline; }',
+      '.md-cite-list { display: flex; flex-wrap: wrap; gap: 4px 6px; }',
+      '.md-cite-chip { border: 1px solid var(--kos-line); background: var(--kos-surface);',
+      '  color: var(--kos-accent); padding: 1px 8px; border-radius: 999px;',
+      '  font-size: 11.5px; font-family: inherit; line-height: 18px;',
+      '  cursor: pointer; transition: all .12s ease; }',
+      '.md-cite-chip:hover { border-color: var(--kos-primary); background: var(--kos-info-bg); }',
+      '.md-cite-chip.md-selected { border-color: var(--kos-primary); background: var(--kos-primary-soft);',
+      '  color: var(--kos-accent); font-weight: 600; }',
+      /* 正文里的「引用原文」小节：与检索过程同一个折叠形态，默认收起 */
+      '.md-answer details.md-refs { margin-top: 10px; border: 1px solid var(--kos-line);',
+      '  border-radius: 8px; background: var(--kos-surface); overflow: hidden; }',
+      '.md-answer details.md-refs > summary { list-style: none; cursor: pointer; padding: 7px 11px;',
+      '  font-size: 12px; color: var(--kos-ink-2); user-select: none; }',
+      '.md-answer details.md-refs > summary::-webkit-details-marker { display: none; }',
+      '.md-answer details.md-refs > summary::before { content: "▸"; display: inline-block;',
+      '  margin-right: 6px; color: var(--kos-ink-4); font-size: 10px; }',
+      '.md-answer details.md-refs[open] > summary::before { content: "▾"; }',
+      '.md-answer details.md-refs > summary:hover { color: var(--kos-accent); }',
+      '.md-answer details.md-refs > .answer-citations, .md-answer details.md-refs > .md-heading,',
+      '.md-answer details.md-refs > ol, .md-answer details.md-refs > ul {',
+      '  margin: 0; padding: 0 12px 10px; border-top: none; }',
+      '.md-answer details.md-refs > .answer-citations { padding-top: 0; }',
       '.md-cite-detail { margin-top: 8px; padding: 9px 11px; border: 1px solid var(--kos-line);',
       '  border-radius: 8px; background: var(--kos-bg-sub); font-size: 12.5px; color: var(--kos-ink-2); }',
       '.md-cite-detail-head { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }',
@@ -1205,12 +1223,13 @@
       box.innerHTML = '';
       return;
     }
+    /* 只给标号：文档名、摘录这些都收在点开后的详情里，窄面板里先让结论和编号站住。
+       出处信息留给 title，悬浮即见，不占版面。 */
     var chipsHtml = items.map(function (citation) {
       var idx = citation.index != null ? citation.index : 0;
-      var title = pick(citation, ['title', 'sourceName', 'documentTitle', 'objectId']) || '证据';
       return '<button type="button" class="md-cite-chip" data-act="cite-show" data-cite-index="' +
-        escapeHtml(String(idx)) + '" title="' + escapeHtml(citationTitle(citation)) + '">[' +
-        escapeHtml(String(idx)) + '] ' + escapeHtml(title) + '</button>';
+        escapeHtml(String(idx)) + '" aria-expanded="false" title="' +
+        escapeHtml(citationTitle(citation)) + '">[' + escapeHtml(String(idx)) + ']</button>';
     }).join('');
     box.innerHTML =
       '<p class="md-cites-head">引用来源 · ' + items.length + ' 条</p>' +
@@ -1264,13 +1283,17 @@
     var box = card.citeEl.querySelector('.md-cite-detail');
     if (!box) return;
     var alreadyShown = chip.classList.contains('md-selected') && !box.hidden;
-    card.citeEl.querySelectorAll('.md-cite-chip').forEach(function (n) { n.classList.remove('md-selected'); });
+    card.citeEl.querySelectorAll('.md-cite-chip').forEach(function (n) {
+      n.classList.remove('md-selected');
+      n.setAttribute('aria-expanded', 'false');
+    });
     if (alreadyShown) {
       box.hidden = true;
       box.innerHTML = '';
       return;
     }
     chip.classList.add('md-selected');
+    chip.setAttribute('aria-expanded', 'true');
     var title = pick(citation, ['title', 'sourceName', 'documentTitle', 'objectId']) || '证据';
     box.innerHTML =
       '<div class="md-cite-detail-head">' +
@@ -1286,7 +1309,10 @@
     if (!card) return;
     var box = card.citeEl.querySelector('.md-cite-detail');
     if (box) { box.hidden = true; box.innerHTML = ''; }
-    card.citeEl.querySelectorAll('.md-cite-chip').forEach(function (n) { n.classList.remove('md-selected'); });
+    card.citeEl.querySelectorAll('.md-cite-chip').forEach(function (n) {
+      n.classList.remove('md-selected');
+      n.setAttribute('aria-expanded', 'false');
+    });
   };
 
   Widget.prototype.findCard = function (node) {
@@ -1501,6 +1527,34 @@
   /* ---- 空结果：没有可验证内容时，说清发生了什么，而不是给一段空文本 ---- */
   var NO_ANSWER_TEXT = '现有知识不足以形成全部可验证的结论；未通过证据完整性与忠实度校验的内容已阻止输出。';
   var NO_ANSWER_PREFIX = '现有知识不足以';
+  /* 引用小节的标题字样：Markdown 源、渲染后的标题、服务端 HTML 都靠它认出来 */
+  var REF_HEADING_TEXT = /引用原文|引用来源|参考来源|参考资料|参考文献|证据原文|引用与出处/;
+
+  /**
+   * 弃答卡只留结论那一句：门控拦截时服务端把弃答话术与「引用原文」小节拼在同一段 answer 里，
+   * 整段当标题会把十几条原文铺在结论下面——引用来源区已经给了标号，这里是又长又重复的一份。
+   * 取法：先摘掉引用小节，再取第一个非空行（跳过 --- 分隔与 markdown 标题符号）。
+   */
+  function noAnswerHeadline(answer) {
+    // answerFormat=html 时 answer 是标签流：先把块级闭标签换成换行，再剥掉其余标签，
+    // 否则整段挤成一行，标题会把引用原文一起吞进去。
+    var text = stripReferenceSection(String(answer || '')
+      .replace(/<\/(p|div|section|li|h[1-6]|blockquote|ol|ul)>/gi, '\n')
+      .replace(/<[^>]*>/g, ''));
+    var lines = text.split(/\r?\n/);
+    for (var i = 0; i < lines.length; i++) {
+      var line = String(lines[i] || '').trim().replace(/^#{1,6}\s*/, '');
+      if (!line || /^-{3,}$/.test(line)) {
+        continue;
+      }
+      // 撞上引用小节就停：结论句在它前面，后面都是原文
+      if (REF_HEADING_TEXT.test(line)) {
+        break;
+      }
+      return line;
+    }
+    return '';
+  }
 
   /** 三种情况都算"没有可展示的知识内容"：空答案、服务端的弃答话术、门控判定为阻断。 */
   function isNoAnswer(payload, answer) {
@@ -1518,6 +1572,59 @@
 
   /** 默认视图跟着服务端返回格式走：要 HTML 就给 HTML，其余一律 Markdown。 */
 
+  /**
+   * 正文里的「引用原文」小节默认收起成一行：原文一铺开就把结论挤出 420px 的面板，
+   * 所以结论优先、原文按需点开。服务端 HTML 带 .answer-citations，Markdown 渲染出来
+   * 是「标题 + 列表」的平级节点，两种形态都要压成同一个折叠块。
+   */
+  function wrapRefSection(nodes, labelSource) {
+    var first = nodes[0];
+    var parent = first.parentNode;
+    if (!parent) {
+      return;
+    }
+    var count = 0;
+    nodes.forEach(function (node) {
+      if (node.nodeType === 1) {
+        count += node.querySelectorAll('li').length;
+      }
+    });
+    var details = doc.createElement('details');
+    details.className = 'md-refs';
+    var summary = doc.createElement('summary');
+    var label = String(labelSource.textContent || '').replace(/^#+\s*/, '').trim() || '引用原文';
+    summary.textContent = count ? label + ' · ' + count + ' 条' : label;
+    details.appendChild(summary);
+    parent.insertBefore(details, first);
+    nodes.forEach(function (node) {
+      details.appendChild(node);
+    });
+  }
+
+  function collapseReferenceSections(body) {
+    if (!body) {
+      return;
+    }
+    Array.prototype.forEach.call(body.querySelectorAll('.answer-citations'), function (section) {
+      if (!closest(section, 'details')) {
+        wrapRefSection([section], section.querySelector('h1,h2,h3,h4,h5,h6') || section);
+      }
+    });
+    Array.prototype.forEach.call(body.querySelectorAll('h1,h2,h3,h4,h5,h6'), function (heading) {
+      if (closest(heading, 'details') || !REF_HEADING_TEXT.test(String(heading.textContent || ''))) {
+        return;
+      }
+      var nodes = [heading];
+      var node = heading.nextSibling;
+      // 标题之后直到下一个标题之间的内容都属于这一节，中间可能夹着纯文本节点
+      while (node && !(node.nodeType === 1 && /^H[1-6]$/.test(node.tagName))) {
+        nodes.push(node);
+        node = node.nextSibling;
+      }
+      wrapRefSection(nodes, heading);
+    });
+  }
+
   /** 渲染答案正文：HTML 源半截先降级为纯文本，done 时再整段落成富文本。 */
   Widget.prototype.renderAnswer = function (card, streaming) {
     var answer = card.answer || '';
@@ -1532,12 +1639,18 @@
       html = renderMarkdown(answer, card.citations);
     }
     card.answerBody.innerHTML = html + (streaming ? '<span class="md-caret"></span>' : '');
+    // 流式中间态的答案只有半截，此时判定引用小节会误伤，等 done 再收
+    if (!streaming) {
+      collapseReferenceSections(card.answerBody);
+    }
   };
 
   /** 空结果卡：给出结论性说明 + 这次检索到底发生了什么 + 下一步建议。 */
   Widget.prototype.renderNoAnswer = function (card, payload) {
     var answer = String(card.answer || '').trim();
-    var headline = answer.indexOf(NO_ANSWER_PREFIX) === 0 ? answer : NO_ANSWER_TEXT;
+    var headline = answer.indexOf(NO_ANSWER_PREFIX) === 0
+      ? (noAnswerHeadline(answer) || NO_ANSWER_TEXT)
+      : NO_ANSWER_TEXT;
     var facts = [];
     var channels = (payload && (payload.channels || payload.strategies)) || [];
     if (channels.length) {

@@ -13,6 +13,7 @@ from typing import Any
 import numpy as np
 
 from app.core.config import settings
+from app.core.contracts import RETRIEVABLE_STATUSES
 from app.services.embedding import get_embedding_provider
 from app.services.graph_provider import get_graph_provider
 from app.services.retrieval.external import get_elasticsearch_provider, get_milvus_provider
@@ -38,13 +39,17 @@ def toks(text: str) -> list[str]:
 def allowed(doc: dict[str, Any], tags: Iterable[str] | None) -> bool:
     """Evaluate publication-state and ACL visibility before local Top-K selection."""
     status = doc.get("status")
-    if status and str(status).upper() not in {"APPROVED", "EFFECTIVE"}:
+    if status and str(status).upper() not in RETRIEVABLE_STATUSES:
         return False
     required = doc.get("permission_tags") or []
     if not required:
         return True
-    if not tags:
-        return False
+    # ``None`` carries the same meaning as in the Elasticsearch and Milvus providers: there is
+    # no ACL identity to enforce (platform admin or auth off), so the clause is dropped and
+    # everything is visible. Treating it as "holds no tag" used to reject every object that
+    # carries __public__ — which is every card and claim, hence the empty card/claim channels.
+    if tags is None:
+        return True
     return bool(set(required).intersection(tags if isinstance(tags, set) else set(tags)))
 
 
@@ -254,7 +259,7 @@ class HybridRetriever:
             "generationIds": sorted(external_generations),
             "generationBarrier": "FAIL_CLOSED_ES_MILVUS_NEO4J",
             "filters": {
-                "status": "APPROVED_OR_EFFECTIVE_PRE_TOPK",
+                "status": "RETRIEVABLE_STATUSES_PRE_TOPK",
                 "acl": "PERMISSION_TAGS_PRE_TOPK_ALL_CHANNELS",
                 "graphAcl": "PERMISSION_TAGS_PRE_TOPK",
                 "permissionTagCount": len(permission_tags or []),

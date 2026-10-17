@@ -161,7 +161,7 @@ curl -X POST http://<host>:8080/api/v1/external/query \
 | `success` | 业务是否成功 |
 | `code` | 业务码，成功恒为 `OK` |
 | `message` | 中文提示，失败时为可直接展示的原因 |
-| `traceId` | 链路追踪 ID，排障时提供给平台方 |
+| `traceId` | 链路追踪 ID（本次 HTTP 调用），排障时提供给平台方。**不要**与 `/query` 返回里的 `data.traceId` 混淆：后者是问答 ID，与 `data.queryId` 同值 |
 | `data` | 业务数据，失败时为 `null` |
 
 ### 3.2 错误码对照
@@ -252,26 +252,60 @@ curl -H 'X-API-Key: kos_ak_xxx' http://<host>:8080/api/v1/external/bases
 
 **返回 `data` 主要字段**
 
+一次调用会把「这次问答是怎么来的」整条链路带回来，字段按用途分组（下表即当前实现的完整清单）。
+
 | 字段 | 说明 |
 |---|---|
+| **标识与问题** | |
 | `queryId` | 本次问答 ID，用于 `/queries/{queryId}` 回放 |
-| `answer` | 生成的答案文本（未通过证据校验时会给出拒答说明），按 `answerFormat` 交付 |
+| `traceId` | 与 `queryId` **同值**；信封层的 `traceId` 是后端这次 HTTP 调用的 ID，两者别混用 |
+| `question` | 问题原文 |
+| `questionType` / `questionTypeLabel` | 意图分类枚举与中文标签，如 `DEFAULT` / `通用问答` |
+| `rewrittenQuery` / `rewrittenQueries` / `rewrite` | 查询改写结果：`rewrite = {variants, used, latencyMs}` |
+| `router` / `routerNote` | 意图路由：`{questionType, strategies, reason, matchedRule, configuredStrategies}`；`routerNote` 是给排查用的一句话说明 |
+| `conclusionSource` | 结论来源：`{type, label, graphPaths, evidenceKinds}`；`type` 取值 `RETRIEVED_KNOWLEDGE`（证据检索）/ `GRAPH_TRAVERSAL`（图谱遍历推导）/ `DERIVED_KNOWLEDGE`（系统推导），取优先级高的那种 |
+| **检索过程** | |
+| `channels` / `strategies` | 本次实际启用的通道，如 `["card","vector","bm25","claim"]` |
+| `recall` | 各通道召回明细，形如 `{bm25:[…], vector:[…], card:[…], claim:[…]}`；每项含 `id / channel / title / score / metadata / contentChars`，**默认不含正文**（正文只在 `candidates` 里给一次） |
+| `fusion` | 融合参数与样本：`{algorithm:"weighted_rrf", k, weights, qualitySignals, qualitySample, latencyMs}` |
+| `reranker` | 重排器：`{name, enabled, topN, latencyMs}` |
+| `reranked` | 本次是否真的跑了重排 |
+| `candidates` | 融合 + 重排后的候选：`id / channel / title / content / score / rrfScore / rerankScore / quality / qualityBoost / chunkBoost / chunkSignals / fusionRank / rerankRank / rankDelta / channelRanks / scoreBreakdown`（`scoreBreakdown.whyMatched` 是人话版的「为什么命中」，`filteredBy` 如 `TOPK_CUTOFF` 说明它被什么卡过） |
+| `selectedContext` | 真正装配进 Prompt 的候选，与 `citations` **同源同序**：超出字符预算被截断的不会进来，也就不会成为证据 |
+| `context` | 拼装好的上下文原文，带 `[证据N]` 标号 |
+| `topK` / `returned` / `minScore` / `effectiveTopK` | 数量口径，见下 |
+| **答案与校验** | |
+| `answer` | 答案正文，按 `answerFormat` 交付；未通过闸门时是弃答说明 |
 | `answerFormat` | 实际生效的交付格式；请求不传时为 `default` |
-| `topK` | AI 服务给出的**选中送入答案生成的上下文条数**——注意它**不是**请求 `topK` 的回显：一次 `topK=3` 的请求这里可能返回 `1` |
-| `effectiveTopK` | 请求 `topK` 夹取后真正生效的召回上限（1–50，不传或小于 1 取 10）。与请求值不一致即越界被夹——「要 200 条回来 50 条」是上限所致，不是库里只有 50 条 |
-| `citations` | 引用数组：`index / title / channel / score / sourceName / sourceUri / contentUnitId / objectType / evidenceHash / pageNo` |
-| `candidates` | 融合后的候选片段：`id / channel / content / score / rrfScore / rerankScore / quality / scoreBreakdown …` |
-| `strategies` | 实际使用的检索策略，如 `["card","bm25","vector"]` |
-| `router` | 意图路由结果（问题类型、命中规则、原因） |
-| `rewrite` | 查询改写结果 |
-| `recall` | 各通道召回明细与耗时 |
-| `fusion` / `reranker` | 融合与重排明细 |
-| `confidence` | 答案置信度 |
-| `answerQualification` | 答案合格性校验（证据完整性、忠实度等闸门） |
-| `model` | 实际使用的模型标识 |
-| `tokenUsage` | token 消耗 |
-| `trace` | 各阶段耗时与统计（`totalLatencyMs`、`stages` 等） |
-| `traceId` | 链路 ID |
+| `citations` | 引用数组，字段见下 |
+| `claims` | 参与生成的断言：`{claimId, subject, predicate, object, conditions, confidence, status}` |
+| `answerVerification` | 证据闸门：`{gateStatus, policy, factualClaimCount, supportedClaimCount, citationCount, completenessScore, faithfulnessScore, unsupportedClaims, blockReasons, claims[]}` |
+| `structuredAnswerVerification` | claim 级蕴含校验的**统计口径**：`gateStatus / claimCount / supportedCount / partialCount / contradictedCount / insufficientCount`；逐条明细不在这里，统一读 `answerQualification.claims`（两份是同一份判定，避免各发一遍口径分叉） |
+| `answerQualification` | 最终合格性：`{gateStatus, policyVersion, evidenceGateStatus, structuredGateStatus, blockReasons, decisionReasons, originalAnswerHash, deliveredAnswerHash, claimCount, claims[]}`；`claims[]` 每条含 `claimId / statement / citationIndexes / evidenceIds / evidenceStatuses / entailmentScore / polarityConflict / decision / confidence / includedInFinalAnswer` |
+| **统计** | |
+| `contextChars` / `durationMs` / `confidence` | 上下文字符数、端到端耗时（ms）、答案置信度 |
+| `model` / `tokenUsage` | 模型标识与 token 消耗（当前 `tokenUsage` 各字段恒为 `null`） |
+| `trace` | 阶段耗时与统计：`rewriteLatencyMs / retrievalLatencyMs / fusionLatencyMs / rerankLatencyMs / llmLatencyMs / totalLatencyMs / recallCounts / retrievalProviders / channelLatencyMs / filters / candidateCount / citationCount / answerEvidenceGate / citationCompleteness / citationFaithfulness / structuredAnswerGate / claimEntailmentSupported / claimEntailmentContradicted / finalAnswerGate / answerPolicyVersion / generationIds / stages / queryPolicy` |
+
+**数量口径**（最容易读错的三个数）
+
+| 字段 | 含义 |
+|---|---|
+| `effectiveTopK` | 请求 `topK` 夹取后真正生效的召回上限（1–50，不传或小于 1 取 10），由后端写入 |
+| `topK` | 服务端实际使用的召回上限，正常情况下与 `effectiveTopK` 同值 |
+| `returned` | 融合、重排与 `minScore` 过滤后**实际给出的候选条数**，等于 `candidates.length`；它可能**大于** `topK`（原文段落补足会把够格的片段补回来），也可能小于（阈值筛掉） |
+
+> 想知道「我要 N 条、回来几条」：比 `topK` 与 `returned`。
+> 想知道「我的 N 有没有被上限夹过」：比请求值与 `effectiveTopK`——「要 200 条回来 50 条」是上限所致，不是库里只有 50 条。
+
+**引用字段 `citations[]`**
+
+`index / id / title / channel / source / score / sourceName / sourceUri / pageNo / contentUnitId / objectId / objectType / evidenceCode / evidenceHash / generationId / sourceVersion / excerpt`
+
+- `index` 与答案正文里的 `[证据N]` 一一对应
+- `objectType` 取值：`CONTENT_UNIT`（原文段落）/ `CARD`（知识卡片）/ `CLAIM`（断言）
+- `evidenceCode` 用于 `GET /evidence/{code}` 取权威原文；`evidenceHash` 是内容指纹
+- `excerpt` 是被引用的原文摘录：`markdown` / `html` 两种交付格式会把它带进答案正文
 
 **示例**
 
@@ -290,43 +324,253 @@ curl -X POST http://<host>:8080/api/v1/external/query \
 | `text` | 纯文本，Markdown 标记与证据章节都已去掉 |
 | `html` | `<p>` 正文 + `<section class="answer-citations">` 引用原文 |
 
+真实响应（`answerFormat` 未传，故为 `default`；`recall` / `candidates` / `selectedContext` 只留一条，实际按召回条数下发）：
+
 ```json
 {
   "success": true,
   "code": "OK",
-  "traceId": "fcaa8330e26e461a94a285b31343133e",
+  "message": "成功",
+  "traceId": "bbe063cfe5ef40d485a166ae8d87624c",
   "data": {
-    "queryId": "Q_c512ffdfce7e498d9c50795a655c3c43",
-    "question": "知识库如何做权限控制",
-    "questionType": "PROCEDURE",
-    "questionTypeLabel": "流程/操作类",
-    "strategies": ["card", "bm25", "vector"],
-    "contextChars": 1842,
-    "durationMs": 3120,
-    "confidence": 0.42,
-    "answer": "现有知识不足以形成全部可验证的结论；未通过证据完整性与忠实度校验的内容已阻止输出。",
-    "answerFormat": "markdown",
+    "queryId": "Q_6ad0c6eef9e24abc8f598c2e537c00cf",
+    "traceId": "Q_6ad0c6eef9e24abc8f598c2e537c00cf",
+    "question": "星河项目交付范围？",
+    "questionType": "DEFAULT",
+    "questionTypeLabel": "通用问答",
+    "conclusionSource": {
+      "type": "RETRIEVED_KNOWLEDGE",
+      "label": "证据检索",
+      "graphPaths": [],
+      "evidenceKinds": ["RETRIEVED_KNOWLEDGE"]
+    },
+    "rewrittenQuery": "星河项目交付范围？",
+    "routerNote": "通用问答｜card + vector + bm25 + claim｜未命中任何路由规则，按默认通道组合处理。",
+    "channels": ["card", "vector", "bm25", "claim"],
+    "contextChars": 1086,
+    "durationMs": 1627,
+    "reranked": true,
+    "confidence": 0.704,
+    "claims": [
+      {
+        "claimId": "CLM_686089ada63d44579066e20e0a25f58b",
+        "subject": "一、适用范围与核心内容",
+        "predicate": "DESCRIBES",
+        "object": "一、适用范围与核心内容",
+        "conditions": [],
+        "confidence": null,
+        "status": "UNCERTAIN"
+      }
+    ],
+    "rewrittenQueries": ["星河项目交付范围？"],
+    "rewrite": { "variants": ["星河项目交付范围？"], "used": "星河项目交付范围？", "latencyMs": 0 },
+    "router": {
+      "questionType": "DEFAULT",
+      "strategies": ["card", "vector", "bm25", "claim"],
+      "reason": "未命中任何路由规则，按默认通道组合处理。",
+      "matchedRule": "default",
+      "configuredStrategies": ["card", "vector", "bm25", "claim"]
+    },
+    "strategies": ["card", "vector", "bm25", "claim"],
+    "recall": {
+      "bm25": [
+        {
+          "id": "K_84c3703122084eb2a1d6d239bb7064b7",
+          "channel": "bm25",
+          "title": "项目星河交付说明 V1.0",
+          "score": 24.440683,
+          "metadata": {
+            "object_type": "CARD",
+            "source_name": "知识卡片",
+            "status": "DRAFT",
+            "generation_id": "vdata3",
+            "evidence_code": "EVD_d1ad82d958a54375b794ea66a2b58934",
+            "retrieval_provider": "elasticsearch"
+          },
+          "contentChars": 43
+        }
+      ]
+    },
+    "fusion": {
+      "algorithm": "weighted_rrf",
+      "k": 60,
+      "weights": { "bm25": 1.15, "vector": 1.15, "card": 1.1, "claim": 1.1, "graph": 1.05 },
+      "qualitySignals": { "authority": 0.25, "freshness": 0.2, "confidence": 0.1, "evidence": 0.1 },
+      "qualitySample": [{ "id": "603", "authority": 0.5, "freshness": 0.6, "confidence": 0.5, "evidence": 0, "boost": 1.295 }],
+      "latencyMs": 0
+    },
+    "candidates": [
+      {
+        "id": "605",
+        "channel": "bm25",
+        "title": "一、适用范围与核心内容",
+        "content": "一、适用范围与核心内容\n\n星河项目建设企业搜索平台，交付范围包括知识采集、混合检索、问答溯源及权限审计。",
+        "score": 0.75,
+        "metadata": {
+          "object_type": "CONTENT_UNIT",
+          "document_id": 69,
+          "content_unit_id": 605,
+          "source_name": "02_项目星河交付说明_V1.0.docx",
+          "heading_path": "一、适用范围与核心内容",
+          "generation_id": "vdata3",
+          "evidence_code": "EVD_8208b712f0344486b5669013fb896fd8"
+        },
+        "qualityBoost": 1.295,
+        "chunkBoost": 1.5786,
+        "chunkSignals": { "headingHit": 1, "coverage": 0.8571 },
+        "preRerankScore": 23.420093948180998,
+        "rerankScore": 0.75,
+        "fusionRank": 3,
+        "rerankRank": 1,
+        "rankDelta": 2,
+        "channelRanks": { "bm25": 5, "vector": 3 },
+        "scoreBreakdown": {
+          "channels": [
+            { "channel": "bm25", "label": "BM25 全文", "rank": 5, "weight": 1.15, "rrfContribution": 0.017692 },
+            { "channel": "vector", "label": "向量", "rank": 3, "weight": 1.15, "rrfContribution": 0.018254 }
+          ],
+          "chunkSignals": { "headingHit": 1, "coverage": 0.8571 },
+          "finalScore": 0.75,
+          "whyMatched": [
+            "BM25 全文命中第 5 名（原始分 -，通道权重 1.15）",
+            "向量命中第 3 名（原始分 -，通道权重 1.15）",
+            "原文段落加成 ×1.58（标题命中 是，问题词覆盖 86%）"
+          ],
+          "filteredBy": []
+        }
+      }
+    ],
+    "topK": 3,
+    "returned": 6,
+    "minScore": null,
+    "reranker": { "name": "lexical-cross-feature", "enabled": true, "topN": 0, "latencyMs": 1 },
+    "selectedContext": [
+      { "id": "605", "title": "一、适用范围与核心内容", "channel": "bm25", "score": 0.75, "rerankScore": 0.75, "objectType": "CONTENT_UNIT", "sourceName": "02_项目星河交付说明_V1.0.docx", "fusionRank": 3, "rerankRank": 1, "rankDelta": 2 }
+    ],
+    "context": "[证据1] 一、适用范围与核心内容（来源：02_项目星河交付说明_V1.0.docx）\n一、适用范围与核心内容\n\n星河项目建设企业搜索平台…",
     "citations": [
       {
         "index": 1,
-        "id": "71",
-        "title": "sample.txt",
+        "id": "605",
+        "title": "一、适用范围与核心内容",
         "channel": "bm25",
-        "score": 0.365,
-        "sourceName": "sample.txt",
-        "sourceUri": "upload://sample.txt",
+        "source": "bm25",
+        "score": 0.75,
+        "sourceName": "02_项目星河交付说明_V1.0.docx",
+        "sourceUri": "upload://02_项目星河交付说明_V1.0.docx",
         "pageNo": null,
-        "contentUnitId": 71,
+        "contentUnitId": 605,
+        "objectId": "605",
         "objectType": "CONTENT_UNIT",
-        "evidenceHash": "3bd5e095bb09e3afe139b9f6f83566bc…",
-        "sourceVersion": 1
+        "evidenceCode": "EVD_8208b712f0344486b5669013fb896fd8",
+        "evidenceHash": "3d402fabc960cdea9d74be4b3d761593230444ba81fbc041aec453bf8ce6fe58",
+        "generationId": "vdata3",
+        "sourceVersion": null,
+        "excerpt": "一、适用范围与核心内容 星河项目建设企业搜索平台，交付范围包括知识采集、混合检索、问答溯源及权限审计。计划2026年11月完成试运行。…"
       }
     ],
+    "answer": "## 星河项目交付范围\n- 星河项目建设企业搜索平台，交付范围包括**知识采集、混合检索、问答溯源及权限审计** [证据1][证据2]。",
+    "answerFormat": "default",
+    "answerVerification": {
+      "gateStatus": "PASS",
+      "policy": "FACTUAL_CLAIM_REQUIRES_EXACT_VISIBLE_EVIDENCE",
+      "factualClaimCount": 1,
+      "supportedClaimCount": 1,
+      "citationCount": 6,
+      "completenessScore": 1,
+      "faithfulnessScore": 1,
+      "unsupportedClaims": [],
+      "blockReasons": { "missingCitation": 0, "nonExactEvidence": 0, "lowFaithfulness": 0 },
+      "claims": [
+        {
+          "text": "星河项目建设企业搜索平台，交付范围包括知识采集、混合检索、问答溯源及权限审计 [证据1][证据2]。",
+          "claim": "星河项目建设企业搜索平台，交付范围包括知识采集、混合检索、问答溯源及权限审计 。",
+          "citationIndexes": [1, 2],
+          "validCitationIndexes": [1, 2],
+          "exactEvidence": true,
+          "faithfulnessScore": 1,
+          "supported": true
+        }
+      ]
+    },
+    "structuredAnswerVerification": {
+      "gateStatus": "PASS",
+      "policy": "CLAIM_LEVEL_ENTAILMENT_AND_CONFLICT_AWARE",
+      "claimCount": 1,
+      "supportedCount": 1,
+      "partialCount": 0,
+      "contradictedCount": 0,
+      "insufficientCount": 0
+    },
+    "answerQualification": {
+      "gateStatus": "PASS",
+      "policyVersion": "answer-policy-v1",
+      "evidenceGateStatus": "PASS",
+      "structuredGateStatus": "PASS",
+      "blockReasons": { "missingCitation": 0, "nonExactEvidence": 0, "lowFaithfulness": 0 },
+      "decisionReasons": [],
+      "originalAnswerHash": "b373b8f1f50dc8b50c4d18d397b0b6fe0183ffa65b8ceb1aad75817391492796",
+      "deliveredAnswerHash": "b373b8f1f50dc8b50c4d18d397b0b6fe0183ffa65b8ceb1aad75817391492796",
+      "claimCount": 1,
+      "claims": [
+        {
+          "claimId": "claim-1",
+          "statement": "星河项目建设企业搜索平台，交付范围包括知识采集、混合检索、问答溯源及权限审计 。",
+          "citationIndexes": [1, 2],
+          "evidenceIds": ["EVD_8208b712f0344486b5669013fb896fd8", "EVD_d1ad82d958a54375b794ea66a2b58934"],
+          "evidenceStatuses": ["SUPPORTED", "DRAFT"],
+          "entailmentScore": 1,
+          "polarityConflict": false,
+          "decision": "SUPPORTED",
+          "confidence": 1,
+          "policyVersion": "answer-policy-v1",
+          "includedInFinalAnswer": true
+        }
+      ]
+    },
     "model": "openai",
-    "trace": { "totalLatencyMs": 3120, "candidateCount": 35, "citationCount": 3 }
+    "tokenUsage": { "promptTokens": null, "completionTokens": null, "totalTokens": null },
+    "trace": {
+      "rewriteLatencyMs": 0,
+      "questionType": "DEFAULT",
+      "retrievalLatencyMs": 265,
+      "fusionLatencyMs": 0,
+      "rerankLatencyMs": 1,
+      "llmLatencyMs": 1360,
+      "totalLatencyMs": 1627,
+      "recallCounts": { "bm25": 15, "vector": 20, "card": 5, "claim": 4 },
+      "retrievalProviders": { "bm25": ["elasticsearch"], "vector": ["milvus"], "card": ["elasticsearch"], "claim": ["elasticsearch"] },
+      "channelLatencyMs": { "bm25": 15, "vector": 220, "card": 12, "claim": 12 },
+      "filters": {
+        "status": "RETRIEVABLE_STATUSES_PRE_TOPK",
+        "acl": "PERMISSION_TAGS_PRE_TOPK_ALL_CHANNELS",
+        "dedup": "RRF_BY_OBJECT_ID",
+        "conflict": "STATUS_POLICY"
+      },
+      "candidateCount": 6,
+      "citationCount": 6,
+      "answerEvidenceGate": "PASS",
+      "citationCompleteness": 1,
+      "citationFaithfulness": 1,
+      "structuredAnswerGate": "PASS",
+      "claimEntailmentSupported": 1,
+      "claimEntailmentContradicted": 0,
+      "finalAnswerGate": "PASS",
+      "answerPolicyVersion": "answer-policy-v1",
+      "generationIds": ["vdata3"],
+      "stages": [
+        { "key": "rewrite", "label": "查询改写", "latencyMs": 0, "inputCount": 1, "outputCount": 1 },
+        { "key": "recall", "label": "多通道召回", "latencyMs": 265, "inputCount": 1, "outputCount": 44 },
+        { "key": "llm", "label": "答案生成", "latencyMs": 1360, "inputCount": 6, "outputCount": 1, "detail": { "model": "openai" } }
+      ],
+      "queryPolicy": { "version": "query-policy-v1", "rrfK": 60, "contextMaxChars": 8000, "rerankEnabled": true }
+    },
+    "effectiveTopK": 3
   }
 }
 ```
+
+> 上面这份响应的 `topK=3` 而 `returned=6`：3 是本次生效的召回上限，6 是融合重排后真正给出的候选条数（原文段落补足会把够格的片段补回来）。二者不等是正常现象，不代表参数没生效。
 
 > `answer` 出现「证据不足」类表述是答案闸门在起作用：知识不足以支撑结论时平台会拒答，而不是编造。
 
@@ -336,7 +580,11 @@ curl -X POST http://<host>:8080/api/v1/external/query \
 
 适合已有自有 Prompt、只想取上下文的系统。入参与 `/query` 相同（`answerFormat` 可传但对返回内容无影响：这里没有答案正文），返回**不含 `answer`**。`minScore` 同样生效——返回的 `returned` 是过滤后实际给出的条数，与 `topK` 不一致时说明是阈值筛掉的。
 
-`queryId / knowledgeBaseId / question / strategies / router / rewrite / recall / reranker / candidates / citations`
+返回字段（`/query` 的子集：**不含** `answer` / `answerFormat` / `answerVerification` / `answerQualification` / `context` / `selectedContext` / `trace`，因为没有生成这一步）：
+
+`queryId / knowledgeBaseId / question / topK / effectiveTopK / returned / minScore / strategies / router / rewrite / recall / reranker / candidates / citations`
+
+其中 `topK` / `effectiveTopK` / `returned` 的口径与 `/query` 完全一致（见 4.2「数量口径」）；`citations` 的字段也与 `/query` 相同，可直接按 `index` 与 `candidates` 对齐。
 
 ```bash
 curl -X POST http://<host>:8080/api/v1/external/search \
@@ -610,11 +858,14 @@ curl -X POST http://<host>:8080/api/mcp \
 
 | 事件 | 载荷 | 说明 |
 |---|---|---|
+| `open` | `{knowledgeBaseId, question, topK, effectiveTopK, answerFormat, content, stages:[{key,label}], time}` | 握手帧，先告知将要执行哪些阶段；`content` 是服务端实际生效的交付方式（`final` = 答案整体在 `done` 里，`stream` = 逐字推 `delta`），`topK` 与 `effectiveTopK` 的口径同 `/query` |
 | `stage` | `{"knowledgeBaseId":1,"stage":"REWRITE","time":1789970566684}` | 依次 REWRITE → RECALL → FUSION → RERANK → ANSWER |
 | `delta` | 字符串（答案切片） | 逐片输出答案正文，按 `answerFormat` 交付（不传即默认格式）。切片内含换行时，按 SSE 规范拆成**多条 `data:` 字段**，客户端需用 `\n` 拼回 —— `EventSource` 会自动拼好，手写解析器也必须照做，否则换行会被当成帧结束、后半截被丢弃（表现为整段答案挤成一行）。当 `content=final` 时不推送 `delta` 事件，答案在 `done.answer` 里整体交付 —— 与阻塞式 `/api/v1/external/query` 拿到的内容同源 |
-| `citation` | `{"citations":[ … ]}` | 引用一次性下发 |
-| `done` | `{"queryId","knowledgeBaseId","question","answer","answerFormat","model","trace"}` | 完成帧，`answerFormat` 为实际生效的交付格式 |
+| `citation` | `{"citations":[ … ]}` | 引用一次性下发，字段同 `/query` 的 `citations` |
+| `done` | `{queryId, knowledgeBaseId, question, answer, answerFormat, model, trace, confidence, durationMs, channels, strategies, reranked, questionTypeLabel, rewrittenQuery, conclusionSource, answerQualification, contextChars}` | 完成帧，`answerFormat` 为实际生效的交付格式；`conclusionSource` / `answerQualification` 与 `/query` 同构，客户端可以复用同一套渲染 |
 | `error` | 错误信息字符串 | 异常结束 |
+
+> 流式连接建立失败（SSE 不可用）时服务端会退化成「阻塞查询 + 事件回放」：事件序列不变，`done` 帧额外带上 `stages` / `elapsedMs` / `streamed:false`。客户端按 `done` 里的字段渲染即可，无需区分这两条路径。
 
 真实帧（chunked 解码后）：
 

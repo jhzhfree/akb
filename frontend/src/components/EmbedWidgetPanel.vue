@@ -118,10 +118,9 @@ const tokenDisplayId = ref('')
 const permanent = ref(false)
 const expiresText = ref('')
 
-/** 有效期（秒）：0 = 沿用部署默认，-1 = 长期有效 */
-const ttl = ref<number>(0)
+/** 有效期（秒）：>0 = 指定时长，-1 = 长期有效 */
+const ttl = ref<number>(3600)
 const ttlOptions = [
-  { value: 0, label: '默认（沿用部署配置）' },
   { value: 3600, label: '1 小时' },
   { value: 21600, label: '6 小时' },
   { value: 86400, label: '24 小时' },
@@ -204,7 +203,7 @@ function openDemo() {
   params.set('format', answerFormat.value)
   if (token.value) params.set('token', token.value)
   if (apiKey.value.trim()) params.set('apiKey', apiKey.value.trim())
-  if (ttl.value !== 0) params.set('ttl', String(ttl.value))
+  params.set('ttl', String(ttl.value))
   // 参数放在 hash 里：不会随请求发送到服务器，也不会出现在 Referer 与服务端访问日志中
   window.open(`${scriptOrigin.value}/embed/demo.html#${params.toString()}`, '_blank')
 }

@@ -334,7 +334,8 @@ public class ExternalStreamService {
         payload.put("knowledgeBaseId", kb);
         payload.put("question", question);
         payload.put("topK", topK);
-        // 与 REST 一致：夹取后的值另起一个名字，不覆盖 `topK`（下游另有语义）。
+        // 与 REST 一致：夹取后的值另起一个名字，不覆盖 `topK`（那是本次生效的召回上限，
+        // 实际给出的条数看 done 帧的 `returned`）。
         payload.put("effectiveTopK", ExternalKnowledgeFacade.effectiveTopK(topK));
         payload.put("answerFormat", answerFormat);
         // Echoed back so a client can tell which delivery it actually got: a value that was not

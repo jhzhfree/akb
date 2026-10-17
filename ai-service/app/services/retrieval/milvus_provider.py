@@ -13,6 +13,7 @@ from typing import Any
 import httpx
 
 from app.core.config import settings
+from app.core.contracts import RETRIEVABLE_STATUSES
 from app.services.retrieval.provider_common import candidate
 
 logger = logging.getLogger(__name__)
@@ -181,8 +182,16 @@ class MilvusProvider:
         except Exception:
             await self._post("/v2/vectordb/collections/create", self._legacy_create_body(name, dimension))
 
-    def schema_target(self, schema_version: str) -> str:
-        return "%s__%s" % (self.collection, schema_version.lower())
+    def schema_target(self, schema_version: str, knowledge_base_id: int | None = None) -> str:
+        """Physical collection of one schema release.
+
+        The knowledge base has to be part of the name: a blue/green release is per library,
+        and a shared name makes the second library's rebuild drop the first library's target
+        (or, worse, point the shared read alias at a collection holding only one library).
+        """
+        if knowledge_base_id is None:
+            return "%s__%s" % (self.collection, schema_version.lower())
+        return "%s__kb%s__%s" % (self.collection, int(knowledge_base_id), schema_version.lower())
 
     async def upsert(self, docs: list[dict[str, Any]], target: str | None = None) -> dict[str, Any]:
         vector_docs = [doc for doc in docs if doc.get("vector")]
@@ -199,6 +208,12 @@ class MilvusProvider:
                 # Dynamic fields are stored in Milvus JSON metadata. A sentinel makes
                 # public visibility explicit and avoids ambiguous empty-array filters.
                 row["permission_tags"] = list(doc.get("permission_tags") or ["__public__"])
+                # A chunk has no governance state of its own, and leaving the field out is not
+                # the same as leaving it empty: Milvus evaluates a filter against a missing
+                # dynamic field to false, so the status clause in _filter_expr would drop every
+                # chunk and vector recall would return nothing for every library. Chunks are
+                # readable the moment they are parsed.
+                row["status"] = str(doc.get("status") or "EFFECTIVE")
                 row["id"] = "%s:%s" % (doc.get("knowledge_base_id"), doc.get("id"))
                 row["object_id"] = str(doc.get("id"))
                 row["vector"] = doc["vector"]
@@ -207,8 +222,9 @@ class MilvusProvider:
             total += len(rows)
         return {"provider": "milvus", "indexed": total}
 
-    async def rebuild_target(self, docs: list[dict[str, Any]], schema_version: str) -> dict[str, Any]:
-        target = self.schema_target(schema_version)
+    async def rebuild_target(self, docs: list[dict[str, Any]], schema_version: str,
+                             knowledge_base_id: int | None = None) -> dict[str, Any]:
+        target = self.schema_target(schema_version, knowledge_base_id)
         if target in await self.list_collections():
             await self._post("/v2/vectordb/collections/drop", {"collectionName": target})
         dimension = len(next((doc["vector"] for doc in docs if doc.get("vector")), [])) or None
@@ -222,7 +238,7 @@ class MilvusProvider:
         import hashlib
         import json
 
-        collection = self.schema_target(schema_version)
+        collection = self.schema_target(schema_version, knowledge_base_id)
         result = await self._post(
             "/v2/vectordb/entities/query",
             {
@@ -260,7 +276,7 @@ class MilvusProvider:
 
     async def qualify_acl_target(self, knowledge_base_id: int, schema_version: str, permission_tags, admin=False):
         """Scan green Milvus scalar ACL fields without ANN ranking."""
-        collection = self.schema_target(schema_version)
+        collection = self.schema_target(schema_version, knowledge_base_id)
         result = await self._post(
             "/v2/vectordb/entities/query",
             {
@@ -278,42 +294,41 @@ class MilvusProvider:
             if admin or not (row.get("permission_tags") or []) or caller.intersection(row.get("permission_tags") or [])
         ]
 
-    async def activate_target(self, schema_version: str) -> dict[str, Any]:
-        target = self.schema_target(schema_version)
+    def _read_alias_for(self, knowledge_base_id: int) -> str:
+        """Read alias of one library.
+
+        A release is per library, so the read side has to be per library too: a single shared
+        alias can only ever point at one physical collection, and the last activation would
+        then decide which library is readable and which ones recall nothing.
+        """
+        return "%s__kb%s" % (self.read_alias, int(knowledge_base_id))
+
+    async def activate_target(self, schema_version: str, knowledge_base_id: int | None = None) -> dict[str, Any]:
+        target = self.schema_target(schema_version, knowledge_base_id)
         if target not in await self.list_collections():
             raise RuntimeError("Milvus target does not exist: %s" % target)
-        aliases = await self._post("/v2/vectordb/aliases/list", {"collectionName": target})
-        # Alter is atomic from the caller perspective; create is used for first activation.
-        all_aliases = aliases.get("data") or []
-        if any(item.get("aliasName") == self.read_alias for item in all_aliases if isinstance(item, dict)):
+        alias = self._read_alias_for(knowledge_base_id) if knowledge_base_id is not None else self.read_alias
+        try:
+            await self._post(
+                "/v2/vectordb/aliases/create",
+                {
+                    "collectionName": target,
+                    "aliasName": alias,
+                },
+            )
+        except RuntimeError:
+            # Alter is atomic from the caller perspective; create is used for first activation.
             await self._post(
                 "/v2/vectordb/aliases/alter",
                 {
                     "collectionName": target,
-                    "aliasName": self.read_alias,
+                    "aliasName": alias,
                 },
             )
-        else:
-            try:
-                await self._post(
-                    "/v2/vectordb/aliases/create",
-                    {
-                        "collectionName": target,
-                        "aliasName": self.read_alias,
-                    },
-                )
-            except RuntimeError:
-                await self._post(
-                    "/v2/vectordb/aliases/alter",
-                    {
-                        "collectionName": target,
-                        "aliasName": self.read_alias,
-                    },
-                )
-        self._active_read_collection = self.read_alias
-        return {"provider": "milvus", "alias": self.read_alias, "target": target, "activated": True}
+        self._active_read_collection = alias
+        return {"provider": "milvus", "alias": alias, "target": target, "activated": True}
 
-    async def read_collection(self) -> str:
+    async def read_collection(self, knowledge_base_id: int | None = None) -> str:
         """Resolve the active read alias, falling back to the base collection.
 
         The alias only exists once a blue/green generation has been activated.
@@ -321,6 +336,14 @@ class MilvusProvider:
         with "can't find collection" on a deployment that never activated one —
         the same reason Elasticsearch checks the alias before using it.
         """
+        if knowledge_base_id is not None:
+            alias = self._read_alias_for(knowledge_base_id)
+            try:
+                await self._post("/v2/vectordb/aliases/describe", {"aliasName": alias})
+                return alias
+            except Exception as exc:
+                logger.debug("Milvus per-kb alias %s unavailable: %s", alias, exc)
+                return self.collection
         if self._active_read_collection:
             return self._active_read_collection
         target = self.collection
@@ -339,7 +362,8 @@ class MilvusProvider:
         if object_type:
             safe_type = str(object_type).replace('"', '"')
             clauses.append('object_type == "%s"' % safe_type)
-        clauses.append('(status in ["APPROVED", "EFFECTIVE"] or status == "")')
+        recallable = ", ".join('"%s"' % item for item in sorted(RETRIEVABLE_STATUSES))
+        clauses.append("(status in [%s] or status == \"\")" % recallable)
         # tags is None: caller is unrestricted (platform admin / auth off) → no ACL clause,
         # otherwise restricted knowledge (e.g. the ops knowledge base) would never be recalled.
         if tags is not None:
@@ -359,7 +383,7 @@ class MilvusProvider:
         object_type: str | None = None,
     ) -> list[dict[str, Any]]:
         body = {
-            "collectionName": await self.read_collection(),
+            "collectionName": await self.read_collection(kb),
             "data": [vector],
             "annsField": "vector",
             "limit": top_k,

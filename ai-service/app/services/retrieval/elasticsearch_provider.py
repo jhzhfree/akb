@@ -21,6 +21,7 @@ from typing import Any
 import httpx
 
 from app.core.config import settings
+from app.core.contracts import RETRIEVABLE_STATUSES
 
 logger = logging.getLogger(__name__)
 
@@ -43,11 +44,14 @@ SEARCH_METADATA_FIELDS = [
 
 
 def _status_filter() -> dict[str, Any]:
-    """Allow raw chunks or formally published knowledge objects."""
+    """Admit every state that is recallable, plus objects carrying no state at all.
+
+    Chunks have no governance state of their own, hence the "field missing" branch.
+    """
     return {
         "bool": {
             "should": [
-                {"terms": {"status": ["APPROVED", "EFFECTIVE"]}},
+                {"terms": {"status": sorted(RETRIEVABLE_STATUSES)}},
                 {"bool": {"must_not": [{"exists": {"field": "status"}}]}},
             ],
             "minimum_should_match": 1,
@@ -224,9 +228,16 @@ class ElasticsearchProvider:
             raise RuntimeError("Elasticsearch bulk indexing failed for %s documents" % len(errors))
         return {"provider": "elasticsearch", "indexed": len(docs)}
 
-    def schema_target(self, schema_version: str) -> str:
-        """Return the physical index name for one schema release."""
-        return "%s__%s" % (settings.elasticsearch_index, schema_version.lower())
+    def schema_target(self, schema_version: str, knowledge_base_id: int | None = None) -> str:
+        """Return the physical index name for one schema release.
+
+        The knowledge base is part of the name because a release belongs to one library: with a
+        shared name, rebuilding a second library drops the first library's green index and the
+        shared read alias ends up covering a single library.
+        """
+        if knowledge_base_id is None:
+            return "%s__%s" % (settings.elasticsearch_index, schema_version.lower())
+        return "%s__kb%s__%s" % (settings.elasticsearch_index, int(knowledge_base_id), schema_version.lower())
 
     # ------------------------------------------------------------------
     # Standard document store: normalized source units that card generation reads.
@@ -444,9 +455,10 @@ class ElasticsearchProvider:
         self,
         docs: list[dict[str, Any]],
         schema_version: str,
+        knowledge_base_id: int | None = None,
     ) -> dict[str, Any]:
         """Reset and populate a green index for a schema release."""
-        target = self.schema_target(schema_version)
+        target = self.schema_target(schema_version, knowledge_base_id)
         head = await self.client.head("/%s" % target)
         if head.status_code == 200:
             await self.client.delete("/%s" % target)
@@ -456,7 +468,7 @@ class ElasticsearchProvider:
 
     async def acl_target_rows(self, knowledge_base_id: int, schema_version=None):
         """Return green-target ACL metadata for machine qualification only."""
-        index = self.schema_target(schema_version) if schema_version else self.read_alias
+        index = self.schema_target(schema_version, knowledge_base_id) if schema_version else self.read_alias
         body = {
             "size": 10000,
             "query": {"bool": {"filter": [{"term": {"knowledge_base_id": knowledge_base_id}}]}},
@@ -508,31 +520,40 @@ class ElasticsearchProvider:
             str(row["id"]) for row in rows if not row["permission_tags"] or caller.intersection(row["permission_tags"])
         ]
 
-    async def activate_target(self, schema_version: str) -> dict[str, Any]:
+    def _read_alias_for(self, knowledge_base_id: int) -> str:
+        """Read alias of one library: a release is per library, so the read side is too."""
+        return "%s__kb%s" % (self.read_alias, int(knowledge_base_id))
+
+    async def activate_target(self, schema_version: str, knowledge_base_id: int | None = None) -> dict[str, Any]:
         """Atomically move the read alias to a validated physical index."""
-        target = self.schema_target(schema_version)
+        target = self.schema_target(schema_version, knowledge_base_id)
         if (await self.client.head("/%s" % target)).status_code != 200:
             raise RuntimeError("Elasticsearch target does not exist: %s" % target)
 
+        alias = self._read_alias_for(knowledge_base_id) if knowledge_base_id is not None else self.read_alias
         actions: list[dict[str, Any]] = []
-        aliases = await self.client.get("/_alias/%s" % self.read_alias)
+        aliases = await self.client.get("/_alias/%s" % alias)
         if aliases.status_code == 200:
             for old in aliases.json():
-                actions.append({"remove": {"index": old, "alias": self.read_alias}})
-        actions.append({"add": {"index": target, "alias": self.read_alias}})
+                actions.append({"remove": {"index": old, "alias": alias}})
+        actions.append({"add": {"index": target, "alias": alias}})
 
         response = await self.client.post("/_aliases", json={"actions": actions})
         response.raise_for_status()
-        self._active_read_index = self.read_alias
+        self._active_read_index = alias
         return {
             "provider": "elasticsearch",
-            "alias": self.read_alias,
+            "alias": alias,
             "target": target,
             "activated": True,
         }
 
-    async def read_index(self) -> str:
+    async def read_index(self, knowledge_base_id: int | None = None) -> str:
         """Resolve and cache the active read alias, falling back to base index."""
+        if knowledge_base_id is not None:
+            alias = self._read_alias_for(knowledge_base_id)
+            aliases = await self.client.get("/_alias/%s" % alias)
+            return alias if aliases.status_code == 200 else self.index
         if self._active_read_index:
             return self._active_read_index
         aliases = await self.client.get("/_alias/%s" % self.read_alias)
@@ -693,7 +714,7 @@ class ElasticsearchProvider:
             },
         }
         response = await self.client.post(
-            "/%s/_search" % (await self.read_index()),
+            "/%s/_search" % (await self.read_index(kb)),
             json=body,
         )
         response.raise_for_status()

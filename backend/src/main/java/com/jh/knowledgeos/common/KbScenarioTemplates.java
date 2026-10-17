@@ -241,7 +241,12 @@ public final class KbScenarioTemplates {
             profile(chunk("SEMANTIC", 600, 100, 100, "CHAR", true, true, false), extract(true, true, false),
                 derivation(true, Arrays.asList("DEPLOY_CHAIN", "OWNER_CHAIN", "CONTAINS_CHAIN", "RESOURCE_CHAIN", "CLAIM_SENTENCE",
                     "AI_CONCLUSION")),
-                query(Arrays.asList("graph", "card", "vector"), weights(1.00D, 1.15D, 1.20D, 1.00D, 1.40D),
+                /**
+                 * 图谱优先，但必须留一条文本通道：关系问法往往带专名（人名、项目名），
+                 * 图谱只给实体路径、不给可引用的原文，bm25 缺席时证据门禁会拦掉整条答案。
+                 * 图谱权重也从 1.4 降到 1.2：路径是补充证据，不该压过能被引用的片段。
+                 */
+                query(Arrays.asList("card", "vector", "bm25", "graph"), weights(1.15D, 1.15D, 1.20D, 1.00D, 1.20D),
                     4, 24, true, 0, 30, true, true, "default", 3, 8000))));
         templates.put(VULN, template(VULN, "漏洞库知识库", "编号与影响面问法并重：CVE 编号精确命中，影响版本与修复状态靠断言，图谱回答“影响到谁”。",
             "漏洞通报、CVE 明细、受影响版本与修复方案",

@@ -115,8 +115,10 @@
 <select id="countIndexableObjects" resultType="long">
   SELECT
     (SELECT COUNT(*) FROM t_content_unit cu JOIN t_document d ON d.id=cu.document_id JOIN t_source_version sv ON sv.id=d.source_version_id JOIN t_source s ON s.id=sv.source_id WHERE s.knowledge_base_id=#{kb})
-    +(SELECT COUNT(*) FROM t_knowledge_card WHERE knowledge_base_id=#{kb} AND status IN ('APPROVED','EFFECTIVE'))
-    +(SELECT COUNT(*) FROM t_claim WHERE knowledge_base_id=#{kb} AND status IN ('APPROVED','EFFECTIVE'))
+    <!-- Must stay identical to the status set in listAuthoritativeIndexSnapshot: this is the
+         expected row count the integrity check compares the snapshot against. -->
+    +(SELECT COUNT(*) FROM t_knowledge_card WHERE knowledge_base_id=#{kb} AND status IN ('DRAFT','UNCERTAIN','APPROVED','EFFECTIVE'))
+    +(SELECT COUNT(*) FROM t_claim WHERE knowledge_base_id=#{kb} AND status IN ('DRAFT','UNCERTAIN','APPROVED','EFFECTIVE'))
 </select>
 
 
@@ -222,7 +224,10 @@
           (SELECT COALESCE(cu.content_hash,'') FROM t_knowledge_evidence k JOIN t_evidence e ON e.id=k.evidence_id
            LEFT JOIN t_content_unit cu ON cu.id=e.content_unit_id
            WHERE k.knowledge_code=c.knowledge_code ORDER BY e.id ASC LIMIT 1) evidenceHash
-   FROM t_knowledge_card c WHERE c.knowledge_base_id=#{kb} AND c.status IN ('APPROVED','EFFECTIVE')
+   <!-- 可召回状态集：DRAFT 是卡片的生成态，UNCERTAIN 是断言的待裁决态。只认 APPROVED/EFFECTIVE
+        会让刚摄入的库在重建后丢掉全部卡片与断言——重建出来的库只剩 chunk。 -->
+   FROM t_knowledge_card c WHERE c.knowledge_base_id=#{kb}
+     AND c.status IN ('DRAFT','UNCERTAIN','APPROVED','EFFECTIVE')
    UNION ALL
    SELECT CONCAT('CLAIM:',cl.claim_code),cl.claim_code,'CLAIM',cl.knowledge_base_id,NULL,NULL,
           CONCAT('断言：',COALESCE(cl.subject,'')),CONCAT_WS(' ',COALESCE(cl.subject,''),COALESCE(cl.predicate,''),COALESCE(cl.object_value,'')),
@@ -233,7 +238,8 @@
           (SELECT COALESCE(cu.content_hash,'') FROM t_claim_evidence ce JOIN t_evidence e ON e.id=ce.evidence_id
            LEFT JOIN t_content_unit cu ON cu.id=e.content_unit_id
            WHERE ce.claim_code=cl.claim_code ORDER BY e.id ASC LIMIT 1) evidenceHash
-   FROM t_claim cl WHERE cl.knowledge_base_id=#{kb} AND cl.status IN ('APPROVED','EFFECTIVE')
+   FROM t_claim cl WHERE cl.knowledge_base_id=#{kb}
+     AND cl.status IN ('DRAFT','UNCERTAIN','APPROVED','EFFECTIVE')
  ) x ORDER BY objectKey LIMIT #{limit} OFFSET #{offset}
 </select>
 
