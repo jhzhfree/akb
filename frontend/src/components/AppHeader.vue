@@ -43,7 +43,7 @@ import { useTheme } from '../theme'
 
 /**
  * 顶栏只保留：视图切换、知识库切换、全局搜索、主题、用户区。
- * 任务入口与服务状态点已移除——任务在「知识生成 · 生成任务」页内查看，
+ * 任务入口与服务状态点已移除——任务在「知识生成 · 文档导入」页内查看，
  * 服务状态由页面内的空态与错误提示表达，不再占用顶栏位置。
  */
 const props = defineProps<{baseName?:string;visibility:string;keyword:string;

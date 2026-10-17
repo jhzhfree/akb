@@ -74,9 +74,9 @@
             </button>
             <button
               class="health-tile disabled:cursor-not-allowed disabled:opacity-60"
-              :disabled="!canGo('create.jobs')"
-              :title="canGo('create.jobs') ? '' : '当前角色无权访问该页面'"
-              @click="go('create.jobs')">
+              :disabled="!canGo('create.import')"
+              :title="canGo('create.import') ? '' : '当前角色无权访问该页面'"
+              @click="go('create.import')">
               <span>解析失败任务</span>
               <b :class="data.health.failedIngestion ? 'text-[color:var(--danger)]' : ''">{{ data.health.failedIngestion }}</b>
             </button>
@@ -170,7 +170,7 @@ const barWidth = (total:number) => {
   return Math.round((total / max) * 100)
 }
 const go = (view:string) => emit('navigate', view)
-/** 健康度磁贴的下钻目标可能超出当前角色（裁决 / 生成任务 / Benchmark），无权时置灰。 */
+/** 健康度磁贴的下钻目标可能超出当前角色（裁决 / 文档导入 / Benchmark），无权时置灰。 */
 const canGo = (view:string) => shell.canNavigate(view)
 
 async function load() {

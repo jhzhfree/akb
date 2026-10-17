@@ -22,6 +22,29 @@ public interface PurgeMapper {
 
     Map<String, Object> countPurgeable(@Param("kb") Long kb);
 
+    /**
+     * Drop only the cards and claims that were never published.
+     *
+     * <p>Regenerating a knowledge base extracts every document again, which would otherwise
+     * leave the older output alongside the new one. Objects a reviewer approved or marked
+     * effective are human work and survive; candidates still sitting in DRAFT, UNCERTAIN,
+     * PENDING_REVIEW or CONFLICTED were never retrievable and are safe to replace.</p>
+     *
+     * <p>Links are removed first because these tables carry no foreign keys, so dropping the
+     * parent rows alone would leave edges pointing at codes that no longer exist.</p>
+     */
+    int purgeUnpublishedCardEvidence(@Param("kb") Long kb);
+
+    int purgeUnpublishedCardEntities(@Param("kb") Long kb);
+
+    int purgeUnpublishedClaimEvidence(@Param("kb") Long kb);
+
+    int purgeUnpublishedClaimEntities(@Param("kb") Long kb);
+
+    int purgeUnpublishedCards(@Param("kb") Long kb);
+
+    int purgeUnpublishedClaims(@Param("kb") Long kb);
+
     List<String> listSourceStoragePaths(@Param("kb") Long kb);
 
     int purgeKnowledgeBaseTable(@Param("table") String table, @Param("kb") Long kb);

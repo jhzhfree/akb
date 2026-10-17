@@ -35,6 +35,13 @@ public class KnowledgeService {
     public Map<String, Object> query(Map<String, Object> request) throws Exception {
         return queryService.query(request);
     }
+
+    /**
+     * Query delivered as events; see {@link KnowledgeQueryService#streamQuery}.
+     */
+    public void streamQuery(Map<String, Object> request, KnowledgeQueryService.QueryStreamListener listener) throws Exception {
+        queryService.streamQuery(request, listener);
+    }
     public Map<String, Object> adjudicate(Map<String, Object> request) {
         return governanceService.adjudicate(request);
     }

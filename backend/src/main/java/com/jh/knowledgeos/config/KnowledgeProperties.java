@@ -217,6 +217,23 @@ public class KnowledgeProperties {
 
         private int defaultRateLimitPerMinute = 60;
 
+        private String allowedOrigins = "";
+
+        private int embedTokenHours = 12;
+
+        /**
+         * Upper bound accepted when a caller asks for a specific lifetime (hours). 0 means no cap.
+         */
+        private int embedTokenMaxHours = 8760;
+
+        /**
+         * Whether a caller may mint a token that never expires; such a token is still revoked
+         * the moment its API key is revoked or disabled.
+         */
+        private boolean embedTokenPermanent = true;
+
+        private String embedTokenSecret = "";
+
         public boolean isEnabled() {
             return enabled;
         }
@@ -279,6 +296,52 @@ public class KnowledgeProperties {
 
         public void setDefaultRateLimitPerMinute(int value) {
             defaultRateLimitPerMinute = value < 1 ? 60 : value;
+        }
+
+        /**
+         * Origins allowed to embed the chat widget when a key carries no origin of its own.
+         */
+        public String getAllowedOrigins() {
+            return allowedOrigins;
+        }
+
+        public void setAllowedOrigins(String value) {
+            allowedOrigins = value == null ? "" : value.trim();
+        }
+
+        public int getEmbedTokenHours() {
+            return embedTokenHours;
+        }
+
+        public void setEmbedTokenHours(int value) {
+            embedTokenHours = Math.min(Math.max(value, 1), 720);
+        }
+
+        public int getEmbedTokenMaxHours() {
+            return embedTokenMaxHours;
+        }
+
+        public void setEmbedTokenMaxHours(int value) {
+            embedTokenMaxHours = value < 1 ? 0 : value;
+        }
+
+        public boolean isEmbedTokenPermanent() {
+            return embedTokenPermanent;
+        }
+
+        public void setEmbedTokenPermanent(boolean value) {
+            embedTokenPermanent = value;
+        }
+
+        /**
+         * Signing secret of short-lived embed tokens; empty means "generate one at startup".
+         */
+        public String getEmbedTokenSecret() {
+            return embedTokenSecret;
+        }
+
+        public void setEmbedTokenSecret(String value) {
+            embedTokenSecret = value == null ? "" : value.trim();
         }
     }
 }

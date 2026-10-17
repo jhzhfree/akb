@@ -50,6 +50,18 @@ QUESTION_TYPE_LABELS = {
 }
 
 
+def _without_claims(gate_result):
+    """Return a gate result without its per-claim rows, keeping every aggregate.
+
+    Used where the claim rows would be a duplicate of another part of the response: the
+    counts and the gate status are what a consumer checks first, and dropping the rows
+    leaves those untouched. Non-dict results (the "NOT_RUN" placeholders) pass through.
+    """
+    if not isinstance(gate_result, dict):
+        return gate_result
+    return {key: value for key, value in gate_result.items() if key != "claims"}
+
+
 class QueryEngine:
     """Coordinate query rewrite, multi-channel recall, fusion, reranking, context, and answer generation."""
 
@@ -63,7 +75,8 @@ class QueryEngine:
         self.rewriter = QueryRewriter()
 
     async def query(self, qid, kb, q, topk, permission_tags=None, generate=True,
-                    answer_format=DEFAULT_ANSWER_FORMAT, policy_override=None):
+                    answer_format=DEFAULT_ANSWER_FORMAT, policy_override=None, progress=None,
+                    min_score=None, include_recall_content=False):
         """Run the pipeline: recall → fusion → rerank, then generation unless `generate` is off.
 
         `generate=False` gives the retrieval-only shape the evaluation center needs — the same
@@ -74,6 +87,12 @@ class QueryEngine:
         :func:`app.core.query_policy.merge_override`): a library created as 漏洞库 asks with the
         channels and thresholds that suit CVE questions without changing what any other library
         sees.
+
+        `progress`, when given, is awaited after every stage with a stage event and, during
+        generation, with each piece of answer text. That is what turns a request that used to
+        return one blob at the end into a stream a client can render as it happens; without it
+        this method is byte-for-byte the old synchronous path, so nothing that already works
+        has to change.
         """
         policy = load_policy()
         if policy_override:
@@ -85,6 +104,19 @@ class QueryEngine:
         if not rewritten:
             rewritten = [normalized]
         rewrite_ms = int((time.perf_counter() - rewrite_started) * 1000)
+        if progress is not None:
+            await progress({
+                "type": "stage",
+                "stage": {
+                    "key": "rewrite",
+                    "label": "查询改写",
+                    "status": "done",
+                    "latencyMs": rewrite_ms,
+                    "inputCount": 1,
+                    "outputCount": len(rewritten),
+                    "detail": {"variants": rewritten, "enabled": bool(getattr(policy.rewrite, "enabled", True))},
+                },
+            })
         route = self.router.route(q, enabled=policy.route.enabled, defaultStrategies=policy.route.defaultStrategies)
         strategies = list(effective_strategies(policy, route["strategies"]))
         # The library's declared channels are a floor, not a suggestion: the router may add
@@ -96,11 +128,59 @@ class QueryEngine:
                 if name not in strategies:
                     strategies.append(name)
 
+        if progress is not None:
+            await progress({
+                "type": "stage",
+                "stage": {
+                    "key": "route",
+                    "label": "意图路由",
+                    "status": "done",
+                    "latencyMs": None,
+                    "inputCount": 1,
+                    "outputCount": len(strategies),
+                    "detail": {
+                        "questionType": route.get("questionType") or "DEFAULT",
+                        "strategies": strategies,
+                        "reason": route.get("reason"),
+                        "enabled": bool(getattr(policy.route, "enabled", False)),
+                    },
+                },
+            })
         retrieval_started = time.perf_counter()
         result_sets, retrieval_diagnostics, used_rewrite = await self._recall(
             kb, rewritten, strategies, topk, permission_tags, policy
         )
         retrieval_ms = int((time.perf_counter() - retrieval_started) * 1000)
+        if progress is not None:
+            recall_counts = {name: len(items) for name, items in result_sets.items()}
+            await progress({
+                "type": "stage",
+                "stage": {
+                    "key": "recall",
+                    "label": "多通道召回",
+                    "status": "done",
+                    "latencyMs": retrieval_ms,
+                    "inputCount": 1,
+                    "outputCount": sum(recall_counts.values()),
+                    "detail": {
+                        "sizes": recall_sizes(policy, topk),
+                        "counts": recall_counts,
+                        "channelLatencyMs": retrieval_diagnostics.get("channelLatencyMs", {}),
+                    },
+                },
+            })
+            await progress({
+                "type": "stage",
+                "stage": {
+                    "key": "acl_filter",
+                    "label": "ACL 与状态过滤",
+                    "status": "done",
+                    "latencyMs": None,
+                    "inputCount": None,
+                    "outputCount": sum(recall_counts.values()),
+                    "detail": retrieval_diagnostics.get("filters", {}),
+                },
+            })
 
         fusion_weights = channel_weights(policy)
         fusion_started = time.perf_counter()
@@ -132,6 +212,24 @@ class QueryEngine:
                 for item in candidates[:5]
             ]
         fusion_ms = int((time.perf_counter() - fusion_started) * 1000)
+        if progress is not None:
+            await progress({
+                "type": "stage",
+                "stage": {
+                    "key": "fusion",
+                    "label": "RRF 融合",
+                    "status": "done",
+                    "latencyMs": fusion_ms,
+                    "inputCount": sum(len(items) for items in result_sets.values()),
+                    "outputCount": len(candidates),
+                    "detail": {
+                        "algorithm": "weighted_rrf",
+                        "k": policy.fusion.rrfK,
+                        "weights": fusion_weights,
+                        "qualitySignals": signal_weights,
+                    },
+                },
+            })
         fused_snapshot = [dict(c) for c in candidates]
         fusion_rank = {str(c.get("id")): rank for rank, c in enumerate(fused_snapshot, 1)}
         channel_ranks = {}
@@ -171,12 +269,46 @@ class QueryEngine:
                 candidate, fusion_weights, policy.fusion.rrfK, rerank_depth, topk
             )
 
+        if progress is not None:
+            await progress({
+                "type": "stage",
+                "stage": {
+                    "key": "rerank",
+                    "label": "重排",
+                    "status": "done",
+                    "latencyMs": rerank_ms,
+                    "inputCount": rerank_input_count,
+                    "outputCount": rerank_output_count,
+                    "detail": {
+                        "reranker": reranker.name,
+                        "enabled": bool(policy.rerank.enabled),
+                        "topN": policy.rerank.topN,
+                    },
+                    "errors": rerank_errors,
+                },
+            })
+        # The score floor is applied after reranking, not before: a candidate that only looks
+        # weak before reranking may be exactly the one the reranker promotes, and dropping it
+        # early would change the ordering for every caller, including those that set no floor.
+        # Filtering here also keeps `recall` honest — it reports what was actually found.
+        if min_score is not None:
+            candidates = [
+                c for c in candidates if float(c.get("score") or 0.0) >= float(min_score)
+            ]
+
         # Retrieval-only callers (evaluation runs, the retrieval test page) must not pay for
         # generation: measuring recall latency with an LLM call inside it measures the wrong thing.
         if generate:
-            context, citations = self._context(candidates, policy.answer.contextMaxChars)
+            context, citations, evidence_pool = self._context(candidates, policy.answer.contextMaxChars)
+            # 字符预算可能在第一条就超限，那时 _context 一个片段都装不进去，evidence_pool 是空的。
+            # 空证据集会让门控把每条 claim 都判成"无证据支持"，答案被整段拦掉——表现出来就是
+            # "库里有这条知识却检索不出来"。这时退回 topK 切片：至少保住调用方要的那几条，
+            # 不会比改动前（固定用 candidates[:topk]）更差。
+            if not evidence_pool and candidates:
+                evidence_pool = candidates[:topk]
         else:
             context, citations = "", []
+            evidence_pool = candidates[:topk]
         selected_context = [
             {
                 "id": c.get("id"),
@@ -194,9 +326,22 @@ class QueryEngine:
                 "channelRanks": c.get("channelRanks"),
                 "scoreBreakdown": c.get("scoreBreakdown"),
             }
-            for c in candidates[:topk]
+            for c in evidence_pool
         ]
 
+        if progress is not None:
+            await progress({
+                "type": "stage",
+                "stage": {
+                    "key": "context",
+                    "label": "上下文装配",
+                    "status": "done",
+                    "latencyMs": None,
+                    "inputCount": len(candidates),
+                    "outputCount": len(selected_context),
+                    "detail": {"chars": len(context), "maxChars": policy.answer.contextMaxChars},
+                },
+            })
         llm_started = time.perf_counter()
         if not generate:
             # Gates stay in the payload as explicit "not run" rather than absent keys, so a
@@ -226,25 +371,58 @@ class QueryEngine:
             llm_ms = int((time.perf_counter() - llm_started) * 1000)
         else:
             llm = get_llm_provider()
-            answer = await llm.generate(self._prompt(q, context))
+            if progress is None:
+                answer = await llm.generate(self._prompt(q, context))
+            else:
+                answer = await self._generate_streaming(llm, self._prompt(q, context), progress)
             model = llm.name
             verification = AnswerEvidenceGate(policy.answer.faithfulnessMin).verify(
-                answer, citations, candidates[:topk]
+                answer, citations, evidence_pool
             )
             structured_verification = StructuredAnswerGate(policy.answer.entailmentMin).verify(
-                answer, citations, candidates[:topk]
+                answer, citations, evidence_pool
             )
             qualification = AnswerQualification(policy.answer.policyVersion).qualify(
                 answer, verification, structured_verification, policy.answer.evidenceGateEnabled, model
             )
             answer = qualification.pop("deliveredAnswer")
             llm_ms = int((time.perf_counter() - llm_started) * 1000)
+        if progress is not None:
+            await progress({
+                "type": "stage",
+                "stage": {
+                    "key": "llm",
+                    "label": "答案生成",
+                    "status": "done",
+                    "latencyMs": llm_ms,
+                    "inputCount": len(selected_context),
+                    "outputCount": 1 if candidates else 0,
+                    "detail": {"model": model},
+                },
+            })
+            await progress({
+                "type": "stage",
+                "stage": {
+                    "key": "citation",
+                    "label": "引用校验",
+                    "status": "done",
+                    "latencyMs": None,
+                    "inputCount": len(evidence_pool),
+                    "outputCount": len(citations),
+                    "detail": {
+                        "evidenceGate": verification.get("gateStatus"),
+                        "structuredGate": structured_verification.get("gateStatus"),
+                        "finalGate": qualification.get("gateStatus"),
+                        "policyVersion": qualification.get("policyVersion"),
+                    },
+                },
+            })
         total_ms = int((time.perf_counter() - total_started) * 1000)
 
         recall_counts = {name: len(items) for name, items in result_sets.items()}
         # llmwiki-style presentation payload: everything the answer card badges and chips need.
-        supporting_claims = self._supporting_claims(candidates[:topk])
-        confidence = self._confidence(candidates[:topk], citations, supporting_claims, qualification)
+        supporting_claims = self._supporting_claims(evidence_pool)
+        confidence = self._confidence(evidence_pool, citations, supporting_claims, qualification)
         question_type = route.get("questionType") or "DEFAULT"
         type_label = QUESTION_TYPE_LABELS.get(question_type, question_type)
         router_note = "%s｜%s%s" % (
@@ -376,7 +554,7 @@ class QueryEngine:
                 "key": "citation",
                 "label": "引用校验",
                 "latencyMs": None,
-                "inputCount": len(candidates[:topk]),
+                "inputCount": len(evidence_pool),
                 "outputCount": len(citations),
                 "detail": {
                     "evidenceGate": verification.get("gateStatus"),
@@ -409,7 +587,7 @@ class QueryEngine:
             "rewrite": {"variants": rewritten, "used": used_rewrite, "latencyMs": rewrite_ms},
             "router": {**route, "configuredStrategies": route["strategies"]},
             "strategies": strategies,
-            "recall": result_sets,
+            "recall": self._slim_recall(result_sets, include_recall_content),
             "fusion": {
                 "algorithm": "weighted_rrf",
                 "k": policy.fusion.rrfK,
@@ -419,6 +597,12 @@ class QueryEngine:
                 "latencyMs": fusion_ms,
             },
             "candidates": candidates,
+            # 检索接口要能回答“给了多少、够格的有多少”：topK 是请求要的数量，
+            # returned 是过滤后真的返回的数量，两者不一致时调用方才知道是阈值卡掉了结果，
+            # 而不是库里没有。
+            "topK": topk,
+            "returned": len(candidates),
+            "minScore": min_score,
             "reranker": {
                 "name": reranker.name,
                 "enabled": policy.rerank.enabled,
@@ -433,7 +617,11 @@ class QueryEngine:
             "answer": render_answer(answer, citations, answer_format),
             "answerFormat": normalize_answer_format(answer_format),
             "answerVerification": verification,
-            "structuredAnswerVerification": structured_verification,
+            # structured 的 claim 明细与 answerQualification.claims 是同一份：后者由前者的副本
+            # 加 policyVersion / includedInFinalAnswer 构成（见 answer_qualification.qualify），
+            # 是它的超集。两处都发等于把每条判定结果发两遍。这里只留统计口径，明细统一读
+            # answerQualification.claims——那也是落库用的那份，口径不会分叉。
+            "structuredAnswerVerification": _without_claims(structured_verification),
             "answerQualification": qualification,
             "model": model,
             "tokenUsage": {"promptTokens": None, "completionTokens": None, "totalTokens": None},
@@ -464,6 +652,32 @@ class QueryEngine:
                 "queryPolicy": policy_summary(policy),
             },
         }
+
+    async def _generate_streaming(self, llm, prompt, progress):
+        """Generate the answer while forwarding every piece through `progress`.
+
+        The concatenation of the pieces is returned so the gates downstream judge exactly the
+        text the reader saw. If a provider cannot stream at all, the failure happens before the
+        first chunk and a blocking call recovers it; once chunks are already on the wire there
+        is nothing to recover — re-sending would duplicate what the reader is looking at.
+        """
+        pieces = []
+        try:
+            async for piece in llm.stream_generate(prompt):
+                if not piece:
+                    continue
+                pieces.append(piece)
+                await progress({"type": "delta", "text": piece})
+        except Exception as exc:
+            if pieces:
+                logger.warning("llm stream interrupted after %d chunks: %s", len(pieces), exc)
+            else:
+                logger.warning("llm streaming unavailable; falling back to blocking generate: %s", exc)
+                text = await llm.generate(prompt)
+                if text:
+                    pieces.append(text)
+                    await progress({"type": "delta", "text": text})
+        return "".join(pieces)
 
     async def _recall(self, kb, rewrites, strategies, topk, permission_tags, policy):
         """Recall over rewrite variants until one returns enough candidates (design §8.2).
@@ -584,6 +798,40 @@ class QueryEngine:
         }
 
     @staticmethod
+    def _slim_recall(result_sets, include_content=False):
+        """Drop recalled full text unless the caller asked for it.
+
+        Recall is by far the largest thing in the response: every channel returns its own
+        candidate list, and every candidate carries several hundred characters of verbatim
+        chunk text. Twenty of those is five figures' worth of characters that then get
+        serialised into the trace JSON column, logged, and shipped to external callers —
+        while every consumer on record (the retrieval test page, the trace panel, the
+        external search endpoint) only ever reads id / title / channel / score / metadata.
+
+        The full text is not deleted so much as demoted to a length: `contentChars` keeps
+        "was this chunk long enough to matter" answerable without paying for the text.
+        """
+        slimmed = {}
+        for channel, items in (result_sets or {}).items():
+            if not isinstance(items, list):
+                slimmed[channel] = items
+                continue
+            rows = []
+            for item in items:
+                if not isinstance(item, dict):
+                    rows.append(item)
+                    continue
+                text = item.get("content") or ""
+                row = {key: value for key, value in item.items() if key != "content"}
+                if include_content:
+                    row["content"] = text
+                else:
+                    row["contentChars"] = len(text)
+                rows.append(row)
+            slimmed[channel] = rows
+        return slimmed
+
+    @staticmethod
     def _chunk_candidate_floor(candidates, result_sets, policy):
         """Give verbatim chunks a seat among the fused candidates before ranking continues.
 
@@ -631,6 +879,10 @@ class QueryEngine:
     def _context(self, candidates, limit=None):
         blocks = []
         citations = []
+        # 实际被装进上下文的候选。字符预算可能在中间截断，所以它不是 len(ordered)——
+        # 返回它是为了让 selectedContext / 门控拿到"答案真的看见了哪些证据"，而不是靠
+        # 调用方自己猜一个切片。
+        selected = []
         used = 0
         policy = load_policy()
         budget = int(limit) if limit else int(policy.answer.contextMaxChars)
@@ -651,6 +903,9 @@ class QueryEngine:
                 break
             blocks.append(block)
             used += len(block)
+            # 与 citations 同源同序：进不了上下文的候选（字符预算截断）不算证据，
+            # 否则 selectedContext / 门控会声称答案"看见"了它其实没看到的片段。
+            selected.append(c)
             citations.append(
                 {
                     "index": i,
@@ -674,7 +929,7 @@ class QueryEngine:
                     "excerpt": answer_excerpt(c.get("content", "")),
                 }
             )
-        return "\n\n".join(blocks), citations
+        return "\n\n".join(blocks), citations, selected
 
     def _prompt(self, q, ctx):
         return (

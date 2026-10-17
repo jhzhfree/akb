@@ -45,6 +45,7 @@ LIMIT 1
 <select id="listDocuments" resultType="map">SELECT d.id,d.document_code documentCode,d.title,d.mime_type mimeType,d.parse_status parseStatus,d.status,d.current_stage currentStage,d.error_message errorMessage,d.retry_count retryCount,d.chunk_count chunkCount,s.name sourceName,s.id sourceId,d.created_time createdTime FROM t_document d JOIN t_source_version sv ON sv.id=d.source_version_id JOIN t_source s ON s.id=sv.source_id WHERE s.knowledge_base_id=#{kb}<choose><when test="permissionTags == null"></when><when test="permissionTags != null and permissionTags.size() > 0"> AND (s.permission_tags IS NULL OR JSON_LENGTH(s.permission_tags)=0 OR <foreach collection="permissionTags" item="tag" open="(" separator=" OR " close=")">JSON_CONTAINS(s.permission_tags, JSON_QUOTE(#{tag}))</foreach>)</when><otherwise> AND (s.permission_tags IS NULL OR JSON_LENGTH(s.permission_tags)=0)</otherwise></choose> ORDER BY d.created_time DESC</select>
 
 
+<select id="listDocumentUnits" resultType="map">SELECT cu.id unitId,cu.unit_code unitCode,cu.heading_path headingPath,cu.chunk_type chunkType,cu.page_no pageNo,cu.content content,e.evidence_code evidenceCode FROM t_content_unit cu LEFT JOIN t_evidence e ON e.content_unit_id=cu.id WHERE cu.document_id=#{documentId} AND cu.status='ACTIVE' ORDER BY cu.id</select>
 <update id="supersedeDocumentChunks">UPDATE t_content_unit SET status='SUPERSEDED' WHERE document_id=#{documentId} AND status='ACTIVE'</update>
 
 

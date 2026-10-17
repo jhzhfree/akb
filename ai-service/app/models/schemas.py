@@ -21,6 +21,14 @@ class QueryRequest(BaseModel):
     # 只有白名单内的字段生效（见 app.core.query_policy.merge_override），所以一个知识库
     # 无法改写与它无关的全局行为，也无法用一个坏值把整次查询变成 500。
     policyOverride: dict[str, Any] | None = None
+    # 最低相关度分数：低于该分数的候选不进入返回。不给阈值即不过滤，行为与以前一致。
+    # 检索接口（knowledge_search / /v1/external/search）靠它把“召回了多少”和
+    # “其中有多少真的够格”分开——数量由 topK 决定，质量由它决定。
+    minScore: float | None = Field(default=None, ge=0.0, le=1.0)
+    # 召回原文按需返回。recall 每条都带几百字正文，20 条就是上万字，占响应体积的绝大部分，
+    # 而所有已知消费方（检索测试页、溯源面板、对外检索接口）都只用它的元数据。
+    # 默认只给元数据 + 原文长度；确实要看原文（排查召回质量）时显式打开。
+    includeRecallContent: bool = False
 
 
 class ExtractRequest(BaseModel):
@@ -33,6 +41,10 @@ class ExtractRequest(BaseModel):
     chunks: list[dict[str, Any]] | None = None
     # Normalized standard units; when supplied, extraction reads these instead of raw text.
     units: list[dict[str, Any]] | None = None
+    # Scenario template of this library (GENERAL / OPS / POLICY / BUSINESS / VULN), sent by
+    # the console so generation follows the same template as chunking and retrieval instead
+    # of every library being extracted by one generic instruction.
+    scenario: str = "GENERAL"
 
 
 class IndexDocument(BaseModel):

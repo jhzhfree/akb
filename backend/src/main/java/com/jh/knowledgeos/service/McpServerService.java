@@ -106,11 +106,14 @@ public class McpServerService {
     public Map<String, Object> toolsList() {
         List<Map<String, Object>> tools = new ArrayList<Map<String, Object>>();
         tools.add(tool("knowledge_query", "可追溯知识问答：返回答案、引用与 queryId，可用于后续溯源；答案可按 answerFormat 交付成 Markdown / 纯文本 / HTML", schema(properties(prop("knowledgeBaseId", "integer", "知识库 ID"),
-            prop("question", "string", "要提问的问题"), prop("topK", "integer", "召回数量，默认 10"),
-            prop("answerFormat", "string", "答案返回格式：default（不传即此项）/ markdown / text / html；返回值里的 answerFormat 是实际生效的那个")),
-            Arrays.asList("knowledgeBaseId", "question"))));
+           prop("question", "string", "要提问的问题"), prop("topK", "integer", "召回数量，默认 10"),
+           prop("minScore", "number", "最低相关度分数（0~1）：低于该分数的候选不参与答案生成；不传即不过滤"),
+           prop("answerFormat", "string", "答案返回格式：default（不传即此项）/ markdown / text / html；返回值里的 answerFormat 是实际生效的那个")),
+           Arrays.asList("knowledgeBaseId", "question"))));
         tools.add(tool("knowledge_search", "只做检索不生成答案：返回召回候选、重排结果与引用，便于自行装配上下文", schema(properties(prop("knowledgeBaseId", "integer", "知识库 ID"),
-            prop("query", "string", "检索语句"), prop("topK", "integer", "召回数量，默认 10")), Arrays.asList("knowledgeBaseId", "query"))));
+           prop("query", "string", "检索语句"), prop("topK", "integer", "召回数量，默认 10"),
+           prop("minScore", "number", "最低相关度分数（0~1）：低于该分数的候选不返回；不传即不过滤。返回里的 returned 是过滤后实际给出的条数")),
+           Arrays.asList("knowledgeBaseId", "query"))));
         tools.add(tool("list_knowledge_bases", "列出当前 API Key 可见的知识库", schema(new LinkedHashMap<String, Object>(), new ArrayList<String>())));
         tools.add(tool("list_knowledge_cards", "列出知识卡片（结构化标准答案，如 SOP）", schema(properties(prop("knowledgeBaseId", "integer", "知识库 ID")),
             Arrays.asList("knowledgeBaseId"))));
@@ -144,11 +147,12 @@ public class McpServerService {
         if ("knowledge_query".equals(name)) {
             Long kb = resolve(key, args);
             accessService.assertScope(key, ApiKey.SCOPE_READ);
-            value = facade.query(kb, text(args, "question"), integer(args, "topK"), null, text(args, "answerFormat"));
+            value = facade.query(kb, text(args, "question"), integer(args, "topK"), null, text(args, "answerFormat"),
+                resolveMinScore(args));
         } else if ("knowledge_search".equals(name)) {
             Long kb = resolve(key, args);
             accessService.assertScope(key, ApiKey.SCOPE_READ);
-            value = facade.search(kb, text(args, "query"), integer(args, "topK"), null);
+            value = facade.search(kb, text(args, "query"), integer(args, "topK"), null, resolveMinScore(args));
         } else if ("list_knowledge_bases".equals(name)) {
             accessService.assertScope(key, ApiKey.SCOPE_READ);
             value = facade.bases(key.getKnowledgeBaseId());
@@ -264,6 +268,42 @@ public class McpServerService {
     private String text(Map<String, Object> args, String key) {
         Object value = args.get(key);
         return value == null ? null : String.valueOf(value);
+    }
+
+    /**
+     * A score floor arrives as a JSON number and has to survive being handed over as a string by
+     * a client that stringifies every argument; an unusable value is dropped rather than turned
+     * into 0.0, because 0.0 means "accept everything" and that is not what a caller who typed
+     * something wrong asked for.
+     */
+    private Double decimal(Map<String, Object> args, String key) {
+        Object value = args.get(key);
+        if (value == null) {
+            return null;
+        }
+        if (value instanceof Number) {
+            return ((Number) value).doubleValue();
+        }
+        try {
+            return Double.valueOf(String.valueOf(value).trim());
+        } catch (NumberFormatException e) {
+            return null;
+        }
+    }
+
+    /**
+     * 解析最低相关度 {@code minScore}（0~1）。与 REST / SSE 同一语义：不传即不过滤。
+     *
+     * <p>数值解析沿用 {@link #decimal} 的宽松策略（数字或字符串都收，解析不了的丢掉而不是
+     * 变成 0.0——0.0 等于"全收"，那不是输错值的调用方想要的结果）。范围则与 REST 的
+     * {@code @Min(0) @Max(1)}、SSE 的显式校验一致：越界直接报 400，不让它静默生效。</p>
+     */
+    private Double resolveMinScore(Map<String, Object> args) {
+        Double minScore = decimal(args, "minScore");
+        if (minScore != null && (minScore < 0.0d || minScore > 1.0d)) {
+            throw new IllegalArgumentException("minScore 必须在 0~1 之间");
+        }
+        return minScore;
     }
 
     private Integer integer(Map<String, Object> args, String key) {

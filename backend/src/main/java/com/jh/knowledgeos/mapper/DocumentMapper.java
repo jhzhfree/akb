@@ -41,6 +41,14 @@ public interface DocumentMapper {
 
     List<Map<String, Object>> listDocumentChunks(@Param("documentId") Long documentId);
 
+    /**
+     * Full content of every unit of one document, joined to its evidence code.
+     *
+     * <p>Re-extraction needs the whole unit text and the evidence code it is anchored to:
+     * the browsing query deliberately returns only a 200-character excerpt.</p>
+     */
+    List<Map<String, Object>> listDocumentUnits(@Param("documentId") Long documentId);
+
     int insertContentUnit(@Param("documentId") Long documentId, @Param("unitCode") String unitCode, @Param("headingPath") String heading,
         @Param("pageNo") Integer pageNo, @Param("content") String content, @Param("contentHash") String hash);
 

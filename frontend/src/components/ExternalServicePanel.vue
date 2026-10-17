@@ -165,6 +165,8 @@
             </el-tab-pane>
           </el-tabs>
           <p class="kb-muted mt-2 text-[11px]">{{ answerFormatHint }}</p>
+          <p class="kb-muted mt-1 text-[11px]">{{ minScoreHint }}</p>
+          <p v-if="exampleTab === 'sse'" class="kb-muted mt-1 text-[11px]">{{ contentHint }}</p>
           <div class="mt-3 border-t border-ink-100 pt-3">
             <div class="flex flex-wrap items-center gap-2">
               <input v-model="probeSecret" class="kb-input flex-1" placeholder="粘贴明文 API 密钥做连通性自检" />
@@ -323,9 +325,13 @@ const probeOk = ref(false)
 const restExample = computed(() => `curl -X POST '${origin()}/api/v1/external/query' \\
   -H 'Content-Type: application/json' \\
   -H 'X-API-Key: <YOUR_API_KEY>' \\
-  -d '{"knowledgeBaseId":1,"question":"报销流程是什么？","topK":10,"answerFormat":"markdown"}'`)
+  -d '{"knowledgeBaseId":1,"question":"报销流程是什么？","topK":10,"answerFormat":"markdown","minScore":0.6}'`)
 /** answerFormat 可整个省掉（不传即默认格式）：default / markdown / text / html。 */
 const answerFormatHint = '答案返回格式：default（不传即此项，模型原文）/ markdown（正文 + 引用原文章节）/ text（纯文本）/ html（含引用原文）；响应里的 answerFormat 是实际生效的那个'
+/** minScore 同样可整个省掉：不传即不过滤，与以前完全一致。 */
+const minScoreHint = 'minScore：最低相关度（0~1，含端点），低于该分数的候选不参与答案生成；/search 用它过滤候选，返回的 returned 是过滤后条数'
+/** 只在 SSE 页签下出现：content 是 /stream/query 独有的交付方式开关。 */
+const contentHint = 'content：stream（默认）逐片推 delta；final 只推检索过程（stage / citation），答案在 done.answer 里整体交付——与控制台阻塞式拿到的是同一份加工产物'
 const mcpExample = computed(() => `{
   "mcpServers": {
     "knowledge-os": {
@@ -334,14 +340,17 @@ const mcpExample = computed(() => `{
     }
   }
 }
-# tools: knowledge_query / knowledge_search / list_knowledge_bases ...`)
+# tools: knowledge_query / knowledge_search / list_knowledge_bases ...
+# tools/call 的 arguments 支持 minScore（0~1，最低相关度）`)
 const sseExample = computed(() => `const es = new EventSource(
   '${origin()}/api/v1/external/stream/query?knowledgeBaseId=1'
   + '&question=' + encodeURIComponent('报销流程是什么？')
   + '&answerFormat=markdown'
+  + '&content=final'   // stream=逐片推 delta；final=只推检索过程，答案在 done 里整体交付
+  + '&minScore=0.6'    // 可选，最低相关度；不传即不过滤
   + '&apiKey=' + encodeURIComponent('<YOUR_API_KEY>'))
 es.addEventListener('stage', e => console.log('阶段', JSON.parse(e.data)))
-es.addEventListener('delta', e => process.stdout.write(JSON.parse(e.data)))
+es.addEventListener('delta', e => process.stdout.write(e.data))   // content=final 时不会有此事件
 es.addEventListener('citation', e => console.log('引用', JSON.parse(e.data)))
 es.addEventListener('done', e => { console.log('完成', JSON.parse(e.data)); es.close() })`)
 

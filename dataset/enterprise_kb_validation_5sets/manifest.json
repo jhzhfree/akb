@@ -1,0 +1,162 @@
+[
+  {
+    "knowledge_base": "01_综合知识库",
+    "document_id": "KB-GEN-001",
+    "title": "企业知识管理办法_V1.0",
+    "file": "01_综合知识库/01_企业知识管理办法_V1.0.docx",
+    "format": "docx",
+    "synthetic": true
+  },
+  {
+    "knowledge_base": "01_综合知识库",
+    "document_id": "PRJ-XH-001",
+    "title": "项目星河交付说明_V1.0",
+    "file": "01_综合知识库/02_项目星河交付说明_V1.0.docx",
+    "format": "docx",
+    "synthetic": true
+  },
+  {
+    "knowledge_base": "01_综合知识库",
+    "document_id": "GUIDE-001",
+    "title": "企业知识使用指南_V1.0",
+    "file": "01_综合知识库/03_企业知识使用指南_V1.0.docx",
+    "format": "docx",
+    "synthetic": true
+  },
+  {
+    "knowledge_base": "01_综合知识库",
+    "document_id": "REPORT-001",
+    "title": "知识质量月度评估_V1.0",
+    "file": "01_综合知识库/04_知识质量月度评估_V1.0.docx",
+    "format": "docx",
+    "synthetic": true
+  },
+  {
+    "knowledge_base": "02_运维知识库",
+    "document_id": "OPS-DB-001",
+    "title": "数据库连接池耗尽故障手册_V1.0",
+    "file": "02_运维知识库/01_数据库连接池耗尽故障手册_V1.0.docx",
+    "format": "docx",
+    "synthetic": true
+  },
+  {
+    "knowledge_base": "02_运维知识库",
+    "document_id": "OPS-INS-001",
+    "title": "生产系统巡检规程_V1.0",
+    "file": "02_运维知识库/02_生产系统巡检规程_V1.0.docx",
+    "format": "docx",
+    "synthetic": true
+  },
+  {
+    "knowledge_base": "02_运维知识库",
+    "document_id": "OPS-CHG-001",
+    "title": "检索服务变更记录_20261008",
+    "file": "02_运维知识库/03_检索服务变更记录_20261008.docx",
+    "format": "docx",
+    "synthetic": true
+  },
+  {
+    "knowledge_base": "02_运维知识库",
+    "document_id": "OPS-ALERT-001",
+    "title": "索引积压告警处置SOP_V1.0",
+    "file": "02_运维知识库/04_索引积压告警处置SOP_V1.0.docx",
+    "format": "docx",
+    "synthetic": true
+  },
+  {
+    "knowledge_base": "03_制度条款知识库",
+    "document_id": "POL-PROC-001",
+    "title": "采购审批管理制度_V1.0",
+    "file": "03_制度条款知识库/01_采购审批管理制度_V1.0.docx",
+    "format": "docx",
+    "synthetic": true
+  },
+  {
+    "knowledge_base": "03_制度条款知识库",
+    "document_id": "POL-PROC-002",
+    "title": "采购审批管理制度_V2.0",
+    "file": "03_制度条款知识库/02_采购审批管理制度_V2.0.docx",
+    "format": "docx",
+    "synthetic": true
+  },
+  {
+    "knowledge_base": "03_制度条款知识库",
+    "document_id": "CONTRACT-001",
+    "title": "供应商服务合同示范条款_V1.0",
+    "file": "03_制度条款知识库/03_供应商服务合同示范条款_V1.0.docx",
+    "format": "docx",
+    "synthetic": true
+  },
+  {
+    "knowledge_base": "03_制度条款知识库",
+    "document_id": "JUDGE-001",
+    "title": "制度冲突裁决记录_20260905",
+    "file": "03_制度条款知识库/04_制度冲突裁决记录_20260905.docx",
+    "format": "docx",
+    "synthetic": true
+  },
+  {
+    "knowledge_base": "04_公司业务人员关系知识库",
+    "document_id": "ORG-001",
+    "title": "企业组织架构_2026Q4",
+    "file": "04_公司业务人员关系知识库/01_企业组织架构_2026Q4.docx",
+    "format": "docx",
+    "synthetic": true
+  },
+  {
+    "knowledge_base": "04_公司业务人员关系知识库",
+    "document_id": "ROLE-001",
+    "title": "岗位职责与协作矩阵_V1.0",
+    "file": "04_公司业务人员关系知识库/02_岗位职责与协作矩阵_V1.0.docx",
+    "format": "docx",
+    "synthetic": true
+  },
+  {
+    "knowledge_base": "04_公司业务人员关系知识库",
+    "document_id": "REL-001",
+    "title": "星河项目客户与交付关系_V1.0",
+    "file": "04_公司业务人员关系知识库/03_星河项目客户与交付关系_V1.0.docx",
+    "format": "docx",
+    "synthetic": true
+  },
+  {
+    "knowledge_base": "04_公司业务人员关系知识库",
+    "document_id": "ACL-EMP-001",
+    "title": "员工信息访问分级规范_V1.0",
+    "file": "04_公司业务人员关系知识库/04_员工信息访问分级规范_V1.0.docx",
+    "format": "docx",
+    "synthetic": true
+  },
+  {
+    "knowledge_base": "05_漏洞库知识库",
+    "document_id": "VULN-001",
+    "title": "模拟漏洞公告_KB-2026-001",
+    "file": "05_漏洞库知识库/01_模拟漏洞公告_KB-2026-001.docx",
+    "format": "docx",
+    "synthetic": true
+  },
+  {
+    "knowledge_base": "05_漏洞库知识库",
+    "document_id": "ASSET-001",
+    "title": "软件资产与组件清单_202610",
+    "file": "05_漏洞库知识库/02_软件资产与组件清单_202610.docx",
+    "format": "docx",
+    "synthetic": true
+  },
+  {
+    "knowledge_base": "05_漏洞库知识库",
+    "document_id": "FIX-001",
+    "title": "模拟漏洞修复与缓解方案_V1.0",
+    "file": "05_漏洞库知识库/03_模拟漏洞修复与缓解方案_V1.0.docx",
+    "format": "docx",
+    "synthetic": true
+  },
+  {
+    "knowledge_base": "05_漏洞库知识库",
+    "document_id": "TEST-001",
+    "title": "漏洞复测报告_20261012",
+    "file": "05_漏洞库知识库/04_漏洞复测报告_20261012.docx",
+    "format": "docx",
+    "synthetic": true
+  }
+]

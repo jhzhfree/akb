@@ -237,6 +237,7 @@ curl -H 'X-API-Key: kos_ak_xxx' http://<host>:8080/api/v1/external/bases
 | `topK` | Integer | 否 | 1–50，默认 10 | 召回候选数量 |
 | `permissionTags` | String[] | 否 | — | 调用方侧权限标签，平台仍会叠加自身 ACL |
 | `answerFormat` | String | 否 | `default` / `markdown` / `text` / `html`，默认 `default` | 答案交付格式，取值见下 |
+| `minScore` | Double | 否 | `0.0`–`1.0`，含端点 | 最低相关度分数：低于该分数的候选不参与答案生成（也用于 `/search` 过滤返回）。不传即不过滤——与历史完全一致 |
 
 **`answerFormat` 取值**
 
@@ -256,6 +257,8 @@ curl -H 'X-API-Key: kos_ak_xxx' http://<host>:8080/api/v1/external/bases
 | `queryId` | 本次问答 ID，用于 `/queries/{queryId}` 回放 |
 | `answer` | 生成的答案文本（未通过证据校验时会给出拒答说明），按 `answerFormat` 交付 |
 | `answerFormat` | 实际生效的交付格式；请求不传时为 `default` |
+| `topK` | AI 服务给出的**选中送入答案生成的上下文条数**——注意它**不是**请求 `topK` 的回显：一次 `topK=3` 的请求这里可能返回 `1` |
+| `effectiveTopK` | 请求 `topK` 夹取后真正生效的召回上限（1–50，不传或小于 1 取 10）。与请求值不一致即越界被夹——「要 200 条回来 50 条」是上限所致，不是库里只有 50 条 |
 | `citations` | 引用数组：`index / title / channel / score / sourceName / sourceUri / contentUnitId / objectType / evidenceHash / pageNo` |
 | `candidates` | 融合后的候选片段：`id / channel / content / score / rrfScore / rerankScore / quality / scoreBreakdown …` |
 | `strategies` | 实际使用的检索策略，如 `["card","bm25","vector"]` |
@@ -331,7 +334,7 @@ curl -X POST http://<host>:8080/api/v1/external/query \
 
 ### 4.3 POST /search — 只检索不生成答案
 
-适合已有自有 Prompt、只想取上下文的系统。入参与 `/query` 相同（`answerFormat` 可传但对返回内容无影响：这里没有答案正文），返回**不含 `answer`**：
+适合已有自有 Prompt、只想取上下文的系统。入参与 `/query` 相同（`answerFormat` 可传但对返回内容无影响：这里没有答案正文），返回**不含 `answer`**。`minScore` 同样生效——返回的 `returned` 是过滤后实际给出的条数，与 `topK` 不一致时说明是阈值筛掉的。
 
 `queryId / knowledgeBaseId / question / strategies / router / rewrite / recall / reranker / candidates / citations`
 
@@ -513,8 +516,8 @@ curl -X POST http://<host>:8080/api/mcp \
 
 | 工具 | 入参（加粗为必填） | 说明 |
 |---|---|---|
-| `knowledge_query` | **knowledgeBaseId**、**question**、topK | 可追溯问答，返回答案、引用与 queryId |
-| `knowledge_search` | **knowledgeBaseId**、**query**、topK | 只检索不生成答案 |
+| `knowledge_query` | **knowledgeBaseId**、**question**、topK、minScore（可选） | 可追溯问答，返回答案、引用与 queryId |
+| `knowledge_search` | **knowledgeBaseId**、**query**、topK、minScore（可选） | 只检索不生成答案 |
 | `list_knowledge_bases` | — | 列出当前 Key 可见知识库 |
 | `list_knowledge_cards` | **knowledgeBaseId** | 知识卡片清单 |
 | `get_knowledge_card` | **knowledgeBaseId**、**code** | 卡片详情与证据链 |
@@ -533,10 +536,13 @@ curl -X POST http://<host>:8080/api/mcp \
         "jsonrpc":"2.0","id":2,"method":"tools/call",
         "params":{
           "name":"knowledge_query",
-          "arguments":{"knowledgeBaseId":1,"question":"退款时效是多久","topK":5,"answerFormat":"markdown"}
+          "arguments":{"knowledgeBaseId":1,"question":"退款时效是多久","topK":5,"answerFormat":"markdown","minScore":0.6}
         }
       }'
 ```
+
+`minScore` 是 `0`–`1` 的最低相关度阈值，与 REST `/query`、`/search` 和 SSE `/stream/query`
+同名同义；不传即不过滤（与历史一致）。
 
 ```json
 {
@@ -598,14 +604,14 @@ curl -X POST http://<host>:8080/api/mcp \
 
 ### 6.1 GET /stream/query — 流式问答
 
-**参数**：`question`（**必填**）、`knowledgeBaseId`（可选）、`topK`（可选）、`answerFormat`（可选，同 `/query`，默认 `default`）。
+**参数**：`question`（**必填**）、`knowledgeBaseId`（可选）、`topK`（可选）、`answerFormat`（可选，同 `/query`，默认 `default`）、`content`（可选，`stream` | `final`，默认 `stream`）、`minScore`（可选，`0.0`–`1.0`，与 `/query` 同义，越界返 400）。
 
 **事件序列**
 
 | 事件 | 载荷 | 说明 |
 |---|---|---|
 | `stage` | `{"knowledgeBaseId":1,"stage":"REWRITE","time":1789970566684}` | 依次 REWRITE → RECALL → FUSION → RERANK → ANSWER |
-| `delta` | 字符串（答案切片） | 逐片输出答案正文，按 `answerFormat` 交付（不传即默认格式） |
+| `delta` | 字符串（答案切片） | 逐片输出答案正文，按 `answerFormat` 交付（不传即默认格式）。切片内含换行时，按 SSE 规范拆成**多条 `data:` 字段**，客户端需用 `\n` 拼回 —— `EventSource` 会自动拼好，手写解析器也必须照做，否则换行会被当成帧结束、后半截被丢弃（表现为整段答案挤成一行）。当 `content=final` 时不推送 `delta` 事件，答案在 `done.answer` 里整体交付 —— 与阻塞式 `/api/v1/external/query` 拿到的内容同源 |
 | `citation` | `{"citations":[ … ]}` | 引用一次性下发 |
 | `done` | `{"queryId","knowledgeBaseId","question","answer","answerFormat","model","trace"}` | 完成帧，`answerFormat` 为实际生效的交付格式 |
 | `error` | 错误信息字符串 | 异常结束 |

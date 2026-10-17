@@ -1,8 +1,11 @@
 package com.jh.knowledgeos.service;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.jh.knowledgeos.common.AnswerFormat;
 import com.jh.knowledgeos.domain.ApiKey;
+import com.jh.knowledgeos.domain.Claim;
 import com.jh.knowledgeos.domain.KnowledgeBase;
+import com.jh.knowledgeos.domain.KnowledgeCard;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 import java.io.ByteArrayInputStream;
@@ -28,9 +31,13 @@ public class ExternalKnowledgeFacade {
 
     private final KnowledgeBaseService knowledgeBaseService;
 
-    public ExternalKnowledgeFacade(KnowledgeService knowledgeService, KnowledgeBaseService knowledgeBaseService) {
+    private final ObjectMapper objectMapper;
+
+    public ExternalKnowledgeFacade(KnowledgeService knowledgeService, KnowledgeBaseService knowledgeBaseService,
+        ObjectMapper objectMapper) {
         this.knowledgeService = knowledgeService;
         this.knowledgeBaseService = knowledgeBaseService;
+        this.objectMapper = objectMapper;
     }
 
     /**
@@ -69,12 +76,66 @@ public class ExternalKnowledgeFacade {
      */
     public Map<String, Object> query(ApiKey key, Long kb, String question, Integer topK, List<String> permissionTags, String source,
         String answerFormat) throws Exception {
+        return query(key, kb, question, topK, permissionTags, source, answerFormat, null);
+    }
+
+    /**
+     * 同上，带最低分数：调用方用一个阈值决定"够格"的候选，而不是先取回一堆再自己筛。
+     */
+    public Map<String, Object> query(ApiKey key, Long kb, String question, Integer topK, List<String> permissionTags, String source,
+        String answerFormat, Double minScore) throws Exception {
+        Map<String, Object> payload = payload(key, kb, question, topK, permissionTags, source, answerFormat, minScore);
+        Map<String, Object> result = knowledgeService.query(payload);
+        // 回传实际生效的格式：调用方传了个认不出来的取值时，这里如实说 default，而不是让他以为生效了。
+        result.put("answerFormat", AnswerFormat.normalize(result.get("answerFormat") == null ? null
+            : String.valueOf(result.get("answerFormat"))));
+        // 同理回传实际生效的 topK——但**不能**写回 `topK`：那是 AI 服务自己的字段，语义是
+        // "选中送入答案生成的上下文条数"（一次请求 topK=3 的调用里它返回 1），覆盖掉会让
+        // 已按下游语义解析的调用方拿到完全不同的东西。用独立名字并存，两边都不破坏。
+        result.put("effectiveTopK", effectiveTopK(topK));
+        return result;
+    }
+
+    /**
+     * Streaming counterpart of {@link #query}: stages and answer chunks are handed to the
+     * listener as the pipeline produces them.
+     *
+     * <p>The credential is put on the payload exactly as it is for a blocking call, so a streamed
+     * answer is attributed to the same key, and the ACL tags resolved for it are the same ones
+     * the engine filters with — there is no second, looser path for streaming.</p>
+     */
+    public void streamQuery(ApiKey key, Long kb, String question, Integer topK, List<String> permissionTags, String source,
+        String answerFormat, Double minScore, KnowledgeQueryService.QueryStreamListener listener) throws Exception {
+        knowledgeService.streamQuery(payload(key, kb, question, topK, permissionTags, source, answerFormat, minScore), listener);
+    }
+
+    private static Map<String, Object> payload(ApiKey key, Long kb, String question, Integer topK, List<String> permissionTags,
+        String source, String answerFormat) {
+        return payload(key, kb, question, topK, permissionTags, source, answerFormat, null);
+    }
+
+    /**
+     * 实际生效的 topK：请求里的取值会被夹到 1~50，不传或小于 1 取默认 10。
+     *
+     * <p>夹取只在这一处做，且夹完的值要回传给调用方（见 {@link #query}）——否则
+     * "我要 200 条、回来 50 条"看起来像是库里只有 50 条，真实原因却是上限。</p>
+     */
+    public static int effectiveTopK(Integer topK) {
+        return topK == null || topK < 1 ? 10 : Math.min(topK, 50);
+    }
+
+    private static Map<String, Object> payload(ApiKey key, Long kb, String question, Integer topK, List<String> permissionTags,
+        String source, String answerFormat, Double minScore) {
         Map<String, Object> payload = new LinkedHashMap<String, Object>();
         payload.put("knowledgeBaseId", kb);
         payload.put("query", question);
-        payload.put("topK", topK == null || topK < 1 ? 10 : Math.min(topK, 50));
+        payload.put("topK", effectiveTopK(topK));
         payload.put("source", source == null ? PlatformEventPublisher.SOURCE_REST : source);
         payload.put("answerFormat", AnswerFormat.normalize(answerFormat));
+        // 只在给了阈值时下发：不传时 AI 服务侧是 None，与以前的行为逐字一致。
+        if (minScore != null) {
+            payload.put("minScore", minScore);
+        }
         if (key != null) {
             payload.put("externalKeyCode", key.getKeyCode());
             payload.put("externalKeyName", key.getName());
@@ -82,11 +143,7 @@ public class ExternalKnowledgeFacade {
         if (permissionTags != null && !permissionTags.isEmpty()) {
             payload.put("permissionTags", permissionTags);
         }
-        Map<String, Object> result = knowledgeService.query(payload);
-        // 回传实际生效的格式：调用方传了个认不出来的取值时，这里如实说 default，而不是让他以为生效了。
-        result.put("answerFormat", AnswerFormat.normalize(result.get("answerFormat") == null ? null
-            : String.valueOf(result.get("answerFormat"))));
-        return result;
+        return payload;
     }
 
     /**
@@ -101,19 +158,38 @@ public class ExternalKnowledgeFacade {
      */
     public Map<String, Object> query(Long kb, String question, Integer topK, List<String> permissionTags, String answerFormat)
         throws Exception {
-        return query(null, kb, question, topK, permissionTags, PlatformEventPublisher.SOURCE_REST, answerFormat);
+        return query(null, kb, question, topK, permissionTags, PlatformEventPublisher.SOURCE_REST, answerFormat, null);
+    }
+
+    public Map<String, Object> query(Long kb, String question, Integer topK, List<String> permissionTags, String answerFormat,
+        Double minScore) throws Exception {
+        return query(null, kb, question, topK, permissionTags, PlatformEventPublisher.SOURCE_REST, answerFormat, minScore);
     }
 
     /**
      * Retrieval-only surface: the same pipeline as query minus answer generation detail, so
      * systems that already own their own prompt can assemble context themselves.
      */
-    public Map<String, Object> search(ApiKey key, Long kb, String question, Integer topK, List<String> permissionTags, String source) throws Exception {
-        Map<String, Object> result = query(key, kb, question, topK, permissionTags, source);
+    public Map<String, Object> search(ApiKey key, Long kb, String question, Integer topK, List<String> permissionTags, String source)
+        throws Exception {
+        return search(key, kb, question, topK, permissionTags, source, null);
+    }
+
+    /**
+     * 同上，带最低分数：阈值在服务端生效，返回的 {@code returned} 是过滤后真正给出的条数。
+     */
+    public Map<String, Object> search(ApiKey key, Long kb, String question, Integer topK, List<String> permissionTags, String source,
+        Double minScore) throws Exception {
+        Map<String, Object> result = query(key, kb, question, topK, permissionTags, source, AnswerFormat.DEFAULT, minScore);
         Map<String, Object> search = new LinkedHashMap<String, Object>();
         search.put("queryId", result.get("queryId"));
         search.put("knowledgeBaseId", kb);
         search.put("question", question);
+        // `topK` 沿用 AI 服务的语义（选中上下文条数），夹取后的请求值另放在 effectiveTopK。
+        search.put("topK", result.get("topK"));
+        search.put("effectiveTopK", result.get("effectiveTopK"));
+        search.put("returned", result.get("returned"));
+        search.put("minScore", result.get("minScore"));
         search.put("strategies", result.get("strategies"));
         search.put("router", result.get("router"));
         search.put("rewrite", result.get("rewrite"));
@@ -128,19 +204,76 @@ public class ExternalKnowledgeFacade {
      * Legacy signature kept for internal callers that have no credential to report.
      */
     public Map<String, Object> search(Long kb, String question, Integer topK, List<String> permissionTags) throws Exception {
-        return search(null, kb, question, topK, permissionTags, PlatformEventPublisher.SOURCE_REST);
+        return search(null, kb, question, topK, permissionTags, PlatformEventPublisher.SOURCE_REST, null);
     }
 
-    public Object cards(Long kb, List<String> permissionTags) {
-        return knowledgeService.cards(kb, tags(permissionTags));
+    /**
+     * Legacy signature with a score floor: same as above but only candidates at or above
+     * `minScore` come back.
+     */
+    public Map<String, Object> search(Long kb, String question, Integer topK, List<String> permissionTags, Double minScore)
+        throws Exception {
+        return search(null, kb, question, topK, permissionTags, PlatformEventPublisher.SOURCE_REST, minScore);
     }
 
-    public Object claims(Long kb, List<String> permissionTags) {
-        return knowledgeService.claims(kb, tags(permissionTags));
+    /**
+     * Cards for external callers, each carrying a plain `code`.
+     *
+     * <p>The list endpoint and the detail endpoint have to agree on the identifier: a caller that
+     * lists cards and then wants one of them should be able to take the field it just received and
+     * put it into `/cards/{code}`. Internally the object is addressed by `knowledgeCode`, and
+     * leaving only that in the payload means every consumer has to guess which of the three
+     * spellings applies to which object type — which is exactly how an integration ends up
+     * calling `/cards/` with an empty code and getting the list back instead of a card.</p>
+     */
+    public List<Map<String, Object>> cards(Long kb, List<String> permissionTags) {
+        List<Map<String, Object>> rows = new ArrayList<Map<String, Object>>();
+        for (KnowledgeCard card : knowledgeService.cards(kb, tags(permissionTags))) {
+            Map<String, Object> row = toRow(card);
+            row.put("code", card.getKnowledgeCode());
+            rows.add(row);
+        }
+        return rows;
     }
 
+    public List<Map<String, Object>> claims(Long kb, List<String> permissionTags) {
+        List<Map<String, Object>> rows = new ArrayList<Map<String, Object>>();
+        for (Claim claim : knowledgeService.claims(kb, tags(permissionTags))) {
+            Map<String, Object> row = toRow(claim);
+            row.put("code", claim.getClaimCode());
+            rows.add(row);
+        }
+        return rows;
+    }
+
+    /**
+     * One object, with the evidence rows it rests on carrying a `code` of their own for the same
+     * reason the lists above do: the next call is `/evidence/{code}`.
+     */
+    @SuppressWarnings("unchecked")
     public Object objectDetail(Long kb, String type, String code, List<String> permissionTags) {
-        return knowledgeService.knowledgeDetail(kb, type.toUpperCase(), code, tags(permissionTags));
+        Object detail = knowledgeService.knowledgeDetail(kb, type.toUpperCase(), code, tags(permissionTags));
+        if (detail instanceof Map) {
+            Map<String, Object> map = (Map<String, Object>) detail;
+            Object evidence = map.get("evidence");
+            if (evidence instanceof List) {
+                List<Map<String, Object>> rows = new ArrayList<Map<String, Object>>();
+                for (Object item : (List<Object>) evidence) {
+                    Map<String, Object> row = toRow(item);
+                    if (row.get("code") == null) {
+                        row.put("code", row.get("evidenceCode"));
+                    }
+                    rows.add(row);
+                }
+                map.put("evidence", rows);
+            }
+        }
+        return detail;
+    }
+
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> toRow(Object value) {
+        return objectMapper.convertValue(value, Map.class);
     }
 
     public Object graph(Long kb, String code, Integer depth, Integer limit, List<String> permissionTags) {

@@ -21,6 +21,9 @@
 
   <McpServicePanel v-else-if="active==='integration.mcp'" :knowledge-base-id="knowledgeBaseId" />
 
+  <!-- 网站嵌入组件：生成可贴到第三方站点的脚本（设计 §6，嵌入令牌在服务端换取） -->
+  <EmbedWidgetPanel v-else-if="active==='integration.embed'" :bases="bases" />
+
   <CallLogPanel v-else :knowledge-base-id="knowledgeBaseId" @open-trace="shell.openCallTrace" />
 </template>
 <script setup lang="ts">
@@ -32,6 +35,7 @@ import IntegrationOverviewPanel from './IntegrationOverviewPanel.vue'
 import ExternalServicePanel from './ExternalServicePanel.vue'
 import ExternalServiceLab from './ExternalServiceLab.vue'
 import McpServicePanel from './McpServicePanel.vue'
+import EmbedWidgetPanel from './EmbedWidgetPanel.vue'
 import CallLogPanel from './CallLogPanel.vue'
 
 defineProps<{ active: string; knowledgeBaseId: number; bases: KnowledgeBase[] }>()

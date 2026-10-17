@@ -44,6 +44,11 @@ public class ApiKey {
 
     private Integer rateLimitPerMinute;
 
+    /**
+     * Comma separated origins allowed to embed this credential; empty means unrestricted.
+     */
+    private String allowedOrigins;
+
     private String status;
 
     private LocalDateTime expiresAt;
@@ -154,6 +159,14 @@ public class ApiKey {
 
     public void setRateLimitPerMinute(Integer v) {
         rateLimitPerMinute = v;
+    }
+
+    public String getAllowedOrigins() {
+        return allowedOrigins;
+    }
+
+    public void setAllowedOrigins(String v) {
+        allowedOrigins = v;
     }
 
     public String getStatus() {

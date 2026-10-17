@@ -23,6 +23,7 @@ import com.jh.knowledgeos.service.KnowledgeBasePurgeService;
 import com.jh.knowledgeos.service.IngestionObservabilityService;
 import com.jh.knowledgeos.service.KnowledgeLifecycleService;
 import com.jh.knowledgeos.service.KnowledgeService;
+import com.jh.knowledgeos.service.KnowledgeRegenerationService;
 import com.jh.knowledgeos.service.IndexOutboxService;
 import com.jh.knowledgeos.service.IndexSchemaService;
 import com.jh.knowledgeos.service.AiClient;
@@ -60,13 +61,46 @@ public class KnowledgeGovernanceController {
     private final KnowledgeService service;
     private final AclContextResolver aclContextResolver;
     private final KnowledgeBaseAccessService accessService;
+    private final KnowledgeRegenerationService regenerationService;
 
-    public KnowledgeGovernanceController(KnowledgeService service, AclContextResolver aclContextResolver, KnowledgeBaseAccessService accessService) {
+    public KnowledgeGovernanceController(KnowledgeService service, AclContextResolver aclContextResolver, KnowledgeBaseAccessService accessService,
+        KnowledgeRegenerationService regenerationService) {
         this.service = service;
         this.aclContextResolver = aclContextResolver;
         this.accessService = accessService;
+        this.regenerationService = regenerationService;
     }
 
+
+    /**
+     * Re-run knowledge generation for a whole knowledge base.
+     *
+     * <p>Extraction is otherwise a by-product of importing a document, so a library built
+     * before the extraction logic changed keeps its old cards and claims forever. This walks
+     * every document and extracts again from the text already stored, without re-uploading.</p>
+     */
+    @PostMapping("/{kb}/regenerate")
+    @Operation(summary = "重新生成知识库知识")
+    public ApiResponse<Object> regenerate(@PathVariable Long kb, @RequestBody(required = false) Map<String, Object> body) {
+        accessService.assertWrite(kb);
+        boolean purge = body != null && Boolean.parseBoolean(String.valueOf(body.get("purgeUnpublished")));
+        return ApiResponse.ok(regenerationService.regenerate(kb, purge));
+    }
+
+    /**
+     * Same regeneration, submitted instead of awaited.
+     *
+     * <p>A whole library takes minutes and the synchronous variant gives the caller nothing to
+     * look at in the meantime. This returns the task code straight away and the run reports its
+     * progress to the task centre, which is where the console watches it.</p>
+     */
+    @PostMapping("/{kb}/regenerate/start")
+    @Operation(summary = "提交重新生成任务（异步，返回任务码）")
+    public ApiResponse<Object> regenerateStart(@PathVariable Long kb, @RequestBody(required = false) Map<String, Object> body) {
+        accessService.assertWrite(kb);
+        boolean purge = body != null && Boolean.parseBoolean(String.valueOf(body.get("purgeUnpublished")));
+        return ApiResponse.ok(regenerationService.start(kb, purge));
+    }
 
     @PostMapping("/extract")
     @Operation(summary = "抽取候选知识")

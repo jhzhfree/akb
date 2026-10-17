@@ -20,6 +20,11 @@ public class ExternalKeyRequest {
      */
     private String expiresAt;
 
+    /**
+     * Origins allowed to embed the widget with this key, e.g. https://intranet.corp.com.
+     */
+    private List<String> allowedOrigins;
+
     public String getName() {
         return name;
     }
@@ -58,5 +63,13 @@ public class ExternalKeyRequest {
 
     public void setExpiresAt(String expiresAt) {
         this.expiresAt = expiresAt;
+    }
+
+    public List<String> getAllowedOrigins() {
+        return allowedOrigins;
+    }
+
+    public void setAllowedOrigins(List<String> allowedOrigins) {
+        this.allowedOrigins = allowedOrigins;
     }
 }

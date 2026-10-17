@@ -204,6 +204,10 @@ services:
       MYSQL_USER: ${MYSQL_USER:-knowledge}
       MYSQL_PASSWORD: ${MYSQL_PASSWORD:-knowledge123}
       MYSQL_DB: ${MYSQL_DATABASE:-knowledge_os}
+      # 嵌入组件令牌签名密钥：多副本 backend 必须共用同一个值，否则一个副本签发的令牌在另一个副本校验失败。
+      EXTERNAL_EMBED_TOKEN_SECRET: ${EXTERNAL_EMBED_TOKEN_SECRET:-}
+      # 允许嵌入组件的站点来源（逗号分隔），作为 API Key 级白名单的兜底；为空表示不限制。
+      EXTERNAL_ALLOWED_ORIGINS: ${EXTERNAL_ALLOWED_ORIGINS:-}
       ES_URL: ${ELASTICSEARCH_URL:-http://elasticsearch:9200}
       ES_USER: ${ELASTICSEARCH_USERNAME:-elastic}
       ES_PASSWORD: ${ELASTICSEARCH_PASSWORD:-}

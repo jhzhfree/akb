@@ -124,6 +124,21 @@ class MilvusProvider:
                         return None
         return None
 
+    async def _dynamic_field_enabled(self, name: str) -> bool:
+        """Whether the collection accepts fields it does not declare.
+
+        Milvus 3.x reports this on describe, and it is the difference between an upsert that
+        works and one that fails with code 1804 for every batch.
+        """
+        try:
+            payload = await self._post(
+                "/v2/vectordb/collections/describe", {"collectionName": name}
+            )
+        except Exception as exc:
+            logger.debug("Milvus describe failed for %s: %s", name, exc)
+            return False
+        return bool((payload.get("data") or {}).get("enableDynamicField"))
+
     async def ensure_collection(self, target: str | None = None, dim: int | None = None) -> None:
         """Create the collection, tolerating both REST dialects.
 
@@ -147,7 +162,20 @@ class MilvusProvider:
                     "embeddings are %d wide; drop the collection or re-index it before "
                     "writing." % (name, existing, dimension)
                 )
-            return
+            # Upserts carry fields outside the declared schema — body text, title, permission
+            # tags — and Milvus 3.x answers any such insert with code 1804 when the collection
+            # was created without dynamic fields. A collection left over from an older
+            # deployment matches on dimension and so would never be caught above, yet fails
+            # every single write. Collections are rebuildable projections of the authoritative
+            # store, so recreating one beats leaving it permanently broken.
+            if await self._dynamic_field_enabled(name):
+                return
+            logger.warning(
+                "Milvus collection %s has dynamic fields disabled; recreating it so writes "
+                "outside the declared schema are accepted",
+                name,
+            )
+            await self._post("/v2/vectordb/collections/drop", {"collectionName": name})
         try:
             await self._post("/v2/vectordb/collections/create", self._create_body(name, dimension))
         except Exception:

@@ -52,6 +52,11 @@
           <input v-model.number="cfg.topK" type="number" class="kb-input mt-1" />
         </label>
         <label class="block">
+          <span class="kb-field-label">最低分数 minScore</span>
+          <input v-model.number="cfg.minScore" type="number" step="0.05" min="0" max="1" class="kb-input mt-1"
+            placeholder="留空不过滤（0~1）" />
+        </label>
+        <label class="block">
           <span class="kb-field-label">返回格式 answerFormat</span>
           <select v-model="cfg.answerFormat" class="kb-input mt-1">
             <option v-for="option in answerFormatOptions" :key="option.value" :value="option.value">
@@ -94,6 +99,9 @@
                 </select>
               </label>
               <p class="kb-muted mt-2">{{ restUrl(restEndpoint) }}</p>
+              <p class="kb-muted mt-1 break-all text-[11px]">
+                <b class="text-ink-700">参数：</b>{{ REST_PARAM_DOCS[restEndpoint.key] }}
+              </p>
               <div v-if="restEndpoint.method === 'POST'" class="mt-2">
                 <span class="kb-field-label">请求体</span>
                 <textarea v-model="restBody" rows="8" class="kb-input mt-1 font-mono text-[11px] leading-5" />
@@ -109,79 +117,36 @@
             </div>
           </article>
 
-          <article class="kb-card">
+          <article v-if="smokeRows.length" class="kb-card">
             <div class="kb-card-head">
-              <b class="text-sm">调用记录</b>
-              <button class="kb-btn-outline" :disabled="!logs.length" @click="clearLogs()">清空</button>
+              <b class="text-sm">冒烟结果</b>
+              <span class="kb-muted">
+                通过 {{ smokeRows.filter(r => r.verdict === 'PASS').length }} / {{ smokeRows.length }}
+              </span>
             </div>
-            <div class="kb-card-body max-h-[520px] overflow-auto">
-              <div v-if="!logs.length" class="kb-muted">尚未发起调用。</div>
-              <div v-for="log in logs" :key="log.id" class="border-b border-[color:var(--line-d)] py-2 last:border-0">
-                <div class="flex flex-wrap items-center gap-2">
-                  <span class="kb-badge" :class="log.verdict === 'PASS' ? 'kb-state-ok'
-                    : log.verdict === 'FAIL' ? 'kb-state-warn' : 'kb-state-danger'">
-                    {{ log.verdict }}
-                  </span>
-                  <span class="text-[11px] font-semibold text-accent">{{ log.method }}</span>
-                  <span class="min-w-0 flex-1 truncate text-[11px] text-ink-700">
-                  {{ log.label }}</span>
-                  <span class="text-[11px]" :class="log.status >= 400 ? 'text-[color:var(--danger)]' : 'text-[color:var(--ok)]'">
-                    HTTP {{ log.status }}
-                  </span>
-                  <span class="text-[11px] text-ink-500">{{ log.durationMs }} ms</span>
-                </div>
-                <div class="mt-1 text-[11px] text-ink-500">{{ log.note }}</div>
-                <div class="mt-1 flex flex-wrap items-center gap-2">
-                  <button class="kb-btn-ghost text-[11px]" @click="toggleLogBody(log.id)">
-                    {{ logBodyOpen[log.id] ? '收起响应' : '展开响应' }}
-                  </button>
-                  <span class="text-[11px] text-ink-500">
-                    {{ isJsonBody(log.body) ? 'JSON' : '文本' }} · {{ bodySize(log.body) }}
-                  </span>
-                  <button class="kb-btn-ghost text-[11px]" @click="copy(prettyBody(log.body))">复制响应</button>
-                </div>
-                <pre
-                  :class="logBodyOpen[log.id] ? 'max-h-[420px]' : 'max-h-16'"
-                  class="mt-1 overflow-auto whitespace-pre-wrap break-words rounded-lg bg-ink-50 p-2 text-[11px] leading-5 text-ink-700">
-                  {{ prettyBody(log.body) }}</pre>
-                <div class="mt-1 flex items-center gap-2">
-                  <span class="truncate text-[11px] text-ink-500">{{ log.url }}</span>
-                  <button class="kb-btn-ghost shrink-0 text-[11px]" @click="copy(log.curl)">复制请求命令</button>
-                </div>
-              </div>
+            <div class="kb-card-body">
+              <el-table :data="smokeRows" border size="small">
+                <el-table-column prop="label" label="端点" min-width="220" show-overflow-tooltip />
+                <el-table-column label="HTTP" width="90">
+                  <template #default="{ row }">
+                    <span :class="row.status >= 400 ? 'text-[color:var(--danger)]' : 'text-[color:var(--ok)]'">{{ row.status }}</span>
+                  </template>
+                </el-table-column>
+                <el-table-column label="耗时" width="90">
+                  <template #default="{ row }">{{ row.durationMs }} ms</template>
+                </el-table-column>
+                <el-table-column label="判定" width="90">
+                  <template #default="{ row }">
+                    <el-tag size="small" effect="plain" :type="row.verdict === 'PASS' ? 'success' : 'danger'">
+                      {{ row.verdict }}
+                    </el-tag>
+                  </template>
+                </el-table-column>
+                <el-table-column prop="note" label="结构校验" min-width="260" show-overflow-tooltip />
+              </el-table>
             </div>
           </article>
         </div>
-
-        <article v-if="smokeRows.length" class="kb-card mt-4">
-          <div class="kb-card-head">
-            <b class="text-sm">冒烟结果</b>
-            <span class="kb-muted">
-              通过 {{ smokeRows.filter(r => r.verdict === 'PASS').length }} / {{ smokeRows.length }}
-            </span>
-          </div>
-          <div class="kb-card-body">
-            <el-table :data="smokeRows" border size="small">
-              <el-table-column prop="label" label="端点" min-width="220" show-overflow-tooltip />
-              <el-table-column label="HTTP" width="90">
-                <template #default="{ row }">
-                  <span :class="row.status >= 400 ? 'text-[color:var(--danger)]' : 'text-[color:var(--ok)]'">{{ row.status }}</span>
-                </template>
-              </el-table-column>
-              <el-table-column label="耗时" width="90">
-                <template #default="{ row }">{{ row.durationMs }} ms</template>
-              </el-table-column>
-              <el-table-column label="判定" width="90">
-                <template #default="{ row }">
-                  <el-tag size="small" effect="plain" :type="row.verdict === 'PASS' ? 'success' : 'danger'">
-                    {{ row.verdict }}
-                  </el-tag>
-                </template>
-              </el-table-column>
-              <el-table-column prop="note" label="结构校验" min-width="260" show-overflow-tooltip />
-            </el-table>
-          </div>
-        </article>
       </el-tab-pane>
 
       <el-tab-pane label="MCP" name="mcp">
@@ -229,7 +194,7 @@
                 </div>
                 <pre
                   class="mt-2 max-h-72 overflow-auto whitespace-pre-wrap break-words rounded-lg bg-ink-50 p-2 text-[11px] leading-5 text-ink-700">
-                  {{ prettyBody(mcpResult.body) }}</pre>
+                  {{ displayBody(mcpResult.body) }}</pre>
               </template>
 
               <div v-if="mcpTools.length" class="mt-3">
@@ -239,6 +204,9 @@
                   <div class="text-[11px] text-ink-500">{{ tool.description }}</div>
                   <div class="mt-1 text-[11px] text-ink-500">
                     必填：{{ (tool.required || []).join(', ') || '无' }}
+                  </div>
+                  <div class="text-[11px] text-ink-500">
+                    可选：{{ (tool.optional || []).join(', ') || '无' }}
                   </div>
                 </div>
               </div>
@@ -278,6 +246,13 @@
                   <option value="events">stream/events 事件订阅</option>
                 </select>
               </label>
+              <label v-if="sseKind === 'query'" class="mt-2 block">
+                <span class="kb-field-label">答案交付方式 content</span>
+                <select v-model="cfg.content" class="kb-input mt-1">
+                  <option value="stream">stream — 逐片推 delta（打字机）</option>
+                  <option value="final">final — 只推检索过程，答案在 done 里整体交付</option>
+                </select>
+              </label>
               <p class="kb-muted mt-2 break-all">{{ sseUrl() }}</p>
               <div class="mt-3 grid grid-cols-2 gap-3 text-[11px] sm:grid-cols-4">
                 <div><span class="text-ink-500">HTTP</span> <b class="text-ink-800">{{ sseStats.status || '—' }}</b></div>
@@ -301,6 +276,7 @@
               </div>
               <p class="kb-muted mt-3">
                 stream/query 期望 stage(REWRITE→RECALL→FUSION→RERANK→ANSWER) → delta → citation → done；
+                content=final 时不推 delta 帧——只推检索过程，答案在 done 里整体交付（与控制台同源）。
                 done 帧带 answerFormat（实际生效的交付格式，与上方选择的取值不一致说明已退回默认）；
                 stream/events 期望 open → ingestion / knowledge → 心跳注释。
               </p>
@@ -332,7 +308,7 @@
                 <pre
                   :class="event.open ? 'max-h-64 overflow-auto' : 'max-h-16 overflow-hidden'"
                   class="mt-1 whitespace-pre-wrap break-words rounded-lg bg-ink-50 p-2 text-[11px] leading-5 text-ink-700">
-                  {{ prettyBody(event.data) }}</pre>
+                  {{ displayBody(event.data) }}</pre>
               </div>
             </div>
           </article>
@@ -403,11 +379,61 @@
         </div>
       </el-tab-pane>
     </el-tabs>
+
+    <!-- 四个通道共用一份记录：切到 MCP 复现同一个问题时，REST 那次的结果仍然在眼前。 -->
+    <article class="kb-card mt-4">
+      <div class="kb-card-head">
+        <b class="text-sm">调用记录</b>
+        <span class="kb-muted">RESTful / MCP / SSE / 事件总线共用，最近 {{ logs.length }} 条</span>
+        <button class="kb-btn-outline" :disabled="!logs.length" @click="clearLogs()">清空</button>
+      </div>
+      <div class="kb-card-body max-h-[520px] overflow-auto">
+        <div v-if="!logs.length" class="kb-muted">尚未发起调用。</div>
+        <div v-for="log in logs" :key="log.id" class="border-b border-[color:var(--line-d)] py-2 last:border-0">
+          <div class="flex flex-wrap items-center gap-2">
+            <span class="kb-badge" :class="verdictClass(log.verdict)">
+              {{ log.verdict === 'PENDING' ? '进行中' : log.verdict }}
+            </span>
+            <span class="kb-badge">{{ log.channel }}</span>
+            <span class="text-[11px] font-semibold text-accent">{{ log.method }}</span>
+            <span class="min-w-0 flex-1 truncate text-[11px] text-ink-700">
+            {{ log.label }}</span>
+            <span v-if="log.status" class="text-[11px]"
+              :class="log.status >= 400 ? 'text-[color:var(--danger)]' : 'text-[color:var(--ok)]'">
+              HTTP {{ log.status }}
+            </span>
+            <span v-else class="text-[11px] text-ink-500">等待响应</span>
+            <span class="text-[11px] text-ink-500">{{ log.durationMs }} ms</span>
+          </div>
+          <div class="mt-1 text-[11px] text-ink-500">{{ log.note }}</div>
+          <div class="mt-1 flex flex-wrap items-center gap-2">
+            <button class="kb-btn-ghost text-[11px]" @click="toggleLogBody(log.id)">
+              {{ logBodyOpen[log.id] ? '收起响应' : '展开响应' }}
+            </button>
+            <span class="text-[11px] text-ink-500">
+              {{ isJsonBody(log.body) ? 'JSON' : '文本' }} · {{ bodySize(log.body) }}
+            </span>
+            <button class="kb-btn-ghost text-[11px]" @click="copy(prettyBody(log.body))">复制响应</button>
+          </div>
+          <pre
+            :class="logBodyOpen[log.id] ? 'max-h-[420px]' : 'max-h-16'"
+            class="mt-1 overflow-auto whitespace-pre-wrap break-words rounded-lg bg-ink-50 p-2 text-[11px] leading-5 text-ink-700">
+            {{ displayBody(log.body) }}</pre>
+          <div class="mt-1 flex items-center gap-2">
+            <span class="truncate text-[11px] text-ink-500">{{ log.url }}</span>
+            <button v-if="log.curl" class="kb-btn-ghost shrink-0 text-[11px]" @click="copy(log.curl)">复制请求命令</button>
+          </div>
+        </div>
+      </div>
+    </article>
   </section>
 </template>
 
 <script setup lang="ts">
 import { useExternalServiceLab, type ExternalServiceLabProps } from './external-service/useExternalServiceLab'
+// 记录区要格式化响应体，这三个函数模板里直接用；漏掉就会在渲染记录时抛“is not a function”，
+// 表现是点完发送右侧毫无反应。
+import { bodySize, displayBody, isJsonBody, prettyBody } from './external-service/lab-utils'
 
 const props = defineProps<ExternalServiceLabProps>()
 const {
@@ -417,6 +443,7 @@ const {
   logs,
   logBodyOpen,
   REST_ENDPOINTS,
+  REST_PARAM_DOCS,
   restKey,
   restBody,
   sending,
@@ -484,4 +511,10 @@ const {
   previewBus,
   issueLabKey
 } = useExternalServiceLab(props)
+
+/** “进行中”不带成功/失败色：结果还没回来，先别定性。 */
+const verdictClass = (verdict:string) => verdict === 'PASS' ? 'kb-state-ok'
+  : verdict === 'FAIL' ? 'kb-state-warn'
+    : verdict === 'ERROR' ? 'kb-state-danger'
+      : ''
 </script>

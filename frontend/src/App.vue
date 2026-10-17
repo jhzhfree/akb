@@ -68,7 +68,7 @@
     v-else-if="activeSection==='create'"
     :active="active" :knowledge-base-id="knowledgeBaseId"
     :pending-reviews="pendingReviews" :conflicts="conflicts" :assessments="assessments"
-    :adjudicating="adjudicating"
+    :adjudicating="adjudicating" :regenerating="regenerating"
     :selected-conflict-id="selectedConflictId" :conflict-detail="conflictDetail"
     :conflict-detail-loading="conflictDetailLoading"
     :selected-review="selectedReview" :review-detail="reviewDetail"
@@ -135,7 +135,7 @@
 </div>
 </template>
 <script setup lang="ts">
-import{computed,onMounted,onUnmounted,provide,ref,watch}from'vue'
+import{computed,onMounted,onUnmounted,provide,reactive,ref,watch}from'vue'
 import{ElMessage,type UploadFile}from'element-plus'
 import type {
   AssessmentRow, Capabilities, ConflictRow,
@@ -179,12 +179,13 @@ import SearchPage from './components/SearchPage.vue'
 import IntegrationPage from './components/IntegrationPage.vue'
 import SystemPage from './components/SystemPage.vue'
 import { KOS_SHELL } from './shell'
-import type { KosShell } from './shell'
+import type { KosShell, RegenerationProgress } from './shell'
 import {
   createKnowledgeBase, updateKnowledgeBase, getKnowledgeBases, getOverview, getSources, getDocuments,
   getPendingReviews, getOpenConflicts, getCapabilities, getAssessments,
   getIngestionRuns, getIngestionRun,
-  uploadDocument, queryKnowledge, runAdjudication, reviewKnowledge,
+  uploadDocument, queryKnowledge, runAdjudication, reviewKnowledge, regenerateKnowledge,
+  startRegeneration, getTaskDetail,
   uploadDocuments, getBatchStatus, cancelBatch as cancelBatchRequest, retryBatch as retryBatchRequest,
   listBatches,
   resolveKnowledgeConflict, getConflictTargets, adjudicateConflict,
@@ -248,8 +249,11 @@ const capabilities=ref<Capabilities|null>(null),
     q=ref('知识为什么需要裁决？'),
     result=ref<QueryResult|null>(null),
     graphCode=ref('')
-/** 问答的返回格式：默认 / markdown / 纯文本 / html，随提问一起提交。 */
-const answerFormat=ref<AnswerFormat>('default')
+/** 问答的返回格式：默认 / markdown / 纯文本 / html，随提问一起提交。
+    默认取 markdown（服务端规范化后的正文 + 引用原文章节），与嵌入组件 public/embed/kos-chat.js
+    的默认 answerFormat 保持一致 —— 两边取不同格式时，同一个问题会拿到两份不同的文本，
+    排版再怎么对齐也还是「不一样」。 */
+const answerFormat=ref<AnswerFormat>('markdown')
 const runs=ref<IngestionRun[]>([]),
     runDetail=ref<IngestionRunDetail|null>(null),
     selectedRunId=ref<number|null>(null)
@@ -273,6 +277,16 @@ let liveBaseline=0, liveBusy=false
 const uploading=ref(false),
     asking=ref(false),
     adjudicating=ref(false)
+/**
+ * 重新生成的进度：整库重跑是异步任务，这里保存任务中心回读的阶段与计数，
+ * 生成概览与生成配置两处展示的都是这一份状态，不会出现两个页面进度不一致。
+ */
+const regeneration=reactive<RegenerationProgress>({
+  running:false,taskCode:'',status:'',stage:'',progress:0,
+  documentCount:0,processed:0,failed:0,skipped:0,cardCount:0,claimCount:0,
+  currentDocument:'',error:'',
+})
+const regenerating=computed(()=>regeneration.running)
 /**
  * 上传复位令牌：一次摄入结束后自增，摄入面板收到后清空 el-upload 内部文件列表。
  * 面板已下沉到模块页面内部，App 拿不到组件实例，改用令牌广播（limit=1 时否则无法继续选文件）。
@@ -534,9 +548,9 @@ const navigate=(tab:string)=>{goto(tab)}
 function openAssets(type:AssetType){
 if(!goto('workbench.assets',true))return
 assetType.value=type}
-/** 任务中心 / 创建首页点击任务：选中该次运行并进入解析任务页。 */
+/** 任务中心 / 创建首页点击任务：选中该次运行并进入文档中心（生成任务已合并进文档导入）。 */
 function openRun(runId:number){
-if(!goto('create.jobs',true))return
+if(!goto('create.import',true))return
 selectedRunId.value=runId;
 void selectRun(runId)}
 /** 顶栏全局搜索：进入搜索页并直接执行一次检索，减少一次点击。 */
@@ -729,7 +743,7 @@ if(r[0].status==='fulfilled')pendingReviews.value=unwrap(r[0].value,[]);
 if(r[1].status==='fulfilled')conflicts.value=unwrap(r[1].value,[]);
 if(r[2].status==='fulfilled')assessments.value=unwrap(r[2].value,[])}
 /** 各视图需要的后台数据：进入模块 Tab 时按需加载，避免一次性拉取全站数据。 */
-const DATA_KEYS=['create.overview','create.import','create.connector','create.jobs']
+const DATA_KEYS=['create.overview','create.import','create.connector']
 const REVIEW_KEYS=['create.judgment']
 const QUERY_KEYS=['search.query','search.test','search.trace']
 const ACL_KEYS=['system.acl','system.audit']
@@ -859,6 +873,85 @@ async function openDetail(mode:'CARD'|'CLAIM'|'CHUNK',code:string){detailMode.va
 detailVisible.value=true;detailLoading.value=true;try{
 knowledgeDetail.value=unwrap(await getKnowledgeObjectDetail(knowledgeBaseId.value,mode,code),null)
 }catch(e){err(e)}finally{detailLoading.value=false}}
+/**
+ * 重新生成：抽取只在文档导入时跑一次，抽取逻辑改进后旧产物不会自动重算。
+ * 这里用已入库的正文对整个知识库重跑一次抽取，不需要重新上传文件。
+ */
+/** 任务中心的 result 落成的是 JSON 文本，读回来要看它是字符串还是已经解析过的对象。 */
+function parseTaskResult(raw:unknown):Record<string,unknown>|null{
+if(typeof raw==='string'){try{const v=JSON.parse(raw);return v&&typeof v==='object'?v:null}catch{return null}}
+return raw&&typeof raw==='object'?raw as Record<string,unknown>:null}
+/**
+ * 重新生成：提交任务后轮询任务中心，而不是让这条请求挂在那里等几分钟。
+ * 期间进度、阶段与计数写进 regeneration，生成概览与生成配置两处都读它，
+ * 任务中心里也能看到同一条任务。
+ */
+async function runRegeneration(purgeUnpublished:boolean){
+if(regeneration.running){ElMessage.info('已有一个重新生成任务在进行中');return}
+regeneration.running=true;regeneration.error='';regeneration.progress=0;regeneration.failed=0
+regeneration.processed=0;regeneration.skipped=0;regeneration.cardCount=0;regeneration.claimCount=0
+regeneration.stage='正在提交任务…';regeneration.status='QUEUED'
+try{
+const d=unwrap(await startRegeneration(knowledgeBaseId.value,purgeUnpublished),{taskCode:'',documentCount:0,status:''})
+const taskCode=String(d.taskCode||'')
+/** 拿不到任务码时退回同步调用：没有进度，但至少还有结果。 */
+if(!taskCode){await runRegenerationSync(purgeUnpublished);return}
+regeneration.taskCode=taskCode
+regeneration.documentCount=Number(d.documentCount||0)
+await watchRegeneration(taskCode)
+}catch(e){
+/** 后端还没升级出 start 接口（404/405）时退回同步重跑：宁可没有进度，也不能用不了。 */
+const httpStatus=Number((e as {response?:{status?:number}}|null)?.response?.status||0)
+if(httpStatus===404||httpStatus===405){await runRegenerationSync(purgeUnpublished);return}
+regeneration.running=false;err(e)}}
+/** 轮询到终态为止：中途一次读失败只是丢了一次采样，继续下一次。 */
+async function watchRegeneration(taskCode:string){
+const deadline=Date.now()+60*60*1000
+let last:Record<string,unknown>|null=null
+while(Date.now()<deadline){
+await new Promise(r=>setTimeout(r,1500))
+let task:Record<string,unknown>={}
+try{task=unwrap(await getTaskDetail(taskCode),{})}catch{continue}
+const status=String(task.status||'')
+regeneration.status=status
+regeneration.stage=String(task.stage||task.currentStage||'')
+regeneration.progress=Number(task.progress||0)
+const result=parseTaskResult(task.result)
+if(result){
+last=result
+regeneration.processed=Number(result.processed||0)
+regeneration.failed=Number(result.failed||0)
+regeneration.skipped=Number(result.skipped||0)
+regeneration.cardCount=Number(result.cardCount||0)
+regeneration.claimCount=Number(result.claimCount||0)
+regeneration.documentCount=Number(result.documentCount||regeneration.documentCount||0)
+regeneration.currentDocument=String(result.currentDocument||'')
+}
+if(['SUCCEEDED','FAILED','DEAD','CANCELED'].indexOf(status)>=0)break
+}
+regeneration.running=false
+if(regeneration.status==='SUCCEEDED'){
+const failed=regeneration.failed
+ElMessage[failed>0?'warning':'success'](
+  `重新生成完成：处理 ${regeneration.processed} 篇，卡片 ${regeneration.cardCount}、断言 ${regeneration.claimCount}`
+  + (failed>0?`，${failed} 篇失败`:'')
+  + (regeneration.skipped>0?`，跳过 ${regeneration.skipped} 篇`:''))
+}else{
+ElMessage.error(`重新生成${regeneration.status==='CANCELED'?'已取消':'失败'}：${regeneration.stage||'请到任务中心查看失败原因'}`)
+}
+try{await Promise.all([loadReview(),loadOverview(),loadTasks()])}catch(e){err(e)}
+void last}
+/** 同步兜底：拿不到任务码时走原来的整库重跑，结果一样，只是没有过程可见。 */
+async function runRegenerationSync(purgeUnpublished:boolean){
+try{
+const d=unwrap(await regenerateKnowledge(knowledgeBaseId.value,purgeUnpublished),{})
+const failed=Number(d.failed||0)
+ElMessage[failed>0?'warning':'success'](
+  `重新生成完成：处理 ${Number(d.processed||0)} 篇，新增卡片 ${Number(d.cardCount||0)}、断言 ${Number(d.claimCount||0)}`
+  + (failed>0?`，${failed} 篇失败`:'')
+  + (Number(d.skipped||0)>0?`，跳过 ${Number(d.skipped||0)} 篇`:''))
+await Promise.all([loadReview(),loadOverview()])
+}catch(e){err(e)}finally{regeneration.running=false}}
 async function runIntelligentAdjudication(){adjudicating.value=true;
 try{const d=unwrap(await runAdjudication(knowledgeBaseId.value),
     {});
@@ -947,6 +1040,8 @@ const shell:KosShell={
   refresh:()=>{void loadOverview()},
   reloadAfterRetry:()=>{void reloadAfterRetry()},
   adjudicate:()=>{void runIntelligentAdjudication()},
+  regenerate:(purgeUnpublished:boolean)=>{void runRegeneration(purgeUnpublished)},
+  regeneration,
   review:(row,decision,comment)=>{void review(row,decision,comment)},
   resolveConflict:(row,status)=>{void resolveConflict(row,status)},
   selectConflict:id=>{void selectConflict(id)},
@@ -995,7 +1090,7 @@ onUnmounted(()=>{
 /**
  * 决定登录后的第一个页面：沿用上次访问的位置，但它可能已无权访问（换账号或角色被调整），
  * 这时回到主页面。没有历史位置时一律进主页面——主页面是登录后统一的首屏，
- * 角色专属的深入入口（系统配置 / 裁决 / 生成任务）由侧栏与页面内快捷入口承担。
+ * 角色专属的深入入口（系统配置 / 裁决 / 连接器）由侧栏与页面内快捷入口承担。
  * 必须在拿到 /auth/me 的权限之后执行，否则会按「未知角色」渲染出无权页面。
  */
 function resolveInitialView(){

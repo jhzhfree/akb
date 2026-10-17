@@ -51,6 +51,14 @@ public class ApiKeyService {
      */
     public Map<String, Object> create(String name, Long knowledgeBaseId, List<String> scopes, Integer rateLimitPerMinute, LocalDateTime expiresAt,
         Long createdBy) {
+        return create(name, knowledgeBaseId, scopes, rateLimitPerMinute, expiresAt, createdBy, null);
+    }
+
+    /**
+     * Same as above but also binds the credential to the sites allowed to embed it.
+     */
+    public Map<String, Object> create(String name, Long knowledgeBaseId, List<String> scopes, Integer rateLimitPerMinute, LocalDateTime expiresAt,
+        Long createdBy, List<String> allowedOrigins) {
         String secret = newSecret();
         ApiKey key = new ApiKey();
         key.setKeyCode(ids.next("AK_"));
@@ -63,6 +71,7 @@ public class ApiKeyService {
         key.setStatus(ApiKey.STATUS_ACTIVE);
         key.setExpiresAt(expiresAt);
         key.setCreatedBy(createdBy);
+        key.setAllowedOrigins(normalizeOrigins(allowedOrigins));
         mapper.insertApiKey(key);
         Map<String, Object> result = profile(mapper.getApiKey(key.getId()));
         // 明文只在此处出现一次，界面提示调用方立即保存。
@@ -114,6 +123,7 @@ public class ApiKeyService {
         row.put("rateLimitPerMinute", key.getRateLimitPerMinute());
         row.put("status", key.getStatus());
         row.put("expiresAt", key.getExpiresAt());
+        row.put("allowedOrigins", key.getAllowedOrigins());
         row.put("lastUsedAt", key.getLastUsedAt());
         row.put("createdByName", key.getCreatedByName());
         row.put("createdTime", key.getCreatedTime());
@@ -143,6 +153,50 @@ public class ApiKeyService {
             cleaned.add(ApiKey.SCOPE_READ);
         }
         return String.join(",", cleaned);
+    }
+
+    /**
+     * Origins are stored trimmed of any trailing slash so the check stays a plain equality:
+     * browsers always send a bare origin, and a substring match would let https://evil.com
+     * through just because it ends with a configured host name.
+     */
+    private String normalizeOrigins(List<String> origins) {
+        List<String> cleaned = new ArrayList<String>();
+        if (origins != null) {
+            for (String origin : origins) {
+                String value = String.valueOf(origin == null ? "" : origin).trim();
+                while (value.endsWith("/")) {
+                    value = value.substring(0, value.length() - 1);
+                }
+                if (value.isEmpty() || value.length() > 300 || cleaned.contains(value)) {
+                    continue;
+                }
+                cleaned.add(value);
+                if (cleaned.size() >= 20) {
+                    break;
+                }
+            }
+        }
+        return cleaned.isEmpty() ? null : String.join(",", cleaned);
+    }
+
+    /**
+     * Whether an origin is permitted for this credential; an unrestricted key accepts anything.
+     */
+    public boolean allowsOrigin(ApiKey key, String origin) {
+        if (key == null || key.getAllowedOrigins() == null || key.getAllowedOrigins().trim().isEmpty()) {
+            return true;
+        }
+        if (origin == null || origin.trim().isEmpty()) {
+            return false;
+        }
+        String presented = origin.trim();
+        for (String allowed : key.getAllowedOrigins().split(",")) {
+            if (allowed.trim().equalsIgnoreCase(presented)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**

@@ -63,7 +63,7 @@ public class DashboardService {
         // 接入阶段的异常只看“没接干净”的对象：失败或脏文档，而不是文档总数。
         stages.add(stage("接入", "INGEST", num(raw.get("ingestSource")) + num(raw.get("ingestDocument")), num(raw.get("publishDirty")), "create.sources"));
         stages.add(stage("解析", "PARSE", num(raw.get("parseSuccess")) + num(raw.get("parseFailed")) + num(raw.get("parseRunning")),
-            num(raw.get("parseFailed")), "create.jobs"));
+            num(raw.get("parseFailed")), "create.import"));
         stages.add(stage("抽取", "EXTRACT", num(raw.get("extractCandidate")) + num(raw.get("extractUncertain")), num(raw.get("extractUncertain")),
             "create.extraction"));
         stages.add(stage("衍生", "DERIVE", num(raw.get("derivedStale")), num(raw.get("derivedStale")), "create.derivation"));

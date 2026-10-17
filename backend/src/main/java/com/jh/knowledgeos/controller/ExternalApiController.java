@@ -13,7 +13,6 @@ import com.jh.knowledgeos.service.ExternalAuditService;
 import com.jh.knowledgeos.service.ExternalKnowledgeFacade;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
-import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -36,8 +35,7 @@ import java.util.Map;
  */
 @RestController
 @RequestMapping("/api/v1/external")
-@CrossOrigin
-@Tag(name = "External RESTful", description = "对外知识服务：版本化 RESTful 接口（API Key 鉴权）")
+@Tag(name = "External RESTful", description = "对外知识服务：版本化 RESTful 接口（API Key 或嵌入令牌鉴权）；跨域由 EmbedCorsFilter 统一处理")
 public class ExternalApiController {
 
     private final ExternalAccessService accessService;
@@ -66,14 +64,14 @@ public class ExternalApiController {
     @Operation(summary = "可追溯知识问答：返回答案、引用与 queryId")
     public ApiResponse<Object> query(HttpServletRequest request, @Valid @RequestBody ExternalQueryRequest body) throws Exception {
         return call(request, "POST /query", body.getKnowledgeBaseId(), (key, kb) -> facade.query(kb, body.getQuestion(), body.getTopK(),
-            body.getPermissionTags(), body.getAnswerFormat()));
+            body.getPermissionTags(), body.getAnswerFormat(), body.getMinScore()));
     }
 
     @PostMapping("/search")
     @Operation(summary = "只检索不生成答案：返回候选、重排结果与引用")
     public ApiResponse<Object> search(HttpServletRequest request, @Valid @RequestBody ExternalQueryRequest body) throws Exception {
         return call(request, "POST /search", body.getKnowledgeBaseId(), (key, kb) -> facade.search(kb, body.getQuestion(), body.getTopK(),
-            body.getPermissionTags()));
+            body.getPermissionTags(), body.getMinScore()));
     }
 
     @GetMapping("/cards")
@@ -153,31 +151,31 @@ public class ExternalApiController {
             if (!properties.isEnabled()) {
                 throw new SecurityException("对外接口服务已关闭");
             }
-            key = accessService.authenticate(request);
+            key = accessService.authenticateEmbed(request);
             Long kb = requestedKb == null ? null : accessService.resolveKnowledgeBase(key, requestedKb);
             Object data = body.run(key, kb);
-            auditService.record(key, ApiCallAudit.CHANNEL_REST, method, kb, 200, System.currentTimeMillis() - start, null, params, data);
+            auditService.record(key, ApiCallAudit.CHANNEL_REST, method, kb, 200, System.currentTimeMillis() - start, null, params, data, ExternalAccessService.embedTokenOf(request));
             return ApiResponse.ok(data);
         } catch (UnauthorizedException e) {
             auditService.record(key, ApiCallAudit.CHANNEL_REST, method, requestedKb, 401, System.currentTimeMillis() - start, e.getMessage(), params,
-                errorBody(401, e));
+                errorBody(401, e), ExternalAccessService.embedTokenOf(request));
             throw e;
         } catch (SecurityException e) {
             auditService.record(key, ApiCallAudit.CHANNEL_REST, method, requestedKb, 403, System.currentTimeMillis() - start, e.getMessage(), params,
-                errorBody(403, e));
+                errorBody(403, e), ExternalAccessService.embedTokenOf(request));
             throw e;
         } catch (RateLimitException e) {
             auditService.record(key, ApiCallAudit.CHANNEL_REST, method, requestedKb, 429, System.currentTimeMillis() - start, e.getMessage(), params,
-                errorBody(429, e));
+                errorBody(429, e), ExternalAccessService.embedTokenOf(request));
             throw e;
         } catch (IllegalArgumentException e) {
             // 调用方漏传 knowledgeBaseId 或参数非法属于 400，不应记成服务端故障。
             auditService.record(key, ApiCallAudit.CHANNEL_REST, method, requestedKb, 400, System.currentTimeMillis() - start, e.getMessage(), params,
-                errorBody(400, e));
+                errorBody(400, e), ExternalAccessService.embedTokenOf(request));
             throw e;
         } catch (Exception e) {
             auditService.record(key, ApiCallAudit.CHANNEL_REST, method, requestedKb, 500, System.currentTimeMillis() - start, e.getMessage(), params,
-                errorBody(500, e));
+                errorBody(500, e), ExternalAccessService.embedTokenOf(request));
             throw e;
         }
     }

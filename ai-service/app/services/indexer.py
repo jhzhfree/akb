@@ -552,11 +552,17 @@ class KnowledgeIndexer:
         qd_target = milvus.schema_target(schema_version)
         graph = get_graph_provider()
         if reset:
+            # The width has to come from a real vector, not from settings.embedding_dim. When
+            # the configured width and the embedding model disagree, the collection is created
+            # at the configured width and every insert afterwards is rejected — which surfaces
+            # as a 500 on this endpoint and "Index schema rebuild failed" in the backend.
+            width = len(next((item["vector"] for item in normalized if item.get("vector")), [])) or None
             await self._reset_schema_targets(
                 elasticsearch,
                 milvus,
                 os_target,
                 qd_target,
+                width,
             )
             if graph.available():
                 await asyncio.to_thread(graph.reset_generation, knowledge_base_id, schema_version)
@@ -636,6 +642,7 @@ class KnowledgeIndexer:
         milvus,
         os_target: str,
         qd_target: str,
+        dim: int | None = None,
     ) -> None:
         """Reset green physical targets before the first snapshot page."""
         if (await elasticsearch.client.head("/%s" % os_target)).status_code == 200:
@@ -646,7 +653,7 @@ class KnowledgeIndexer:
                 {"collectionName": qd_target},
             )
         await elasticsearch.ensure_index(os_target)
-        await milvus.ensure_collection(qd_target)
+        await milvus.ensure_collection(qd_target, dim=dim)
 
     async def activate_schema(
         self,

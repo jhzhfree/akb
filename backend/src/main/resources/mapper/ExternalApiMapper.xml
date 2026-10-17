@@ -2,7 +2,7 @@
 
 <sql id="apiKeyColumns">k.id,k.key_code,k.name,k.secret_hash,k.key_prefix,k.knowledge_base_id,
   b.name AS knowledge_base_name,k.scopes,k.rate_limit_per_minute,k.status,k.expires_at,k.last_used_at,
-  k.created_by,u.display_name AS created_by_name,k.created_time,k.updated_time</sql>
+  k.created_by,u.display_name AS created_by_name,k.created_time,k.updated_time,k.allowed_origins</sql>
 
 <select id="listApiKeys" resultType="com.jh.knowledgeos.domain.ApiKey">SELECT <include refid="apiKeyColumns"/> FROM t_api_key k
   LEFT JOIN t_knowledge_base b ON b.id=k.knowledge_base_id
@@ -19,15 +19,15 @@
   LEFT JOIN t_user u ON u.id=k.created_by
   WHERE k.secret_hash=#{secretHash} LIMIT 1</select>
 
-<insert id="insertApiKey" parameterType="com.jh.knowledgeos.domain.ApiKey" useGeneratedKeys="true" keyProperty="id">INSERT INTO t_api_key(key_code,name,secret_hash,key_prefix,knowledge_base_id,scopes,rate_limit_per_minute,status,expires_at,created_by)
-  VALUES(#{keyCode},#{name},#{secretHash},#{keyPrefix},#{knowledgeBaseId},#{scopes},#{rateLimitPerMinute},#{status},#{expiresAt},#{createdBy})</insert>
+<insert id="insertApiKey" parameterType="com.jh.knowledgeos.domain.ApiKey" useGeneratedKeys="true" keyProperty="id">INSERT INTO t_api_key(key_code,name,secret_hash,key_prefix,knowledge_base_id,scopes,rate_limit_per_minute,status,expires_at,created_by,allowed_origins)
+  VALUES(#{keyCode},#{name},#{secretHash},#{keyPrefix},#{knowledgeBaseId},#{scopes},#{rateLimitPerMinute},#{status},#{expiresAt},#{createdBy},#{allowedOrigins})</insert>
 
 <update id="updateApiKeyStatus">UPDATE t_api_key SET status=#{status} WHERE id=#{id}</update>
 
 <update id="touchApiKey">UPDATE t_api_key SET last_used_at=CURRENT_TIMESTAMP WHERE id=#{id}</update>
 
-<insert id="insertApiCallAudit" parameterType="com.jh.knowledgeos.domain.ApiCallAudit">INSERT INTO t_api_call_audit(key_id,key_code,caller_name,channel,method,knowledge_base_id,request_params,status_code,response_data,duration_ms,trace_id,message)
-  VALUES(#{keyId},#{keyCode},#{callerName},#{channel},#{method},#{knowledgeBaseId},#{requestParams},#{statusCode},#{responseData},#{durationMs},#{traceId},#{message})</insert>
+<insert id="insertApiCallAudit" parameterType="com.jh.knowledgeos.domain.ApiCallAudit">INSERT INTO t_api_call_audit(key_id,key_code,caller_name,token_jti,origin,channel,method,knowledge_base_id,request_params,status_code,response_data,duration_ms,trace_id,message)
+  VALUES(#{keyId},#{keyCode},#{callerName},#{tokenJti},#{origin},#{channel},#{method},#{knowledgeBaseId},#{requestParams},#{statusCode},#{responseData},#{durationMs},#{traceId},#{message})</insert>
 
 <select id="listApiCallAudits" resultType="com.jh.knowledgeos.domain.ApiCallAudit">SELECT * FROM t_api_call_audit
   <where>
@@ -57,5 +57,34 @@
   WHERE created_time &gt;= #{since} GROUP BY channel</select>
 
 <select id="countActiveApiKeys" resultType="int">SELECT COUNT(1) FROM t_api_key WHERE status='ACTIVE'</select>
+
+<!-- 嵌入令牌吊销名单：签发时令牌不入库，吊销是唯一需要落盘的状态。 -->
+<insert id="insertEmbedTokenRevocation" parameterType="com.jh.knowledgeos.domain.EmbedTokenRevocation">
+  INSERT IGNORE INTO t_embed_token_revocation(jti,key_id,key_code,knowledge_base_id,origin,reason,operator_id)
+  VALUES(#{jti},#{keyId},#{keyCode},#{knowledgeBaseId},#{origin},#{reason},#{operatorId})</insert>
+
+<delete id="deleteEmbedTokenRevocation">DELETE FROM t_embed_token_revocation WHERE jti=#{jti}</delete>
+
+<select id="findEmbedTokenRevocation" resultType="com.jh.knowledgeos.domain.EmbedTokenRevocation">
+  SELECT * FROM t_embed_token_revocation WHERE jti=#{jti} LIMIT 1</select>
+
+<select id="listEmbedTokenRevocations" resultType="com.jh.knowledgeos.domain.EmbedTokenRevocation">
+  SELECT * FROM t_embed_token_revocation ORDER BY revoked_time DESC,id DESC LIMIT #{limit}</select>
+
+<select id="listTokenCallAudits" resultType="com.jh.knowledgeos.domain.ApiCallAudit">SELECT * FROM t_api_call_audit
+  <where>
+    <if test="jti != null and jti != ''">token_jti=#{jti}</if>
+    <if test="keyId != null">AND key_id=#{keyId}</if>
+  </where>
+  ORDER BY created_time DESC,id DESC LIMIT #{limit}</select>
+
+<!-- 最近出现过的令牌：按 jti 聚合出调用次数、来源与末次时间，供控制台直接吊销。 -->
+<select id="recentTokenSummaries" resultType="map">SELECT token_jti jti,MAX(key_id) keyId,MAX(key_code) keyCode,
+    MAX(knowledge_base_id) knowledgeBaseId,MAX(origin) origin,COUNT(*) calls,
+    SUM(CASE WHEN status_code &gt;= 400 THEN 1 ELSE 0 END) errors,MAX(created_time) lastCallTime,
+    MIN(created_time) firstCallTime
+  FROM t_api_call_audit
+  WHERE token_jti IS NOT NULL AND token_jti &lt;&gt; '' AND created_time &gt;= #{since}
+  GROUP BY token_jti ORDER BY lastCallTime DESC LIMIT #{limit}</select>
 
 </mapper>

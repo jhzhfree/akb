@@ -24,6 +24,16 @@ public class ApiCallAudit {
      */
     private String callerName;
 
+    /**
+     * Id of the embed token that made the call: which page, not just which key.
+     */
+    private String tokenJti;
+
+    /**
+     * Site the call came from, as recorded on the token or read from the request.
+     */
+    private String origin;
+
     private String channel;
 
     private String method;
@@ -80,6 +90,22 @@ public class ApiCallAudit {
 
     public void setCallerName(String v) {
         callerName = v;
+    }
+
+    public String getTokenJti() {
+        return tokenJti;
+    }
+
+    public void setTokenJti(String tokenJti) {
+        this.tokenJti = tokenJti;
+    }
+
+    public String getOrigin() {
+        return origin;
+    }
+
+    public void setOrigin(String origin) {
+        this.origin = origin;
     }
 
     public String getChannel() {

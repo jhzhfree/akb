@@ -5,10 +5,12 @@ import com.jh.knowledgeos.common.UserRole;
 import com.jh.knowledgeos.config.KnowledgeProperties;
 import com.jh.knowledgeos.domain.ApiCallAudit;
 import com.jh.knowledgeos.domain.User;
+import com.jh.knowledgeos.dto.EmbedTokenRevokeRequest;
 import com.jh.knowledgeos.dto.ExternalKeyRequest;
 import com.jh.knowledgeos.exception.UnauthorizedException;
 import com.jh.knowledgeos.service.ApiKeyService;
 import com.jh.knowledgeos.service.AuthContext;
+import com.jh.knowledgeos.service.EmbedTokenLifecycleService;
 import com.jh.knowledgeos.service.ExternalAuditService;
 import com.jh.knowledgeos.service.McpServerService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -45,13 +47,16 @@ public class ExternalServiceAdminController {
 
     private final McpServerService mcpServerService;
 
+    private final EmbedTokenLifecycleService tokenLifecycle;
+
     private final KnowledgeProperties.External properties;
 
     public ExternalServiceAdminController(ApiKeyService apiKeyService, ExternalAuditService auditService, McpServerService mcpServerService,
-        KnowledgeProperties properties) {
+        EmbedTokenLifecycleService tokenLifecycle, KnowledgeProperties properties) {
         this.apiKeyService = apiKeyService;
         this.auditService = auditService;
         this.mcpServerService = mcpServerService;
+        this.tokenLifecycle = tokenLifecycle;
         this.properties = properties.external();
     }
 
@@ -116,7 +121,8 @@ public class ExternalServiceAdminController {
             }
         }
         Integer limit = request.getRateLimitPerMinute() == null ? properties.getDefaultRateLimitPerMinute() : request.getRateLimitPerMinute();
-        return ApiResponse.ok(apiKeyService.create(request.getName(), request.getKnowledgeBaseId(), request.getScopes(), limit, expiresAt, operator.getId()));
+        return ApiResponse.ok(apiKeyService.create(request.getName(), request.getKnowledgeBaseId(), request.getScopes(), limit, expiresAt,
+            operator.getId(), request.getAllowedOrigins()));
     }
 
     @PostMapping("/keys/{id}/revoke")
@@ -132,6 +138,93 @@ public class ExternalServiceAdminController {
         Integer limit) {
         requireManager();
         return ApiResponse.ok(auditService.recent(keyId, limit == null ? 50 : limit));
+    }
+
+    /* ---- 嵌入令牌生命周期 ---- */
+
+    /**
+     * Tokens seen in the audit window with their traffic: the list an operator revokes from.
+     */
+    @GetMapping("/embed/tokens")
+    @Operation(summary = "嵌入令牌：窗口内出现过的令牌、来源站点、调用量与是否已吊销")
+    public ApiResponse<Object> embedTokens(@RequestParam(value = "hours", required = false) Integer hours,
+        @RequestParam(value = "limit", required = false) Integer limit) {
+        requireManager();
+        Map<String, Object> payload = new LinkedHashMap<String, Object>();
+        payload.put("windowHours", hours == null ? 168 : hours);
+        payload.put("tokens", tokenLifecycle.recentTokens(hours == null ? 168 : hours, limit == null ? 50 : limit));
+        payload.put("revocations", tokenLifecycle.revocations(50));
+        return ApiResponse.ok(payload);
+    }
+
+    @GetMapping("/embed/tokens/calls")
+    @Operation(summary = "嵌入令牌调用日志：可按令牌或 API Key 过滤")
+    public ApiResponse<Object> embedTokenCalls(@RequestParam(value = "jti", required = false) String jti,
+        @RequestParam(value = "keyId", required = false) Long keyId, @RequestParam(value = "limit", required = false) Integer limit) {
+        requireManager();
+        return ApiResponse.ok(tokenCalls(tokenLifecycle.calls(keyId, jti, limit == null ? 50 : limit)));
+    }
+
+    @PostMapping("/embed/tokens/revoke")
+    @Operation(summary = "吊销单个嵌入令牌，立即生效（不影响同一 API Key 签发的其他令牌）")
+    public ApiResponse<Object> revokeEmbedToken(@RequestBody(required = false) EmbedTokenRevokeRequest body) {
+        User operator = requireManager();
+        EmbedTokenRevokeRequest request = body == null ? new EmbedTokenRevokeRequest() : body;
+        return ApiResponse.ok(tokenLifecycle.revoke(request.getJti(), request.getKeyId(), request.getKeyCode(), request.getKnowledgeBaseId(),
+            request.getOrigin(), request.getReason(), operator.getId()));
+    }
+
+    @PostMapping("/embed/tokens/{jti}/restore")
+    @Operation(summary = "撤销吊销：令牌在到期前重新可用")
+    public ApiResponse<Object> restoreEmbedToken(@PathVariable String jti) {
+        requireManager();
+        Map<String, Object> data = new LinkedHashMap<String, Object>();
+        data.put("jti", jti);
+        data.put("restored", tokenLifecycle.restore(jti));
+        return ApiResponse.ok(data);
+    }
+
+    @GetMapping("/embed/tokens/revocations")
+    @Operation(summary = "已吊销的嵌入令牌名单")
+    public ApiResponse<Object> embedTokenRevocations(@RequestParam(value = "limit", required = false) Integer limit) {
+        requireManager();
+        return ApiResponse.ok(tokenLifecycle.revocations(limit == null ? 50 : limit));
+    }
+
+    /**
+     * Flattens audit rows for the console: the token id is shown shortened, because the point of
+     * the screen is recognising a token, not copying one.
+     */
+    private List<Map<String, Object>> tokenCalls(List<ApiCallAudit> rows) {
+        List<Map<String, Object>> out = new ArrayList<Map<String, Object>>();
+        for (ApiCallAudit row : rows) {
+            Map<String, Object> item = new LinkedHashMap<String, Object>();
+            item.put("id", row.getId());
+            item.put("jti", row.getTokenJti());
+            item.put("displayId", displayId(row.getTokenJti()));
+            item.put("keyId", row.getKeyId());
+            item.put("keyCode", row.getKeyCode());
+            item.put("callerName", row.getCallerName());
+            item.put("origin", row.getOrigin());
+            item.put("channel", row.getChannel());
+            item.put("method", row.getMethod());
+            item.put("knowledgeBaseId", row.getKnowledgeBaseId());
+            item.put("statusCode", row.getStatusCode());
+            item.put("durationMs", row.getDurationMs());
+            item.put("message", row.getMessage());
+            item.put("requestParams", row.getRequestParams());
+            item.put("traceId", row.getTraceId());
+            item.put("createdTime", row.getCreatedTime() == null ? null : row.getCreatedTime().toString());
+            out.add(item);
+        }
+        return out;
+    }
+
+    private static String displayId(String jti) {
+        if (jti == null || jti.isEmpty()) {
+            return "—";
+        }
+        return jti.length() <= 8 ? jti : jti.substring(0, 4) + "…" + jti.substring(jti.length() - 4);
     }
 
     /**

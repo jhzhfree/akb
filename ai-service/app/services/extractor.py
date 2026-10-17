@@ -13,6 +13,7 @@ shows edges instead of isolated dots.
 import logging
 import re
 import uuid
+from datetime import date, timedelta
 from typing import Any
 
 from app.core.knowledge_schema import entity_types, relation_vocabulary
@@ -144,6 +145,96 @@ RELATION_LABELS: dict[str, str] = {
     "DEPLOYED_IN": "部署于",
 }
 
+# Institutional clauses are written as inline key/value runs separated by a full-width
+# semicolon: "假期: 年假；额度: 司龄满 1 年 5 天；申请时限: 提前 3 个工作日". That shape is what
+# carries the numbers an exact-calibre question asks for ("年假多少天"), and it is already
+# structured in the source, so reading it needs no model: parsing it deterministically is
+# both cheaper and more faithful than asking an LLM to retype it.
+CLAUSE_PAIR_SEP = re.compile(r"[；;]\s*")
+# The field name may carry a citation in parenthesis — "原口径（HR-HB-03 V3.1）" is 18
+# characters — so the bound has to leave room for it or the superseded reading is dropped.
+CLAUSE_KV = re.compile(r"^\s*([^:：]{1,28})\s*[:：]\s*(.+?)\s*$")
+# The field that names what the row is about. Every other field in the row is a property
+# of it, so "假期: 年假；额度: 5 天" becomes one claim about 年假, not two unrelated ones.
+CLAUSE_SUBJECT_KEYS = (
+    "假期",
+    "假期类型",
+    "项目",
+    "事项",
+    "情形",
+    "场景",
+    "类型",
+    "类别",
+    "名称",
+    "制度",
+    "条款",
+    "岗位",
+    "职级",
+    "费用",
+    "福利",
+    "价值观",
+)
+# Fields whose value is a restatement rather than a property: carrying them into claims
+# would only duplicate the subject row in the graph.
+CLAUSE_SKIP_KEYS = ("备注", "说明")
+# A revision notice states the old and the new reading side by side. Keeping which side a
+# clause belongs to is what lets an answer say "before X it was 5 days, from X it is 10".
+CLAUSE_SUPERSEDED_KEYS = ("原口径", "旧口径", "原规定", "调整前")
+CLAUSE_CURRENT_KEYS = ("新口径", "新规定", "调整后")
+CLAUSE_EFFECTIVE_HINT = ("起", "生效", "自", "执行")
+CLAUSE_DATE = re.compile(r"(20\d{2})\s*[-/年.]\s*(\d{1,2})\s*[-/月.]\s*(\d{1,2})")
+# What a sentence says about its subject, ordered most specific first.
+CLAUSE_PREDICATE_HINTS = (
+    ("额度", ("额度", "天数", "上限", "下限", "标准", "金额", "比例", "带宽")),
+    ("时限", ("时限", "期限", "有效期", "提前", "截止", "日内", "个工作日")),
+    ("流程", ("流程", "步骤", "审批", "提交", "申请")),
+    ("责任", ("负责", "归属", "归属部门", "管理", "维护人")),
+    ("要求", ("必须", "禁止", "不得", "应当", "需")),
+)
+
+# Which field of a row names the subject depends on what the library is about: a runbook
+# names its host or component, a handbook its leave type, a directory its post. Reading the
+# subject from the scenario's own vocabulary is what keeps "额度: 5 天" attached to the
+# thing it actually describes instead of to the first field that happens to match.
+SCENARIO_SUBJECT_KEYS: dict[str, tuple[str, ...]] = {
+    "OPS": ("故障", "告警", "命令", "错误码", "主机", "服务", "组件", "中间件", "工单", "会话",
+            "事件", "规程", "SOP", "事项", "场景", "类型", "名称"),
+    "VULN": ("漏洞", "CVE", "编号", "组件", "产品", "服务", "资产", "系统", "事项", "类型", "名称"),
+    "BUSINESS": ("岗位", "人员", "部门", "项目", "客户", "产品", "团队", "组织", "事项", "名称", "类型"),
+}
+
+# What a model should look for in this kind of library. The scenario profile already tunes
+# chunking and the recall weights; without a matching instruction the generation itself
+# stays one-size-fits-all, and a library that is asked "影响到谁" gets answers built from
+# the same generic claims as one asked "年假多少天".
+SCENARIO_FOCUS: dict[str, str] = {
+    "OPS": "本库是运维知识库，抽取重点：故障现象与根因、处置步骤（按执行顺序）、命令与错误码、"
+           "告警等级与响应/止损时限、责任人。命令与错误码必须原样保留，步骤不要合并成一段。\n",
+    "POLICY": "本库是制度条款知识库，抽取重点：条款的适用条件、额度与时限、生效与失效时间、"
+              "新旧口径差异。同一条款的多个属性必须逐条成 claim，不要把整段原文塞进一个 object。\n",
+    "BUSINESS": "本库是公司业务知识库，抽取重点：岗位与人员、所属部门、汇报关系、项目与客户归属、"
+                "产品负责人。人与组织必须单独抽成实体，并在 relations 里给出归属与汇报关系。\n",
+    "VULN": "本库是漏洞知识库，抽取重点：漏洞编号（CVE 等）、受影响产品与版本区间、修复版本、"
+            "严重程度与修复方案。版本号必须原样保留，影响范围按组件逐条成 claim。\n",
+}
+
+
+def _day_before(date_text: str) -> str:
+    """The last day on which a superseded reading still held, as YYYY-MM-DD.
+
+    A rule replaced on 2026-09-01 held up to and including 2026-08-31. Giving the old
+    clause that end date makes its window disjoint from the new one, which is how the
+    conflict engine recognises a succession instead of reporting a contradiction.
+    """
+    try:
+        parts = [int(part) for part in str(date_text).split("-")]
+        if len(parts) != 3:
+            return ""
+        return (date(parts[0], parts[1], parts[2]) - timedelta(days=1)).isoformat()
+    except (TypeError, ValueError):
+        return ""
+
+
 logger = logging.getLogger(__name__)
 
 
@@ -156,14 +247,29 @@ class KnowledgeExtractor:
         chunks: list | None = None,
         units: list | None = None,
         knowledge_base_id: int | None = None,
+        scenario: str = "",
     ) -> dict[str, Any]:
-        """Prefer structured LLM extraction and degrade to deterministic rules."""
+        """Read structured clauses deterministically, then let a model add what is left.
+
+        Model extraction is the only way to reach knowledge written in running prose, but
+        it is also the part that fails silently: when it does, an institutional clause
+        such as "额度: 司龄满 1 年 5 天" was being lost even though the source states it
+        outright. Parsing those rows first means the numbers a policy question asks for
+        survive regardless of whether the model answered, and the model only ever adds.
+
+        ``scenario`` is the knowledge base's scenario template (GENERAL / OPS / POLICY /
+        BUSINESS / VULN). It decides which vocabulary names the subject of a parsed row and
+        what the model is told to look for, so two libraries of different kinds stop being
+        generated by the same instruction.
+        """
         text = (text or "").strip()
         material = self._material(units, chunks or [])
         if not text:
             text = "\n\n".join(item["content"] for item in material)
         if not text and chunks:
             text = "\n\n".join(chunk.get("content", "") for chunk in chunks)
+
+        policy_claims, policy_cards = self._policy_clauses(material, scenario)
 
         llm = get_llm_provider()
         # Relation labels come from the published schema of this knowledge base, so a
@@ -176,7 +282,7 @@ class KnowledgeExtractor:
                 # mid-thought returns an empty answer, and losing cards and claims to that is
                 # worse than the extra latency of asking for a bigger response once.
                 result = await llm.extract_json(
-                    self._prompt(text[:14000], material, vocabulary, types), max_tokens=8192
+                    self._prompt(text[:14000], material, vocabulary, types, scenario), max_tokens=8192
                 )
                 if not isinstance(result, dict):
                     # A reasoning model can spend the whole output budget on thinking and return an
@@ -187,12 +293,73 @@ class KnowledgeExtractor:
                         self._strict_prompt(text[:8000], vocabulary, types), max_tokens=8192
                     )
                 if isinstance(result, dict):
-                    return self._normalize(result, material, vocabulary, types)
+                    return self._merge(
+                        self._normalize(result, material, vocabulary, types),
+                        policy_claims,
+                        policy_cards,
+                        vocabulary,
+                    )
             except Exception as exc:
                 # Extraction must remain usable offline. Log why fallback was
                 # selected instead of silently swallowing the model failure.
                 logger.warning("LLM knowledge extraction failed; using fallback: %s", exc)
-        return self._fallback(text, material)
+        return self._merge(self._fallback(text, material), policy_claims, policy_cards, vocabulary)
+
+    def _merge(
+        self,
+        structured: dict[str, Any],
+        policy_claims: list[dict[str, Any]],
+        policy_cards: list[dict[str, Any]],
+        vocabulary: tuple | None = None,
+    ) -> dict[str, Any]:
+        """Combine parsed clauses with model output, parsed clauses first."""
+        cards = [dict(card) for card in policy_cards]
+        seen_cards = {self._key(card.get("title")) for card in cards}
+        for card in structured.get("cards", []):
+            if not isinstance(card, dict):
+                continue
+            marker = self._key(card.get("title"))
+            if not marker or marker in seen_cards:
+                continue
+            seen_cards.add(marker)
+            cards.append(card)
+
+        claims = [dict(claim) for claim in policy_claims]
+        seen_claims = {
+            (
+                self._key(claim.get("subject")),
+                self._key(claim.get("predicate")),
+                self._key(claim.get("object")),
+            )
+            for claim in claims
+        }
+        for claim in structured.get("claims", []):
+            if not isinstance(claim, dict):
+                continue
+            marker = (
+                self._key(claim.get("subject")),
+                self._key(claim.get("predicate")),
+                self._key(claim.get("object")),
+            )
+            if not marker[0] or marker in seen_claims:
+                continue
+            seen_claims.add(marker)
+            claims.append(claim)
+
+        entities = [item for item in structured.get("entities", []) if isinstance(item, dict)]
+        index = self._entity_index(entities)
+        # Relations are rebuilt from the merged claims so a parsed clause contributes its
+        # edge even when the model never saw it.
+        self._link_entities(cards, claims, index)
+        relations = self._dedupe_relations(
+            self._claim_relations(claims, index, vocabulary) + structured.get("relations", [])
+        )
+        return {
+            "cards": cards,
+            "claims": claims,
+            "entities": entities,
+            "relations": relations[:MAX_RELATIONS],
+        }
 
     @staticmethod
     def _material(units: list | None, chunks: list) -> list[dict[str, Any]]:
@@ -231,6 +398,177 @@ class KnowledgeExtractor:
             )
         return material
 
+    def _policy_clauses(self, material: list[dict[str, Any]], scenario: str = "") -> tuple[list, list]:
+        """Read inline key/value institutional clauses into claims and one card per row.
+
+        ``scenario`` selects the vocabulary the subject is read from, so one parser serves
+        a runbook ("主机: srv-pay-01；用途: 延迟 1 小时的从库") and a handbook
+        ("假期: 年假；额度: 5 天") without either having to know about the other.
+
+        Policy documents state their numbers in rows like
+        ``假期: 年假；额度: 司龄满 1 年 5 天；申请时限: 提前 3 个工作日``. Left as raw text those
+        rows are only reachable through full-text search, which is why a question such as
+        "年假多少天" has to rely on BM25 luck. The row already says what it is about, so it
+        can be turned into a subject/predicate/object claim without a model: the first
+        recognised key names the subject and every remaining field becomes a property of it.
+
+        Returns ``(claims, cards)``. Nothing is invented here — every claim keeps the
+        evidence code of the unit it was read from, so it is only as trustworthy as the
+        source text, which is exactly why it does not need to wait for human review.
+        """
+        claims: list[dict[str, Any]] = []
+        cards: list[dict[str, Any]] = []
+        # A clause row rarely repeats the date, because the notice states it once in its
+        # preamble. Scanning the whole document first means the row that carries the
+        # number still gets the window that makes it the current or the superseded one.
+        document_effective = self._document_effective_date(material)
+        subject_keys = SCENARIO_SUBJECT_KEYS.get(str(scenario or "").upper()) or CLAUSE_SUBJECT_KEYS
+        for item in material or []:
+            content = str(item.get("content") or "")
+            if not content:
+                continue
+            effective = self._clause_effective_date(content) or document_effective
+            evidence = [str(item.get("evidence_code"))] if item.get("evidence_code") else []
+            rows = []
+            for line in content.split("\n"):
+                parsed = self._parse_clause_row(line, effective, evidence, subject_keys)
+                if parsed:
+                    rows.append(parsed)
+            if not rows:
+                continue
+            for row in rows:
+                claims.extend(row["claims"])
+            # One card per unit keeps the human-readable form available alongside the
+            # claims: the card is what an answer quotes, the claims are what it matches on.
+            cards.append(self._clause_card(item, rows))
+        return claims, cards
+
+    @classmethod
+    def _parse_clause_row(
+        cls, line: str, effective: str = "", evidence_ids: list[str] | None = None,
+        subject_keys: tuple[str, ...] = CLAUSE_SUBJECT_KEYS,
+    ) -> dict[str, Any] | None:
+        """Split one clause row into its subject and per-field claims."""
+        text = clean_inline(str(line or "")).strip()
+        if not text or "：" not in text and ":" not in text:
+            return None
+        pairs = []
+        for segment in CLAUSE_PAIR_SEP.split(text):
+            matched = CLAUSE_KV.match(segment or "")
+            if not matched:
+                continue
+            raw_key = matched.group(1).strip()
+            value = matched.group(2).strip()
+            if not raw_key or not value or not has_content(value):
+                continue
+            # A revision notice qualifies its field names — "原口径（HR-HB-03 V3.1）",
+            # "新口径（本通知）". The parenthesis is a citation, not part of the field, so
+            # it is moved aside before matching; otherwise "原口径（…）" matches nothing and
+            # the superseded reading silently disappears from the knowledge base.
+            key, note = cls._split_clause_note(raw_key)
+            pairs.append((key, value, note))
+        # A single field is a heading or a stray fragment, not a clause row: two or more
+        # fields is what distinguishes "假期: 年假；额度: 5 天" from "一、工作时间:".
+        if len(pairs) < 2:
+            return None
+        subject_key = ""
+        subject = ""
+        for key, value, _note in pairs:
+            if key in subject_keys:
+                subject_key, subject = key, value
+                break
+        if not subject:
+            return None
+        claims = []
+        for key, value, note in pairs:
+            if key == subject_key or key in CLAUSE_SKIP_KEYS:
+                continue
+            claim: dict[str, Any] = {
+                "subject": subject[:200],
+                "predicate": key[:60],
+                "object": value[:400],
+                "conditions": [],
+                # The parenthesis the field name carried is provenance worth keeping —
+                # "原口径（HR-HB-03 V3.1）" says which document the old reading came from.
+                "qualifiers": {"sourceRef": note} if note else {},
+                "polarity": "POSITIVE",
+                "certainty": 0.9,
+                "confidence": 0.9,
+                "evidence_ids": list(evidence_ids or []),
+                # Marks the provenance so downstream governance knows this was read from
+                # the source rather than inferred, and can publish it without review.
+                "derivation": "DETERMINISTIC",
+            }
+            claim.update(cls._clause_validity(key, effective))
+            claims.append(claim)
+        if not claims:
+            return None
+        return {"subject": subject, "claims": claims, "text": text}
+
+    @staticmethod
+    def _split_clause_note(raw_key: str) -> tuple[str, str]:
+        """Split a clause field name from the citation in its parenthesis."""
+        matched = re.match(r"^([^（(]*)\s*[（(]([^)）]*)[)）]\s*$", str(raw_key or "").strip())
+        if not matched:
+            return str(raw_key or "").strip(), ""
+        return matched.group(1).strip(), matched.group(2).strip()
+
+    @staticmethod
+    def _clause_validity(key: str, effective: str) -> dict[str, str]:
+        """Place a clause on the timeline when the row says which reading it is.
+
+        A revision notice puts the old and the new figure in the same row. Without a
+        validity window both claims look like a contradiction and end up in the conflict
+        queue; with one they are recognised as successive versions of the same rule.
+        """
+        if key in CLAUSE_SUPERSEDED_KEYS:
+            return {"valid_from": "", "valid_to": _day_before(effective) if effective else ""}
+        if key in CLAUSE_CURRENT_KEYS:
+            return {"valid_from": effective, "valid_to": ""}
+        # Every other field belongs to the document as published.
+        return {"valid_from": effective, "valid_to": ""}
+
+    @classmethod
+    def _document_effective_date(cls, material: list[dict[str, Any]]) -> str:
+        """The date the document as a whole takes effect, from any of its units."""
+        for item in material or []:
+            found = cls._clause_effective_date(str(item.get("content") or ""))
+            if found:
+                return found
+        return ""
+
+    @staticmethod
+    def _clause_effective_date(content: str) -> str:
+        """The date this unit says its rule takes effect, as YYYY-MM-DD."""
+        best = ""
+        for matched in CLAUSE_DATE.finditer(str(content or "")):
+            year, month, day = matched.group(1), matched.group(2), matched.group(3)
+            if not (1 <= int(month) <= 12 and 1 <= int(day) <= 31):
+                continue
+            window = str(content or "")[max(0, matched.start() - 12) : matched.end() + 6]
+            # A date is only an effective date when the wording says so; a document dated
+            # 2026-08-30 also mentions 2025 figures that must not become validity windows.
+            if any(hint in window for hint in CLAUSE_EFFECTIVE_HINT) or "生效" in window:
+                best = "%s-%02d-%02d" % (year, int(month), int(day))
+        return best
+
+    @classmethod
+    def _clause_card(cls, item: dict[str, Any], rows: list[dict[str, Any]]) -> dict[str, Any]:
+        """One readable card per unit, titled by its heading rather than its first line."""
+        heading = str(item.get("heading_path") or "")
+        segments = [part.strip() for part in heading.split("/") if part.strip()]
+        title = segments[-1] if segments else (rows[0]["subject"] if rows else "")
+        body = "\n".join(row["text"] for row in rows)
+        return {
+            "type": cls._classify(body, heading),
+            "title": clean_inline(title)[:200],
+            "summary": body[:500],
+            "content": body,
+            "confidence": 0.9,
+            "evidence_ids": [str(item.get("evidence_code"))] if item.get("evidence_code") else [],
+            "derivation": "DETERMINISTIC",
+        }
+
     @staticmethod
     def _relation_glossary(vocabulary: tuple | None = None) -> str:
         """One readable line per allowed relation type, with the wording that triggers it.
@@ -253,6 +591,7 @@ class KnowledgeExtractor:
         material: list[dict[str, Any]],
         vocabulary: tuple | None = None,
         types: tuple | None = None,
+        scenario: str = "",
     ) -> str:
         return (
             "请从企业知识材料中抽取结构化知识，直接输出 JSON，不要输出分析过程或代码块：\n"
@@ -282,7 +621,22 @@ class KnowledgeExtractor:
             "挂载要求：cards/claims 的 entity_codes 填写该条知识涉及的实体名称，"
             "没有则留空数组。\n"
             "标题要求：title 不得包含 #、*、-、| 等排版符号，不得照抄表格分隔行；"
-            "材料已去除排版标记，请直接产出可读标题。\n材料：\n" + text
+            "材料已去除排版标记，请直接产出可读标题。\n"
+            # Institutional clauses: the numbers a policy question asks for live in
+            # "key: value；key: value" rows. Asked generically, a model summarises the row
+            # into a card and the individual figure stays unreachable, so the prompt has to
+            # ask for one claim per property and show what that looks like.
+            "制度条款要求：材料中的“键: 值；键: 值”式条款（如“假期: 年假；额度: 司龄满 1 年 5 天，每满 1 年 +1，上限 15 天；"
+            "申请时限: 提前 3 个工作日”），必须为每一个属性单独产出一条 claim："
+            "subject 取该条款描述的主体（年假），predicate 取属性名（额度、申请时限），object 取属性值；"
+            "不要把整行原文塞进一个 object，也不要把主体名写进 predicate。\n"
+            "新旧口径要求：制度修订类材料常同时给出“原口径/新口径”或“调整前/调整后”，"
+            "必须分别产出 claim，并用 valid_from/valid_to 标注各自适用期限"
+            "（新口径填 valid_from，原口径填 valid_to），使二者在时间上可区分、而不是互相冲突。\n"
+            "数字口径要求：额度、天数、金额、比例、上限、时限等精确数值必须原样保留在 object 中，"
+            "不要换算、不要概括、不要省略单位。\n"
+            + SCENARIO_FOCUS.get(str(scenario or "").upper(), "")
+            + "材料：\n" + text
         )
 
     def _normalize(
@@ -659,15 +1013,24 @@ class KnowledgeExtractor:
             )
             sentence = re.split(r"[。！？\n]", content)[0].strip()
             if has_content(sentence):
+                # The object used to be ``sentence[40:160]``, a fixed offset meant to skip a
+                # repeated title. It landed mid-number instead, producing objects such as
+                # ",000；绩效工资占比: 15%" that read as corrupted and, because two fragments of
+                # the same sentence differ, were then reported as conflicting with each other.
+                # Only strip a prefix that genuinely repeats the title, never a blind slice.
+                body = sentence
+                if title and body.startswith(title):
+                    body = body[len(title) :].strip(" 　:：,，-—")
                 claims.append(
                     {
                         "claim_code": "CLM_" + uuid.uuid4().hex,
                         "subject": title[:40],
-                        "predicate": "DESCRIBES",
-                        "object": sentence[40:160] or sentence[:160],
+                        "predicate": self._infer_predicate(sentence, source.get("heading_path", "")),
+                        "object": (body or sentence)[:200],
                         "conditions": [],
                         "confidence": 0.62,
                         "evidence_ids": source["evidence_ids"][:4],
+                        "derivation": "FALLBACK",
                     }
                 )
             self._collect_entities(content, source.get("heading_path", ""), entities, seen)
@@ -707,6 +1070,21 @@ class KnowledgeExtractor:
         if any(keyword in haystack for keyword in ["故障", "问题", "原因", "解决"]):
             return "PROBLEM_SOLUTION"
         return "FACT"
+
+    @staticmethod
+    def _infer_predicate(sentence: str, heading_path: str = "") -> str:
+        """Name what a sentence states about its subject.
+
+        Every fallback claim used to be ``DESCRIBES``, which made the predicate useless for
+        both reading and comparison: two claims about the same subject then differed only in
+        their object, so a rewording was reported as a contradiction. Naming the property
+        keeps unrelated statements apart and lets the same property be compared on purpose.
+        """
+        haystack = "%s %s" % (heading_path, sentence)
+        for predicate, keywords in CLAUSE_PREDICATE_HINTS:
+            if any(keyword in haystack for keyword in keywords):
+                return predicate
+        return "DESCRIBES"
 
     @staticmethod
     def _collect_entities(content: str, heading_path: str, entities: list, seen: set) -> None:

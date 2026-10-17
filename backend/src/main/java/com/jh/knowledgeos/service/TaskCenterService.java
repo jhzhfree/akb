@@ -65,10 +65,16 @@ public class TaskCenterService {
     public static final String TYPE_ACL_REBUILD = "ACL_REBUILD";
 
     /**
+     * Re-running extraction for a whole library. It is asynchronous for the same reason a batch
+     * import is — it calls the model once per document — so it needs a row here to be watched.
+     */
+    public static final String TYPE_REGENERATION = "REGENERATION";
+
+    /**
      * Task types the centre offers as a filter, in the order the console shows them.
      */
     public static final List<String> TASK_TYPES = Collections.unmodifiableList(Arrays.asList(TYPE_INGESTION, TYPE_EXTRACTION, TYPE_EMBEDDING,
-        TYPE_INDEX, TYPE_DERIVATION, TYPE_EVALUATION, TYPE_SYNC, TYPE_SCHEMA, TYPE_ACL_REBUILD));
+        TYPE_INDEX, TYPE_DERIVATION, TYPE_EVALUATION, TYPE_SYNC, TYPE_SCHEMA, TYPE_ACL_REBUILD, TYPE_REGENERATION));
 
     private static final DateTimeFormatter TS = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 

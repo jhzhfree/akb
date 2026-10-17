@@ -5,7 +5,8 @@ import { ANSWER_FORMATS } from '../../api/contracts'
 import type { AnswerFormat } from '../../api/contracts'
 import { createExternalKey } from '../../api/external'
 import { unwrap } from '../../api/knowledge'
-import { asArray, asRecord, bodySize, isJsonBody, prettyBody, safeJson } from './lab-utils'
+// 格式化响应体的三个函数在组件里用（模板渲染），这里只留结构判定用的。
+import { asArray, asRecord, safeJson } from './lab-utils'
 import { getToken } from '../../api/auth'
 import { errorMessage as message } from '../../utils/feedback'
 
@@ -25,8 +26,12 @@ export function useExternalServiceLab(props: ExternalServiceLabProps) {
     knowledgeBaseId:null as number | null,
     question:'报销流程是什么？',
     topK:10,
+    /** 最低相关度分数（0~1）：留空即不过滤，与不传这个参数完全一致。 */
+    minScore:null as number | null,
     /** 答案交付格式：default / markdown / text / html，服务端回传的 answerFormat 是实际生效的那个。 */
     answerFormat:'default' as AnswerFormat,
+    /** 流式答案交付方式：stream 逐片推 delta；final 只推检索过程，答案在 done 里整体交付。 */
+    content:'stream' as 'stream' | 'final',
     code:'',
     queryId:'',
   })
@@ -70,16 +75,27 @@ export function useExternalServiceLab(props: ExternalServiceLabProps) {
   }
 
 
+  /** 调用记录对四个通道共用：一次联调往往是 REST 发过了再换 MCP 复现同一件事，
+   *  记录散在各个 Tab 里就拼不出完整的排查过程。 */
+  type Channel = 'REST' | 'MCP' | 'SSE' | 'BUS'
   interface CallLog {
-    id:number; label:string; method:string; url:string; status:number; durationMs:number
-    verdict:'PASS' | 'FAIL' | 'ERROR'; note:string; body:string; curl:string
+    id:number; channel:Channel; label:string; method:string; url:string; status:number; durationMs:number
+    verdict:'PENDING' | 'PASS' | 'FAIL' | 'ERROR'; note:string; body:string; curl:string
   }
   const logs = ref<CallLog[]>([])
   const logBodyOpen = ref<Record<number, boolean>>({})
   let logSeq = 0
   function pushLog(log:Omit<CallLog, 'id'>) {
-    logs.value.unshift({ ...log, id:++logSeq })
+    const id = ++logSeq
+    logs.value.unshift({ ...log, id })
     if (logs.value.length > 40) logs.value.length = 40
+    return id
+  }
+  /** 先落一条“进行中”再回填结果：AI 检索慢的时候，空白等待最容易被当成没反应。 */
+  function settleLog(id:number, patch:Partial<Omit<CallLog, 'id'>>) {
+    const row = logs.value.find(item => item.id === id)
+    if (!row) return
+    Object.assign(row, patch)
   }
   function clearLogs() {
     logs.value = []
@@ -109,6 +125,25 @@ export function useExternalServiceLab(props: ExternalServiceLabProps) {
     { key:'ingest', method:'POST', path:'/v1/external/documents/text', summary:'文本接入（INGEST）' },
   ]
 
+  /**
+   * 每个端点实际接受的参数。联调台按下发的字段为准，说明与请求体模板保持一致——
+   * 否则"看到的参数"和"发出去的参数"会各说一套，调不通时最难排查的就是这个。
+   */
+  const REST_PARAM_DOCS:Record<string, string> = {
+    bases:'无参数；knowledgeBaseId 由凭证绑定解析',
+    overview:'knowledgeBaseId（可选）',
+    query:'knowledgeBaseId（可选）· question（必填）· topK（1–50，默认 10）· permissionTags[]（可选）· answerFormat（default / markdown / text / html，默认 default）· minScore（0~1，可选，最低相关度）',
+    search:'同 /query（answerFormat 对返回内容无影响，这里没有答案正文）· minScore（0~1，可选）过滤候选，返回的 returned 是过滤后条数',
+    cards:'knowledgeBaseId（可选）',
+    card:'code（路径，必填）· knowledgeBaseId（可选）',
+    claims:'knowledgeBaseId（可选）',
+    claim:'code（路径，必填）· knowledgeBaseId（可选）',
+    evidence:'code（路径，必填）· knowledgeBaseId（可选）',
+    graph:'code（路径，必填）· knowledgeBaseId（可选）· depth（默认 2）· limit（默认 50）',
+    trace:'queryId（路径，必填）',
+    ingest:'knowledgeBaseId（可选）· title（可选）· text（必填）· permissionTags[]（可选）',
+  }
+
   const restKey = ref('query')
   const restBody = ref('')
   const sending = ref(false)
@@ -133,11 +168,15 @@ export function useExternalServiceLab(props: ExternalServiceLabProps) {
 
   function bodyTemplate(endpoint:RestEndpoint) {
     if (endpoint.key === 'query' || endpoint.key === 'search') {
-      return JSON.stringify({
+      const body:Record<string, unknown> = {
         knowledgeBaseId:cfg.knowledgeBaseId,
         question:cfg.question,
         topK:cfg.topK,
-      }, null, 2)
+      }
+      // 只在填了阈值时带上：留空与服务端“未传”是同一回事，不该顺手下发一个 0。
+      // Number.isFinite 同时挡住空输入框留下的空串。
+      if (Number.isFinite(cfg.minScore)) body.minScore = cfg.minScore
+      return JSON.stringify(body, null, 2)
     }
     if (endpoint.key === 'ingest') {
       return JSON.stringify({
@@ -154,14 +193,41 @@ export function useExternalServiceLab(props: ExternalServiceLabProps) {
     restBody.value = bodyTemplate(restEndpoint.value)
   }
   watch(restEndpoint, endpoint => { restBody.value = bodyTemplate(endpoint) }, { immediate:true })
+  // 阈值改了要重填请求体，否则手改的 body 里还留着上一次的取值。
+  watch(() => cfg.minScore, () => {
+    if (restEndpoint.value.key === 'query' || restEndpoint.value.key === 'search') resetBody()
+  })
 
   interface RawCall { status:number; durationMs:number; text:string; json:unknown; url:string }
+
+  /**
+   * 联调台是手工点击的，等一个没有超时的请求会把页面钉死在“发送中”。
+   * 宁可清楚地报“30 秒未返回”，也不要让人去猜是卡住了还是失败了。
+   */
+  const REQUEST_TIMEOUT_MS = 30_000
+  async function fetchWithTimeout(url:string, init:RequestInit, timeoutMs = REQUEST_TIMEOUT_MS) {
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), timeoutMs)
+    try {
+      return await fetch(url, { ...init, signal:controller.signal })
+    } finally {
+      clearTimeout(timer)
+    }
+  }
+  /** abort 在浏览器里只报一个空泛的 AbortError，换成调用方看得懂的话。 */
+  function callError(e:unknown) {
+    if (e instanceof DOMException && e.name === 'AbortError') {
+      return `请求超时：${REQUEST_TIMEOUT_MS / 1000} 秒内没有响应`
+    }
+    return message(e)
+  }
+
   async function callRest(endpoint:RestEndpoint, body?:string, headers?:Record<string, string>) {
     const url = withAuth(restUrl(endpoint))
     const init:RequestInit = { method:endpoint.method, headers:headers ?? authHeaders() }
     if (endpoint.method === 'POST') init.body = body ?? restBody.value ?? '{}'
     const started = performance.now()
-    const response = await fetch(url, init)
+    const response = await fetchWithTimeout(url, init)
     const text = await response.text()
     return {
       status:response.status,
@@ -180,7 +246,10 @@ export function useExternalServiceLab(props: ExternalServiceLabProps) {
       }
     }
     if (call.status !== 200) {
-      return { verdict:'FAIL' as const, note:`HTTP ${call.status}：${asRecord(call.json).message || call.text.slice(0, 120)}` }
+      // 403 在联调台里几乎总是权限范围不够（接入文本要 INGEST），而不是服务端故障；
+      // 说清楚是哪一种，省得拿一枚只读凭证反复重试写入接口。
+      const hint = call.status === 403 ? ' — 凭证缺少该接口所需的权限范围（接入文本需要 INGEST）' : ''
+      return { verdict:'FAIL' as const, note:`HTTP ${call.status}：${asRecord(call.json).message || call.text.slice(0, 120)}${hint}` }
     }
     const envelope = asRecord(call.json)
     if (envelope.success !== true) {
@@ -188,6 +257,18 @@ export function useExternalServiceLab(props: ExternalServiceLabProps) {
     }
     const data = envelope.data
     const rows = asArray(data)
+    /**
+     * `effectiveTopK` 是本服务对请求 topK 夹取后的结果（1~50，不传或 <1 取 10）。请求值被夹时
+     * 必须说出来：否则"我要 200 条、回来 50 条"看起来跟"库里就 50 条"一样。
+     *
+     * 注意别去读 `topK`：那是 AI 服务自己的字段，语义是"选中送入答案生成的上下文条数"，
+     * 一次 topK=3 的请求它会返回 1，拿它跟请求值比对只会得出错误结论。
+     */
+    const topKNote = (row:Record<string, unknown>) => {
+      const effective = row.effectiveTopK == null ? null : Number(row.effectiveTopK)
+      if (effective == null || !Number.isFinite(effective) || effective === cfg.topK) return ''
+      return `，topK 请求 ${cfg.topK} 未生效：服务端夹为 ${effective}（范围 1~50，不传或 <1 取 10）`
+    }
     switch (endpoint.key) {
       case 'bases':
         return { verdict:'PASS' as const, note:`返回 ${rows.length} 个可见知识库` }
@@ -204,24 +285,46 @@ export function useExternalServiceLab(props: ExternalServiceLabProps) {
           verdict:(ok ? 'PASS' : 'FAIL') as 'PASS' | 'FAIL',
           note:ok ? `queryId=${row.queryId}，答案 ${String(row.answer).length} 字，引用 ${asArray(row.citations).length} 条`
             + `，交付格式 ${effective}${downgraded ? `（请求 ${cfg.answerFormat} 未生效，已退回默认）` : ''}`
+            + topKNote(row)
             : '缺少 queryId 或 answer',
         }
       }
       case 'search': {
         const row = asRecord(data)
         const candidates = asArray(row.candidates ?? row.results ?? row.items)
-        return { verdict:'PASS' as const, note:`候选 ${candidates.length} 条，引用 ${asArray(row.citations).length} 条` }
+        // `effectiveTopK` 是请求 topK 夹取后真正生效的召回上限（1~50，不传或 <1 取 10）。
+        // 不用 `topK`——那是 AI 服务的"选中上下文条数"，语义不同（topK=3 的请求它返回 1）。
+        const effective = row.effectiveTopK == null ? null : Number(row.effectiveTopK)
+        const asked = effective == null ? cfg.topK : effective
+        const returned = row.returned == null ? candidates.length : Number(row.returned)
+        const floor0 = row.minScore
+        const floor = floor0 == null ? '' : `，分数 ≥ ${floor0}`
+        // 给了阈值且返回条数少于 topK，说明是阈值筛掉的，不是库里没有 —— 这两件事
+        // 对调阈值的人意义完全不同，判定里必须说出来。
+        const filtered = floor0 != null && returned < asked
+        return {
+          verdict:'PASS' as const,
+          note:`候选 ${candidates.length} 条（topK=${asked}${floor}），引用 ${asArray(row.citations).length} 条`
+            + (filtered ? `：${asked - returned} 条低于阈值被筛掉` : '')
+            + topKNote(row),
+        }
       }
       case 'cards':
       case 'claims':
         return { verdict:'PASS' as const, note:`返回 ${rows.length} 条` }
       case 'card':
       case 'claim':
-      case 'evidence':
+      case 'evidence': {
+        // 详情端点返回对象，但编码为空时请求会落到列表端点上、拿回一个数组。
+        // 两种形状都要能读，否则“填错了编码”会被显示成“接口没返回东西”。
+        const rows = Array.isArray(data) ? asArray(data) : []
+        const row = Array.isArray(data) ? asRecord(rows[0]) : asRecord(data)
+        const fields = Object.keys(row)
         return {
-          verdict:(Object.keys(asRecord(data)).length ? 'PASS' : 'FAIL') as 'PASS' | 'FAIL',
-          note:`code=${cfg.code || '—'}，字段 ${Object.keys(asRecord(data)).join(', ') || '空'}`,
+          verdict:(fields.length ? 'PASS' : 'FAIL') as 'PASS' | 'FAIL',
+          note:`code=${cfg.code || '—'}，字段 ${fields.join(', ') || '空'}`,
         }
+      }
       case 'graph': {
         const row = asRecord(data)
         const nodes = asArray(row.nodes)
@@ -237,25 +340,64 @@ export function useExternalServiceLab(props: ExternalServiceLabProps) {
     }
   }
 
+  /**
+   * 详情类端点必须有编码。空编码发出的请求会落到列表端点上（/cards/ 命中的是 /cards），
+   * 拿到一个数组，看起来就像“接口没返回成功”——所以发送前先补一个真实编码。
+   */
+  async function ensureCode(endpoint:RestEndpoint) {
+    if (cfg.code.trim() || !['card', 'claim', 'evidence', 'graph'].includes(endpoint.key)) return
+    const find = (key:string) => REST_ENDPOINTS.find(item => item.key === key) ?? null
+    try {
+      if (endpoint.key === 'claim') {
+        const call = await callRest(find('claims')!)
+        const first = asRecord(asArray(asRecord(call.json).data)[0])
+        cfg.code = String(first.code || first.claimCode || '')
+        return
+      }
+      const cards = await callRest(find('cards')!)
+      const firstCard = asRecord(asArray(asRecord(cards.json).data)[0])
+      const cardCode = String(firstCard.code || firstCard.knowledgeCode || '')
+      if (endpoint.key !== 'evidence') {
+        cfg.code = cardCode
+        return
+      }
+      // 证据编码要从某张卡片的证据链里取：先拿到卡片，再读它的第一条证据。
+      cfg.code = cardCode
+      const detail = await callRest(find('card')!)
+      const body = asRecord(asRecord(detail.json).data)
+      const evidences = asArray(body.evidence ?? body.evidences)
+      cfg.code = String(asRecord(evidences[0]).code || asRecord(evidences[0]).evidenceCode || '')
+    } catch {
+      // 取不到就照原样发：让响应自己说话，比在这里猜一个错误原因更诚实。
+    }
+  }
+
   async function sendRest(endpoint:RestEndpoint | null, expect?:number) {
     if (!endpoint) return
     sending.value = true
+    const label = `${endpoint.method} ${endpoint.path} — ${endpoint.summary}`
+    // 立刻落一条记录：拿到响应前的等待也要看得见，否则慢接口和“点了没反应”无法区分。
+    const id = pushLog({
+      channel:'REST', label, method:endpoint.method, url:restUrl(endpoint), status:0, durationMs:0,
+      verdict:'PENDING', note:'请求已发出，等待响应…', body:'',
+      curl:curlOf(endpoint.method, restUrl(endpoint), endpoint.method === 'POST' ? restBody.value : ''),
+    })
     try {
+      await ensureCode(endpoint)
+      // 详情端点的编码可能刚被自动补上，URL 与 curl 要按补完后的样子更新。
+      settleLog(id, {
+        url:restUrl(endpoint),
+        curl:curlOf(endpoint.method, restUrl(endpoint), endpoint.method === 'POST' ? restBody.value : ''),
+      })
       const call = await callRest(endpoint)
       const judged = judgeRest(endpoint, call, expect)
-      pushLog({
-        label:`${endpoint.method} ${endpoint.path} — ${endpoint.summary}`,
-        method:endpoint.method, url:call.url, status:call.status, durationMs:call.durationMs,
-        verdict:judged.verdict, note:judged.note,
-        body:call.text.slice(0, 32000),
-        curl:curlOf(endpoint.method, call.url, endpoint.method === 'POST' ? restBody.value : ''),
+      settleLog(id, {
+        url:call.url, status:call.status, durationMs:call.durationMs,
+        verdict:judged.verdict, note:judged.note, body:call.text,
       })
     } catch (e) {
-      pushLog({
-        label:`${endpoint.method} ${endpoint.path} — ${endpoint.summary}`,
-        method:endpoint.method, url:restUrl(endpoint), status:0, durationMs:0,
-        verdict:'ERROR', note:message(e), body:message(e), curl:'',
-      })
+      const text = callError(e)
+      settleLog(id, { verdict:'ERROR', note:text, body:text })
     } finally {
       sending.value = false
     }
@@ -291,16 +433,21 @@ export function useExternalServiceLab(props: ExternalServiceLabProps) {
     // 顺序执行：后面的步骤依赖前面拿到的 queryId 与对象编码。
     await step('bases')
     await step('overview')
-    await step('search', JSON.stringify({ knowledgeBaseId:cfg.knowledgeBaseId, question:cfg.question, topK:cfg.topK }))
-    await step('query', JSON.stringify({ knowledgeBaseId:cfg.knowledgeBaseId, question:cfg.question, topK:cfg.topK }))
+    const body = (extra:Record<string, unknown>) => JSON.stringify({
+      knowledgeBaseId:cfg.knowledgeBaseId, question:cfg.question, topK:cfg.topK, ...extra })
+    await step('search', body(Number.isFinite(cfg.minScore) ? { minScore:cfg.minScore } : {}))
+    await step('query', body(Number.isFinite(cfg.minScore) ? { minScore:cfg.minScore } : {}))
     const cards = await step('cards')
-    const firstCard = asArray(asRecord(cards).data)[0]
-    const cardCode = String(asRecord(firstCard).code || '')
+    const firstCard = asRecord(asArray(asRecord(cards).data)[0])
+    // 列表里的编码字段过去随对象类型而变（knowledgeCode / claimCode / evidenceCode），
+    // 现在统一给了 code，但仍保留旧字段的回退：联调台不该因为服务端换了个版本就取不到编码。
+    const cardCode = String(firstCard.code || firstCard.knowledgeCode || '')
     if (cardCode) {
       cfg.code = cardCode
       const detail = await step('card')
-      const evidences = asArray(asRecord(asRecord(detail).data).evidences)
-      const evidenceCode = String(asRecord(evidences[0]).code || '')
+      const detailBody = asRecord(asRecord(detail).data)
+      const evidences = asArray(detailBody.evidence ?? detailBody.evidences)
+      const evidenceCode = String(asRecord(evidences[0]).code || asRecord(evidences[0]).evidenceCode || '')
       if (evidenceCode) {
         cfg.code = evidenceCode
         await step('evidence')
@@ -309,7 +456,8 @@ export function useExternalServiceLab(props: ExternalServiceLabProps) {
       await step('graph')
     }
     const claims = await step('claims')
-    const claimCode = String(asRecord(asArray(asRecord(claims).data)[0]).code || '')
+    const firstClaim = asRecord(asArray(asRecord(claims).data)[0])
+    const claimCode = String(firstClaim.code || firstClaim.claimCode || '')
     if (claimCode) {
       cfg.code = claimCode
       await step('claim')
@@ -354,13 +502,17 @@ export function useExternalServiceLab(props: ExternalServiceLabProps) {
       body:() => ({ jsonrpc:'2.0', id:3, method:'tools/call', params:{
         name:'knowledge_query', arguments:{
           knowledgeBaseId:cfg.knowledgeBaseId ?? 1, question:cfg.question, topK:cfg.topK, answerFormat:cfg.answerFormat,
+          ...(Number.isFinite(cfg.minScore) ? { minScore:cfg.minScore } : {}),
         },
       } }),
     },
     {
       key:'callSearch', label:'tools/call knowledge_search',
       body:() => ({ jsonrpc:'2.0', id:4, method:'tools/call', params:{
-        name:'knowledge_search', arguments:{ knowledgeBaseId:cfg.knowledgeBaseId ?? 1, query:cfg.question, topK:cfg.topK },
+        name:'knowledge_search', arguments:{
+          knowledgeBaseId:cfg.knowledgeBaseId ?? 1, query:cfg.question, topK:cfg.topK,
+          ...(Number.isFinite(cfg.minScore) ? { minScore:cfg.minScore } : {}),
+        },
       } }),
     },
     {
@@ -421,7 +573,18 @@ export function useExternalServiceLab(props: ExternalServiceLabProps) {
   interface Check { label:string; pass:boolean; detail:string }
   interface McpResult { durationMs:number; body:string; checks:Check[] }
   const mcpResult = ref<McpResult | null>(null)
-  const mcpTools = ref<{ name:string; description:string; required:string[] }[]>([])
+  const mcpTools = ref<{ name:string; description:string; required:string[]; optional:string[] }[]>([])
+
+  /**
+   * 工具的可选入参（inputSchema.properties 去掉 required）。
+   * 清单卡片只列必填的话，minScore / topK / answerFormat 这类可选参数在界面上根本看不见，
+   * 而"这个工具到底收不收 minScore"正是加了新参数后最该一眼看到的事。
+   */
+  function optionalArgsOf(schema:Record<string, unknown>) {
+    const props = asRecord(schema.properties)
+    const required = asArray(schema.required).map(String)
+    return Object.keys(props).filter(name => required.indexOf(name) < 0)
+  }
   const mcpSteps = ref<Check[]>([])
 
   function applyMcpTemplate() {
@@ -433,7 +596,7 @@ export function useExternalServiceLab(props: ExternalServiceLabProps) {
   async function rawMcp(payload:unknown):Promise<{ status:number; durationMs:number; text:string; json:unknown }> {
     const url = withAuth(`${prefix()}/mcp`)
     const started = performance.now()
-    const response = await fetch(url, {
+    const response = await fetchWithTimeout(url, {
       method:'POST', headers:authHeaders(), body:JSON.stringify(payload),
     })
     const text = await response.text()
@@ -481,12 +644,25 @@ export function useExternalServiceLab(props: ExternalServiceLabProps) {
 
   async function sendMcp() {
     mcpSending.value = true
+    const payload = safeJson(mcpBody.value) ?? {}
+    const method = String(asRecord(payload).method || '—')
+    const id = pushLog({
+      channel:'MCP', label:`MCP ${method}`, method:'POST', url:`${prefix()}/mcp`, status:0, durationMs:0,
+      verdict:'PENDING', note:'请求已发出，等待响应…', body:'',
+      curl:curlOf('POST', `${prefix()}/mcp`, mcpBody.value),
+    })
     try {
-      const payload = safeJson(mcpBody.value) ?? {}
       const call = await rawMcp(payload)
       mcpResult.value = {
-        durationMs:call.durationMs, body:call.text.slice(0, 32000), checks:judgeMcp(payload, call),
+        durationMs:call.durationMs, body:call.text, checks:judgeMcp(payload, call),
       }
+      const passed = mcpResult.value.checks.filter(item => item.pass).length
+      settleLog(id, {
+        status:call.status, durationMs:call.durationMs, url:withAuth(`${prefix()}/mcp`),
+        verdict:passed === mcpResult.value.checks.length ? 'PASS' : 'FAIL',
+        note:`HTTP ${call.status} · 协议校验 ${passed}/${mcpResult.value.checks.length} 通过`,
+        body:call.text,
+      })
       const result = asRecord(asRecord(call.json).result)
       if (Array.isArray(result.tools)) {
         mcpTools.value = result.tools.map(tool => {
@@ -496,13 +672,16 @@ export function useExternalServiceLab(props: ExternalServiceLabProps) {
             name:String(row.name || ''),
             description:String(row.description || ''),
             required:asArray(schema.required).map(String),
+            optional:optionalArgsOf(schema),
           }
         })
       } else {
         mcpTools.value = []
       }
     } catch (e) {
-      mcpResult.value = { durationMs:0, body:message(e), checks:[{ label:'请求可达', pass:false, detail:message(e) }] }
+      const text = callError(e)
+      mcpResult.value = { durationMs:0, body:text, checks:[{ label:'请求可达', pass:false, detail:text }] }
+      settleLog(id, { verdict:'ERROR', note:text, body:text })
     } finally {
       mcpSending.value = false
     }
@@ -511,6 +690,10 @@ export function useExternalServiceLab(props: ExternalServiceLabProps) {
   async function mcpHandshake() {
     handshaking.value = true
     mcpSteps.value = []
+    const id = pushLog({
+      channel:'MCP', label:'MCP 握手自检', method:'POST', url:withAuth(`${prefix()}/mcp`), status:0, durationMs:0,
+      verdict:'PENDING', note:'initialize → tools/list → tools/call', body:'', curl:'',
+    })
     try {
       const init = await rawMcp({ jsonrpc:'2.0', id:1, method:'initialize', params:{} })
       const initResult = asRecord(asRecord(init.json).result)
@@ -529,6 +712,7 @@ export function useExternalServiceLab(props: ExternalServiceLabProps) {
           name:String(row.name || ''),
           description:String(row.description || ''),
           required:asArray(asRecord(row.inputSchema).required).map(String),
+          optional:optionalArgsOf(asRecord(row.inputSchema)),
         }
       })
       mcpSteps.value.push({
@@ -540,7 +724,8 @@ export function useExternalServiceLab(props: ExternalServiceLabProps) {
       const call = await rawMcp({
         jsonrpc:'2.0', id:3, method:'tools/call', params:{
           name:'knowledge_query',
-          arguments:{ knowledgeBaseId:cfg.knowledgeBaseId ?? 1, question:cfg.question, topK:cfg.topK },
+          arguments:{ knowledgeBaseId:cfg.knowledgeBaseId ?? 1, question:cfg.question, topK:cfg.topK,
+            ...(Number.isFinite(cfg.minScore) ? { minScore:cfg.minScore } : {}) },
         },
       })
       const callResult = asRecord(asRecord(call.json).result)
@@ -552,10 +737,19 @@ export function useExternalServiceLab(props: ExternalServiceLabProps) {
         detail:failed ? String(asRecord(asRecord(call.json).error).message || '调用失败') : `queryId=${structured.queryId || '—'}`,
       })
       mcpResult.value = {
-        durationMs:call.durationMs, body:call.text.slice(0, 32000), checks:judgeMcp({ id:3, method:'tools/call' }, call),
+        durationMs:call.durationMs, body:call.text, checks:judgeMcp({ id:3, method:'tools/call' }, call),
       }
+      const passed = mcpSteps.value.filter(item => item.pass).length
+      settleLog(id, {
+        status:call.status, durationMs:call.durationMs,
+        verdict:passed === mcpSteps.value.length ? 'PASS' : 'FAIL',
+        note:`自检 ${passed}/${mcpSteps.value.length} 步通过：${mcpSteps.value.map(item => item.label).join(' → ')}`,
+        body:call.text,
+      })
     } catch (e) {
-      mcpSteps.value.push({ label:'握手', pass:false, detail:message(e) })
+      const text = callError(e)
+      mcpSteps.value.push({ label:'握手', pass:false, detail:text })
+      settleLog(id, { verdict:'ERROR', note:text, body:text })
     } finally {
       handshaking.value = false
     }
@@ -577,6 +771,10 @@ export function useExternalServiceLab(props: ExternalServiceLabProps) {
       params.set('question', cfg.question)
       params.set('topK', String(cfg.topK))
       params.set('answerFormat', cfg.answerFormat)
+      // content：stream 逐片推 delta；final 只推检索过程，答案在 done 里整体交付。
+      params.set('content', cfg.content)
+      // 阈值只在填了时带：不传即不过滤。
+      if (Number.isFinite(cfg.minScore)) params.set('minScore', String(cfg.minScore))
     }
     const path = sseKind.value === 'query' ? '/v1/external/stream/query' : '/v1/external/stream/events'
     return withAuth(`${prefix()}${path}?${params.toString()}`)
@@ -623,9 +821,16 @@ export function useExternalServiceLab(props: ExternalServiceLabProps) {
     const started = performance.now()
     let buffer = ''
     let first = true
+    // 流式订阅没有“响应完成”，记录要靠订阅开始/结束两个时刻撑起来。
+    const logId = pushLog({
+      channel:'SSE', label:`SSE ${sseKind.value === 'query' ? '/stream/query' : '/stream/events'}`,
+      method:'GET', url, status:0, durationMs:0,
+      verdict:'PENDING', note:'连接中，等待首个事件帧…', body:'', curl:curlOf('GET', url),
+    })
     try {
       const response = await fetch(url, { headers:authHeaders(), signal:sseController.signal })
       sseStats.status = response.status
+      settleLog(logId, { status:response.status, note:`HTTP ${response.status}，等待事件帧…` })
       if (!response.ok || !response.body) {
         const text = await response.text()
         sseStats.ended = `HTTP ${response.status}`
@@ -660,6 +865,16 @@ export function useExternalServiceLab(props: ExternalServiceLabProps) {
     } finally {
       sseStats.elapsedMs = Math.round(performance.now() - started)
       sseRunning.value = false
+      const names = sseEvents.value.map(event => event.name)
+      const stopped = sseStats.ended === 'aborted'
+      const complete = sseKind.value === 'events' || names.includes('done')
+      settleLog(logId, {
+        status:sseStats.status, durationMs:sseStats.elapsedMs,
+        verdict:sseStats.status === 200 && names.length && (complete || stopped) ? 'PASS' : 'FAIL',
+        note:`HTTP ${sseStats.status || '—'} · ${names.length} 帧（首帧 ${sseStats.firstByteMs} ms，共 ${sseStats.elapsedMs} ms）`
+          + (stopped ? ' · 已手动停止' : ` · ${sseStats.ended || '未结束'}`),
+        body:JSON.stringify(sseEvents.value.map(event => ({ seq:event.seq, name:event.name, at:event.at })), null, 2),
+      })
     }
   }
 
@@ -734,11 +949,20 @@ export function useExternalServiceLab(props: ExternalServiceLabProps) {
     busRunning.value = true
     busStatus.value = '连接中…'
     const query = new URLSearchParams(busParams()).toString()
+    const url = `${prefix()}/internal/platform/events/stream${query ? `?${query}` : ''}`
+    const started = performance.now()
+    let streamStatus = 0
+    const logId = pushLog({
+      channel:'BUS', label:'事件总线订阅 /internal/platform/events/stream', method:'GET', url, status:0, durationMs:0,
+      verdict:'PENDING', note:'连接中，等待事件推送…', body:'', curl:'',
+    })
     try {
-      const response = await fetch(`${prefix()}/internal/platform/events/stream${query ? `?${query}` : ''}`, {
+      const response = await fetch(url, {
         headers:{ ...sessionHeaders(), Accept:'text/event-stream' },
         signal:controller.signal,
       })
+      streamStatus = response.status
+      settleLog(logId, { status:response.status, note:`HTTP ${response.status}，等待事件推送…` })
       if (!response.ok || !response.body) {
         busStatus.value = `HTTP ${response.status}：${await response.text()}`
         busRunning.value = false
@@ -764,6 +988,14 @@ export function useExternalServiceLab(props: ExternalServiceLabProps) {
         busController = null
         busRunning.value = false
       }
+      settleLog(logId, {
+        status:streamStatus, durationMs:Math.round(performance.now() - started),
+        verdict:streamStatus === 200 ? 'PASS' : 'FAIL',
+        note:`HTTP ${streamStatus || '—'} · ${busEvents.value.length} 个事件 · ${busStatus.value}`,
+        body:JSON.stringify(busEvents.value.slice(-40).map(event => ({
+          type:event.type, time:event.time, target:event.targetCode, summary:event.summary,
+        })), null, 2),
+      })
     }
   }
 
@@ -820,13 +1052,25 @@ export function useExternalServiceLab(props: ExternalServiceLabProps) {
   }
 
   async function loadBusHistory() {
+    const started = performance.now()
+    const id = pushLog({
+      channel:'BUS', label:'事件历史 GET /internal/platform/events', method:'GET',
+      url:`${prefix()}/internal/platform/events`, status:0, durationMs:0,
+      verdict:'PENDING', note:'加载中…', body:'', curl:'',
+    })
     try {
       const payload = await busRequest('/internal/platform/events', { ...busParams(), limit:'50' })
       const items = asArray(payload.items).map(value => asRecord(value)).reverse()
       items.forEach(item => pushBusEvent(item))
       busStatus.value = `历史加载完成（${items.length} 条）`
+      settleLog(id, {
+        status:200, durationMs:Math.round(performance.now() - started), verdict:'PASS',
+        note:`历史 ${items.length} 条`, body:JSON.stringify(payload),
+      })
     } catch (e) {
-      ElMessage.error(`事件历史加载失败：${message(e)}`)
+      const text = callError(e)
+      settleLog(id, { verdict:'ERROR', note:text, body:text })
+      ElMessage.error(`事件历史加载失败：${text}`)
     }
   }
 
@@ -840,15 +1084,20 @@ export function useExternalServiceLab(props: ExternalServiceLabProps) {
     if (!sseEvents.value.length) return null
     const names = sseEvents.value.map(event => event.name)
     if (sseKind.value === 'query') {
+      // 阶段事件带上的是引擎自己的 key（rewrite / route / recall …），且每个阶段会先报
+      // running 再报 done——只有 done 才是“这一步真跑完了”。
       const stages = sseEvents.value
         .filter(event => event.name === 'stage')
-        .map(event => String(asRecord(safeJson(event.data)).stage || ''))
-      const expected = ['REWRITE', 'RECALL', 'FUSION', 'RERANK', 'ANSWER']
+        .map(event => asRecord(safeJson(event.data)))
+        .filter(row => row.status === 'done')
+        .map(row => String(row.key || ''))
+      const expected = ['rewrite', 'route', 'recall', 'acl_filter', 'fusion', 'rerank', 'context', 'llm', 'citation']
+      const missing = expected.filter(key => !stages.includes(key))
       const items:Check[] = [
         {
-          label:'stage 顺序 REWRITE→ANSWER',
-          pass:JSON.stringify(stages) === JSON.stringify(expected),
-          detail:stages.join('→') || '未收到',
+          label:'九个阶段全部完成',
+          pass:!missing.length,
+          detail:missing.length ? `缺 ${missing.join(',')}` : stages.join('→') || '未收到',
         },
         { label:'delta 增量推送', pass:names.includes('delta'), detail:`${names.filter(n => n === 'delta').length} 片` },
         { label:'citation 引用', pass:names.includes('citation'), detail:names.includes('citation') ? '已推送' : '未收到' },
@@ -909,6 +1158,7 @@ export function useExternalServiceLab(props: ExternalServiceLabProps) {
     logs,
     logBodyOpen,
     REST_ENDPOINTS,
+    REST_PARAM_DOCS,
     restKey,
     restBody,
     sending,

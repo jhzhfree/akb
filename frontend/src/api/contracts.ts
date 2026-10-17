@@ -53,3 +53,23 @@ export interface AdjudicationRunResult {
   pendingReview?:number
   [key:string]:unknown
 }
+
+/** 知识库重新生成的结果：逐文档的成败与本次产出的卡片/断言数。 */
+export interface RegenerationResult {
+  knowledgeBaseId?:number
+  documentCount?:number
+  processed?:number
+  skipped?:number
+  failed?:number
+  cardCount?:number
+  claimCount?:number
+  documents?:Array<{
+    documentId?:number
+    title?:string
+    status?:string
+    message?:string
+    cardCount?:number
+    claimCount?:number
+  }>
+  [key:string]:unknown
+}

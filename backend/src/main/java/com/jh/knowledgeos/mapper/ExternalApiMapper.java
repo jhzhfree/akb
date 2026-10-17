@@ -2,6 +2,7 @@ package com.jh.knowledgeos.mapper;
 
 import com.jh.knowledgeos.domain.ApiCallAudit;
 import com.jh.knowledgeos.domain.ApiKey;
+import com.jh.knowledgeos.domain.EmbedTokenRevocation;
 import org.apache.ibatis.annotations.Param;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -59,4 +60,28 @@ public interface ExternalApiMapper {
     ApiCallAudit findApiCallAuditByTraceId(@Param("traceId") String traceId);
 
     int countActiveApiKeys();
+
+    /* ---- 嵌入令牌生命周期：吊销名单与按令牌的调用轨迹 ---- */
+
+    /**
+     * Revocation row of one token id; null means the token was never revoked.
+     *
+     * <p>Read on every call rather than cached: a revoke is an emergency action, and a cache would
+     * quietly keep accepting a token somebody just killed.</p>
+     */
+    EmbedTokenRevocation findEmbedTokenRevocation(@Param("jti") String jti);
+
+    int insertEmbedTokenRevocation(EmbedTokenRevocation row);
+
+    int deleteEmbedTokenRevocation(@Param("jti") String jti);
+
+    List<EmbedTokenRevocation> listEmbedTokenRevocations(@Param("limit") int limit);
+
+    List<ApiCallAudit> listTokenCallAudits(@Param("keyId") Long keyId, @Param("jti") String jti, @Param("limit") int limit);
+
+    /**
+     * Tokens seen recently, grouped: the console lists them so an operator can revoke one without
+     * first digging an id out of a log line.
+     */
+    List<Map<String, Object>> recentTokenSummaries(@Param("since") LocalDateTime since, @Param("limit") int limit);
 }

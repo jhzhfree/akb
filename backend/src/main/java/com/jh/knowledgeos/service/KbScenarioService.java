@@ -99,6 +99,16 @@ public class KbScenarioService {
         return payload;
     }
 
+    /**
+     * Scenario code of a library: the template it tracks. Generation needs it because the
+     * extractor reads clause rows and instructs the model differently per scenario, and
+     * reading only the code avoids parsing the whole stored profile once per document.
+     */
+    public String scenario(Long kb) {
+        Map<String, Object> stored = readRow(kb);
+        return stored == null ? KbScenarioTemplates.DEFAULT_SCENARIO : KbScenarioTemplates.normalizeCode(text(stored.get("scenario")));
+    }
+
     /** Effective profile of a knowledge base plus whether it was ever edited. */
     public Map<String, Object> policy(Long kb) {
         Map<String, Object> stored = readRow(kb);

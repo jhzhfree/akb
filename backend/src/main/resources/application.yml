@@ -92,6 +92,14 @@ knowledge:
     answer-chunk-chars: ${EXTERNAL_ANSWER_CHUNK_CHARS:40}
     answer-chunk-delay-millis: ${EXTERNAL_ANSWER_CHUNK_DELAY_MILLIS:40}
     default-rate-limit-per-minute: ${EXTERNAL_DEFAULT_RATE_LIMIT:60}
+    # 允许嵌入聊天组件的站点来源，逗号分隔；为空表示不校验来源（仅建议内网使用）
+    allowed-origins: ${EXTERNAL_ALLOWED_ORIGINS:}
+    # 嵌入组件访问令牌有效期（小时）与签名密钥；密钥为空时启动时自动生成
+    embed-token-hours: ${EXTERNAL_EMBED_TOKEN_HOURS:12}
+    # 调用方指定有效期时的上限（小时，0 表示不限制）；是否允许签发长期有效令牌
+    embed-token-max-hours: ${EXTERNAL_EMBED_TOKEN_MAX_HOURS:8760}
+    embed-token-permanent: ${EXTERNAL_EMBED_TOKEN_PERMANENT:true}
+    embed-token-secret: ${EXTERNAL_EMBED_TOKEN_SECRET:}
 logging:
   level:
     root: ${LOG_LEVEL:INFO}

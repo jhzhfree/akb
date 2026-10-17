@@ -36,7 +36,7 @@
       </div>
     </PanelState>
     <template #footer>
-      <button class="kb-btn-outline w-full" @click="$emit('navigate','create.jobs')">查看全部任务</button>
+      <button class="kb-btn-outline w-full" @click="$emit('navigate','create.import')">进入文档中心</button>
     </template>
   </el-drawer>
 </template>

@@ -6,7 +6,7 @@ import type {
   SourcePreview,
   AnswerQualification, AnswerQualificationSummary,
 } from '../types'
-import type { AnswerFormat, RetrievalRequest, RetrievalResult, AnswerResult, DocumentRetryResult, AdjudicationRunResult } from './contracts'
+import type { AnswerFormat, RetrievalRequest, RetrievalResult, AnswerResult, DocumentRetryResult, AdjudicationRunResult, RegenerationResult } from './contracts'
 import type { AssetPage, KbScenarioProfile, KbScenarioSettings } from '../types/knowledge'
 
 const LONG_TIMEOUT_MS = 180000
@@ -174,6 +174,26 @@ export const queryKnowledge = (
 
 export const runAdjudication = (kb:number):Promise<ApiResponse<AdjudicationRunResult>> =>
   axios.post(`/api/knowledge/adjudication/${kb}/run`, {}, { timeout:LONG_TIMEOUT_MS })
+
+/**
+ * 重新生成整个知识库的卡片与断言。
+ * 抽取原本只在文档导入时发生一次，抽取逻辑变更后旧产物不会被自动重算，
+ * 这里按库重跑一次，用已入库的正文重新抽取，不需要重新上传文件。
+ */
+export const regenerateKnowledge = (
+  kb:number, purgeUnpublished=false,
+):Promise<ApiResponse<RegenerationResult>> =>
+  axios.post(`/api/knowledge/${kb}/regenerate`, { purgeUnpublished }, { timeout:LONG_TIMEOUT_MS })
+/**
+ * 提交整库重新生成任务，只拿任务码，不等它跑完。
+ * 重跑要按文档逐个调用模型，耗时以分钟计：同步等待期间界面上只有一个忙碌按钮，
+ * 既看不到进度，也判断不出是卡住了还是卡在哪一篇。提交后由外壳轮询任务中心，
+ * 任务中心里同样能看到这条任务，两处进度是同一个来源。
+ */
+export const startRegeneration = (
+  kb:number, purgeUnpublished=false,
+):Promise<ApiResponse<{taskCode:string; documentCount:number; status:string}>> =>
+  axios.post(`/api/knowledge/${kb}/regenerate/start`, { purgeUnpublished })
 
 /** 人工裁决：审核人缺省由后端取登录态，备注必须能由审核人填写（设计 §4.4）。 */
 export const reviewKnowledge = (

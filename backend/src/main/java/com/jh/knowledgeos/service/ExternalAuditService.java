@@ -80,10 +80,25 @@ public class ExternalAuditService {
      */
     public void record(ApiKey key, String channel, String method, Long knowledgeBaseId, int statusCode, long durationMillis, String message, Object
         requestParams, Object responseData) {
+        record(key, channel, method, knowledgeBaseId, statusCode, durationMillis, message, requestParams, responseData, null);
+    }
+
+    /**
+     * Same as above, plus the embed token the call was made with.
+     *
+     * <p>An audit row already named the key; naming the token and the site as well is what makes a
+     * bad call actionable — otherwise "some page using key X" is all an operator has, and revoke
+     * means taking down every page minted from that key. The token id is not a secret: it only
+     * becomes useful to an attacker together with the signed token itself.</p>
+     */
+    public void record(ApiKey key, String channel, String method, Long knowledgeBaseId, int statusCode, long durationMillis, String message, Object
+        requestParams, Object responseData, EmbedTokenService.EmbedToken embedToken) {
         ApiCallAudit audit = new ApiCallAudit();
         audit.setKeyId(key == null ? null : key.getId());
         audit.setKeyCode(key == null ? null : key.getKeyCode());
         audit.setCallerName(callerName(key));
+        audit.setTokenJti(embedToken == null ? null : embedToken.getJti());
+        audit.setOrigin(embedToken == null ? null : embedToken.getOrigin());
         audit.setChannel(channel);
         audit.setMethod(method);
         audit.setKnowledgeBaseId(knowledgeBaseId);

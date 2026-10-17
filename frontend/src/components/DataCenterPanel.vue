@@ -2,14 +2,14 @@
 <section class="kb-page">
 <div class="kb-section-head">
 <div>
-<div class="kb-eyebrow">{{focusEyebrow}}</div>
-<h2 class="kb-title mt-1">{{focusTitle}}</h2>
-<p class="kb-muted mt-1">{{focusHint}}</p>
+<div class="kb-eyebrow">DOCUMENT CENTER</div>
+<h2 class="kb-title mt-1">文档中心</h2>
+<p class="kb-muted mt-1">文档状态机：解析失败与索引失效可重跑，Chunk 与 revision 全程可追溯。</p>
 </div>
 </div>
 
-<!-- 文档导入与「生成概览」共用 DocumentIngestPanel：拖入资料 + 已解析文档是同一套结构，
-     三个入口（数据源 / 文档 / 解析任务）只换标题文案，区块行为两处完全一致。 -->
+<!-- 与「生成概览」共用 DocumentIngestPanel：拖入资料 + 已解析文档是同一套结构，
+     同一条摄入链路只保留一份实现，本页只负责页面外壳（标题与说明）。 -->
 <DocumentIngestPanel
   :knowledge-base-id="knowledgeBaseId"
   :authority="authority" :permission-tags="permissionTags"
@@ -31,15 +31,12 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
 import type {
   BatchIngestStatus, IngestionRun, IngestionRunDetail, KnowledgeDocument, SourcePreview,
 } from '../types'
 import DocumentIngestPanel from './DocumentIngestPanel.vue'
 
-const props = defineProps<{
-  /** IA 入口聚焦：文档导入 / 生成任务共用同一面板，只换标题与说明（连接器已独立成面板）。 */
-  focus?:'documents'|'ingestion'
+defineProps<{
   knowledgeBaseId:number
   authority:number
   permissionTags:string
@@ -76,15 +73,4 @@ const emit = defineEmits<{
   reloaded:[]
 }>()
 
-/** 两个入口共用同一区块，只有标题文案不同：聚焦不再重排区块。 */
-const FOCUS_TEXT:Record<string,{eyebrow:string;title:string;hint:string}> = {
-  documents:{eyebrow:'DOCUMENT CENTER',title:'文档中心',
-    hint:'文档状态机：解析失败与索引失效可重跑，Chunk 与 revision 全程可追溯。'},
-  ingestion:{eyebrow:'PARSING TASKS',title:'解析任务',
-    hint:'Source → Parse → Persist → Extract 的运行日志与实时阶段跟踪，失败可定位到具体阶段。'},
-}
-const focusKey = computed(()=>props.focus||'documents')
-const focusEyebrow = computed(()=>FOCUS_TEXT[focusKey.value]?.eyebrow||FOCUS_TEXT.documents.eyebrow)
-const focusTitle = computed(()=>FOCUS_TEXT[focusKey.value]?.title||FOCUS_TEXT.documents.title)
-const focusHint = computed(()=>FOCUS_TEXT[focusKey.value]?.hint||FOCUS_TEXT.documents.hint)
 </script>

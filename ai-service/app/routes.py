@@ -1,11 +1,14 @@
 """HTTP route layer for parsing, extraction, indexing, retrieval, adjudication, graph, and schema operations."""
 
 import asyncio
+import json
+import logging
 import shutil
 import uuid
 from typing import Any
 
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
+from fastapi.responses import StreamingResponse
 
 from app.core import chunk_policy
 from app.core.config import UPLOAD_DIR, settings
@@ -84,7 +87,7 @@ async def inspect_okf_bundle(file: UploadFile = File(...)):
 @router.post("/ai/extract")
 async def extract(r: ExtractRequest):
     """Extract structured knowledge candidates from normalized document evidence."""
-    return await extractor.extract(r.text, r.chunks, r.units, r.knowledgeBaseId)
+    return await extractor.extract(r.text, r.chunks, r.units, r.knowledgeBaseId, r.scenario)
 
 
 @router.post("/ai/standard/index")
@@ -282,14 +285,74 @@ async def retrieval_capabilities():
 async def query(r: QueryRequest):
     """Execute query routing, hybrid retrieval, reranking, context assembly, and answer generation."""
     return await engine.query(r.queryId or "", r.knowledgeBaseId, r.query, r.topK, r.permissionTags,
-                              answer_format=r.answerFormat, policy_override=r.policyOverride)
+                              answer_format=r.answerFormat, policy_override=r.policyOverride,
+                              min_score=r.minScore, include_recall_content=r.includeRecallContent)
+
+
+@router.post("/ai/query/stream")
+async def query_stream(r: QueryRequest):
+    """The same pipeline as ``/ai/query``, pushed as server-sent events as it runs.
+
+    The engine is unchanged: it is handed a `progress` callback and awaits it after every stage
+    and for every answer chunk, so the events below are the real pipeline being observed rather
+    than a replay of a finished answer. One task fills a queue, the response drains it, and a
+    sentinel marks the end — which also lets the task be cancelled if the client disconnects.
+    """
+    queue: asyncio.Queue = asyncio.Queue()
+
+    async def progress(event):
+        await queue.put(event)
+
+    async def runner():
+        try:
+            result = await engine.query(
+                r.queryId or "", r.knowledgeBaseId, r.query, r.topK, r.permissionTags,
+                answer_format=r.answerFormat, policy_override=r.policyOverride, progress=progress,
+                min_score=r.minScore, include_recall_content=r.includeRecallContent,
+            )
+            await queue.put({"type": "result", "result": result})
+        except Exception as exc:  # noqa: BLE001 - the failure has to reach the client as an event
+            logging.getLogger(__name__).exception("query stream failed")
+            await queue.put({"type": "error", "message": str(exc)})
+        finally:
+            await queue.put(None)
+
+    task = asyncio.ensure_future(runner())
+
+    async def event_gen():
+        try:
+            # A first frame is written immediately so a client (and any proxy in front of it)
+            # knows the stream is open before the first stage has finished.
+            yield "event: open\ndata: %s\n\n" % json.dumps({"knowledgeBaseId": r.knowledgeBaseId}, ensure_ascii=False)
+            while True:
+                event = await queue.get()
+                if event is None:
+                    break
+                name = event.get("type", "message")
+                if name == "stage":
+                    payload = event.get("stage")
+                elif name == "delta":
+                    payload = event.get("text")
+                else:
+                    payload = {k: v for k, v in event.items() if k != "type"}
+                yield "event: %s\ndata: %s\n\n" % (name, json.dumps(payload, ensure_ascii=False))
+        finally:
+            if not task.done():
+                task.cancel()
+
+    return StreamingResponse(
+        event_gen(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
 
 
 @router.post("/ai/retrieve")
 async def retrieve(r: QueryRequest):
     """Run recall, fusion and reranking without generation: the grading path for evaluation runs."""
     return await engine.query(r.queryId or "", r.knowledgeBaseId, r.query, r.topK, r.permissionTags, generate=False,
-                              policy_override=r.policyOverride)
+                              policy_override=r.policyOverride, min_score=r.minScore,
+                              include_recall_content=r.includeRecallContent)
 
 
 @router.post("/ai/adjudicate")

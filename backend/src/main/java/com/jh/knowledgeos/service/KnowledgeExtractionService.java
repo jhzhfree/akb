@@ -104,8 +104,13 @@ public class KnowledgeExtractionService {
      */
     @SuppressWarnings("unchecked")
     public Map<String, Object> extract(Map<String, Object> request) {
-        Map<String, Object> response = aiClient.post(AiApiPaths.EXTRACT, request);
         Long knowledgeBaseId = Long.valueOf(String.valueOf(request.get("knowledgeBaseId")));
+        // The scenario travels with the extraction request because generation is part of the
+        // template too: which vocabulary names the subject of a parsed row and what the model
+        // is told to look for differ between a runbook and a policy handbook. Without it the
+        // template only tunes chunking and recall, and every library is generated the same way.
+        request.put("scenario", scenarios.scenario(knowledgeBaseId));
+        Map<String, Object> response = aiClient.post(AiApiPaths.EXTRACT, request);
         Long documentId = request.get("documentId") == null ? null : Long.valueOf(String.valueOf(request.get("documentId")));
         String permissionTags = normalizePermissionTags(request.get("permissionTags"));
         // Source authority is read once and stamped onto every extracted object: retrieval uses it
@@ -253,11 +258,15 @@ public class KnowledgeExtractionService {
             card.setSummary(stringValue(source.get("summary")));
             card.setContent(stringValue(source.get("content")));
             card.setConfidence(doubleValue(source.get("confidence"), 0.0D));
-            card.setStatus(KnowledgeStatus.DRAFT.name());
+            boolean deterministic = isDeterministic(source);
+            // See persistClaims: a card assembled from the clause rows a unit already contains
+            // adds no claim of its own, so it does not need to wait for review.
+            card.setStatus(deterministic ? KnowledgeStatus.APPROVED.name() : KnowledgeStatus.DRAFT.name());
             card.setPermissionTags(permissionTags);
             card.setVersion(1);
             cardClaimMapper.insertCard(card);
-            governanceMapper.snapshotKnowledgeObject(knowledgeBaseId, "CARD", card.getKnowledgeCode(), "CREATED", "AI_EXTRACTION");
+            governanceMapper.snapshotKnowledgeObject(knowledgeBaseId, "CARD", card.getKnowledgeCode(), "CREATED",
+                deterministic ? "DETERMINISTIC_PARSE" : "AI_EXTRACTION");
             if (documentId != null) {
                 cardClaimMapper.linkCardEvidenceFromDocument(card.getKnowledgeCode(), documentId);
             }
@@ -302,10 +311,18 @@ public class KnowledgeExtractionService {
             claim.setValidFrom(dateValue(source.get("valid_from")));
             claim.setValidTo(dateValue(source.get("valid_to")));
             claim.setVersion(source.get("version") == null ? 1 : integerValue(source.get("version"), 1));
-            claim.setStatus(KnowledgeStatus.UNCERTAIN.name());
+            boolean deterministic = isDeterministic(source);
+            // A clause read straight out of the source ("额度: 司龄满 1 年 5 天") asserts nothing
+            // the source does not already say, so it is as trustworthy as the chunk it is
+            // anchored to — and that chunk is retrievable today. Holding it in UNCERTAIN until
+            // a human approves it leaves the structured channels permanently empty, which is
+            // why an exact question such as "年假多少天" never reaches a claim. Model-inferred
+            // knowledge still enters the governance queue, as before.
+            claim.setStatus(deterministic ? KnowledgeStatus.APPROVED.name() : KnowledgeStatus.UNCERTAIN.name());
             claim.setPermissionTags(permissionTags);
             cardClaimMapper.insertClaim(claim);
-            governanceMapper.snapshotKnowledgeObject(knowledgeBaseId, "CLAIM", claim.getClaimCode(), "CREATED", "AI_EXTRACTION");
+            governanceMapper.snapshotKnowledgeObject(knowledgeBaseId, "CLAIM", claim.getClaimCode(), "CREATED",
+                deterministic ? "DETERMINISTIC_PARSE" : "AI_EXTRACTION");
             if (documentId != null) {
                 cardClaimMapper.linkClaimEvidenceFromDocument(claim.getClaimCode(), documentId);
             }
@@ -633,6 +650,17 @@ public class KnowledgeExtractionService {
             }
         });
         return conflictsObject;
+    }
+
+    /**
+     * Whether an extraction candidate was read out of the source rather than inferred.
+     *
+     * <p>The extractor marks candidates parsed from the text itself (institutional clause
+     * rows such as {@code 额度: 司龄满 1 年 5 天}) so they can be published without review,
+     * while anything a model produced or the rule fallback guessed still enters governance.</p>
+     */
+    private boolean isDeterministic(Map<String, Object> source) {
+        return "DETERMINISTIC".equalsIgnoreCase(stringValue(source.get("derivation")));
     }
 
     private String valueOrId(Object value, String prefix) {

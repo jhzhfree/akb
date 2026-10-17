@@ -1,0 +1,152 @@
+/* ============================================================================
+   答案排版：全站「检索结果长什么样」的唯一基准。
+
+   适用范围：控制台智能问答（QueryPanel）以及嵌入组件 public/embed/kos-chat.js。
+   组件那份 CSS 写死在 kos-chat.js 的 buildStyles() 里（它不参与构建，无法 import），
+   因此本文件与组件内 .md-* 规则必须同值 —— 由 scripts/check-answer-style.mjs 校验，
+   改任一边而忘了另一边，校验会失败。
+
+   变量只消费 theme.css 的主题 token（--ink-* / --bg-* / --line-* / --accent-*），
+   不在组件里写死任何浅色，这样深色主题下也是同一套层次。
+   ============================================================================ */
+
+.md-answer {
+  padding: 0.25rem 1rem 0.25rem 0;
+  font-size: 14px;
+  line-height: 1.8;
+  color: var(--ink-1);
+  word-break: break-word;
+}
+.md-answer p { margin: 0.5rem 0; }
+.md-answer p:first-child { margin-top: 0; }
+.md-answer p:last-child { margin-bottom: 0; }
+
+.md-answer h1, .md-answer h2, .md-answer h3,
+.md-answer h4, .md-answer h5, .md-answer h6 {
+  margin: 0.9rem 0 0.4rem;
+  font-weight: 600;
+  color: var(--ink-1);
+}
+.md-answer h1, .md-answer h2 { font-size: 15px; }
+.md-answer h3 { font-size: 14.5px; }
+.md-answer h4 { font-size: 14px; }
+.md-answer h5, .md-answer h6 { font-size: 13.5px; }
+.md-answer h1:first-child, .md-answer h2:first-child, .md-answer h3:first-child,
+.md-answer h4:first-child, .md-answer h5:first-child, .md-answer h6:first-child {
+  margin-top: 0.2rem;
+}
+
+.md-answer b, .md-answer strong { font-weight: 600; }
+.md-answer em { font-style: italic; }
+.md-answer del { opacity: 0.65; }
+
+.md-answer ul, .md-answer ol { margin: 0.4rem 0; padding-left: 1.4rem; }
+.md-answer li { margin: 0.2rem 0; }
+
+.md-answer blockquote {
+  margin: 0.5rem 0;
+  border-left: 3px solid var(--line-soft);
+  padding: 0.1rem 0 0.1rem 0.75rem;
+  color: var(--ink-2);
+}
+
+.md-answer code, .md-answer .md-code {
+  border-radius: 4px;
+  background: var(--bg-sub);
+  padding: 0.1rem 0.3rem;
+  font-family: ui-monospace, monospace;
+  font-size: 12px;
+}
+.md-answer .md-pre {
+  margin: 0.5rem 0;
+  border-radius: 8px;
+  background: var(--bg-sunken);
+  color: var(--ink-2);
+  padding: 0.75rem 1rem;
+  overflow: auto;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+/* 围栏代码块：外壳 + 语言标签顶栏；嵌入组件在同一位置多一个「复制」按钮 */
+.md-answer .md-codeblock {
+  margin: 0.5rem 0;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  background: var(--bg-sunken);
+}
+.md-answer .md-codebar {
+  display: flex;
+  align-items: center;
+  padding: 4px 10px;
+  background: var(--bg-sub);
+  border-bottom: 1px solid var(--line);
+}
+.md-answer .md-codeblock .md-codelang {
+  font-size: 11px;
+  color: var(--ink-3);
+  font-family: ui-monospace, monospace;
+}
+.md-answer .md-codeblock .md-pre {
+  margin: 0;
+  border-radius: 0;
+  padding: 0.75rem 1rem;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.md-answer .md-table-wrap { overflow-x: auto; margin: 0.5rem 0; }
+.md-answer table { border-collapse: collapse; font-size: 13px; width: 100%; margin: 0.5rem 0; }
+.md-answer th, .md-answer td { border: 1px solid var(--line); padding: 5px 9px; text-align: left; }
+.md-answer th { background: var(--bg-sub); font-weight: 600; }
+
+.md-answer .md-task { list-style: none; position: relative; padding-left: 1.4rem; margin-left: -1.4rem; }
+.md-answer .md-check {
+  display: inline-block; width: 12px; height: 12px; line-height: 11px; text-align: center;
+  border: 1.5px solid var(--ink-3); border-radius: 3px; margin-right: 4px;
+  color: var(--ok); font-size: 10px; font-weight: 700; vertical-align: -1px;
+}
+.md-answer .md-check.md-checked { background: var(--ok); border-color: var(--ok); color: #fff; }
+
+.md-answer img.md-img { max-width: 100%; height: auto; border-radius: 6px; margin: 0.4rem 0; }
+.md-answer a { color: var(--accent-text); }
+.md-answer a:hover { text-decoration: underline; }
+.md-answer hr { border: none; border-top: 1px solid var(--line-soft); margin: 0.8rem 0; }
+
+.md-answer .md-cite {
+  margin-left: 2px;
+  color: var(--accent-text);
+  font-weight: 600;
+  cursor: help;
+  padding: 0 1px;
+  border-radius: 3px;
+}
+.md-answer .md-cite:hover { background: var(--info-bg); }
+
+/* 服务端 html 格式自带的引用原文小节（由服务端渲染并转义后插入） */
+.md-answer .answer-citations { margin-top: 1rem; border-top: 1px solid var(--line-soft); padding-top: 0.75rem; }
+.md-answer .answer-citations h3 { margin: 0 0 0.4rem; font-size: 12px; font-weight: 600; color: var(--ink-2); }
+.md-answer .answer-citations ol { margin: 0; padding-left: 1.2rem; list-style: decimal; }
+.md-answer .answer-citation { margin: 0.35rem 0; font-size: 13px; }
+.md-answer .answer-citation-head { display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: baseline; }
+.md-answer .answer-citation-source { margin-left: auto; font-size: 11px; color: var(--ink-3); }
+.md-answer .answer-citation-excerpt {
+  margin: 0.2rem 0 0.5rem;
+  border-left: 3px solid var(--line-soft);
+  padding: 0.1rem 0 0.1rem 0.75rem;
+  color: var(--ink-2);
+  font-size: 12.5px;
+  line-height: 1.7;
+}
+
+/* 纯文本格式：保留换行与空行，不套 Markdown 排版（嵌入组件里同一个类名 .md-text） */
+.md-text {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.8;
+  color: var(--ink-1);
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: inherit;
+}

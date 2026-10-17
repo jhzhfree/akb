@@ -41,7 +41,7 @@ export interface NavLeaf {
   /**
    * 仅管理员视图可见的入口（角色维度，区别于权限码）：
    * 系统管理员与知识管理员看到模块内完整 Tab，其余角色只看到精简版。
-   * 例如知识生成的「生成概览 / 连接器 / 生成任务」属于生产流水线运维入口，
+   * 例如知识生成的「生成概览 / 连接器 / 外部知识」属于生产流水线运维入口，
    * 普通成员只需要「文档导入 / 知识裁决 / 知识衍生」。
    */
   adminOnly?: boolean
@@ -101,21 +101,29 @@ export const NAV_SECTIONS: NavSection[] = [
   },
   {
     key: 'create', label: '知识生成', icon: 'sparkles', group: 'knowledge', scoped: true,
-    desc: '文档、连接器、生成任务、裁决与衍生集中在一个知识生成工作区',
+    desc: '文档、连接器、裁决与衍生集中在一个知识生成工作区',
     /**
      * 知识生成按角色分两套视图（Tab 顺序对管理员保持不变）：
-     *   管理员：生成概览 / 文档导入 / 连接器 / 生成任务 / 知识裁决 / 知识衍生
+     *   管理员：生成概览 / 生成配置 / 文档导入 / 连接器 / 外部知识 / 知识裁决 / 知识衍生
      *   普通成员：文档导入（默认进入）/ 知识裁决 / 知识衍生
-     * 概览、连接器与生成任务属于生产流水线的运维入口，对普通成员隐藏；
+     * 概览、连接器与外部知识属于生产流水线的运维入口，对普通成员隐藏；
      * 过滤后剩下的第一个可见 Tab 正是「文档导入」，即普通成员的默认落点。
+     * 「生成任务」不再单列：它与「文档导入」渲染的是同一份区块（拖入资料 + 文档列表 +
+     * 运行日志抽屉），重复入口只会让人以为存在另一套任务视角，故合并进「文档导入」。
      */
     tabs: [
       { key: 'create.overview', label: '生成概览', icon: 'sparkles', adminOnly: true, permission: PERM.GENERATE_IMPORT },
+      /**
+       * 生成配置：场景模板 + 切片与抽取开关。
+       * 与「概览 / 连接器」不同，它管的是本库怎么产出知识，而不是整条流水线的运维，
+       * 所以只要求与「文档导入」同一级权限：能把资料接进来的人就该能决定它怎么被切分与抽取。
+       * 建库弹窗里仍可一次填完，这里解决的是「库已经建好、文档已入库，还想再调」的场景。
+       */
+      { key: 'create.generation', label: '生成配置', icon: 'sliders', permission: PERM.GENERATE_IMPORT },
       { key: 'create.import', label: '文档导入', icon: 'filePlus', focus: 'documents', permission: PERM.GENERATE_IMPORT },
       { key: 'create.connector', label: '连接器', icon: 'link', adminOnly: true, focus: 'sources', permission: PERM.GENERATE_CONNECTOR },
       /** 连接器的知识目录：按外部系统的类型与属性浏览同步下来的条目。 */
       { key: 'create.connectorCatalog', label: '外部知识', icon: 'layers', adminOnly: true, permission: PERM.GENERATE_CONNECTOR },
-      { key: 'create.jobs', label: '生成任务', icon: 'clock', adminOnly: true, focus: 'ingestion', permission: PERM.GENERATE_IMPORT },
       { key: 'create.judgment', label: '知识裁决', icon: 'scale', badge: 'openConflict', focus: 'judgment', permission: PERM.GENERATE_JUDGE },
       { key: 'create.derive', label: '知识衍生', icon: 'branch', permission: PERM.GENERATE_DERIVE },
     ],
@@ -152,6 +160,7 @@ export const NAV_SECTIONS: NavSection[] = [
       { key: 'integration.mcp', label: 'MCP', icon: 'blocks', adminOnly: true, permission: PERM.INTEGRATION_VIEW },
       { key: 'integration.sse', label: 'SSE', icon: 'broadcast', adminOnly: true, permission: PERM.INTEGRATION_VIEW },
       { key: 'integration.credentials', label: '凭证', icon: 'key', adminOnly: true, permission: PERM.INTEGRATION_VIEW },
+      { key: 'integration.embed', label: '嵌入组件', icon: 'code', adminOnly: true, permission: PERM.INTEGRATION_VIEW },
       { key: 'integration.logs', label: '调用日志', icon: 'doc', adminOnly: true, permission: PERM.INTEGRATION_VIEW },
     ],
   },
@@ -244,7 +253,8 @@ const LEGACY_TAB_ALIAS: Record<string, string> = {
   review: 'create.judgment',
   graph: 'search.graph',
   query: 'search.query',
-  lifecycle: 'create.jobs',
+  // 生成任务已合并进文档导入（同一份区块），旧书签落到文档中心。
+  lifecycle: 'create.import',
   ops: 'system.index',
   acl: 'system.acl',
   queryPolicy: 'search.profile',
@@ -257,11 +267,11 @@ const LEGACY_TAB_ALIAS: Record<string, string> = {
   'space.sources': 'create.connector',
   'space.documents': 'create.import',
   'space.tags': 'create.overview',
-  'production.parsing': 'create.jobs',
+  'production.parsing': 'create.import',
   'production.cleaning': 'create.overview',
   'production.extraction': 'create.overview',
   'production.derivation': 'create.derive',
-  'production.pipeline': 'create.jobs',
+  'production.pipeline': 'create.import',
   'manage.chunk': 'create.overview',
   'manage.card': 'workbench.assets',
   'manage.entity': 'create.overview',
@@ -292,7 +302,9 @@ const LEGACY_TAB_ALIAS: Record<string, string> = {
   // V2.0 / V2.1 二级 key
   'create.home': 'create.overview',
   'create.sources': 'create.connector',
-  'create.chunk': 'create.overview',
+  'create.chunk': 'create.generation',
+  'create.scenario': 'create.generation',
+  'create.config': 'create.generation',
   'create.entity': 'create.overview',
   'create.review': 'create.judgment',
   'create.conflict': 'create.judgment',
@@ -302,6 +314,8 @@ const LEGACY_TAB_ALIAS: Record<string, string> = {
   'integration.api': 'integration.api',
   'system.lab': 'integration.api',
   'system.policy': 'search.profile',
+  // 已合并的入口：「生成任务」与「文档导入」渲染同一份区块，Tab 取消后旧书签/本地存储落到文档中心。
+  'create.jobs': 'create.import',
 }
 
 export function normalizeViewKey(raw: string | null | undefined): string {

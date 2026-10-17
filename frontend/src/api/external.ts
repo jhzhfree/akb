@@ -29,6 +29,122 @@ export const listExternalAudits = (
 export const probeExternal = (secret:string, path = '/api/v1/external/bases'):Promise<AxiosResponse<unknown>> =>
   axios.get(path, { headers:{ 'X-API-Key': secret } })
 
+/* ---- 网站嵌入组件：用 API Key 换取嵌入令牌 ---- */
+
+export interface EmbedTokenResult {
+  token: string
+  /** 长期令牌为 null */
+  expiresAt: number | null
+  /** 长期令牌为 null */
+  expiresInSeconds: number | null
+  permanent?: boolean
+  knowledgeBaseId: number | null
+  origin: string
+  /** 令牌唯一 ID：吊销与调用日志都按它定位 */
+  jti?: string
+  /** jti 的掩码形式，用于界面展示 */
+  displayId?: string
+}
+
+/**
+ * 换令牌走对外端点而非控制台接口：这样签发过程与真实调用方完全一致，
+ * 同时校验该 Key 是否授权了当前站点（allowedOrigins）。
+ *
+ * @param ttlSeconds 有效期秒数；不传沿用部署默认，传 -1（或任意 <= 0）签发长期有效令牌。
+ */
+export const issueEmbedToken = (
+  secret: string, knowledgeBaseId?: number | null, origin?: string, ttlSeconds?: number | null,
+): Promise<ApiResponse<EmbedTokenResult>> =>
+  axios.post('/api/v1/external/embed/token', null, {
+    params: {
+      knowledgeBaseId: knowledgeBaseId ?? undefined,
+      origin: origin ?? undefined,
+      expiresInSeconds: ttlSeconds ?? undefined,
+    },
+    headers: { 'X-API-Key': secret },
+  })
+
+/* ---- 嵌入令牌生命周期：吊销、恢复与调用日志（管理员） ---- */
+
+/** 窗口内出现过的令牌：调用量、来源站点与是否已吊销 */
+export interface EmbedTokenSummary {
+  jti: string
+  displayId: string
+  keyId: number | null
+  keyCode: string | null
+  knowledgeBaseId: number | null
+  origin: string | null
+  calls: number
+  errors: number
+  firstCallTime: string | null
+  lastCallTime: string | null
+  revoked: boolean
+}
+
+/** 一条调用日志：能定位到具体是哪个令牌、哪个站点发起的 */
+export interface EmbedTokenCall {
+  id: number
+  jti: string | null
+  displayId: string
+  keyId: number | null
+  keyCode: string | null
+  callerName: string | null
+  origin: string | null
+  channel: string
+  method: string
+  knowledgeBaseId: number | null
+  statusCode: number | null
+  durationMs: number | null
+  message: string | null
+  requestParams: string | null
+  traceId: string | null
+  createdTime: string | null
+}
+
+export interface EmbedTokenRevocationItem {
+  id: number
+  jti: string
+  keyId: number | null
+  keyCode: string | null
+  knowledgeBaseId: number | null
+  origin: string | null
+  reason: string | null
+  operatorId: number | null
+  revokedTime: string | null
+}
+
+export interface EmbedTokenLifecycle {
+  windowHours: number
+  tokens: EmbedTokenSummary[]
+  revocations: EmbedTokenRevocationItem[]
+}
+
+export const fetchEmbedTokenLifecycle = (hours = 168, limit = 50): Promise<ApiResponse<EmbedTokenLifecycle>> =>
+  axios.get('/api/external/admin/embed/tokens', { params: { hours, limit } })
+
+export const fetchEmbedTokenCalls = (
+  jti?: string | null, keyId?: number | null, limit = 50,
+): Promise<ApiResponse<EmbedTokenCall[]>> =>
+  axios.get('/api/external/admin/embed/tokens/calls', {
+    params: { jti: jti || undefined, keyId: keyId ?? undefined, limit },
+  })
+
+/**
+ * 吊销单个令牌：只影响这一个令牌，同一 API Key 签发的其他令牌继续可用。
+ */
+export const revokeEmbedToken = (body: {
+  jti: string
+  keyId?: number | null
+  keyCode?: string | null
+  knowledgeBaseId?: number | null
+  origin?: string | null
+  reason?: string | null
+}): Promise<ApiResponse<EmbedTokenRevocationItem>> =>
+  axios.post('/api/external/admin/embed/tokens/revoke', body)
+
+export const restoreEmbedToken = (jti: string): Promise<ApiResponse<{ jti: string; restored: boolean }>> =>
+  axios.post(`/api/external/admin/embed/tokens/${encodeURIComponent(jti)}/restore`)
+
 /* ---- MCP Server 管理：工具清单与通道调用审计（管理员） ---- */
 
 export const getMcpManifest = ():Promise<ApiResponse<import('../types').McpManifest>> =>

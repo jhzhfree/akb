@@ -8,6 +8,7 @@ from functools import lru_cache
 from typing import Any
 
 import httpx
+from typing import AsyncIterator
 
 from app.core.runtime_settings import LlmSettings, load_model_settings
 
@@ -25,6 +26,17 @@ class LlmProvider:
     async def generate(self, prompt: str, max_tokens: int | None = None) -> str:
         """Generate text for a fully assembled prompt."""
         raise NotImplementedError
+
+    async def stream_generate(self, prompt: str, max_tokens: int | None = None) -> AsyncIterator[str]:
+        """Yield answer text as it is produced.
+
+        The default implementation is a single chunk: a provider that has no streaming endpoint
+        still behaves correctly, callers just cannot show the answer as it is written. Overriding
+        it must never change the concatenated result — the joined chunks have to equal
+        :meth:`generate`, otherwise the answer gates would be judging different text than the
+        reader sees.
+        """
+        yield await self.generate(prompt, max_tokens=max_tokens)
 
     async def extract_json(self, prompt: str, max_tokens: int | None = None) -> dict[str, Any] | None:
         """Generate text and extract the first JSON object from the response.
@@ -86,6 +98,31 @@ class OllamaProvider(LlmProvider):
         response.raise_for_status()
         return response.json().get("response", "")
 
+    async def stream_generate(self, prompt: str, max_tokens: int | None = None) -> AsyncIterator[str]:
+        """Stream Ollama's NDJSON generate response, one JSON object per line."""
+        options: dict[str, Any] = {"temperature": self._config.temperature}
+        if max_tokens:
+            options["num_predict"] = int(max_tokens)
+        async with httpx.AsyncClient(timeout=self._config.timeout) as client:
+            async with client.stream(
+                "POST",
+                self._config.base_url.rstrip("/") + "/api/generate",
+                json={"model": self._config.model, "prompt": prompt, "stream": True, "options": options},
+            ) as response:
+                response.raise_for_status()
+                async for line in response.aiter_lines():
+                    if not line.strip():
+                        continue
+                    try:
+                        payload = json.loads(line)
+                    except ValueError:
+                        continue
+                    piece = payload.get("response") or ""
+                    if piece:
+                        yield piece
+                    if payload.get("done"):
+                        break
+
 
 class OpenAICompatibleProvider(LlmProvider):
     """OpenAI-style ``/chat/completions`` endpoint used by DeepSeek, 智谱, Kimi, OpenAI ..."""
@@ -138,6 +175,47 @@ class OpenAICompatibleProvider(LlmProvider):
                 choices[0].get("finish_reason"),
             )
         return content
+
+    async def stream_generate(self, prompt: str, max_tokens: int | None = None) -> AsyncIterator[str]:
+        """Stream chat completions, yielding only the visible answer.
+
+        ``reasoning_content`` is deliberately dropped: a reasoning model emits its thinking on
+        the same stream, and putting that in the answer would both confuse the reader and make
+        the answer gates judge text the reader never sees.
+        """
+        budget = int(max_tokens or min(self._config.max_tokens, _MAX_OUTPUT_TOKENS))
+        async with httpx.AsyncClient(timeout=self._config.timeout, headers=self._headers) as client:
+            async with client.stream(
+                "POST",
+                self._url,
+                json={
+                    "model": self._config.model,
+                    "messages": [{"role": "user", "content": prompt}],
+                    "temperature": self._config.temperature,
+                    "max_tokens": min(budget, _MAX_OUTPUT_TOKENS),
+                    "stream": True,
+                },
+            ) as response:
+                response.raise_for_status()
+                async for line in response.aiter_lines():
+                    if not line.startswith("data:"):
+                        continue
+                    data = line[5:].strip()
+                    if not data or data == "[DONE]":
+                        if data == "[DONE]":
+                            break
+                        continue
+                    try:
+                        chunk = json.loads(data)
+                    except ValueError:
+                        continue
+                    choices = chunk.get("choices") or []
+                    if not choices:
+                        continue
+                    delta = choices[0].get("delta") or {}
+                    piece = delta.get("content") or ""
+                    if piece:
+                        yield piece
 
 
 def _completion_url(base_url: str) -> str:

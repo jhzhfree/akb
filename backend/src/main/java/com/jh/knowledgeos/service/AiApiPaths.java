@@ -30,6 +30,12 @@ public final class AiApiPaths {
     public static final String QUERY = "/ai/query";
 
     /**
+     * Streaming variant of {@link #QUERY}: the same pipeline, reported stage by stage as it runs
+     * instead of as one response at the end.
+     */
+    public static final String QUERY_STREAM = "/ai/query/stream";
+
+    /**
      * Retrieval-only pipeline: same recall / fusion / rerank, no generation (design §14 grading).
      */
     public static final String RETRIEVE = "/ai/retrieve";

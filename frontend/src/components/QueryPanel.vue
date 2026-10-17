@@ -50,7 +50,7 @@
                utils/markdown.ts 的 renderMarkdown 同样先 escapeHtml。 -->
           <!-- eslint-disable-next-line vue/no-v-html -->
           <div v-if="isHtml" class="md-answer" v-html="props.result?.answer || ''"></div>
-          <pre v-else-if="isText" class="text-answer">{{ props.result?.answer || '' }}</pre>
+          <pre v-else-if="isText" class="md-text">{{ props.result?.answer || '' }}</pre>
           <!-- eslint-disable-next-line vue/no-v-html -->
           <div v-else class="md-answer" v-html="renderedAnswer"></div>
 
@@ -241,24 +241,7 @@ const citationTitle = (citation:QueryCitation) => {
 }
 </script>
 <style scoped>
-.md-answer{padding:0.25rem 1rem 0.25rem 0;font-size:14px;line-height:1.8;color:var(--ink-1)}
-.md-answer :deep(p){margin:0.5rem 0}
-.md-answer :deep(.md-heading){margin:0.9rem 0 0.4rem;font-weight:600;color:var(--ink-1)}
-.md-answer :deep(.md-heading:first-child){margin-top:0.2rem}
-.md-answer :deep(ul),.md-answer :deep(ol){margin:0.4rem 0;padding-left:1.4rem}
-.md-answer :deep(li){margin:0.2rem 0}
-.md-answer :deep(blockquote){margin:0.5rem 0;border-left:3px solid var(--line-soft);padding:0.1rem 0 0.1rem 0.75rem;color:var(--ink-2)}
-.md-answer :deep(.md-code){border-radius:4px;background:var(--bg-sub);padding:0.1rem 0.3rem;font-family:ui-monospace,monospace;font-size:12px}
-.md-answer :deep(.md-pre){margin:0.5rem 0;border-radius:8px;background:var(--bg-sunken);color:var(--ink-2);padding:0.75rem 1rem;overflow:auto;font-size:12px;line-height:1.6}
-.md-answer :deep(.md-cite){margin-left:2px;color:var(--accent-text);font-weight:600;cursor:help}
-/* 纯文本格式：保留换行与空行，不套 Markdown 排版 */
-.text-answer{margin:0;font-size:14px;line-height:1.8;color:var(--ink-1);white-space:pre-wrap;word-break:break-word;font-family:inherit}
-/* HTML 格式自带的引用原文小节（由服务端渲染并转义后插入） */
-.md-answer :deep(.answer-citations){margin-top:1rem;border-top:1px solid var(--line-soft);padding-top:0.75rem}
-.md-answer :deep(.answer-citations h3){margin:0 0 0.4rem;font-size:12px;font-weight:600;color:var(--ink-2)}
-.md-answer :deep(.answer-citations ol){margin:0;padding-left:1.2rem;list-style:decimal}
-.md-answer :deep(.answer-citation){margin:0.35rem 0;font-size:13px}
-.md-answer :deep(.answer-citation-head){display:flex;flex-wrap:wrap;gap:0.4rem;align-items:baseline}
-.md-answer :deep(.answer-citation-source){margin-left:auto;font-size:11px;color:var(--ink-3)}
-.md-answer :deep(.answer-citation-excerpt){margin:0.2rem 0 0.5rem;border-left:3px solid var(--line-soft);padding:0.1rem 0 0.1rem 0.75rem;color:var(--ink-2);font-size:12.5px;line-height:1.7}
+/* 答案排版已提到 src/answer.css（全局）：那是全站「检索结果长什么样」的唯一基准，
+   与嵌入组件 public/embed/kos-chat.js 内 .md-* 规则同值，由 scripts/check-answer-style.mjs 校验。
+   这里不再重复定义，避免出现第二套 .md-answer 规则。 */
 </style>

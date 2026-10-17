@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>KnowledgeOS 嵌入组件 · 外部联调演示</title>
+  <style>
+    :root { --primary: #2f6bff; }
+    body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif; background: #f1f5f9; color: #0f172a; }
+    header { background: #0f172a; color: #fff; padding: 18px 24px; }
+    header h1 { margin: 0; font-size: 18px; }
+    header p { margin: 4px 0 0; font-size: 13px; color: #94a3b8; }
+    main { max-width: 1080px; margin: 0 auto; padding: 24px 20px 140px; }
+    .card { background: #fff; border-radius: 12px; padding: 18px 20px; box-shadow: 0 6px 20px rgba(15,23,42,.08); margin-bottom: 16px; }
+    .card h3 { margin: 0 0 12px; font-size: 15px; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; }
+    label { display: block; font-size: 12.5px; color: #64748b; margin: 10px 0 4px; }
+    input, textarea, select { width: 100%; box-sizing: border-box; border: 1px solid #cbd5e1; border-radius: 8px; padding: 8px 10px; font-size: 13.5px; font-family: inherit; }
+    button { border: none; background: var(--primary); color: #fff; border-radius: 8px; padding: 9px 16px; font-size: 13.5px; cursor: pointer; }
+    button.ghost { background: #e2e8f0; color: #334155; }
+    button[disabled] { background: #cbd5e1; cursor: not-allowed; }
+    .row { display: flex; gap: 10px; align-items: flex-end; flex-wrap: wrap; margin-top: 12px; }
+    .hint { font-size: 12.5px; color: #64748b; line-height: 1.7; margin: 10px 0 0; }
+    pre { background: #0f172a; color: #e2e8f0; padding: 14px; border-radius: 10px; overflow-x: auto; font-size: 12.5px; line-height: 1.6; margin: 8px 0 0; }
+    code { font-family: Menlo, Consolas, monospace; }
+    #log { height: 320px; overflow-y: auto; background: #0f172a; color: #cbd5e1; border-radius: 10px; padding: 12px; font-family: Menlo, Consolas, monospace; font-size: 12px; line-height: 1.7; }
+    #log .ev-stage { color: #7dd3fc; }
+    #log .ev-delta { color: #d1fae5; }
+    #log .ev-done { color: #fbbf24; }
+    #log .ev-error { color: #fca5a5; }
+    #log .ts { color: #64748b; }
+    .stat { font-size: 12.5px; color: #475569; margin-top: 8px; }
+    .prefill {
+      background: #ecfdf5; border: 1px solid #a7f3d0; color: #065f46;
+      border-radius: 10px; padding: 11px 14px; font-size: 13px; line-height: 1.8; margin-bottom: 16px;
+    }
+    .prefill b { color: #047857; }
+    .prefill code { background: #d1fae5; padding: 1px 5px; border-radius: 4px; word-break: break-all; }
+    .prefill .masked { color: #047857; }
+  </style>
+</head>
+<body>
+<header>
+  <h1>KnowledgeOS 嵌入组件 · 外部联调演示</h1>
+  <p>模拟第三方站点：参数可由配置面板带入 → 挂载组件 → 查看服务端检索过程与原始 SSE 事件流</p>
+</header>
+
+<main>
+  <div id="prefill" class="prefill" style="display:none"></div>
+
+  <section class="card">
+    <h3>1. 连接配置</h3>
+    <div class="grid">
+      <div>
+        <label>后端地址 apiBase</label>
+        <input id="apiBase" value="http://127.0.0.1:8080/api/v1/external" />
+      </div>
+      <div>
+        <label>知识库 ID</label>
+        <input id="kb" value="1" />
+      </div>
+      <div>
+        <label>API Key（仅在换令牌时使用）</label>
+        <input id="apiKey" placeholder="kos_ak_..." type="password" />
+      </div>
+      <div>
+        <label>嵌入令牌 token</label>
+        <input id="token" placeholder="kos_et_...（可由上方 API Key 换取）" />
+      </div>
+      <div>
+        <label>令牌有效期</label>
+        <select id="ttl">
+          <option value="0">默认（沿用部署配置）</option>
+          <option value="3600">1 小时</option>
+          <option value="21600">6 小时</option>
+          <option value="86400">24 小时</option>
+          <option value="604800">7 天</option>
+          <option value="2592000">30 天</option>
+          <option value="-1">长期有效</option>
+        </select>
+      </div>
+    </div>
+    <div class="row">
+      <button id="btnToken">用 API Key 换取令牌</button>
+      <button id="btnMount" class="ghost">挂载右下角组件</button>
+      <span class="stat" id="tokenStat"></span>
+    </div>
+    <p class="hint">
+      换令牌会带上本页的 <code>Origin</code>（<span id="originText"></span>），
+      若该 Key 配置了来源白名单，必须与之一致；令牌绑定站点后无法在其他站点使用。
+    </p>
+  </section>
+
+  <section class="card">
+    <h3>2. 原始 SSE 事件流（不经过组件，直接调接口）</h3>
+    <div class="grid">
+      <div>
+        <label>问题</label>
+        <input id="question" value="报销流程是怎么规定的？" />
+      </div>
+      <div>
+        <label>topK</label>
+        <input id="topK" value="10" />
+      </div>
+      <div>
+        <label>答案格式</label>
+        <select id="format">
+          <option value="markdown">markdown</option>
+          <option value="default">default</option>
+          <option value="text">text</option>
+          <option value="html">html</option>
+        </select>
+      </div>
+    </div>
+    <div class="row">
+      <button id="btnProbe">发送并监听事件流</button>
+      <button id="btnStop" class="ghost" disabled>停止</button>
+      <button id="btnClear" class="ghost">清空日志</button>
+      <span class="stat" id="probeStat"></span>
+    </div>
+    <pre id="log"></pre>
+    <p class="hint">
+      日志里的 <code>+ms</code> 是相对请求发出的到达时间：真流式下 <code>stage</code> 会在检索过程中陆续到达，
+      <code>delta</code> 是模型逐段写出的答案。
+    </p>
+  </section>
+
+  <section class="card">
+    <h3>3. 生产接入代码</h3>
+    <pre><code>&lt;script src="https://&lt;host&gt;/embed/kos-chat.js"
+        data-api-base="https://&lt;host&gt;/api/v1/external"
+        data-token="kos_et_..."
+        data-kb="1"
+        data-title="知识库助手"
+        data-primary="#2f6bff"
+        data-samples="这份制度适用于哪些部门？|最近变更了什么？"&gt;&lt;/script&gt;</code></pre>
+    <p class="hint">
+      组件使用 Light DOM 渲染：宿主页面的全局样式会作用到组件内部（组件类名统一带
+      <code>kos-</code> / <code>md-</code> 前缀，不会污染宿主页面），也可以用
+      <code>--kos-external-*</code> 变量主题化。生产环境应在业务系统服务端用 API Key 换令牌后再下发页面。
+    </p>
+  </section>
+</main>
+
+<script src="./kos-chat.js" data-auto="false"></script>
+<script>
+(function () {
+  var $ = function (id) { return document.getElementById(id); };
+  var controller = null;
+  var started = 0;
+  var seq = 0;
+
+  // ---- 由「打开联调演示页」带入的参数（hash 优先，其次 query，便于手工拼 URL）----
+  var preset = (function () {
+    var p = new URLSearchParams(location.search.replace(/^\?/, ''));
+    var hash = (location.hash || '').replace(/^#/, '');
+    if (hash) {
+      new URLSearchParams(hash).forEach(function (v, k) { p.set(k, v); });
+    }
+    return {
+      apiBase: p.get('apiBase') || '',
+      kb: p.get('kb') || '',
+      token: p.get('token') || '',
+      apiKey: p.get('apiKey') || '',
+      title: p.get('title') || '',
+      primary: p.get('primary') || '',
+      samples: p.get('samples') || '',
+      welcome: p.get('welcome') || '',
+      question: p.get('question') || '',
+      topK: p.get('topK') || '',
+      format: p.get('format') || '',
+      ttl: p.get('ttl') || ''
+    };
+  })();
+
+  var hasPreset = !!(preset.apiBase || preset.token || preset.apiKey || preset.kb);
+
+  var widgetTitle = preset.title || '知识库助手';
+  var widgetPrimary = preset.primary || '#2f6bff';
+  var widgetWelcome = preset.welcome || '你好，可以问我知识库内的问题，我会展示检索过程。';
+  var widgetSamples = preset.samples
+    ? preset.samples.split('|').map(function (s) { return s.trim(); }).filter(Boolean)
+    : ['这份制度适用于哪些部门？', '最近一次变更了什么内容？'];
+
+  function esc(text) {
+    return String(text).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+
+  function mask(secret) {
+    if (!secret) { return ''; }
+    return secret.length <= 16 ? secret.slice(0, 4) + '…' : secret.slice(0, 10) + '…' + secret.slice(-4);
+  }
+
+  function applyPreset() {
+    if (preset.apiBase) { $('apiBase').value = preset.apiBase; }
+    if (preset.kb) { $('kb').value = preset.kb; }
+    if (preset.token) { $('token').value = preset.token; }
+    if (preset.apiKey) { $('apiKey').value = preset.apiKey; }
+    if (preset.question) { $('question').value = preset.question; }
+    if (preset.topK) { $('topK').value = preset.topK; }
+    if (preset.format) { $('format').value = preset.format; }
+    if (preset.ttl) { $('ttl').value = preset.ttl; }
+  }
+
+  function ttlLabel(value) {
+    var options = $('ttl').options;
+    for (var i = 0; i < options.length; i++) {
+      if (options[i].value === String(value)) { return options[i].text; }
+    }
+    return value + ' 秒';
+  }
+
+  function renderPresetBar() {
+    if (!hasPreset) { $('prefill').style.display = 'none'; return; }
+    var bits = [];
+    if (preset.apiBase) { bits.push('apiBase <code>' + esc(preset.apiBase) + '</code>'); }
+    if (preset.kb) { bits.push('知识库 <code>#' + esc(preset.kb) + '</code>'); }
+    if (preset.token) { bits.push('嵌入令牌 <code class="masked">' + esc(mask(preset.token)) + '</code>'); }
+    if (preset.apiKey) { bits.push('API Key <code class="masked">' + esc(mask(preset.apiKey)) + '</code>'); }
+    bits.push('标题 <code>' + esc(widgetTitle) + '</code>');
+    if (preset.primary) { bits.push('主题色 <code>' + esc(widgetPrimary) + '</code>'); }
+    if (preset.ttl) { bits.push('令牌有效期 <code>' + esc(ttlLabel(preset.ttl)) + '</code>'); }
+    $('prefill').innerHTML = '已从配置面板带入当前参数：' + bits.join(' · ') +
+      '。<br>直接点下方 <b>「挂载右下角组件」</b> 即可开始验证；本页字段仍可自由修改。';
+    $('prefill').style.display = '';
+  }
+
+  $('originText').textContent = location.origin;
+  applyPreset();
+  renderPresetBar();
+
+  function apiBase() { return $('apiBase').value.trim().replace(/\/$/, ''); }
+
+  function log(event, text) {
+    var line = document.createElement('div');
+    var cls = 'ev-' + event;
+    var ms = started ? Math.round(performance.now() - started) : 0;
+    line.innerHTML = '<span class="ts">' + (++seq + '').padStart(3, '0') +
+      ' +' + ms + 'ms</span> <span class="' + cls + '">' + event + '</span> ' +
+      String(text).replace(/&/g, '&amp;').replace(/</g, '&lt;');
+    $('log').appendChild(line);
+    $('log').scrollTop = $('log').scrollHeight;
+  }
+
+  $('btnToken').addEventListener('click', function () {
+    var key = $('apiKey').value.trim();
+    if (!key) { alert('请先填写 API Key'); return; }
+    $('tokenStat').textContent = '换取中…';
+    var ttl = $('ttl').value;
+    var query = apiBase() + '/embed/token?knowledgeBaseId=' + encodeURIComponent($('kb').value.trim());
+    if (ttl && ttl !== '0') { query += '&expiresInSeconds=' + encodeURIComponent(ttl); }
+    fetch(query, {
+      method: 'POST',
+      headers: { 'X-API-Key': key }
+    })
+      .then(function (r) { return r.json().then(function (j) { return { status: r.status, body: j }; }); })
+      .then(function (res) {
+        var data = res.body && res.body.data;
+        if (res.status !== 200 || !data || !data.token) {
+          $('tokenStat').textContent = '失败 HTTP ' + res.status + '：' + ((res.body && res.body.message) || '未知错误');
+          return;
+        }
+        $('token').value = data.token;
+        var expiry = (data.permanent || data.expiresAt === null || data.expiresAt === undefined)
+          ? '长期有效'
+          : Math.round((data.expiresInSeconds || 0) / 3600) + ' 小时后过期';
+        $('tokenStat').textContent = '已获取，' + expiry + '，来源 ' + (data.origin || '未限制');
+      })
+      .catch(function (e) { $('tokenStat').textContent = '失败：' + e.message; });
+  });
+
+  var widget = null;
+  $('btnMount').addEventListener('click', function () {
+    if (widget) {
+      var host = document.querySelector('.kos-widget-host');
+      if (host) { host.remove(); }
+    }
+    widget = KnowledgeOSChat.init({
+      apiBase: apiBase(),
+      token: $('token').value.trim(),
+      apiKey: $('apiKey').value.trim(),
+      knowledgeBaseId: $('kb').value.trim(),
+      answerFormat: $('format').value.trim() || 'markdown',
+      title: widgetTitle,
+      primary: widgetPrimary,
+      welcome: widgetWelcome,
+      sampleQuestions: widgetSamples
+    });
+    widget.toggle(true);
+  });
+
+  $('btnClear').addEventListener('click', function () { $('log').innerHTML = ''; seq = 0; });
+
+  $('btnStop').addEventListener('click', function () {
+    if (controller) { controller.abort(); controller = null; }
+    $('btnStop').disabled = true;
+  });
+
+  $('btnProbe').addEventListener('click', function () {
+    var token = $('token').value.trim();
+    var key = $('apiKey').value.trim();
+    if (!token && !key) { alert('请先获取嵌入令牌，或填写 API Key'); return; }
+    $('log').innerHTML = '';
+    seq = 0;
+    started = performance.now();
+    controller = typeof AbortController === 'function' ? new AbortController() : null;
+    $('btnStop').disabled = false;
+    $('probeStat').textContent = '请求中…';
+
+    var url = apiBase() + '/stream/query' +
+      '?question=' + encodeURIComponent($('question').value.trim()) +
+      '&topK=' + encodeURIComponent($('topK').value.trim()) +
+      '&answerFormat=' + encodeURIComponent($('format').value) +
+      '&knowledgeBaseId=' + encodeURIComponent($('kb').value.trim());
+    var headers = token ? { 'X-Embed-Token': token } : { 'X-API-Key': key };
+
+    fetch(url, { method: 'GET', headers: headers, signal: controller ? controller.signal : undefined })
+      .then(function (response) {
+        if (!response.ok || !response.body) {
+          log('error', 'HTTP ' + response.status);
+          $('probeStat').textContent = '失败 HTTP ' + response.status;
+          return;
+        }
+        $('probeStat').textContent = '已连接，接收中…';
+        var reader = response.body.getReader();
+        var decoder = new TextDecoder('utf-8');
+        var buffer = '';
+        var answer = '';
+        var push = function (chunk) {
+          buffer += chunk;
+          var i;
+          while ((i = buffer.indexOf('\n\n')) !== -1) {
+            var frame = buffer.slice(0, i);
+            buffer = buffer.slice(i + 2);
+            var name = 'message', data = '';
+            frame.split(/\r?\n/).forEach(function (line) {
+              if (line.indexOf('event:') === 0) { name = line.slice(6).trim(); }
+              else if (line.indexOf('data:') === 0) { data += line.slice(5).trim(); }
+            });
+            if (!data) { continue; }
+            var payload = data;
+            try { payload = JSON.parse(data); } catch (e) { /* 文本片段 */ }
+            if (name === 'delta') { answer += payload; log(name, JSON.stringify(payload)); }
+            else if (name === 'stage') { log(name, payload.key + ' ' + payload.status + ' ' + (payload.latencyMs === null || payload.latencyMs === undefined ? '' : payload.latencyMs + 'ms')); }
+            else if (name === 'done') { log(name, 'queryId=' + payload.queryId + ' chars=' + String(payload.answer || '').length); }
+            else { log(name, typeof payload === 'string' ? payload : JSON.stringify(payload).slice(0, 200)); }
+          }
+        };
+        var read = function () {
+          return reader.read().then(function (result) {
+            if (result.done) {
+              $('probeStat').textContent = '完成，答案 ' + answer.length + ' 字，耗时 ' + Math.round(performance.now() - started) + 'ms';
+              $('btnStop').disabled = true;
+              return;
+            }
+            push(decoder.decode(result.value, { stream: true }));
+            return read();
+          });
+        };
+        return read();
+      })
+      .catch(function (e) {
+        if (e && e.name === 'AbortError') { $('probeStat').textContent = '已停止'; return; }
+        log('error', e.message);
+        $('probeStat').textContent = '失败：' + e.message;
+      });
+  });
+})();
+</script>
+</body>
+</html>

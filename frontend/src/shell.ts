@@ -12,6 +12,26 @@ import type { AssetType } from './components/AssetBrowserPanel.vue'
 import type { ConflictRow, QueryCitation, ReviewRow } from './types'
 import type { NavLeaf } from './navigation'
 
+/** 整库重新生成的进度：任务码、当前阶段与计数，生成概览与生成配置页共用同一条进度。 */
+export interface RegenerationProgress {
+  running:boolean
+  taskCode:string
+  /** 后端任务状态：QUEUED / RUNNING / SUCCEEDED / FAILED / DEAD / CANCELED。 */
+  status:string
+  /** 当前阶段文案，后端会带上正在处理的文档名。 */
+  stage:string
+  /** 0-100。后端跑完前最多到 99，100 只由任务成功时给出。 */
+  progress:number
+  documentCount:number
+  processed:number
+  failed:number
+  skipped:number
+  cardCount:number
+  claimCount:number
+  currentDocument:string
+  error:string
+}
+
 export interface KosShell {
   /** 切换视图：接受 IA 视图 key，旧 key 由 navigation 归一化。 */
   navigate: (key: string) => void
@@ -27,7 +47,7 @@ export interface KosShell {
   openAssets: (type: AssetType) => void
   /** 打开知识图谱并定位到指定实体。 */
   openGraph: (code: string) => void
-  /** 任务中心 / 生成页点击任务：选中该次运行并进入生成任务页。 */
+  /** 任务中心 / 生成页点击任务：选中该次运行并进入文档中心。 */
   openRun: (runId: number) => void
   /** 打开 检索链路追踪 抽屉。 */
   openTrace: (qid: string) => void
@@ -58,6 +78,10 @@ export interface KosShell {
   reloadAfterRetry: () => void
   /** 运行一次智能裁决。 */
   adjudicate: () => void
+  /** 对整个知识库重新生成卡片与断言：用已入库正文重跑抽取，不重新上传文件。 */
+  regenerate: (purgeUnpublished: boolean) => void
+  /** 重新生成的实时进度：提交后由外壳轮询任务中心写入，页面只负责展示。 */
+  regeneration: RegenerationProgress
   /** 人工裁决：备注与决策一并写入复核记录（设计 §4.4）。 */
   review: (row: ReviewRow, decision: string, comment?: string) => void
   resolveConflict: (row: ConflictRow, status: string) => void

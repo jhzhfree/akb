@@ -36,6 +36,7 @@ MVN ?= mvn $(MVN_PROXY_OPTS)
 
 .PHONY: check up down logs ps clean \
 	dev-env dev-up dev-app-up dev-ai-up dev-backend-up dev-frontend-up dev-down dev-ps dev-logs dev-clean \
+	dev-milvus-up dev-milvus-down dev-milvus-status \
 	dev-install dev-pip dev-ai dev-backend dev-frontend dev-all \
 	prod-env prod-up prod-down prod-ps prod-logs \
 	release-build release-push package
@@ -111,15 +112,31 @@ dev-install:
 dev-pip:
 	$(CONDA_PY) -m pip install -q --disable-pip-version-check --root-user-action=ignore -r ai-service/requirements.txt
 
-# ai-service：默认连本机 7687（容器已映射），检索降级为本地 BM25 + 本地向量 + Neo4j
+# ai-service：默认连本机 7687（容器已映射）。
+# 注意：下面这几个 *_ENABLED 只是「首次种子值」——一旦 ai-service/data/retrieval_settings.json
+# 存在（控制台检索设置页保存过），它就优先于环境变量，改这里不会生效；要真正开关请用
+# 控制台检索设置页，或 ./scripts/dev-milvus.sh enable|disable。
+# NO_PROXY 必须带上 127.0.0.1：本机设了 http_proxy，httpx 否则会把 127.0.0.1:19530/9200
+# 交给代理，表现为 "502 Bad Gateway" 而不是连接失败。
 dev-ai:
 	@test -x "$(CONDA_PY)" || { echo "未找到 conda 环境 $(CONDA_ENV)：$(CONDA_PY)，请先执行 make dev-install"; exit 1; }
 	cd ai-service && KNOWLEDGE_DATA_DIR=$(CURDIR)/ai-service/data \
+		NO_PROXY=127.0.0.1,localhost no_proxy=127.0.0.1,localhost \
 		NEO4J_URI=bolt://127.0.0.1:7687 NEO4J_USER=neo4j NEO4J_PASSWORD=knowledge123 \
 		LLM_PROVIDER=ollama LLM_BASE_URL=$(OLLAMA_URL) LLM_MODEL=$(LLM_MODEL) \
 		EMBEDDING_PROVIDER=ollama EMBEDDING_MODEL=nomic-embed-text EMBEDDING_DIM=768 \
-		RETRIEVAL_MODE=auto ELASTICSEARCH_ENABLED=false MILVUS_ENABLED=false RERANKER_ENABLED=false \
+		RETRIEVAL_MODE=auto ELASTICSEARCH_ENABLED=true MILVUS_ENABLED=true RERANKER_ENABLED=false \
 		$(CONDA_PY) -m uvicorn app.main:app --reload --host 0.0.0.0 --port 12000
+
+# Milvus（dual-retrieval profile）：etcd + minio + standalone，19530 映射到宿主机
+dev-milvus-up: dev-env
+	./scripts/dev-milvus.sh up
+
+dev-milvus-down:
+	./scripts/dev-milvus.sh down
+
+dev-milvus-status:
+	./scripts/dev-milvus.sh status
 
 # backend：application.yml 中 DB/Redis/AI 默认即指向 127.0.0.1，无需额外覆盖
 dev-backend:

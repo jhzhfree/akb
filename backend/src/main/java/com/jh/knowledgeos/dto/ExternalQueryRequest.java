@@ -35,6 +35,25 @@ public class ExternalQueryRequest {
      */
     private String answerFormat = AnswerFormat.DEFAULT;
 
+    /**
+     * 最低相关度分数（0~1）：低于该分数的候选不返回。
+     *
+     * <p>不传即不过滤，与以前完全一致。检索类接口靠它把"要多少条"（topK）和
+     * "哪些条够格"（分数）分开：返回的 {@code returned} 是过滤后真的给出的条数，
+     * 与 {@code topK} 不一致时说明是阈值筛掉的，而不是库里没有。</p>
+     */
+    @Min(0)
+    @Max(1)
+    private Double minScore;
+
+    public Double getMinScore() {
+        return minScore;
+    }
+
+    public void setMinScore(Double minScore) {
+        this.minScore = minScore;
+    }
+
     public Long getKnowledgeBaseId() {
         return knowledgeBaseId;
     }

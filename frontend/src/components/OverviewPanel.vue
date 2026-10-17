@@ -318,8 +318,8 @@ const stages = computed(() => {
   if (props.lifecycle?.stages?.length) return props.lifecycle.stages
   return [
     { code:'INGEST', label:'接入', count:props.overview.sourceCount ?? 0, abnormal:0, target:'create.connector' },
-    { code:'PARSE', label:'解析', count:props.overview.documentCount ?? 0, abnormal:0, target:'create.jobs' },
-    { code:'EXTRACT', label:'抽取', count:props.overview.chunkCount ?? 0, abnormal:0, target:'create.jobs' },
+    { code:'PARSE', label:'解析', count:props.overview.documentCount ?? 0, abnormal:0, target:'create.import' },
+    { code:'EXTRACT', label:'抽取', count:props.overview.chunkCount ?? 0, abnormal:0, target:'create.import' },
     { code:'DERIVE', label:'衍生', count:0, abnormal:0, target:'create.derive' },
     { code:'JUDGE', label:'裁决', count:props.overview.pendingReviewCount ?? 0, abnormal:props.overview.openConflictCount ?? 0, target:'create.judgment' },
     { code:'PUBLISH', label:'发布', count:props.overview.effectiveCardCount ?? 0, abnormal:0, target:'workbench.assets' },
