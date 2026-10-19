@@ -1,0 +1,70 @@
+package com.jh.knowledgeos.service;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.jh.knowledgeos.domain.ApiKey;
+import java.util.Arrays;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import org.junit.jupiter.api.Test;
+
+class McpServerServiceTest {
+
+    @Test
+    void toolsExposePermissionTagFiltersForSearchAndQuery() {
+        McpServerService service = new McpServerService(null, null, new ObjectMapper());
+        List<Map<String, Object>> tools = (List<Map<String, Object>>) service.toolsList().get("tools");
+
+        Map<String, Object> search = tools.stream()
+            .filter(tool -> "knowledge_search".equals(tool.get("name")))
+            .findFirst().orElseThrow(AssertionError::new);
+        Map<String, Object> query = tools.stream()
+            .filter(tool -> "knowledge_query".equals(tool.get("name")))
+            .findFirst().orElseThrow(AssertionError::new);
+
+        assertNotNull(((Map<?, ?>) ((Map<?, ?>) search.get("inputSchema")).get("properties")).get("permissionTags"));
+        assertNotNull(((Map<?, ?>) ((Map<?, ?>) query.get("inputSchema")).get("properties")).get("permissionTags"));
+    }
+
+    @Test
+    void searchPassesTagsAndMcpAttributionThroughTheGovernedFacade() throws Exception {
+        ExternalAccessService access = mock(ExternalAccessService.class);
+        ExternalKnowledgeFacade facade = mock(ExternalKnowledgeFacade.class);
+        ApiKey key = mock(ApiKey.class);
+        when(access.resolveKnowledgeBase(key, 23L)).thenReturn(23L);
+        Map<String, Object> expected = new LinkedHashMap<String, Object>();
+        expected.put("queryId", "q-1");
+        when(facade.search(eq(key), eq(23L), eq("leave policy"), eq(5), eq(Arrays.asList("hr")), eq(PlatformEventPublisher.SOURCE_MCP),
+            eq(0.65d))).thenReturn(expected);
+
+        McpServerService service = new McpServerService(access, facade, new ObjectMapper());
+        Map<String, Object> args = new LinkedHashMap<String, Object>();
+        args.put("knowledgeBaseId", 23);
+        args.put("query", "leave policy");
+        args.put("topK", 5);
+        args.put("permissionTags", Arrays.asList(" hr ", " "));
+        args.put("minScore", 0.65d);
+
+        Map<String, Object> result = service.toolsCall(key, toolCall("knowledge_search", args));
+
+        verify(access).assertScope(key, ApiKey.SCOPE_READ);
+        verify(facade).search(eq(key), eq(23L), eq("leave policy"), eq(5), eq(Arrays.asList("hr")), eq(PlatformEventPublisher.SOURCE_MCP),
+            eq(0.65d));
+        assertEquals(Boolean.FALSE, result.get("isError"));
+        assertEquals(expected, result.get("structuredContent"));
+    }
+
+    private Map<String, Object> toolCall(String name, Map<String, Object> arguments) {
+        Map<String, Object> params = new LinkedHashMap<String, Object>();
+        params.put("name", name);
+        params.put("arguments", arguments);
+        return params;
+    }
+}

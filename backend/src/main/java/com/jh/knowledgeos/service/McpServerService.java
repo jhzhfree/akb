@@ -107,11 +107,13 @@ public class McpServerService {
         List<Map<String, Object>> tools = new ArrayList<Map<String, Object>>();
         tools.add(tool("knowledge_query", "可追溯知识问答：返回答案、引用与 queryId，可用于后续溯源；答案可按 answerFormat 交付成 Markdown / 纯文本 / HTML", schema(properties(prop("knowledgeBaseId", "integer", "知识库 ID"),
            prop("question", "string", "要提问的问题"), prop("topK", "integer", "召回数量，默认 10"),
+           arrayProp("permissionTags", "可选的检索标签过滤；知识库 ACL 仍由服务端强制执行"),
            prop("minScore", "number", "最低相关度分数（0~1）：低于该分数的候选不参与答案生成；不传即不过滤"),
            prop("answerFormat", "string", "答案返回格式：default（不传即此项）/ markdown / text / html；返回值里的 answerFormat 是实际生效的那个")),
            Arrays.asList("knowledgeBaseId", "question"))));
         tools.add(tool("knowledge_search", "只做检索不生成答案：返回召回候选、重排结果与引用，便于自行装配上下文", schema(properties(prop("knowledgeBaseId", "integer", "知识库 ID"),
            prop("query", "string", "检索语句"), prop("topK", "integer", "召回数量，默认 10"),
+           arrayProp("permissionTags", "可选的检索标签过滤；知识库 ACL 仍由服务端强制执行"),
            prop("minScore", "number", "最低相关度分数（0~1）：低于该分数的候选不返回；不传即不过滤。返回里的 returned 是过滤后实际给出的条数")),
            Arrays.asList("knowledgeBaseId", "query"))));
         tools.add(tool("list_knowledge_bases", "列出当前 API Key 可见的知识库", schema(new LinkedHashMap<String, Object>(), new ArrayList<String>())));
@@ -147,12 +149,13 @@ public class McpServerService {
         if ("knowledge_query".equals(name)) {
             Long kb = resolve(key, args);
             accessService.assertScope(key, ApiKey.SCOPE_READ);
-            value = facade.query(kb, text(args, "question"), integer(args, "topK"), null, text(args, "answerFormat"),
-                resolveMinScore(args));
+            value = facade.query(key, kb, text(args, "question"), integer(args, "topK"), strings(args, "permissionTags"),
+                PlatformEventPublisher.SOURCE_MCP, text(args, "answerFormat"), resolveMinScore(args));
         } else if ("knowledge_search".equals(name)) {
             Long kb = resolve(key, args);
             accessService.assertScope(key, ApiKey.SCOPE_READ);
-            value = facade.search(kb, text(args, "query"), integer(args, "topK"), null, resolveMinScore(args));
+            value = facade.search(key, kb, text(args, "query"), integer(args, "topK"), strings(args, "permissionTags"),
+                PlatformEventPublisher.SOURCE_MCP, resolveMinScore(args));
         } else if ("list_knowledge_bases".equals(name)) {
             accessService.assertScope(key, ApiKey.SCOPE_READ);
             value = facade.bases(key.getKnowledgeBaseId());
@@ -275,6 +278,20 @@ public class McpServerService {
         return value == null ? null : String.valueOf(value);
     }
 
+    private List<String> strings(Map<String, Object> args, String key) {
+        Object value = args.get(key);
+        if (!(value instanceof List)) {
+            return new ArrayList<String>();
+        }
+        List<String> result = new ArrayList<String>();
+        for (Object item : (List<?>) value) {
+            if (item != null && !String.valueOf(item).trim().isEmpty()) {
+                result.add(String.valueOf(item).trim());
+            }
+        }
+        return result;
+    }
+
     /**
      * A score floor arrives as a JSON number and has to survive being handed over as a string by
      * a client that stringifies every argument; an unusable value is dropped rather than turned
@@ -375,6 +392,18 @@ public class McpServerService {
         prop.put("description", description);
         Map<String, Object> wrapper = new LinkedHashMap<String, Object>();
         wrapper.put(name, prop);
+        return wrapper;
+    }
+
+    private Map<String, Object> arrayProp(String name, String description) {
+        Map<String, Object> item = new LinkedHashMap<String, Object>();
+        item.put("type", "string");
+        Map<String, Object> property = new LinkedHashMap<String, Object>();
+        property.put("type", "array");
+        property.put("description", description);
+        property.put("items", item);
+        Map<String, Object> wrapper = new LinkedHashMap<String, Object>();
+        wrapper.put(name, property);
         return wrapper;
     }
 }

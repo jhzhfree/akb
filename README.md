@@ -60,6 +60,10 @@ make up
 - [V1.1 发版清单与交付说明](docs/V1.1-RELEASE-MANIFEST.md)（功能清单与实现程度/限制、部署方式、升级包类型、交付形态）
 - [V1.1 功能清单与缺口排期](docs/V1.1-FEATURE-SCOPE.md)（首发版本规划与工程缺口）
 
+集成指南：
+
+- [Octop 知识检索集成](OCTOP-INTEGRATION.md)（MCP 地址、API Key 权限、Agent 绑定与联调检查）
+
 架构/历史专项说明：
 
 - `ARCHITECTURE.md`
