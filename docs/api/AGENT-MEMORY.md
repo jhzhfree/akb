@@ -36,9 +36,9 @@ AKB 在既有知识服务之外提供独立的 Agent Memory Engine，供本系�
 | `memoryNamespace` | 记忆共享边界；留空时按 API Key 独立隔离 |
 | `memoryAgentCode` | 服务端绑定的 Agent 身份；留空时使用 API Key 编码 |
 
-Agent 作用域的 owner 永远由 API Key 推导，忽略请求中的身份字段。TEAM / PROJECT / TASK / WORKFLOW / SESSION 作用域使用 namespace + 显式 scope code。当前权限粒度是 namespace：持有同一 namespace 且具有 MEMORY_READ 的凭证可读取该 namespace 下匹配的共享 scope；scope code 用于隔离检索上下文，不代表独立 ACL。管理员应按租户/安全边界分配 namespace，不得跨租户或跨应用复用。若项目之间需要不同授权边界，应先使用不同 namespace；细粒度项目 ACL 属于后续扩展。
+Agent 作用域的 owner 永远由 API Key 推导，忽略请求中的身份字段。TEAM / PROJECT / TASK / WORKFLOW / SESSION 共享作用域除 namespace 外，还必须由管理员对具体 API Key 显式授予读取和/或写入权限。只有 scope code 而没有授权记录时，Capture、Recall、Forget 都会被拒绝。`MEMORY_READ` / `MEMORY_WRITE` 是调用能力的上限，作用域授权不能扩大 Key 本身的能力。授权精确匹配 `scopeType + scopeCode`，比较区分大小写。
 
-API Key 撤销会立即阻止继续读写。旧记忆仍留在 namespace 中，可由同 namespace 中仍有效且具备权限的凭证继续访问。Forget 会立即物理删除单条记忆。L0 到期后由小时级清理任务删除；其他层级到期后不再召回，并在 30 天恢复窗口结束后清理。
+API Key 撤销会立即阻止继续读写。旧记忆仍留在 namespace 中，可由同 namespace 中仍有效且单独获得该作用域授权的凭证继续访问。升级到按作用域授权后，原先仅凭相同 namespace 即可访问的共享作用域默认拒绝；管理员须补充精确授权。Forget 会立即物理删除单条记忆。L0 到期后由小时级清理任务删除；其他层级到期后不再召回，并在 30 天恢复窗口结束后清理。
 
 当前 REST / MCP Key 代表 Agent 服务身份，不代表最终员工身份。因此本版实现 Agent、团队、项目、任务、工作流和会话作用域；最终用户个人记忆需要由下游身份提供方把可信 subject 映射进服务端凭证上下文，不能让模型从请求体自行声明 userId。
 
@@ -51,6 +51,24 @@ API Key 撤销会立即阻止继续读写。旧记忆仍留在 namespace 中，�
 5. 不再需要的记忆通过 Forget 删除；过期数据由服务端 TTL 清理。
 
 ### 集成方式
+
+#### 管理员授权与治理
+
+- `GET /api/external/admin/keys/{keyId}/memory-access`：查看 API Key 的共享记忆授权。
+- `PUT /api/external/admin/keys/{keyId}/memory-access`：原子替换授权；传 `[]` 撤销全部共享作用域授权。
+- `GET /api/external/admin/keys/{keyId}/memories`：管理该 Key 命名空间内的记忆，支持 status、scopeType、scopeCode 筛选，最多 200 条/页。
+- `PUT /api/external/admin/keys/{keyId}/memories/{memoryCode}/status?status=SUSPENDED|ACTIVE`：暂停或恢复 Recall，必须提交处理原因。
+- `POST /api/external/admin/keys/{keyId}/memories/{memoryCode}/forget`：物理删除，必须提交原因；审计保留编码、作用域、操作人和原因，不保存正文。
+- `GET /api/external/admin/keys/{keyId}/memory-events`：查看该 namespace 最近治理记录，不包含记忆正文。
+
+```json
+[
+  {"scopeType":"PROJECT","scopeCode":"release-2026","canRead":true,"canWrite":false},
+  {"scopeType":"WORKFLOW","scopeCode":"release-flow","canRead":true,"canWrite":true}
+]
+```
+
+控制台“接口服务 → 凭证”提供“记忆授权”和“记忆管理”操作。暂停的记忆不参与 Agent Recall；恢复后重新可用。
 
 #### REST
 
@@ -71,7 +89,7 @@ Octop 和其他兼容 MCP 的平台可直接将 AKB 注册为远程 MCP Server�
 
 ### 当前交付与后续阶段
 
-本次版本包含独立存储、作用域控制、L0–L3 写入规则、TTL、幂等 Capture、关键词 Recall、Forget、REST、MCP、API Key scope 配置与接口文档。语义向量检索、异步 L0→L1/L2/L3 抽取、用户 subject 身份映射、记忆管理控制台和跨系统经验审批仍属于后续阶段；Memory 结果不会自动写成权威知识或 Skill。
+本次版本包含独立存储、API Key 共享作用域 ACL、L0–L3 写入规则、TTL、幂等 Capture、关键词 Recall、Forget、REST/MCP、记忆治理控制台的查询/暂停/恢复/删除和操作审计。BM25/向量混合 Recall、异步记忆归并、可信员工 subject 身份映射和跨系统经验审批仍属于后续阶段；Memory 结果不会自动写成权威知识或 Skill。
 
 
 
@@ -133,7 +151,7 @@ AKB 已实现文档接入与治理、知识卡片和断言、知识图谱、多�
 
 迁移 `V48__query_feedback_workflow.sql` 为 Query Trace 增加调用者归属，并创建持久化反馈工作流表。
 
-记忆 API 与 MCP 契约详见 [Agent 平台记忆服务集成规范](AGENT-MEMORY-INTEGRATION.md)，数据库迁移为 `V49__agent_memory_platform.sql`。
+记忆 API 与 MCP 契约详见本文件；数据库迁移依次为 `V49__agent_memory_platform.sql`、`V50__agent_memory_scope_access.sql`、`V51__agent_memory_governance.sql`。
 
 ### 后续实施次序
 

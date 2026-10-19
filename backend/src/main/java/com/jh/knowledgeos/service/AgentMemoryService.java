@@ -44,6 +44,9 @@ public class AgentMemoryService {
         if (content.isEmpty() || content.length() > 4000) {
             throw new IllegalArgumentException("记忆内容不能为空且最多 4000 字符");
         }
+        if (!"AGENT".equals(scopeType)) {
+            requireSharedScopeAccess(key, namespace, scopeType, scopeCode, "WRITE");
+        }
         List<String> tags = normalizeTags(request.getTags());
         Double confidence = request.getConfidence() == null ? Double.valueOf(0.7) : request.getConfidence();
         Integer importance = request.getImportance() == null ? Integer.valueOf(3) : request.getImportance();
@@ -122,6 +125,9 @@ public class AgentMemoryService {
             ? "AGENT" : normalize(request.getScopeType());
         validateScopeType(scopeType);
         String scopeCode = resolveScopeCode(scopeType, request.getScopeCode(), agent);
+        if (!"AGENT".equals(scopeType)) {
+            requireSharedScopeAccess(key, namespace, scopeType, scopeCode, "READ");
+        }
         String query = request.getQuery() == null ? "" : request.getQuery().trim();
         if (query.isEmpty() || query.length() > 300) {
             throw new IllegalArgumentException("召回关键词不能为空且最多 300 字符");
@@ -155,11 +161,21 @@ public class AgentMemoryService {
         if ("AGENT".equals(String.valueOf(existing.get("scopeType"))) && !agent.equals(String.valueOf(existing.get("agentCode")))) {
             throw new SecurityException("只能删除当前 Agent 自己的私有记忆");
         }
+        if (!"AGENT".equals(String.valueOf(existing.get("scopeType")))) {
+            requireSharedScopeAccess(key, namespace, String.valueOf(existing.get("scopeType")),
+                String.valueOf(existing.get("scopeCode")), "WRITE");
+        }
         int changed = mapper.forget(namespace, memoryCode.trim(), agent);
         Map<String, Object> result = new LinkedHashMap<String, Object>();
         result.put("forgotten", Boolean.valueOf(changed > 0));
         result.put("memoryCode", memoryCode.trim());
         return result;
+    }
+
+    private void requireSharedScopeAccess(ApiKey key, String namespace, String scopeType, String scopeCode, String accessMode) {
+        if (!mapper.hasScopeAccess(key.getId(), namespace, scopeType, scopeCode, accessMode)) {
+            throw new SecurityException("当前 API Key 未获准访问该共享记忆作用域");
+        }
     }
 
     public String namespace(ApiKey key) {

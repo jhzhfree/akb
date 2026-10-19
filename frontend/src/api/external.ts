@@ -17,6 +17,32 @@ export const createExternalKey = (payload:{
 }):Promise<ApiResponse<ExternalKeyRow>> => axios.post('/api/external/admin/keys', payload)
 export const revokeExternalKey = (id:number):Promise<ApiResponse<ExternalKeyRow>> =>
   axios.post(`/api/external/admin/keys/${id}/revoke`)
+export interface MemoryScopeGrant {
+  scopeType:'TEAM'|'PROJECT'|'TASK'|'WORKFLOW'|'SESSION'; scopeCode:string; canRead:boolean; canWrite:boolean
+}
+export const getMemoryScopeGrants = (id:number):Promise<ApiResponse<MemoryScopeGrant[]>> =>
+  axios.get(`/api/external/admin/keys/${id}/memory-access`)
+export const replaceMemoryScopeGrants = (id:number, grants:MemoryScopeGrant[]):Promise<ApiResponse<MemoryScopeGrant[]>> =>
+  axios.put(`/api/external/admin/keys/${id}/memory-access`, grants)
+export interface ManagedMemoryItem {
+  memoryCode:string; agentCode:string; scopeType:string; scopeCode:string; memoryLevel:string
+  content:string; sourceType:string|null; sourceRef:string|null; importance:number; confidence:number
+  expiresAt:string|null; status:'ACTIVE'|'SUSPENDED'; createdTime:string; updatedTime:string
+}
+export const listManagedMemories = (id:number, params?:{
+  status?:string; scopeType?:string; scopeCode?:string; limit?:number; offset?:number
+}):Promise<ApiResponse<{ namespace:string; limit:number; offset:number; items:ManagedMemoryItem[] }>> =>
+  axios.get(`/api/external/admin/keys/${id}/memories`, { params })
+export const setManagedMemoryStatus = (id:number, code:string, status:'ACTIVE'|'SUSPENDED', reason:string):Promise<ApiResponse<unknown>> =>
+  axios.put(`/api/external/admin/keys/${id}/memories/${encodeURIComponent(code)}/status`, { reason }, { params:{ status } })
+export const forgetManagedMemory = (id:number, code:string, reason:string):Promise<ApiResponse<unknown>> =>
+  axios.post(`/api/external/admin/keys/${id}/memories/${encodeURIComponent(code)}/forget`, { reason })
+export interface MemoryGovernanceEvent {
+  memoryCode:string; agentCode:string; scopeType:string; scopeCode:string; operation:string
+  oldStatus:string|null; newStatus:string|null; reason:string; operatorId:number; createdTime:string
+}
+export const listMemoryGovernanceEvents = (id:number):Promise<ApiResponse<{ limit:number; offset:number; items:MemoryGovernanceEvent[] }>> =>
+  axios.get(`/api/external/admin/keys/${id}/memory-events`, { params:{ limit:200 } })
 export const listExternalAudits = (
   keyId?:number|null, limit = 50,
 ):Promise<ApiResponse<ExternalAuditRow[]>> =>

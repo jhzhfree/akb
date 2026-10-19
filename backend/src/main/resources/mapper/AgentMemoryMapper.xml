@@ -45,6 +45,71 @@
       AND (scope_type&lt;&gt;'AGENT' OR agent_code=#{agent}) AND status='ACTIVE'
   </delete>
 
+  <select id="hasScopeAccess" resultType="boolean">
+    SELECT CASE WHEN COUNT(1) &gt; 0 THEN TRUE ELSE FALSE END
+    FROM t_agent_memory_scope_access
+    WHERE api_key_id=#{keyId} AND namespace_code=#{namespace}
+      AND scope_type=#{scopeType} AND scope_code=#{scopeCode} AND status='ACTIVE'
+      AND ((#{accessMode}='READ' AND can_read=1) OR (#{accessMode}='WRITE' AND can_write=1))
+  </select>
+
+  <select id="listScopeAccess" resultType="map">
+    SELECT scope_type scopeType,scope_code scopeCode,can_read canRead,can_write canWrite,
+      created_by_operator createdByOperator,created_time createdTime
+    FROM t_agent_memory_scope_access
+    WHERE api_key_id=#{keyId} AND namespace_code=#{namespace} AND status='ACTIVE'
+    ORDER BY scope_type,scope_code
+  </select>
+
+  <delete id="deleteScopeAccess">DELETE FROM t_agent_memory_scope_access WHERE api_key_id=#{keyId}</delete>
+
+  <insert id="insertScopeAccess">
+    INSERT INTO t_agent_memory_scope_access(api_key_id,namespace_code,scope_type,scope_code,can_read,can_write,status,created_by_operator)
+    VALUES(#{keyId},#{namespace},#{scopeType},#{scopeCode},#{canRead},#{canWrite},'ACTIVE',#{operatorId})
+  </insert>
+
+  <select id="listManaged" resultType="map">
+    SELECT memory_code memoryCode,namespace_code namespaceCode,agent_code agentCode,scope_type scopeType,scope_code scopeCode,
+      memory_level memoryLevel,content,tags_json tags,source_type sourceType,source_ref sourceRef,confidence,importance,
+      expires_at expiresAt,status,created_time createdTime,updated_time updatedTime
+    FROM t_agent_memory
+    WHERE namespace_code=#{namespace}
+    <if test="status != null">AND status=#{status}</if>
+    <if test="scopeType != null">AND scope_type=#{scopeType}</if>
+    <if test="scopeCode != null">AND scope_code=#{scopeCode}</if>
+    ORDER BY updated_time DESC,id DESC
+    LIMIT #{limit} OFFSET #{offset}
+  </select>
+
+  <select id="getManaged" resultType="map">
+    SELECT memory_code memoryCode,namespace_code namespaceCode,agent_code agentCode,scope_type scopeType,scope_code scopeCode,status
+    FROM t_agent_memory WHERE namespace_code=#{namespace} AND memory_code=#{code} LIMIT 1
+  </select>
+
+  <update id="updateManagedStatus">
+    UPDATE t_agent_memory SET status=#{status},updated_time=CURRENT_TIMESTAMP
+    WHERE namespace_code=#{namespace} AND memory_code=#{code} AND status=#{expectedStatus}
+  </update>
+
+  <delete id="deleteManaged">
+    DELETE FROM t_agent_memory WHERE namespace_code=#{namespace} AND memory_code=#{code}
+  </delete>
+
+  <insert id="insertGovernanceEvent">
+    INSERT INTO t_agent_memory_governance_event(memory_code,namespace_code,agent_code,scope_type,scope_code,operation,
+      old_status,new_status,reason,operator_id)
+    VALUES(#{memoryCode},#{namespace},#{agentCode},#{scopeType},#{scopeCode},#{operation},#{oldStatus},#{newStatus},#{reason},#{operatorId})
+  </insert>
+
+  <select id="listGovernanceEvents" resultType="map">
+    SELECT memory_code memoryCode,agent_code agentCode,scope_type scopeType,scope_code scopeCode,operation,
+      old_status oldStatus,new_status newStatus,reason,operator_id operatorId,created_time createdTime
+    FROM t_agent_memory_governance_event
+    WHERE namespace_code=#{namespace}
+    ORDER BY created_time DESC,id DESC
+    LIMIT #{limit} OFFSET #{offset}
+  </select>
+
   <delete id="purgeExpired">
     DELETE FROM t_agent_memory
     WHERE expires_at IS NOT NULL AND expires_at &lt; CURRENT_TIMESTAMP

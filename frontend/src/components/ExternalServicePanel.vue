@@ -150,8 +150,10 @@
             <el-table-column label="最近调用" width="170">
               <template #default="{ row }">{{ row.lastUsedAt || '—' }}</template>
             </el-table-column>
-            <el-table-column label="操作" width="110" fixed="right">
+            <el-table-column label="操作" width="250" fixed="right">
               <template #default="{ row }">
+                <el-button v-if="hasMemoryScope(row)" link type="primary" size="small" @click="openMemoryAccess(row)">记忆授权</el-button>
+                <el-button v-if="hasMemoryScope(row)" link type="primary" size="small" @click="openMemoryManager(row)">记忆管理</el-button>
                 <el-button v-if="row.status === 'ACTIVE'" link type="danger" size="small" @click="revoke(row)">吊销</el-button>
                 <span v-else class="text-[11px] text-ink-500">已失效</span>
               </template>
@@ -267,6 +269,80 @@
       </template>
     </el-dialog>
 
+    <el-dialog v-model="memoryAccessVisible" title="共享记忆授权" width="740px">
+      <p class="kb-muted mb-3">私有 AGENT 记忆仍按密钥身份隔离。共享记忆必须逐项授权；scope code 相同不代表有访问权限。</p>
+      <div v-for="(grant, index) in memoryGrants" :key="index" class="mb-2 grid grid-cols-12 items-center gap-2">
+        <el-select v-model="grant.scopeType" class="col-span-3" size="small">
+          <el-option value="TEAM" label="团队"/><el-option value="PROJECT" label="项目"/>
+          <el-option value="TASK" label="任务"/><el-option value="WORKFLOW" label="工作流"/>
+          <el-option value="SESSION" label="会话"/>
+        </el-select>
+        <el-input v-model="grant.scopeCode" class="col-span-4" size="small" placeholder="作用域编码"/>
+        <el-checkbox v-model="grant.canRead" class="col-span-2">读取</el-checkbox>
+        <el-checkbox v-model="grant.canWrite" class="col-span-2">写入</el-checkbox>
+        <el-button class="col-span-1" link type="danger" @click="memoryGrants.splice(index, 1)">移除</el-button>
+      </div>
+      <el-button size="small" @click="addMemoryGrant">添加作用域</el-button>
+      <template #footer>
+        <el-button size="small" @click="memoryAccessVisible = false">取消</el-button>
+        <el-button size="small" type="primary" :loading="memoryAccessSaving" @click="saveMemoryAccess">保存</el-button>
+      </template>
+    </el-dialog>
+
+    <el-dialog v-model="memoryManagerVisible" :title="`记忆资产 · ${memoryManagerKey?.name || ''}`" width="1000px">
+      <div class="mb-3 flex flex-wrap items-center gap-2">
+        <el-button size="small" @click="openMemoryEvents">治理记录</el-button>
+        <el-select v-model="memoryStatusFilter" clearable size="small" class="w-36" placeholder="全部状态" @change="loadManagedMemories()">
+          <el-option value="ACTIVE" label="可召回"/><el-option value="SUSPENDED" label="已暂停"/>
+        </el-select>
+        <el-select v-model="memoryTypeFilter" clearable size="small" class="w-36" placeholder="全部作用域" @change="loadManagedMemories()">
+          <el-option value="AGENT" label="Agent"/><el-option value="TEAM" label="团队"/><el-option value="PROJECT" label="项目"/>
+          <el-option value="TASK" label="任务"/><el-option value="WORKFLOW" label="工作流"/><el-option value="SESSION" label="会话"/>
+        </el-select>
+        <el-input v-model="memoryCodeFilter" size="small" class="w-48" placeholder="作用域编码" @keyup.enter="loadManagedMemories()"/>
+        <el-button size="small" @click="loadManagedMemories()">查询</el-button>
+      </div>
+      <el-table :data="managedMemories" v-loading="memoryManagerLoading" max-height="480" size="small" border>
+        <el-table-column prop="scopeType" label="类型" width="100"/>
+        <el-table-column prop="scopeCode" label="作用域" width="150" show-overflow-tooltip/>
+        <el-table-column prop="memoryLevel" label="层级" width="70"/>
+        <el-table-column label="记忆内容" min-width="260" show-overflow-tooltip>
+          <template #default="{ row }">{{ row.content }}</template>
+        </el-table-column>
+        <el-table-column label="来源" width="140" show-overflow-tooltip>
+          <template #default="{ row }">{{ row.sourceType || '—' }} · {{ row.sourceRef || '无引用' }}</template>
+        </el-table-column>
+        <el-table-column label="状态" width="100">
+          <template #default="{ row }"><el-tag :type="row.status === 'ACTIVE' ? 'success' : 'warning'" size="small">{{ row.status === 'ACTIVE' ? '可召回' : '已暂停' }}</el-tag></template>
+        </el-table-column>
+        <el-table-column label="操作" width="170" fixed="right">
+          <template #default="{ row }">
+            <el-button link size="small" :type="row.status === 'ACTIVE' ? 'warning' : 'success'" @click="changeManagedStatus(row)">{{ row.status === 'ACTIVE' ? '暂停' : '恢复' }}</el-button>
+            <el-button link type="danger" size="small" @click="forgetManaged(row)">删除</el-button>
+          </template>
+        </el-table-column>
+      </el-table>
+      <div class="mt-2 flex items-center justify-between text-xs text-ink-500">
+        <span>暂停记录不会进入 Agent Recall。</span>
+        <el-button v-if="memoryHasMore" link type="primary" size="small" :loading="memoryManagerLoading" @click="loadMoreManagedMemories">加载更多</el-button>
+      </div>
+    </el-dialog>
+
+    <el-dialog v-model="memoryEventsVisible" title="记忆治理记录（不含正文）" width="900px">
+      <el-table :data="memoryEvents" v-loading="memoryEventsLoading" max-height="480" size="small" border>
+        <el-table-column prop="createdTime" label="时间" width="170"/>
+        <el-table-column prop="operation" label="操作" width="100"/>
+        <el-table-column label="作用域" min-width="180">
+          <template #default="{ row }">{{ row.scopeType }} / {{ row.scopeCode }}</template>
+        </el-table-column>
+        <el-table-column label="状态变化" width="150">
+          <template #default="{ row }">{{ row.oldStatus || '—' }} → {{ row.newStatus || '已删除' }}</template>
+        </el-table-column>
+        <el-table-column prop="operatorId" label="操作人 ID" width="100"/>
+        <el-table-column prop="reason" label="原因" min-width="180" show-overflow-tooltip/>
+      </el-table>
+    </el-dialog>
+
     <el-dialog v-model="secretVisible" title="请立即保存明文密钥" width="520px">
       <p class="kb-muted">明文密钥只会展示这一次，关闭后无法再次获取，只能重新签发。</p>
       <pre class="code-block mt-2">{{ issuedSecret }}</pre>
@@ -283,7 +359,9 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { ExternalAuditRow, ExternalKeyRow, ExternalServiceOverview, KnowledgeBase } from '../types'
 import {
-  createExternalKey, getExternalServices, listExternalAudits, listExternalKeys,
+  createExternalKey, getExternalServices, getMemoryScopeGrants, listExternalAudits, listExternalKeys,
+  forgetManagedMemory, listManagedMemories, replaceMemoryScopeGrants, setManagedMemoryStatus,
+  listMemoryGovernanceEvents, type ManagedMemoryItem, type MemoryGovernanceEvent, type MemoryScopeGrant,
   probeExternal, revokeExternalKey,
 } from '../api/external'
 import { unwrap } from '../api/knowledge'
@@ -314,6 +392,22 @@ const error = ref('')
 const auditLimit = ref(5)
 
 const createVisible = ref(false)
+const memoryAccessVisible = ref(false)
+const memoryAccessSaving = ref(false)
+const memoryAccessKey = ref<ExternalKeyRow | null>(null)
+const memoryGrants = ref<MemoryScopeGrant[]>([])
+const memoryManagerVisible = ref(false)
+const memoryManagerLoading = ref(false)
+const memoryManagerKey = ref<ExternalKeyRow | null>(null)
+const managedMemories = ref<ManagedMemoryItem[]>([])
+const memoryStatusFilter = ref('')
+const memoryTypeFilter = ref('')
+const memoryCodeFilter = ref('')
+const memoryOffset = ref(0)
+const memoryHasMore = ref(false)
+const memoryEventsVisible = ref(false)
+const memoryEventsLoading = ref(false)
+const memoryEvents = ref<MemoryGovernanceEvent[]>([])
 const secretVisible = ref(false)
 const issuedSecret = ref('')
 const form = ref<{
@@ -366,6 +460,9 @@ function origin() {
 function scopeList(row:ExternalKeyRow) {
   return String(row.scopes || 'READ').split(',').filter(Boolean)
 }
+function hasMemoryScope(row:ExternalKeyRow) {
+  return scopeList(row).some(scope => scope === 'MEMORY_READ' || scope === 'MEMORY_WRITE')
+}
 function scopeLabel(scope:string) {
   const labels:Record<string,string> = {
     READ:'读取（READ）', WRITE:'知识写入（WRITE）', INGEST:'文本接入（INGEST）',
@@ -409,6 +506,90 @@ function openCreate() {
     name:'', knowledgeBaseId:null, scopes:['READ'], rateLimitPerMinute:60, expiresAt:'', memoryNamespace:'', memoryAgentCode:'',
   }
   createVisible.value = true
+}
+
+async function openMemoryAccess(row:ExternalKeyRow) {
+  memoryAccessKey.value = row
+  try {
+    memoryGrants.value = unwrap(await getMemoryScopeGrants(row.id), [])
+      .map(grant => ({ ...grant, canRead:Boolean(grant.canRead), canWrite:Boolean(grant.canWrite) }))
+    memoryAccessVisible.value = true
+  } catch (e) { ElMessage.error(message(e)) }
+}
+function addMemoryGrant() {
+  memoryGrants.value.push({ scopeType:'PROJECT', scopeCode:'', canRead:true, canWrite:false })
+}
+async function saveMemoryAccess() {
+  if (!memoryAccessKey.value) return
+  memoryAccessSaving.value = true
+  try {
+    unwrap(await replaceMemoryScopeGrants(memoryAccessKey.value.id, memoryGrants.value), [])
+    memoryAccessVisible.value = false
+    ElMessage.success('共享记忆授权已更新')
+  } catch (e) { ElMessage.error(message(e)) }
+  finally { memoryAccessSaving.value = false }
+}
+
+async function openMemoryManager(row:ExternalKeyRow) {
+  memoryManagerKey.value = row
+  memoryStatusFilter.value = ''
+  memoryTypeFilter.value = ''
+  memoryCodeFilter.value = ''
+  memoryManagerVisible.value = true
+  await loadManagedMemories()
+}
+async function loadManagedMemories(append = false) {
+  if (!memoryManagerKey.value) return
+  if (!append) memoryOffset.value = 0
+  memoryManagerLoading.value = true
+  try {
+    const result = unwrap(await listManagedMemories(memoryManagerKey.value.id, {
+      status:memoryStatusFilter.value || undefined,
+      scopeType:memoryTypeFilter.value || undefined,
+      scopeCode:memoryCodeFilter.value.trim() || undefined,
+      limit:200, offset:memoryOffset.value,
+    }), null)
+    const items = result?.items || []
+    managedMemories.value = append ? managedMemories.value.concat(items) : items
+    memoryOffset.value += items.length
+    memoryHasMore.value = items.length === 200
+  } catch (e) { ElMessage.error(message(e)) }
+  finally { memoryManagerLoading.value = false }
+}
+async function loadMoreManagedMemories() { await loadManagedMemories(true) }
+async function openMemoryEvents() {
+  if (!memoryManagerKey.value) return
+  memoryEventsVisible.value = true
+  memoryEventsLoading.value = true
+  try {
+    const result = unwrap(await listMemoryGovernanceEvents(memoryManagerKey.value.id), null)
+    memoryEvents.value = result?.items || []
+  } catch (e) { ElMessage.error(message(e)) }
+  finally { memoryEventsLoading.value = false }
+}
+async function changeManagedStatus(row:ManagedMemoryItem) {
+  if (!memoryManagerKey.value) return
+  const target = row.status === 'ACTIVE' ? 'SUSPENDED' : 'ACTIVE'
+  try {
+    const { value } = await ElMessageBox.prompt('该原因会进入记忆治理审计记录。', target === 'ACTIVE' ? '恢复记忆' : '暂停记忆', {
+      inputPlaceholder:'填写处理原因', inputValidator:value => Boolean(value?.trim()), confirmButtonText:'确认', cancelButtonText:'取消',
+    })
+    await setManagedMemoryStatus(memoryManagerKey.value.id, row.memoryCode, target, value)
+    ElMessage.success(target === 'ACTIVE' ? '记忆已恢复' : '记忆已暂停')
+    await loadManagedMemories()
+  } catch (e) { if (e !== 'cancel' && e !== 'close') ElMessage.error(message(e)) }
+}
+async function forgetManaged(row:ManagedMemoryItem) {
+  if (!memoryManagerKey.value) return
+  try {
+    await ElMessageBox.confirm('删除后记忆正文无法恢复；系统只保留不含正文的操作记录。', '物理删除记忆', { type:'warning' })
+    const { value } = await ElMessageBox.prompt('填写删除原因。', '删除原因', {
+      inputPlaceholder:'填写处理原因', inputValidator:value => Boolean(value?.trim()), confirmButtonText:'删除', cancelButtonText:'取消',
+    })
+    await forgetManagedMemory(memoryManagerKey.value.id, row.memoryCode, value)
+    ElMessage.success('记忆已删除')
+    await loadManagedMemories()
+  } catch (e) { if (e !== 'cancel' && e !== 'close') ElMessage.error(message(e)) }
 }
 
 async function saveKey() {

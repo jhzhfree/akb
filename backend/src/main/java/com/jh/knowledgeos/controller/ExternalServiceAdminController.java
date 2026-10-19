@@ -7,8 +7,12 @@ import com.jh.knowledgeos.domain.ApiCallAudit;
 import com.jh.knowledgeos.domain.User;
 import com.jh.knowledgeos.dto.EmbedTokenRevokeRequest;
 import com.jh.knowledgeos.dto.ExternalKeyRequest;
+import com.jh.knowledgeos.dto.AgentMemoryScopeGrantRequest;
+import com.jh.knowledgeos.dto.AgentMemoryGovernanceRequest;
 import com.jh.knowledgeos.exception.UnauthorizedException;
 import com.jh.knowledgeos.service.ApiKeyService;
+import com.jh.knowledgeos.service.AgentMemoryScopeAccessService;
+import com.jh.knowledgeos.service.AgentMemoryGovernanceService;
 import com.jh.knowledgeos.service.AuthContext;
 import com.jh.knowledgeos.service.EmbedTokenLifecycleService;
 import com.jh.knowledgeos.service.ExternalAuditService;
@@ -21,6 +25,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RestController;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeParseException;
@@ -29,6 +34,7 @@ import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Collections;
 
 /**
  * Console-side governance for the external interface-service layer.
@@ -48,15 +54,20 @@ public class ExternalServiceAdminController {
     private final McpServerService mcpServerService;
 
     private final EmbedTokenLifecycleService tokenLifecycle;
+    private final AgentMemoryScopeAccessService memoryScopeAccessService;
+    private final AgentMemoryGovernanceService memoryGovernanceService;
 
     private final KnowledgeProperties.External properties;
 
     public ExternalServiceAdminController(ApiKeyService apiKeyService, ExternalAuditService auditService, McpServerService mcpServerService,
-        EmbedTokenLifecycleService tokenLifecycle, KnowledgeProperties properties) {
+        EmbedTokenLifecycleService tokenLifecycle, AgentMemoryScopeAccessService memoryScopeAccessService,
+        AgentMemoryGovernanceService memoryGovernanceService, KnowledgeProperties properties) {
         this.apiKeyService = apiKeyService;
         this.auditService = auditService;
         this.mcpServerService = mcpServerService;
         this.tokenLifecycle = tokenLifecycle;
+        this.memoryScopeAccessService = memoryScopeAccessService;
+        this.memoryGovernanceService = memoryGovernanceService;
         this.properties = properties.external();
     }
 
@@ -132,6 +143,61 @@ public class ExternalServiceAdminController {
     public ApiResponse<Object> revokeKey(@PathVariable Long id) {
         requireManager();
         return ApiResponse.ok(apiKeyService.revoke(id));
+    }
+
+    @GetMapping("/keys/{id}/memory-access")
+    @Operation(summary = "查看 API Key 的共享记忆作用域授权")
+    public ApiResponse<Object> memoryScopeAccess(@PathVariable Long id) {
+        requireManager();
+        return ApiResponse.ok(memoryScopeAccessService.list(id));
+    }
+
+    @PutMapping("/keys/{id}/memory-access")
+    @Operation(summary = "原子替换 API Key 的共享记忆作用域授权；空数组表示全部撤销")
+    public ApiResponse<Object> replaceMemoryScopeAccess(@PathVariable Long id,
+        @RequestBody(required = false) List<AgentMemoryScopeGrantRequest> grants) {
+        User operator = requireManager();
+        return ApiResponse.ok(memoryScopeAccessService.replace(id,
+            grants == null ? Collections.<AgentMemoryScopeGrantRequest>emptyList() : grants, operator.getId()));
+    }
+
+    @GetMapping("/keys/{id}/memories")
+    @Operation(summary = "查看 API Key 命名空间内记忆资产，支持状态和作用域筛选")
+    public ApiResponse<Object> memories(@PathVariable Long id,
+        @RequestParam(value = "status", required = false) String status,
+        @RequestParam(value = "scopeType", required = false) String scopeType,
+        @RequestParam(value = "scopeCode", required = false) String scopeCode,
+        @RequestParam(value = "limit", required = false) Integer limit,
+        @RequestParam(value = "offset", required = false) Integer offset) {
+        requireManager();
+        return ApiResponse.ok(memoryGovernanceService.list(id, status, scopeType, scopeCode, limit, offset));
+    }
+
+    @PutMapping("/keys/{id}/memories/{memoryCode}/status")
+    @Operation(summary = "暂停或恢复记忆召回；操作需填写原因并留痕")
+    public ApiResponse<Object> memoryStatus(@PathVariable Long id, @PathVariable String memoryCode,
+        @RequestParam("status") String status, @RequestBody(required = false) AgentMemoryGovernanceRequest body) {
+        User operator = requireManager();
+        return ApiResponse.ok(memoryGovernanceService.setStatus(id, memoryCode, status,
+            body == null ? null : body.getReason(), operator.getId()));
+    }
+
+    @PostMapping("/keys/{id}/memories/{memoryCode}/forget")
+    @Operation(summary = "管理员物理删除记忆；保留不含记忆正文的审计记录")
+    public ApiResponse<Object> forgetMemory(@PathVariable Long id, @PathVariable String memoryCode,
+        @RequestBody(required = false) AgentMemoryGovernanceRequest body) {
+        User operator = requireManager();
+        return ApiResponse.ok(memoryGovernanceService.forget(id, memoryCode,
+            body == null ? null : body.getReason(), operator.getId()));
+    }
+
+    @GetMapping("/keys/{id}/memory-events")
+    @Operation(summary = "查看该 API Key 命名空间的记忆治理审计，不包含记忆正文")
+    public ApiResponse<Object> memoryEvents(@PathVariable Long id,
+        @RequestParam(value = "limit", required = false) Integer limit,
+        @RequestParam(value = "offset", required = false) Integer offset) {
+        requireManager();
+        return ApiResponse.ok(memoryGovernanceService.events(id, limit, offset));
     }
 
     @GetMapping("/audits")

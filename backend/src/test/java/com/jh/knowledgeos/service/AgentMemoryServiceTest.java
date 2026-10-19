@@ -64,6 +64,7 @@ class AgentMemoryServiceTest {
         request.setScopeType("PROJECT");
         request.setScopeCode("release-2026");
         request.setLimit(12);
+        when(mapper.hasScopeAccess(41L, "octop-prod", "PROJECT", "release-2026", "READ")).thenReturn(true);
         when(mapper.recall("octop-prod", "agent-ops", "PROJECT", "release-2026", "deployment rollback", 12))
             .thenReturn(Collections.<Map<String, Object>>singletonList(new LinkedHashMap<String, Object>()));
 
@@ -71,6 +72,34 @@ class AgentMemoryServiceTest {
 
         verify(access).assertScope(key, ApiKey.SCOPE_MEMORY_READ);
         assertEquals(1, result.get("count"));
+    }
+
+    @Test
+    void sharedCaptureAndRecallRequireExactCredentialGrant() {
+        ApiKey key = key();
+        MemoryCaptureRequest capture = new MemoryCaptureRequest();
+        capture.setMemoryLevel("L2"); capture.setScopeType("PROJECT"); capture.setScopeCode("release-2026");
+        capture.setContent("Deployment rollback verified"); capture.setSourceType("TASK_RESULT"); capture.setSourceRef("run-44");
+        assertThrows(SecurityException.class, () -> service.capture(key, capture));
+        verify(mapper).hasScopeAccess(41L, "octop-prod", "PROJECT", "release-2026", "WRITE");
+        verify(mapper, never()).insert(any(String.class), any(String.class), any(String.class), any(String.class), any(String.class),
+            any(String.class), any(String.class), any(String.class), any(String.class), any(String.class), any(Double.class),
+            any(Integer.class), any(java.time.LocalDateTime.class), any(Long.class), any(String.class));
+
+        MemoryRecallRequest recall = new MemoryRecallRequest();
+        recall.setScopeType("PROJECT"); recall.setScopeCode("other-project"); recall.setQuery("rollback");
+        assertThrows(SecurityException.class, () -> service.recall(key, recall));
+        verify(mapper).hasScopeAccess(41L, "octop-prod", "PROJECT", "other-project", "READ");
+    }
+
+    @Test
+    void sharedForgetRequiresWriteGrant() {
+        ApiKey key = key();
+        Map<String, Object> existing = new LinkedHashMap<String, Object>();
+        existing.put("scopeType", "PROJECT"); existing.put("scopeCode", "other-project"); existing.put("agentCode", "another-agent");
+        when(mapper.get("octop-prod", "MEM_SHARED")).thenReturn(existing);
+        assertThrows(SecurityException.class, () -> service.forget(key, "MEM_SHARED"));
+        verify(mapper, never()).forget("octop-prod", "MEM_SHARED", "agent-ops");
     }
 
     @Test

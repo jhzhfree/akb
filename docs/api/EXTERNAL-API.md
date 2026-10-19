@@ -127,7 +127,7 @@ curl -X POST http://<host>:8080/api/v1/external/query \
 
 `WRITE` 仅隐含 `READ` 与 `INGEST`，不会隐含授予记忆权限。不传 `scopes` 时默认为 `READ`。无对应 scope 调用会返回 403。
 
-启用记忆权限时可同时配置 API Key 的 `memoryNamespace` 与 `memoryAgentCode`：默认命名空间按 API Key 隔离；管理员给多个 Agent Key 配置相同 namespace 后，它们可按 TEAM / PROJECT / TASK / WORKFLOW 等显式作用域共享记忆。当前授权边界是 namespace；同一 namespace 内具备 `MEMORY_READ` 的密钥都可按 scope code 读取共享记忆，scope code 本身不提供独立 ACL。`memoryAgentCode` 是服务端信任的 Agent 身份，调用参数不能更改。不同租户/应用不得复用 namespace；需要项目级授权时应先使用分离的 namespace。
+启用记忆权限时可同时配置 API Key 的 `memoryNamespace` 与 `memoryAgentCode`：默认命名空间按 API Key 隔离；多个 Agent Key 配置相同 namespace 后仍需管理员逐 Key 授予 TEAM / PROJECT / TASK / WORKFLOW / SESSION 的读取或写入权限。只有精确授权的 `scopeType + scopeCode` 可访问，且 scope code 区分大小写。`memoryAgentCode` 是服务端信任的 Agent 身份，调用参数不能更改。不同租户/应用不得复用 namespace。
 
 ### 2.3 知识库归属规则
 
@@ -1041,7 +1041,7 @@ curl -X POST http://<host>:8080/api/v1/external/documents/text \
 
 ### 4.13 Agent 记忆 API（需要独立 Memory Scope）
 
-Agent Memory 与知识卡片、断言和证据使用独立表与生命周期。服务只保存调用方显式提交的记忆，不会自动收集员工聊天。身份和 namespace 从 API Key 配置确定；请求体里的 `scopeCode` 仅是已授权 namespace 内的项目/任务/工作流标识。
+Agent Memory 与知识卡片、断言和证据使用独立表与生命周期。服务只保存调用方显式提交的记忆，不会自动收集员工聊天。Agent 身份和 namespace 从 API Key 配置确定；请求体里的 `scopeCode` 是待授权的项目/任务/工作流标识，服务会按 API Key 校验精确作用域授权。
 
 记忆层级：`L0` 会话片段（只允许 `SESSION`，默认 7 天且最多 30 天）；`L1` 原子记忆（默认 30 天）；`L2` 团队/项目/任务/工作流场景记忆（默认 180 天）；`L3` Agent 画像（只允许 `AGENT` 且来源必须为 `USER_CONFIRMED` 或 `MANUAL`，默认 365 天）。可通过 `expiresInDays` 覆盖默认 TTL，范围 1–3650 天，L0 上限仍为 30 天。到期记忆不会进入召回结果；L0 到期后由小时级任务清理，其他层级在 30 天恢复窗口后清理。Forget 会立即物理删除记忆。
 
@@ -1053,7 +1053,7 @@ curl -X POST http://<host>:8080/api/v1/external/memories/capture \
   -d '{"memoryLevel":"L2","scopeType":"WORKFLOW","scopeCode":"release-flow","content":"发布前先确认数据库迁移已在预发环境执行","sourceType":"WORKFLOW","sourceRef":"run-2026-10-19-001","importance":4,"idempotencyKey":"run-2026-10-19-001:preflight"}'
 ```
 
-`scopeType` 可选 `AGENT / TEAM / PROJECT / TASK / WORKFLOW / SESSION`。`AGENT` 的 `scopeCode` 由服务端替换为 Key 绑定的 Agent 身份；其他作用域必须提交受限字符集的 `scopeCode`。重复使用同一 `idempotencyKey` 会返回原记忆编码，避免工作流重试重复写入。`TASK_RESULT` 和 `WORKFLOW` 来源必须提供 `sourceRef`。
+`scopeType` 可选 `AGENT / TEAM / PROJECT / TASK / WORKFLOW / SESSION`。`AGENT` 的 `scopeCode` 由服务端替换为 Key 绑定的 Agent 身份；其他作用域必须提交受限字符集的 `scopeCode`，并要求 API Key 对该完整作用域已有写入授权。重复使用同一 `idempotencyKey` 会返回原记忆编码，避免工作流重试重复写入。`TASK_RESULT` 和 `WORKFLOW` 来源必须提供 `sourceRef`。
 
 #### Recall
 
@@ -1063,7 +1063,7 @@ curl -X POST http://<host>:8080/api/v1/external/memories/recall \
   -d '{"query":"发布前检查","scopeType":"WORKFLOW","scopeCode":"release-flow","limit":10}'
 ```
 
-Recall 返回当前 Agent 的私有记忆，以及当前所选 TEAM / PROJECT / TASK / WORKFLOW / SESSION 作用域内命中的共享记忆。第一版按关键词匹配并结合重要度排序；后续可在不改变 API 的情况下接入 BM25/向量混合召回。
+Recall 返回当前 Agent 的私有记忆，或当前所选且已获读授权的 TEAM / PROJECT / TASK / WORKFLOW / SESSION 作用域内的共享记忆。未授权作用域会被拒绝。第一版按关键词匹配并结合重要度排序；后续可在不改变 API 的情况下接入 BM25/向量混合召回。
 
 #### Forget
 
@@ -1072,7 +1072,14 @@ curl -X DELETE 'http://<host>:8080/api/v1/external/memories/<memoryCode>' \
   -H 'X-API-Key: <MEMORY_WRITE_KEY>'
 ```
 
-Agent 只能 Forget 自己的私有记忆；同一显式共享 namespace 中具备 `MEMORY_WRITE` 的调用方可 Forget 共享作用域记忆。记忆接口不接受嵌入令牌，只接受服务端 API Key。
+Agent 只能 Forget 自己的私有记忆；共享记忆还要求调用方对其作用域具有写入授权。记忆接口不接受嵌入令牌，只接受服务端 API Key。
+
+管理员可在控制台“接口服务 → 凭证”管理记忆授权和资产，也可调用：
+
+- `GET /api/external/admin/keys/{keyId}/memory-access`、`PUT /api/external/admin/keys/{keyId}/memory-access`：查看或原子替换共享作用域授权；空数组撤销全部授权。
+- `GET /api/external/admin/keys/{keyId}/memories?status=&scopeType=&scopeCode=&limit=&offset=`：浏览该 namespace 内的记忆资产。
+- `PUT /api/external/admin/keys/{keyId}/memories/{memoryCode}/status?status=SUSPENDED|ACTIVE`：暂停或恢复召回，正文 `{ "reason": "..." }`。
+- `POST /api/external/admin/keys/{keyId}/memories/{memoryCode}/forget`：按原因物理删除，操作元数据留痕，不保存记忆正文。
 
 ## 5. MCP Server（智能体接入）
 

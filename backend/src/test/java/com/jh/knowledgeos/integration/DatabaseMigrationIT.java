@@ -53,6 +53,8 @@ public class DatabaseMigrationIT {
             assertTrue(tableExists(st, "t_query_trace"));
             assertTrue(tableExists(st, "t_query_feedback"));
             assertTrue(tableExists(st, "t_agent_memory"));
+            assertTrue(tableExists(st, "t_agent_memory_scope_access"));
+            assertTrue(tableExists(st, "t_agent_memory_governance_event"));
             assertTrue(tableExists(st, "t_index_outbox"));
             assertTrue(tableExists(st, "t_index_aggregate_version"));
             assertTrue(tableExists(st, "t_index_delivery_attempt"));
