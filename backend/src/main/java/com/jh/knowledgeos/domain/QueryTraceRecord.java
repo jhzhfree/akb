@@ -9,6 +9,9 @@ public class QueryTraceRecord {
 
     private Long knowledgeBaseId;
 
+    /** Signed-in console user who initiated the query; null for API-key/system calls. */
+    private Long actorUserId;
+
     private String traceId;
 
     private String originalQuery;
@@ -58,6 +61,14 @@ public class QueryTraceRecord {
 
     public void setKnowledgeBaseId(Long v) {
         knowledgeBaseId = v;
+    }
+
+    public Long getActorUserId() {
+        return actorUserId;
+    }
+
+    public void setActorUserId(Long v) {
+        actorUserId = v;
     }
 
     public String getTraceId() {

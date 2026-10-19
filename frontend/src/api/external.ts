@@ -13,7 +13,7 @@ export const listExternalKeys = ():Promise<ApiResponse<ExternalKeyRow[]>> =>
   axios.get('/api/external/admin/keys')
 export const createExternalKey = (payload:{
   name?:string; knowledgeBaseId?:number|null; scopes?:string[]; rateLimitPerMinute?:number
-  expiresAt?:string|null
+  expiresAt?:string|null; memoryNamespace?:string|null; memoryAgentCode?:string|null
 }):Promise<ApiResponse<ExternalKeyRow>> => axios.post('/api/external/admin/keys', payload)
 export const revokeExternalKey = (id:number):Promise<ApiResponse<ExternalKeyRow>> =>
   axios.post(`/api/external/admin/keys/${id}/revoke`)

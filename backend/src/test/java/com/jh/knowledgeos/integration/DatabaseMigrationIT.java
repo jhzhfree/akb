@@ -51,6 +51,8 @@ public class DatabaseMigrationIT {
             assertTrue(tableExists(st, "t_knowledge_card"));
             assertTrue(tableExists(st, "t_claim"));
             assertTrue(tableExists(st, "t_query_trace"));
+            assertTrue(tableExists(st, "t_query_feedback"));
+            assertTrue(tableExists(st, "t_agent_memory"));
             assertTrue(tableExists(st, "t_index_outbox"));
             assertTrue(tableExists(st, "t_index_aggregate_version"));
             assertTrue(tableExists(st, "t_index_delivery_attempt"));
@@ -61,6 +63,9 @@ public class DatabaseMigrationIT {
             assertTrue(columnExists(st, "t_index_schema_release", "snapshot_checksum"));
             assertTrue(columnExists(st, "t_index_schema_release", "source_high_watermark"));
             assertTrue(columnExists(st, "t_query_trace", "trace_id"));
+            assertTrue(columnExists(st, "t_query_trace", "actor_user_id"));
+            assertTrue(columnExists(st, "t_api_key", "memory_namespace"));
+            assertTrue(columnExists(st, "t_api_key", "memory_agent_code"));
             assertTrue(columnExists(st, "t_query_trace", "rerank_json"));
             assertTrue(columnExists(st, "t_query_trace", "latency_ms"));
             assertTrue(indexExists(st, "t_claim", "idx_claim_lookup"));
@@ -80,6 +85,7 @@ public class DatabaseMigrationIT {
         QueryTraceRecord trace = new QueryTraceRecord();
         trace.setQueryId("Q_IT_001");
         trace.setKnowledgeBaseId(1L);
+        trace.setActorUserId(9L);
         trace.setTraceId("TRACE_IT_001");
         trace.setOriginalQuery("integration test");
         trace.setRewrittenQueriesJson("[\"integration test\"]");
@@ -99,6 +105,7 @@ public class DatabaseMigrationIT {
         Map<String, Object> stored = traceMapper.getTrace("Q_IT_001");
         assertNotNull(stored);
         assertEquals("TRACE_IT_001", String.valueOf(stored.get("traceId")));
+        assertEquals(9L, ((Number) stored.get("actorUserId")).longValue());
         assertEquals("none", String.valueOf(stored.get("modelName")));
     }
 

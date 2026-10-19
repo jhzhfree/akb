@@ -239,6 +239,24 @@ export const getAnswerQualificationSummary = (kb:number, hours=24):Promise<ApiRe
 export const getQueryHistory = (kb:number, limit=30):Promise<ApiResponse<QueryHistoryItem[]>> =>
   axios.get(`/api/knowledge/traces/${kb}?limit=${limit}`)
 
+export interface QueryFeedback {
+  id:number; feedbackCode:string; queryId:string; knowledgeBaseId:number; actorUserId?:number
+  rating:'HELPFUL'|'UNHELPFUL'; reasonCode?:string|null; comment?:string|null; suggestedAnswer?:string|null
+  status:'NEW'|'IN_REVIEW'|'ACTION_REQUIRED'|'RESOLVED'|'REJECTED'; reviewNote?:string|null
+  question?:string; answer?:string; traceId?:string; createdTime?:string; updatedTime?:string
+}
+export interface QueryFeedbackOperations {
+  items:QueryFeedback[]
+  summary:Record<string,number>
+}
+/** 已登录使用者对一次问答只保留一条可更新反馈，反馈不直接改写权威知识。 */
+export const submitQueryFeedback = (payload:{queryId:string; rating:'HELPFUL'|'UNHELPFUL'; reasonCode?:string; comment?:string; suggestedAnswer?:string}):Promise<ApiResponse<QueryFeedback>> =>
+  axios.post('/api/knowledge/feedback', payload)
+export const listQueryFeedback = (kb:number, status='', limit=100):Promise<ApiResponse<QueryFeedbackOperations>> =>
+  axios.get(`/api/knowledge/feedback/ops/${kb}`, { params:{ status:status || undefined, limit } })
+export const reviewQueryFeedback = (id:number, status:QueryFeedback['status'], reviewNote:string):Promise<ApiResponse<QueryFeedback>> =>
+  axios.put(`/api/knowledge/feedback/ops/${id}/review`, { status, reviewNote })
+
 /* ---- V1.0 实体与别名词典：查看归一结果并人工纠正 ---- */
 
 export const getEntities = (kb:number):Promise<ApiResponse<import('../types').EntityRow[]>> =>

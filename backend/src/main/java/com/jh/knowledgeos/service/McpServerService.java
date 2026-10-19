@@ -2,6 +2,9 @@ package com.jh.knowledgeos.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.jh.knowledgeos.domain.ApiKey;
+import com.jh.knowledgeos.dto.MemoryCaptureRequest;
+import com.jh.knowledgeos.dto.MemoryRecallRequest;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -32,10 +35,19 @@ public class McpServerService {
 
     private final ObjectMapper objectMapper;
 
-    public McpServerService(ExternalAccessService accessService, ExternalKnowledgeFacade facade, ObjectMapper objectMapper) {
+    private final AgentMemoryService memoryService;
+
+    @Autowired
+    public McpServerService(ExternalAccessService accessService, ExternalKnowledgeFacade facade, ObjectMapper objectMapper,
+        AgentMemoryService memoryService) {
         this.accessService = accessService;
         this.facade = facade;
         this.objectMapper = objectMapper;
+        this.memoryService = memoryService;
+    }
+
+    public McpServerService(ExternalAccessService accessService, ExternalKnowledgeFacade facade, ObjectMapper objectMapper) {
+        this(accessService, facade, objectMapper, null);
     }
 
     /**
@@ -100,7 +112,8 @@ public class McpServerService {
         payload.put("capabilities", capabilities);
         payload.put("serverInfo", serverInfo);
         payload.put("instructions", "用 knowledge_query 提问会返回带引用的答案；knowledge_search 只做检索。"
-            + "可使用稳定 knowledgeBaseCode 标识知识库；API Key 授权范围始终由服务端强制执行。");
+            + "拥有 MEMORY_READ / MEMORY_WRITE 的凭证会额外显示 memory_recall / memory_capture / memory_forget。"
+            + "知识库范围、Agent 身份和记忆命名空间授权始终由服务端强制执行。");
         return payload;
     }
 
@@ -142,6 +155,25 @@ public class McpServerService {
             "string", "证据编码")), Arrays.asList("knowledgeBaseId", "evidenceCode"))));
         tools.add(tool("graph_neighbors", "读取实体/知识对象的图谱邻域", schema(properties(prop("knowledgeBaseId", "integer", "知识库 ID"), prop("code", "string",
             "对象编码"), prop("depth", "integer", "跳数，默认 2"), prop("limit", "integer", "返回上限，默认 50")), Arrays.asList("knowledgeBaseId", "code"))));
+        if (key != null && key.hasScope(ApiKey.SCOPE_MEMORY_READ)) {
+            tools.add(tool("memory_recall", "按当前 Agent 或已授权团队/项目/任务/工作流/会话作用域召回记忆",
+                schema(properties(prop("query", "string", "待召回的关键词或问题"), prop("scopeType", "string", "AGENT（默认）/ TEAM / PROJECT / TASK / WORKFLOW / SESSION"),
+                    prop("scopeCode", "string", "共享空间或会话编码；AGENT 身份由 API Key 确定"), prop("limit", "integer", "返回数量，默认 10，最多 50")),
+                    Arrays.asList("query"))));
+        }
+        if (key != null && key.hasScope(ApiKey.SCOPE_MEMORY_WRITE)) {
+            tools.add(tool("memory_capture", "保存有来源、作用域和有效期的 Agent 记忆",
+                schema(properties(prop("memoryLevel", "string", "L0 会话片段 / L1 原子记忆 / L2 场景记忆 / L3 Agent 画像"),
+                    prop("scopeType", "string", "AGENT / TEAM / PROJECT / TASK / WORKFLOW / SESSION"), prop("scopeCode", "string", "共享空间或会话编码"),
+                    prop("content", "string", "需要持久化的经验或上下文"), arrayProp("tags", "可选标签"),
+                    prop("sourceType", "string", "TASK_RESULT / USER_CONFIRMED / WORKFLOW / MANUAL / OTHER"),
+                    prop("sourceRef", "string", "来源任务、流程或对象编码"), prop("idempotencyKey", "string", "调用重试时保持不变，避免重复写入"),
+                    prop("confidence", "number", "可信度 0-1"),
+                    prop("importance", "integer", "重要度 1-5"), prop("expiresInDays", "integer", "有效期 1-3650 天")),
+                    Arrays.asList("memoryLevel", "scopeType", "content"))));
+            tools.add(tool("memory_forget", "删除当前 Agent 私有记忆或已授权命名空间中的共享记忆",
+                schema(properties(prop("memoryCode", "string", "记忆编码")), Arrays.asList("memoryCode"))));
+        }
         if (key != null && key.hasScope(ApiKey.SCOPE_INGEST)) {
             tools.add(tool("ingest_text", "把一段文本接入知识库（需要 INGEST 权限）",
                 schema(properties(
@@ -207,6 +239,32 @@ public class McpServerService {
             Long kb = resolve(key, args);
             accessService.assertScope(key, ApiKey.SCOPE_INGEST);
             value = facade.ingestText(kb, text(args, "title"), text(args, "text"), text(args, "permissionTags"));
+        } else if ("memory_capture".equals(name)) {
+            requireMemoryService();
+            MemoryCaptureRequest request = new MemoryCaptureRequest();
+            request.setMemoryLevel(text(args, "memoryLevel"));
+            request.setScopeType(text(args, "scopeType"));
+            request.setScopeCode(text(args, "scopeCode"));
+            request.setContent(text(args, "content"));
+            request.setTags(strings(args, "tags"));
+            request.setSourceType(text(args, "sourceType"));
+            request.setSourceRef(text(args, "sourceRef"));
+            request.setIdempotencyKey(text(args, "idempotencyKey"));
+            request.setConfidence(decimal(args, "confidence"));
+            request.setImportance(integer(args, "importance"));
+            request.setExpiresInDays(integer(args, "expiresInDays"));
+            value = memoryService.capture(key, request);
+        } else if ("memory_recall".equals(name)) {
+            requireMemoryService();
+            MemoryRecallRequest request = new MemoryRecallRequest();
+            request.setQuery(text(args, "query"));
+            request.setScopeType(text(args, "scopeType"));
+            request.setScopeCode(text(args, "scopeCode"));
+            request.setLimit(integer(args, "limit"));
+            value = memoryService.recall(key, request);
+        } else if ("memory_forget".equals(name)) {
+            requireMemoryService();
+            value = memoryService.forget(key, text(args, "memoryCode"));
         } else {
             throw new IllegalArgumentException("未知工具：" + name);
         }
@@ -300,6 +358,12 @@ public class McpServerService {
             requested = codeMatch;
         }
         return accessService.resolveKnowledgeBase(key, requested);
+    }
+
+    private void requireMemoryService() {
+        if (memoryService == null) {
+            throw new IllegalStateException("Agent 记忆服务不可用");
+        }
     }
 
     private Map<String, Object> textContent(Object value) {

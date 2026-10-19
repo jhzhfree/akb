@@ -6,14 +6,18 @@ import com.jh.knowledgeos.domain.ApiCallAudit;
 import com.jh.knowledgeos.domain.ApiKey;
 import com.jh.knowledgeos.dto.ExternalIngestRequest;
 import com.jh.knowledgeos.dto.ExternalQueryRequest;
+import com.jh.knowledgeos.dto.MemoryCaptureRequest;
+import com.jh.knowledgeos.dto.MemoryRecallRequest;
 import com.jh.knowledgeos.exception.RateLimitException;
 import com.jh.knowledgeos.exception.UnauthorizedException;
 import com.jh.knowledgeos.service.ExternalAccessService;
 import com.jh.knowledgeos.service.ExternalAuditService;
 import com.jh.knowledgeos.service.ExternalKnowledgeFacade;
+import com.jh.knowledgeos.service.AgentMemoryService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -44,13 +48,16 @@ public class ExternalApiController {
 
     private final ExternalAuditService auditService;
 
+    private final AgentMemoryService memoryService;
+
     private final KnowledgeProperties.External properties;
 
     public ExternalApiController(ExternalAccessService accessService, ExternalKnowledgeFacade facade, ExternalAuditService auditService,
-        KnowledgeProperties properties) {
+        AgentMemoryService memoryService, KnowledgeProperties properties) {
         this.accessService = accessService;
         this.facade = facade;
         this.auditService = auditService;
+        this.memoryService = memoryService;
         this.properties = properties.external();
     }
 
@@ -137,6 +144,36 @@ public class ExternalApiController {
         });
     }
 
+    @PostMapping("/memories/capture")
+    @Operation(summary = "Capture：保存有来源且有 TTL 的 Agent 记忆")
+    public ApiResponse<Object> captureMemory(HttpServletRequest request, @Valid @RequestBody MemoryCaptureRequest body) throws Exception {
+        return call(request, "POST /memories/capture", null,
+            (key, kb) -> {
+                requireDirectMemoryCredential(request);
+                return memoryService.capture(key, body);
+            });
+    }
+
+    @PostMapping("/memories/recall")
+    @Operation(summary = "Recall：按 Agent / 项目 / 任务作用域召回记忆")
+    public ApiResponse<Object> recallMemories(HttpServletRequest request, @Valid @RequestBody MemoryRecallRequest body) throws Exception {
+        return call(request, "POST /memories/recall", null,
+            (key, kb) -> {
+                requireDirectMemoryCredential(request);
+                return memoryService.recall(key, body);
+            });
+    }
+
+    @DeleteMapping("/memories/{memoryCode}")
+    @Operation(summary = "Forget：按记忆编码立即删除")
+    public ApiResponse<Object> forgetMemory(HttpServletRequest request, @PathVariable String memoryCode) throws Exception {
+        return call(request, "DELETE /memories/{memoryCode}", null,
+            (key, kb) -> {
+                requireDirectMemoryCredential(request);
+                return memoryService.forget(key, memoryCode);
+            });
+    }
+
     /**
      * One gate for the whole channel: enabled, credential, scope, quota, then audit.
      */
@@ -146,7 +183,8 @@ public class ExternalApiController {
         // Read once, then hand it to every outcome below. Messages that "缺少 knowledgeBaseId" are
         // only actionable next to the parameters the caller actually sent, so failures carry the
         // same payload successes do.
-        Map<String, Object> params = auditService.requestParamsOf(request);
+        boolean memoryCall = method.contains("/memories/");
+        Object params = memoryCall ? memoryAuditRequest(method) : auditService.requestParamsOf(request);
         try {
             if (!properties.isEnabled()) {
                 throw new SecurityException("对外接口服务已关闭");
@@ -154,7 +192,8 @@ public class ExternalApiController {
             key = accessService.authenticateEmbed(request);
             Long kb = requestedKb == null ? null : accessService.resolveKnowledgeBase(key, requestedKb);
             Object data = body.run(key, kb);
-            auditService.record(key, ApiCallAudit.CHANNEL_REST, method, kb, 200, System.currentTimeMillis() - start, null, params, data, ExternalAccessService.embedTokenOf(request));
+            auditService.record(key, ApiCallAudit.CHANNEL_REST, method, kb, 200, System.currentTimeMillis() - start, null, params,
+                memoryCall ? memoryAuditResponse(method, data) : data, ExternalAccessService.embedTokenOf(request));
             return ApiResponse.ok(data);
         } catch (UnauthorizedException e) {
             auditService.record(key, ApiCallAudit.CHANNEL_REST, method, requestedKb, 401, System.currentTimeMillis() - start, e.getMessage(), params,
@@ -193,6 +232,32 @@ public class ExternalApiController {
         payload.put("status", status);
         payload.put("message", e.getMessage());
         return payload;
+    }
+
+    private Map<String, Object> memoryAuditRequest(String method) {
+        Map<String, Object> payload = new LinkedHashMap<String, Object>();
+        payload.put("operation", method);
+        payload.put("payloadOmitted", Boolean.TRUE);
+        return payload;
+    }
+
+    private Map<String, Object> memoryAuditResponse(String method, Object response) {
+        Map<String, Object> payload = new LinkedHashMap<String, Object>();
+        payload.put("operation", method);
+        payload.put("contentOmitted", Boolean.TRUE);
+        if (response instanceof Map) {
+            Map<?, ?> data = (Map<?, ?>) response;
+            if (data.containsKey("count")) { payload.put("count", data.get("count")); }
+            if (data.containsKey("accepted")) { payload.put("accepted", data.get("accepted")); }
+            if (data.containsKey("forgotten")) { payload.put("forgotten", data.get("forgotten")); }
+        }
+        return payload;
+    }
+
+    private void requireDirectMemoryCredential(HttpServletRequest request) {
+        if (ExternalAccessService.embedTokenOf(request) != null) {
+            throw new SecurityException("记忆接口不接受嵌入令牌，请使用服务端 API Key");
+        }
     }
 
     private interface ExternalCall {

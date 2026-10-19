@@ -11,6 +11,7 @@ import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.jh.knowledgeos.domain.ApiKey;
+import com.jh.knowledgeos.dto.MemoryRecallRequest;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.LinkedHashMap;
@@ -47,6 +48,39 @@ class McpServerServiceTest {
         List<Map<String, Object>> tools = (List<Map<String, Object>>) service.toolsList(key).get("tools");
 
         assertFalse(tools.stream().anyMatch(tool -> "ingest_text".equals(tool.get("name"))));
+    }
+
+    @Test
+    void memoryToolsAreOnlyAdvertisedForExplicitMemoryScopes() {
+        ApiKey key = mock(ApiKey.class);
+        when(key.hasScope(ApiKey.SCOPE_MEMORY_READ)).thenReturn(true);
+        when(key.hasScope(ApiKey.SCOPE_MEMORY_WRITE)).thenReturn(false);
+        McpServerService service = new McpServerService(null, null, new ObjectMapper());
+
+        List<Map<String, Object>> tools = (List<Map<String, Object>>) service.toolsList(key).get("tools");
+
+        assertEquals(true, tools.stream().anyMatch(tool -> "memory_recall".equals(tool.get("name"))));
+        assertFalse(tools.stream().anyMatch(tool -> "memory_capture".equals(tool.get("name"))));
+        assertFalse(tools.stream().anyMatch(tool -> "memory_forget".equals(tool.get("name"))));
+    }
+
+    @Test
+    void mcpMemoryRecallDelegatesToSharedMemoryEngine() throws Exception {
+        ExternalAccessService access = mock(ExternalAccessService.class);
+        AgentMemoryService memory = mock(AgentMemoryService.class);
+        ApiKey key = mock(ApiKey.class);
+        Map<String, Object> recalled = new LinkedHashMap<String, Object>();
+        recalled.put("count", 1);
+        when(memory.recall(eq(key), org.mockito.ArgumentMatchers.any(MemoryRecallRequest.class))).thenReturn(recalled);
+        McpServerService service = new McpServerService(access, null, new ObjectMapper(), memory);
+        Map<String, Object> args = new LinkedHashMap<String, Object>();
+        args.put("query", "release rollback");
+        args.put("scopeType", "PROJECT");
+        args.put("scopeCode", "release-2026");
+
+        Map<String, Object> result = service.toolsCall(key, toolCall("memory_recall", args));
+
+        assertEquals(recalled, result.get("structuredContent"));
     }
 
     @Test

@@ -111,6 +111,41 @@
             </div>
           </div>
 
+          <div v-if="result.queryId" class="mt-3 border-t border-ink-100 pt-3">
+            <div class="flex flex-wrap items-center gap-2 text-xs">
+              <span class="text-ink-600">这条回答对你有帮助吗？</span>
+              <template v-if="feedbackSubmitted">
+                <span class="kb-badge kb-state-ok">已收到反馈，谢谢</span>
+              </template>
+              <template v-else>
+                <button class="kb-btn kb-btn-outline text-xs" :disabled="sendingFeedback" @click="submitHelpful">👍 有帮助</button>
+                <button class="kb-btn kb-btn-outline text-xs" :disabled="sendingFeedback" @click="showNegativeFeedback=true">👎 需要改进</button>
+              </template>
+            </div>
+            <div v-if="showNegativeFeedback && !feedbackSubmitted" class="mt-3 grid gap-2 rounded-lg bg-ink-50 p-3">
+              <label class="text-xs text-ink-600">主要问题
+                <select v-model="feedbackReason" class="mt-1 w-full rounded border border-ink-200 bg-white px-2 py-1.5 text-xs">
+                  <option value="INACCURATE">内容不准确</option>
+                  <option value="INCOMPLETE">回答不完整</option>
+                  <option value="OUTDATED">知识已过期</option>
+                  <option value="NO_CITATION">缺少依据或引用</option>
+                  <option value="IRRELEVANT">回答与问题无关</option>
+                  <option value="OTHER">其他</option>
+                </select>
+              </label>
+              <label class="text-xs text-ink-600">补充说明
+                <textarea v-model="feedbackComment" rows="2" maxlength="1000" class="mt-1 w-full rounded border border-ink-200 bg-white px-2 py-1.5 text-xs" placeholder="描述哪里需要改进" />
+              </label>
+              <label class="text-xs text-ink-600">建议答案（可选）
+                <textarea v-model="suggestedAnswer" rows="2" maxlength="4000" class="mt-1 w-full rounded border border-ink-200 bg-white px-2 py-1.5 text-xs" placeholder="如果你知道正确答案，可以补充在这里" />
+              </label>
+              <div class="flex justify-end gap-2">
+                <button class="kb-btn kb-btn-outline text-xs" @click="showNegativeFeedback=false">取消</button>
+                <button class="kb-btn-primary text-xs" :disabled="sendingFeedback" @click="submitNegative">{{ sendingFeedback ? '提交中…' : '提交改进建议' }}</button>
+              </div>
+            </div>
+          </div>
+
           <div class="mt-3 flex justify-end border-t border-ink-100 pt-3">
             <button v-if="result.queryId" class="kb-btn kb-btn-outline text-xs" @click="$emit('open-trace',result.queryId)">查看完整链路</button>
           </div>
@@ -147,13 +182,16 @@
 </section>
 </template>
 <script setup lang="ts">
-import { computed, nextTick } from 'vue'
+import { computed, nextTick, ref, watch } from 'vue'
 import type { QueryCitation, QueryHistoryItem, QueryResult, QuerySupportClaim } from '../types'
 import { ANSWER_FORMATS } from '../api/contracts'
 import type { AnswerFormat } from '../api/contracts'
 import type { SampleQuestion } from '../api/knowledge'
 import { renderMarkdown } from '../utils/markdown'
 import SampleQuestionChips from './SampleQuestionChips.vue'
+import { submitQueryFeedback, unwrap } from '../api/knowledge'
+import type { QueryFeedback } from '../api/knowledge-impl'
+import { notifyError, notifySuccess } from '../utils/feedback'
 
 const props = defineProps<{
   query:string; result:QueryResult|null; asking:boolean; history:QueryHistoryItem[]
@@ -168,6 +206,44 @@ const emit = defineEmits<{
   ask:[]; 'update:query':[value:string]; 'update:answerFormat':[value:AnswerFormat]
   'open-trace':[qid:string]; 'refresh-history':[]; 'open-citation':[citation:QueryCitation]
 }>()
+
+const showNegativeFeedback = ref(false)
+const feedbackSubmitted = ref(false)
+const sendingFeedback = ref(false)
+const feedbackReason = ref('INACCURATE')
+const feedbackComment = ref('')
+const suggestedAnswer = ref('')
+watch(() => props.result?.queryId, () => {
+  showNegativeFeedback.value = false
+  feedbackSubmitted.value = false
+  feedbackReason.value = 'INACCURATE'
+  feedbackComment.value = ''
+  suggestedAnswer.value = ''
+})
+
+async function sendFeedback(rating:'HELPFUL'|'UNHELPFUL') {
+  const queryId = props.result?.queryId
+  if (!queryId || sendingFeedback.value) return
+  sendingFeedback.value = true
+  try {
+    unwrap(await submitQueryFeedback({
+      queryId,
+      rating,
+      reasonCode: rating === 'UNHELPFUL' ? feedbackReason.value : undefined,
+      comment: rating === 'UNHELPFUL' ? feedbackComment.value.trim() : undefined,
+      suggestedAnswer: rating === 'UNHELPFUL' ? suggestedAnswer.value.trim() : undefined,
+    }), {} as QueryFeedback)
+    feedbackSubmitted.value = true
+    showNegativeFeedback.value = false
+    notifySuccess('反馈已提交，知识运营人员会据此改进回答')
+  } catch (error) {
+    notifyError(error, '提交回答反馈失败')
+  } finally {
+    sendingFeedback.value = false
+  }
+}
+function submitHelpful() { return sendFeedback('HELPFUL') }
+function submitNegative() { return sendFeedback('UNHELPFUL') }
 
 /** 库自带的默认句排在评测示例之前：它是这个库的“入口问题”，点一下即可发起。 */
 const chips=computed<SampleQuestion[]>(()=>{

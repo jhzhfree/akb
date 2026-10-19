@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.jh.knowledgeos.mapper.QueryFeedbackMapper">
+  <insert id="upsert">
+    INSERT INTO t_query_feedback(feedback_code,query_id,knowledge_base_id,actor_user_id,rating,reason_code,comment,suggested_answer,status)
+    VALUES(#{code},#{queryId},#{kb},#{actor},#{rating},#{reason},#{comment},#{suggestion},'NEW')
+    ON DUPLICATE KEY UPDATE rating=VALUES(rating),reason_code=VALUES(reason_code),comment=VALUES(comment),
+      suggested_answer=VALUES(suggested_answer),status='NEW',reviewer_user_id=NULL,review_note=NULL,reviewed_time=NULL,updated_time=NOW()
+  </insert>
+
+  <select id="findByQueryAndActor" resultType="map">
+    SELECT f.id,f.feedback_code feedbackCode,f.query_id queryId,f.knowledge_base_id knowledgeBaseId,
+      f.rating,f.reason_code reasonCode,f.comment,f.suggested_answer suggestedAnswer,f.status,
+      f.review_note reviewNote,f.created_time createdTime,f.updated_time updatedTime
+    FROM t_query_feedback f WHERE f.query_id=#{queryId} AND f.actor_user_id=#{actor}
+  </select>
+
+  <select id="getTraceOwner" resultType="map">
+    SELECT query_id queryId,knowledge_base_id knowledgeBaseId,actor_user_id actorUserId
+    FROM t_query_trace WHERE query_id=#{queryId}
+  </select>
+
+  <select id="listMine" resultType="map">
+    SELECT f.id,f.feedback_code feedbackCode,f.query_id queryId,f.knowledge_base_id knowledgeBaseId,
+      f.rating,f.reason_code reasonCode,f.comment,f.suggested_answer suggestedAnswer,f.status,
+      f.review_note reviewNote,f.created_time createdTime,f.updated_time updatedTime,
+      t.original_query question,t.answer
+    FROM t_query_feedback f JOIN t_query_trace t ON t.query_id=f.query_id
+    WHERE f.knowledge_base_id=#{kb} AND f.actor_user_id=#{actor}
+    ORDER BY f.updated_time DESC LIMIT #{limit}
+  </select>
+
+  <select id="listOperations" resultType="map">
+    SELECT f.id,f.feedback_code feedbackCode,f.query_id queryId,f.knowledge_base_id knowledgeBaseId,
+      f.actor_user_id actorUserId,f.rating,f.reason_code reasonCode,f.comment,
+      f.suggested_answer suggestedAnswer,f.status,f.reviewer_user_id reviewerUserId,
+      f.review_note reviewNote,f.reviewed_time reviewedTime,f.created_time createdTime,f.updated_time updatedTime,
+      t.original_query question,t.answer,t.trace_id traceId
+    FROM t_query_feedback f JOIN t_query_trace t ON t.query_id=f.query_id
+    WHERE f.knowledge_base_id=#{kb}
+    <if test="status != null and status != ''">AND f.status=#{status}</if>
+    ORDER BY FIELD(f.status,'NEW','IN_REVIEW','ACTION_REQUIRED','RESOLVED','REJECTED'),f.created_time DESC
+    LIMIT #{limit}
+  </select>
+
+  <select id="summary" resultType="map">
+    SELECT COUNT(*) totalCount,
+      COALESCE(SUM(status='NEW'),0) newCount,
+      COALESCE(SUM(status='IN_REVIEW'),0) inReviewCount,
+      COALESCE(SUM(status='ACTION_REQUIRED'),0) actionRequiredCount,
+      COALESCE(SUM(status='RESOLVED'),0) resolvedCount,
+      COALESCE(SUM(status='REJECTED'),0) rejectedCount,
+      COALESCE(SUM(rating='HELPFUL'),0) helpfulCount,
+      COALESCE(SUM(rating='UNHELPFUL'),0) unhelpfulCount
+    FROM t_query_feedback WHERE knowledge_base_id=#{kb}
+  </select>
+
+  <select id="getById" resultType="map">
+    SELECT id,feedback_code feedbackCode,query_id queryId,knowledge_base_id knowledgeBaseId,
+      actor_user_id actorUserId,status,rating FROM t_query_feedback WHERE id=#{id}
+  </select>
+
+  <update id="review">
+    UPDATE t_query_feedback SET status=#{status},reviewer_user_id=#{reviewer},review_note=#{note},
+      reviewed_time=NOW(),updated_time=NOW() WHERE id=#{id}
+  </update>
+</mapper>

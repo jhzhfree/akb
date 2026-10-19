@@ -79,6 +79,9 @@ const ICONS:Record<string, IconShape[]> = {
   folder: [{d:'M4 5a2 2 0 0 1 2-2h5l2 2h5a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5z'}],
   /** 知识库 · 知识检索 */
   search: [{c:[11, 11, 7]}, {d:'m21 21-4.3-4.3'}],
+  messageSquare: [
+    {r:[3, 4, 18, 14, 2]}, {d:'M8 18v3l4-3'}, {d:'M8 9h8'}, {d:'M8 13h5'},
+  ],
   beaker: [
     {d:'M9 3h6'},
     {d:'M10 3v6.2L5.4 19a2 2 0 0 0 1.8 3h9.6a2 2 0 0 0 1.8-3L14 9.2V3'},

@@ -28,6 +28,8 @@
     :knowledge-base-id="knowledgeBaseId" :code="graphCode"
     @update:code="$emit('update:graphCode',$event)" />
 
+  <QueryFeedbackPanel v-else-if="active==='search.feedback'" :knowledge-base-id="knowledgeBaseId" />
+
   <EvaluationPanel v-else :knowledge-base-id="knowledgeBaseId" />
 </template>
 <script setup lang="ts">
@@ -44,6 +46,7 @@ import QueryPolicyPanel from './QueryPolicyPanel.vue'
 import TraceCenterPanel from './TraceCenterPanel.vue'
 import GraphPanel from './GraphPanel.vue'
 import EvaluationPanel from './EvaluationPanel.vue'
+import QueryFeedbackPanel from './QueryFeedbackPanel.vue'
 
 defineEmits<{
   select: [key: string]

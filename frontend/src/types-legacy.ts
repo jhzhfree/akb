@@ -600,6 +600,7 @@ export interface ExternalKeyRow {
   id:number; keyCode:string; name:string; keyPrefix:string
   knowledgeBaseId:number|null; knowledgeBaseName:string|null
   scopes:string; rateLimitPerMinute:number; status:string
+  memoryNamespace?:string|null; memoryAgentCode?:string|null
   expiresAt:string|null; lastUsedAt:string|null; createdByName:string|null; createdTime:string
   /** 明文仅创建响应携带一次。 */
   secret?:string

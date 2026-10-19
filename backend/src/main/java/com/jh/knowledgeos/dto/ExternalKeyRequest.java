@@ -25,6 +25,10 @@ public class ExternalKeyRequest {
      */
     private List<String> allowedOrigins;
 
+    private String memoryNamespace;
+
+    private String memoryAgentCode;
+
     public String getName() {
         return name;
     }
@@ -71,5 +75,21 @@ public class ExternalKeyRequest {
 
     public void setAllowedOrigins(List<String> allowedOrigins) {
         this.allowedOrigins = allowedOrigins;
+    }
+
+    public String getMemoryNamespace() {
+        return memoryNamespace;
+    }
+
+    public void setMemoryNamespace(String memoryNamespace) {
+        this.memoryNamespace = memoryNamespace;
+    }
+
+    public String getMemoryAgentCode() {
+        return memoryAgentCode;
+    }
+
+    public void setMemoryAgentCode(String memoryAgentCode) {
+        this.memoryAgentCode = memoryAgentCode;
     }
 }

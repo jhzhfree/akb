@@ -121,6 +121,12 @@
                 {{ row.knowledgeBaseName || (row.knowledgeBaseId ? `知识库 #${row.knowledgeBaseId}` : '全部可见库') }}
               </template>
             </el-table-column>
+            <el-table-column label="记忆身份" min-width="190">
+              <template #default="{ row }">
+                <div class="text-xs">{{ row.memoryAgentCode || row.keyCode }}</div>
+                <div class="text-[10px] text-ink-500">{{ row.memoryNamespace || '密钥隔离' }}</div>
+              </template>
+            </el-table-column>
             <el-table-column label="权限" width="180">
               <template #default="{ row }">
                 <el-tag v-for="scope in scopeList(row)" :key="scope" size="small" effect="plain" class="mr-1">
@@ -217,7 +223,7 @@
       </article>
     </div>
 
-    <el-dialog v-model="createVisible" title="签发 API 密钥" width="480px">
+    <el-dialog v-model="createVisible" title="签发 API 密钥" width="560px">
       <el-form label-width="96px" size="small">
         <el-form-item label="调用方名称">
           <el-input v-model="form.name" placeholder="如：ERP 问答助手" />
@@ -232,8 +238,18 @@
             <el-option value="READ" label="读取（检索 / 问答）" />
             <el-option value="WRITE" label="写入（知识治理）" />
             <el-option value="INGEST" label="接入（文本摄入）" />
+            <el-option value="MEMORY_READ" label="读取记忆（Agent Recall）" />
+            <el-option value="MEMORY_WRITE" label="写入记忆（Capture / Forget）" />
           </el-select>
         </el-form-item>
+        <template v-if="form.scopes.includes('MEMORY_READ') || form.scopes.includes('MEMORY_WRITE')">
+          <el-form-item label="记忆命名空间">
+            <el-input v-model="form.memoryNamespace" placeholder="空值时仅本密钥可见；同值用于显式共享项目 / 任务记忆" />
+          </el-form-item>
+          <el-form-item label="Agent 编码">
+            <el-input v-model="form.memoryAgentCode" placeholder="空值时使用本密钥编码；用于 Agent 私有记忆隔离" />
+          </el-form-item>
+        </template>
         <el-form-item label="限流">
           <el-input-number v-model="form.rateLimitPerMinute" :min="1" :max="6000" />
           <span class="ml-2 text-[11px] text-ink-500">次 / 分钟</span>
@@ -243,7 +259,7 @@
         </el-form-item>
       </el-form>
       <p class="kb-muted">
-        绑定知识库后，凭证只能访问该库；不绑定时仅能看到公开知识库。
+        绑定知识库后，凭证只能访问该库；不绑定时仅能看到公开知识库。记忆命名空间默认按密钥隔离，同一命名空间需由管理员明确配置后才共享项目 / 任务记忆。
       </p>
       <template #footer>
         <el-button size="small" @click="createVisible = false">取消</el-button>
@@ -302,8 +318,8 @@ const secretVisible = ref(false)
 const issuedSecret = ref('')
 const form = ref<{
   name:string; knowledgeBaseId:number | null; scopes:string[]
-  rateLimitPerMinute:number; expiresAt:string
-}>({ name:'', knowledgeBaseId:null, scopes:['READ'], rateLimitPerMinute:60, expiresAt:'' })
+  rateLimitPerMinute:number; expiresAt:string; memoryNamespace:string; memoryAgentCode:string
+}>({ name:'', knowledgeBaseId:null, scopes:['READ'], rateLimitPerMinute:60, expiresAt:'', memoryNamespace:'', memoryAgentCode:'' })
 
 const exampleTab = ref<'rest' | 'mcp' | 'sse'>('rest')
 const probeSecret = ref('')
@@ -351,7 +367,11 @@ function scopeList(row:ExternalKeyRow) {
   return String(row.scopes || 'READ').split(',').filter(Boolean)
 }
 function scopeLabel(scope:string) {
-  return scope === 'READ' ? '读取（READ）' : scope === 'WRITE' ? '写入（WRITE）' : '接入（INGEST）'
+  const labels:Record<string,string> = {
+    READ:'读取（READ）', WRITE:'知识写入（WRITE）', INGEST:'文本接入（INGEST）',
+    MEMORY_READ:'记忆读取', MEMORY_WRITE:'记忆写入',
+  }
+  return labels[scope] || scope
 }
 function channelType(channel:string) {
   if (channel === 'MCP') return 'warning' as const
@@ -386,7 +406,7 @@ async function loadAudits() {
 
 function openCreate() {
   form.value = {
-    name:'', knowledgeBaseId:null, scopes:['READ'], rateLimitPerMinute:60, expiresAt:'',
+    name:'', knowledgeBaseId:null, scopes:['READ'], rateLimitPerMinute:60, expiresAt:'', memoryNamespace:'', memoryAgentCode:'',
   }
   createVisible.value = true
 }
@@ -400,6 +420,8 @@ async function saveKey() {
       scopes:form.value.scopes,
       rateLimitPerMinute:form.value.rateLimitPerMinute,
       expiresAt:form.value.expiresAt.trim() || null,
+      memoryNamespace:form.value.memoryNamespace.trim() || null,
+      memoryAgentCode:form.value.memoryAgentCode.trim() || null,
     }), null)
     createVisible.value = false
     issuedSecret.value = String(created?.secret || '')

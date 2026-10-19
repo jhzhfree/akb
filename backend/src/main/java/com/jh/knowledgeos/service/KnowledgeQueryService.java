@@ -278,6 +278,8 @@ public class KnowledgeQueryService {
         QueryTraceRecord trace = new QueryTraceRecord();
         trace.setQueryId(queryId);
         trace.setKnowledgeBaseId(Long.valueOf(String.valueOf(request.get("knowledgeBaseId"))));
+        User actor = AuthContext.get();
+        trace.setActorUserId(actor == null ? null : actor.getId());
         trace.setTraceId(MDC.get("traceId"));
         trace.setOriginalQuery(String.valueOf(request.get("query")));
         trace.setRewrittenQueriesJson(json(response.get("rewrittenQueries")));

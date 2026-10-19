@@ -60,14 +60,15 @@ public class McpController {
         // operator nothing; "tools/call:knowledge_query" with the question and the answer does.
         String method = body == null ? "" : String.valueOf(body.get("method"));
         String auditedMethod = "tools/call".equals(method) ? "tools/call:" + toolName(body) : method;
-        Object params = auditService.mcpRequestParams(body);
+        Object params = isMemoryTool(auditedMethod) ? memoryAuditRequest(auditedMethod) : auditService.mcpRequestParams(body);
         Long knowledgeBaseId = auditService.mcpKnowledgeBaseId(body);
         try {
             key = accessService.authenticate(request);
             Map<String, Object> response = mcpServerService.handle(body == null ? new java.util.LinkedHashMap<String, Object>() : body, key);
             // 协议层错误（鉴权、限流）由全局异常处理，这里只审计进入协议之后的结果。
+            Object responseData = auditService.mcpResponseData(response);
             auditService.record(key, ApiCallAudit.CHANNEL_MCP, auditedMethod, knowledgeBaseId, 200, System.currentTimeMillis() - start, null, params,
-                auditService.mcpResponseData(response));
+                isMemoryTool(auditedMethod) ? memoryAuditResponse(auditedMethod, responseData) : responseData);
             // 通知类消息（无 id）协议上不返回结果，这里回空对象保持 HTTP 200。
             return response == null ? new LinkedHashMap<String, Object>() : response;
         } catch (UnauthorizedException e) {
@@ -110,6 +111,32 @@ public class McpController {
         Map<String, Object> payload = new LinkedHashMap<String, Object>();
         payload.put("status", status);
         payload.put("message", e.getMessage());
+        return payload;
+    }
+
+    private boolean isMemoryTool(String method) {
+        return method != null && (method.endsWith(":memory_capture") || method.endsWith(":memory_recall") || method.endsWith(":memory_forget"));
+    }
+
+    private Map<String, Object> memoryAuditRequest(String method) {
+        Map<String, Object> payload = new LinkedHashMap<String, Object>();
+        payload.put("operation", method);
+        payload.put("payloadOmitted", Boolean.TRUE);
+        return payload;
+    }
+
+    private Map<String, Object> memoryAuditResponse(String method, Object response) {
+        Map<String, Object> payload = new LinkedHashMap<String, Object>();
+        payload.put("operation", method);
+        payload.put("contentOmitted", Boolean.TRUE);
+        if (response instanceof Map) {
+            Map<?, ?> data = (Map<?, ?>) response;
+            Object structured = data.get("structuredContent");
+            Map<?, ?> result = structured instanceof Map ? (Map<?, ?>) structured : data;
+            if (result.containsKey("count")) { payload.put("count", result.get("count")); }
+            if (result.containsKey("accepted")) { payload.put("accepted", result.get("accepted")); }
+            if (result.containsKey("forgotten")) { payload.put("forgotten", result.get("forgotten")); }
+        }
         return payload;
     }
     /**

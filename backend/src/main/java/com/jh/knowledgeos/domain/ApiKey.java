@@ -26,6 +26,10 @@ public class ApiKey {
 
     public static final String SCOPE_INGEST = "INGEST";
 
+    public static final String SCOPE_MEMORY_READ = "MEMORY_READ";
+
+    public static final String SCOPE_MEMORY_WRITE = "MEMORY_WRITE";
+
     private Long id;
 
     private String keyCode;
@@ -48,6 +52,12 @@ public class ApiKey {
      * Comma separated origins allowed to embed this credential; empty means unrestricted.
      */
     private String allowedOrigins;
+
+    /** Shared memory namespace; null means isolated to this API key. */
+    private String memoryNamespace;
+
+    /** Trusted Agent identity assigned by an administrator, never supplied by a model call. */
+    private String memoryAgentCode;
 
     private String status;
 
@@ -73,7 +83,9 @@ public class ApiKey {
             return false;
         }
         List<String> owned = scopeList();
-        return owned.contains(SCOPE_WRITE) || owned.contains(scope.toUpperCase());
+        String requested = scope.toUpperCase();
+        return owned.contains(requested) || (owned.contains(SCOPE_WRITE)
+            && (SCOPE_READ.equals(requested) || SCOPE_INGEST.equals(requested)));
     }
 
     public List<String> scopeList() {
@@ -167,6 +179,22 @@ public class ApiKey {
 
     public void setAllowedOrigins(String v) {
         allowedOrigins = v;
+    }
+
+    public String getMemoryNamespace() {
+        return memoryNamespace;
+    }
+
+    public void setMemoryNamespace(String v) {
+        memoryNamespace = v;
+    }
+
+    public String getMemoryAgentCode() {
+        return memoryAgentCode;
+    }
+
+    public void setMemoryAgentCode(String v) {
+        memoryAgentCode = v;
     }
 
     public String getStatus() {

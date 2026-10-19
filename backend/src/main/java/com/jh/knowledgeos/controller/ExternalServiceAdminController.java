@@ -74,7 +74,9 @@ public class ExternalServiceAdminController {
         rest.put("endpoints", Arrays.asList(endpoint("GET", "/bases", "可见知识库列表"), endpoint("POST", "/query", "可追溯问答"), endpoint("POST", "/search",
             "检索（不生成答案）"), endpoint("GET", "/cards", "知识卡片清单"), endpoint("GET", "/cards/{code}", "知识卡片详情"), endpoint("GET", "/claims", "断言清单"),
             endpoint("GET", "/claims/{code}", "断言详情"), endpoint("GET", "/evidence/{code}", "证据原文"), endpoint("GET", "/graph/{code}", "图谱邻域"),
-            endpoint("GET", "/queries/{queryId}", "问答链路回放"), endpoint("GET", "/overview", "知识库概览"), endpoint("POST", "/documents/text", "文本接入（INGEST）")));
+            endpoint("GET", "/queries/{queryId}", "问答链路回放"), endpoint("GET", "/overview", "知识库概览"),
+            endpoint("POST", "/documents/text", "文本接入（INGEST）"), endpoint("POST", "/memories/capture", "记忆写入（MEMORY_WRITE）"),
+            endpoint("POST", "/memories/recall", "记忆召回（MEMORY_READ）"), endpoint("DELETE", "/memories/{memoryCode}", "记忆删除（MEMORY_WRITE）")));
         Map<String, Object> mcp = new LinkedHashMap<String, Object>();
         mcp.put("enabled", properties.isEnabled() && properties.isMcpEnabled());
         mcp.put("endpoint", "/api/mcp");
@@ -122,7 +124,7 @@ public class ExternalServiceAdminController {
         }
         Integer limit = request.getRateLimitPerMinute() == null ? properties.getDefaultRateLimitPerMinute() : request.getRateLimitPerMinute();
         return ApiResponse.ok(apiKeyService.create(request.getName(), request.getKnowledgeBaseId(), request.getScopes(), limit, expiresAt,
-            operator.getId(), request.getAllowedOrigins()));
+            operator.getId(), request.getAllowedOrigins(), request.getMemoryNamespace(), request.getMemoryAgentCode()));
     }
 
     @PostMapping("/keys/{id}/revoke")
@@ -268,6 +270,9 @@ public class ExternalServiceAdminController {
                 }
             }
         }
+        names.add("memory_capture");
+        names.add("memory_recall");
+        names.add("memory_forget");
         return names;
     }
 

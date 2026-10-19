@@ -59,6 +59,11 @@ public class ApiKeyService {
      */
     public Map<String, Object> create(String name, Long knowledgeBaseId, List<String> scopes, Integer rateLimitPerMinute, LocalDateTime expiresAt,
         Long createdBy, List<String> allowedOrigins) {
+        return create(name, knowledgeBaseId, scopes, rateLimitPerMinute, expiresAt, createdBy, allowedOrigins, null, null);
+    }
+
+    public Map<String, Object> create(String name, Long knowledgeBaseId, List<String> scopes, Integer rateLimitPerMinute, LocalDateTime expiresAt,
+        Long createdBy, List<String> allowedOrigins, String memoryNamespace, String memoryAgentCode) {
         String secret = newSecret();
         ApiKey key = new ApiKey();
         key.setKeyCode(ids.next("AK_"));
@@ -72,6 +77,8 @@ public class ApiKeyService {
         key.setExpiresAt(expiresAt);
         key.setCreatedBy(createdBy);
         key.setAllowedOrigins(normalizeOrigins(allowedOrigins));
+        key.setMemoryNamespace(normalizeMemoryIdentity(memoryNamespace, "memoryNamespace"));
+        key.setMemoryAgentCode(normalizeMemoryIdentity(memoryAgentCode, "memoryAgentCode"));
         mapper.insertApiKey(key);
         Map<String, Object> result = profile(mapper.getApiKey(key.getId()));
         // 明文只在此处出现一次，界面提示调用方立即保存。
@@ -124,6 +131,8 @@ public class ApiKeyService {
         row.put("status", key.getStatus());
         row.put("expiresAt", key.getExpiresAt());
         row.put("allowedOrigins", key.getAllowedOrigins());
+        row.put("memoryNamespace", key.getMemoryNamespace());
+        row.put("memoryAgentCode", key.getMemoryAgentCode());
         row.put("lastUsedAt", key.getLastUsedAt());
         row.put("createdByName", key.getCreatedByName());
         row.put("createdTime", key.getCreatedTime());
@@ -144,7 +153,8 @@ public class ApiKeyService {
                 if (value.isEmpty() || cleaned.contains(value)) {
                     continue;
                 }
-                if (ApiKey.SCOPE_READ.equals(value) || ApiKey.SCOPE_WRITE.equals(value) || ApiKey.SCOPE_INGEST.equals(value)) {
+                if (ApiKey.SCOPE_READ.equals(value) || ApiKey.SCOPE_WRITE.equals(value) || ApiKey.SCOPE_INGEST.equals(value)
+                    || ApiKey.SCOPE_MEMORY_READ.equals(value) || ApiKey.SCOPE_MEMORY_WRITE.equals(value)) {
                     cleaned.add(value);
                 }
             }
@@ -153,6 +163,20 @@ public class ApiKeyService {
             cleaned.add(ApiKey.SCOPE_READ);
         }
         return String.join(",", cleaned);
+    }
+
+    private String normalizeMemoryIdentity(String raw, String field) {
+        if (raw == null || raw.trim().isEmpty()) {
+            return null;
+        }
+        String value = raw.trim();
+        if (value.length() > 64 || !value.matches("[A-Za-z0-9_.:-]+")) {
+            throw new IllegalArgumentException(field + " 仅允许 1-64 位字母、数字、点、下划线、冒号或连字符");
+        }
+        if ("memoryNamespace".equals(field) && value.startsWith("key:")) {
+            throw new IllegalArgumentException("memoryNamespace 不得使用系统保留的 key: 前缀");
+        }
+        return value;
     }
 
     /**

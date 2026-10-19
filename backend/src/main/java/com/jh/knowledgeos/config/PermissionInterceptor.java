@@ -37,6 +37,7 @@ public class PermissionInterceptor implements HandlerInterceptor {
     new Rule("/api/knowledge/settings/model", Permissions.SYSTEM_MODEL, WRITE_ONLY), // 裁决结果（assessments）是工作台与资产浏览的只读投影，所有角色都要能看；
     new Rule("/api/knowledge/settings/retrieval", Permissions.SYSTEM_INDEX, WRITE_ONLY), // 检索引擎开关属于存储与索引运维，读写同 /api/knowledge/index/ 一档。
     new Rule("/api/knowledge/evaluations", Permissions.SEARCH_EVALUATE, WRITE_ONLY), // 只有「跑一轮裁决」这类写操作才要求裁决权限。
+    new Rule("/api/knowledge/feedback/ops", Permissions.SEARCH_EVALUATE, ALL_METHODS), // 回答反馈审核队列属于检索质量运营。
     // 任务与告警属于平台运维：只有系统管理员能看告警、改规则。
     new Rule("/api/knowledge/adjudication", Permissions.GENERATE_JUDGE, WRITE_ONLY), // 任务与告警属于平台运维：只有系统管理员能看告警、改规则。
     new Rule("/api/knowledge/conflicts", Permissions.GENERATE_JUDGE, WRITE_ONLY), // 任务与告警属于平台运维：只有系统管理员能看告警、改规则。

@@ -141,6 +141,7 @@ export const NAV_SECTIONS: NavSection[] = [
        */
       { key: 'search.trace', label: '检索链路追踪', icon: 'rss', debug: true, adminOnly: true, permission: PERM.SEARCH_TEST },
       { key: 'search.graph', label: '知识图谱', icon: 'network', permission: PERM.SEARCH_GRAPH },
+      { key: 'search.feedback', label: '回答反馈', icon: 'messageSquare', adminOnly: true, permission: PERM.SEARCH_EVALUATE },
       { key: 'search.benchmark', label: '检索评测', icon: 'chart', adminOnly: true, permission: PERM.SEARCH_EVALUATE },
     ],
   },
