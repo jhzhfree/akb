@@ -89,10 +89,10 @@ class McpServerServiceTest {
         ExternalKnowledgeFacade facade = mock(ExternalKnowledgeFacade.class);
         ApiKey key = mock(ApiKey.class);
         when(key.getKnowledgeBaseId()).thenReturn(23L);
-        when(facade.bases(23L)).thenReturn(Arrays.asList(Map.of("id", 23L, "baseCode", "ops-runbook")));
+        when(facade.bases(23L)).thenReturn(Arrays.asList(knowledgeBaseMetadata()));
         when(access.resolveKnowledgeBase(key, 23L)).thenReturn(23L);
         when(facade.search(eq(key), eq(23L), eq("leave policy"), eq((Integer) null), eq(Collections.emptyList()), eq(PlatformEventPublisher.SOURCE_MCP),
-            eq((Double) null))).thenReturn(Map.of("queryId", "q-code"));
+            eq((Double) null))).thenReturn(Collections.<String, Object>singletonMap("queryId", "q-code"));
 
         McpServerService service = new McpServerService(access, facade, new ObjectMapper());
         Map<String, Object> args = new LinkedHashMap<String, Object>();
@@ -112,7 +112,7 @@ class McpServerServiceTest {
         ExternalKnowledgeFacade facade = mock(ExternalKnowledgeFacade.class);
         ApiKey key = mock(ApiKey.class);
         when(key.getKnowledgeBaseId()).thenReturn(23L);
-        when(facade.bases(23L)).thenReturn(Arrays.asList(Map.of("id", 23L, "baseCode", "ops-runbook")));
+        when(facade.bases(23L)).thenReturn(Arrays.asList(knowledgeBaseMetadata()));
         McpServerService service = new McpServerService(access, facade, new ObjectMapper());
         Map<String, Object> args = new LinkedHashMap<String, Object>();
         args.put("knowledgeBaseId", 24L);
@@ -158,5 +158,12 @@ class McpServerServiceTest {
         params.put("name", name);
         params.put("arguments", arguments);
         return params;
+    }
+
+    private Map<String, Object> knowledgeBaseMetadata() {
+        Map<String, Object> metadata = new LinkedHashMap<String, Object>();
+        metadata.put("id", 23L);
+        metadata.put("baseCode", "ops-runbook");
+        return metadata;
     }
 }
