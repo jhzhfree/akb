@@ -48,28 +48,28 @@ make up
 
 第一次参与开发建议按以下顺序阅读：
 
-1. [研发工程师详细开发手册](docs/DEVELOPER-GUIDE.md)
-2. [代码架构导读](docs/ARCHITECTURE-CODE-WALKTHROUGH.md)
-3. [代码规范](docs/CODE-STANDARDS.md)
-4. [调试与测试手册](docs/DEBUGGING-TESTING-GUIDE.md)
-5. [常见改动 Playbook](docs/CHANGE-PLAYBOOK.md)
+1. [研发工程师详细开发手册](docs/development/DEVELOPER-GUIDE.md)
+2. [代码架构导读](docs/development/ARCHITECTURE-CODE-WALKTHROUGH.md)
+3. [代码规范](docs/development/CODE-STANDARDS.md)
+4. [调试与测试手册](docs/development/DEBUGGING-TESTING-GUIDE.md)
+5. [常见改动 Playbook](docs/development/CHANGE-PLAYBOOK.md)
 
 发版与交付说明（版本 1.1.0）：
 
-- [V1.1 功能发布说明](docs/V1.1-RELEASE-NOTES.md)（做什么、验收标准、约束、下个版本方向）
-- [V1.1 发版清单与交付说明](docs/V1.1-RELEASE-MANIFEST.md)（功能清单与实现程度/限制、部署方式、升级包类型、交付形态）
-- [V1.1 功能清单与缺口排期](docs/V1.1-FEATURE-SCOPE.md)（首发版本规划与工程缺口）
+- [V1.1 功能发布说明](docs/release/V1.1-RELEASE-NOTES.md)（做什么、验收标准、约束、下个版本方向）
+- [V1.1 发版清单与交付说明](docs/release/V1.1-RELEASE-MANIFEST.md)（功能清单与实现程度/限制、部署方式、升级包类型、交付形态）
+- [V1.1 功能清单与缺口排期](docs/release/V1.1-FEATURE-SCOPE.md)（首发版本规划与工程缺口）
 
 集成指南：
 
-- [Octop 知识检索集成](OCTOP-INTEGRATION.md)（MCP 地址、API Key 权限、Agent 绑定与联调检查）
+- [Octop 知识检索集成](docs/api/OCTOP-INTEGRATION.md)（MCP 地址、API Key 权限、Agent 绑定与联调检查）
 
 架构/历史专项说明：
 
-- `ARCHITECTURE.md`
-- `TRANSACTIONAL-OUTBOX-INDEX-WORKER.md`
-- `DUAL-RETRIEVAL-ELASTICSEARCH-MILVUS.md`
-- `PERFORMANCE-CAPACITY-PLAN-V1.1.md`
+- `docs/design/ARCHITECTURE.md`
+- `docs/design/TRANSACTIONAL-OUTBOX-INDEX-WORKER.md`
+- `docs/design/DUAL-RETRIEVAL-ELASTICSEARCH-MILVUS.md`
+- `docs/operations/PERFORMANCE-CAPACITY-PLAN-V1.1.md`
 
 ## 设计边界
 

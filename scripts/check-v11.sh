@@ -78,12 +78,12 @@ test -f deploy/docker-compose.prod.yml
 test -f .env.production.example
 test -f scripts/e2e-test.py
 test -f scripts/diagnose.sh
-test -f RC-FINAL.md
+test -f docs/release/RC-CHECKLIST.md
 
 echo '[24/44] Compose / operational delivery'
 python -c 'import yaml;[yaml.safe_load(open(p,encoding="utf-8")) for p in ["docker-compose.yml","deploy/docker-compose.prod.yml","monitoring/prometheus.yml","monitoring/alerts.yml","monitoring/grafana/provisioning/datasources/prometheus.yml","monitoring/grafana/provisioning/dashboards/llmkb.yml"]];print(" compose/monitoring yaml ok")'
 test -f monitoring/grafana/dashboards/llmkb-slo.json
-test -f DUAL-RETRIEVAL-ELASTICSEARCH-MILVUS.md
+test -f docs/design/DUAL-RETRIEVAL-ELASTICSEARCH-MILVUS.md
 test -f scripts/fault-injection-indexing.sh
 
 echo '[25/44] Maintainability refactor contract'

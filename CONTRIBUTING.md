@@ -11,9 +11,9 @@
 
 先阅读：
 
-- `docs/DEVELOPER-GUIDE.md`
-- `docs/CODE-STANDARDS.md`
-- `docs/ARCHITECTURE-CODE-WALKTHROUGH.md`
+- `docs/development/DEVELOPER-GUIDE.md`
+- `docs/development/CODE-STANDARDS.md`
+- `docs/development/ARCHITECTURE-CODE-WALKTHROUGH.md`
 
 ## 强制边界
 

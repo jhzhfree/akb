@@ -63,7 +63,7 @@ CHANNEL_DESCRIPTIONS = {
 # The two channels that carry verbatim document chunks carry the most citation-ready
 # evidence: an answer quoting a chunk can point at evidenceCode + evidenceHash, while a
 # card or graph path often cannot. They therefore start level with structured objects
-# instead of below them — see STABILITY-OPTIMIZATION-PLAN.md section B2.
+# instead of below them — see docs/design/STABILITY-OPTIMIZATION-PLAN.md section B2.
 DEFAULT_CHANNEL_WEIGHTS = {
     "bm25": 1.15,
     "vector": 1.15,

@@ -5,7 +5,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 REQUIRED = {
-    "docs/DEVELOPER-GUIDE.md": [
+    "docs/development/DEVELOPER-GUIDE.md": [
         "Transactional Outbox",
         "蓝绿",
         "Query",
@@ -13,26 +13,26 @@ REQUIRED = {
         "Milvus",
         "测试",
     ],
-    "docs/ARCHITECTURE-CODE-WALKTHROUGH.md": [
+    "docs/development/ARCHITECTURE-CODE-WALKTHROUGH.md": [
         "DocumentIngestionService",
         "KnowledgeExtractionService",
         "IndexOutboxWorker",
         "IndexSchemaService",
         "HybridRetriever",
     ],
-    "docs/CODE-STANDARDS.md": [
+    "docs/development/CODE-STANDARDS.md": [
         "Java",
         "Python",
         "Vue",
         "事务",
         "ACL",
     ],
-    "docs/DEBUGGING-TESTING-GUIDE.md": [
+    "docs/development/DEBUGGING-TESTING-GUIDE.md": [
         "Outbox",
         "SOURCE_CHANGED",
         "QueryTrace",
     ],
-    "docs/CHANGE-PLAYBOOK.md": [
+    "docs/development/CHANGE-PLAYBOOK.md": [
         "Backend API",
         "Outbox",
         "Retrieval",
@@ -48,7 +48,7 @@ for relative, markers in REQUIRED.items():
     assert not missing, "%s missing markers: %s" % (relative, missing)
 
 readme = (ROOT / "README.md").read_text(encoding="utf-8")
-assert "docs/DEVELOPER-GUIDE.md" in readme, "README must link the developer guide"
-assert "docs/CODE-STANDARDS.md" in readme, "README must link code standards"
+assert "docs/development/DEVELOPER-GUIDE.md" in readme, "README must link the developer guide"
+assert "docs/development/CODE-STANDARDS.md" in readme, "README must link code standards"
 
 print("developer documentation contract passed: %d documents" % len(REQUIRED))

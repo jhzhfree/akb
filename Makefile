@@ -176,7 +176,7 @@ prod-logs:
 # ---------- 发布与产品包 ----------
 # 构建并打标签：knowledge-os/{ai-service,backend,frontend}:$(VERSION)
 # ---------- 静态检查 / 编码规范 ----------
-# 规则集与取舍说明见 docs/CODE-STYLE.md
+# 规则集与取舍说明见 docs/development/CODE-STYLE.md
 CHECKSTYLE_JAR ?= $(HOME)/.local/lib/checkstyle/checkstyle.jar
 CHECKSTYLE_CONFIG ?= config/checkstyle/checkstyle.xml
 RUFF ?= ruff
