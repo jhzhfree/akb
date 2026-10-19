@@ -59,7 +59,7 @@ public class McpServerService {
                 return result(id, new LinkedHashMap<String, Object>());
             }
             if ("tools/list".equals(method)) {
-                return result(id, toolsList());
+                return result(id, toolsList(key));
             }
             if ("tools/call".equals(method)) {
                 return result(id, toolsCall(key, params));
@@ -99,23 +99,36 @@ public class McpServerService {
         payload.put("protocolVersion", PROTOCOL_VERSION);
         payload.put("capabilities", capabilities);
         payload.put("serverInfo", serverInfo);
-        payload.put("instructions", "用 knowledge_query 提问会返回带引用的答案；knowledge_search 只做检索。" + "所有工具都要求 knowledgeBaseId 在 API Key 授权范围内。");
+        payload.put("instructions", "用 knowledge_query 提问会返回带引用的答案；knowledge_search 只做检索。"
+            + "可使用稳定 knowledgeBaseCode 标识知识库；API Key 授权范围始终由服务端强制执行。");
         return payload;
     }
 
     public Map<String, Object> toolsList() {
+        return toolsList(null);
+    }
+
+    public Map<String, Object> toolsList(ApiKey key) {
         List<Map<String, Object>> tools = new ArrayList<Map<String, Object>>();
-        tools.add(tool("knowledge_query", "可追溯知识问答：返回答案、引用与 queryId，可用于后续溯源；答案可按 answerFormat 交付成 Markdown / 纯文本 / HTML", schema(properties(prop("knowledgeBaseId", "integer", "知识库 ID"),
-           prop("question", "string", "要提问的问题"), prop("topK", "integer", "召回数量，默认 10"),
-           arrayProp("permissionTags", "可选的检索标签过滤；知识库 ACL 仍由服务端强制执行"),
-           prop("minScore", "number", "最低相关度分数（0~1）：低于该分数的候选不参与答案生成；不传即不过滤"),
-           prop("answerFormat", "string", "答案返回格式：default（不传即此项）/ markdown / text / html；返回值里的 answerFormat 是实际生效的那个")),
-           Arrays.asList("knowledgeBaseId", "question"))));
-        tools.add(tool("knowledge_search", "只做检索不生成答案：返回召回候选、重排结果与引用，便于自行装配上下文", schema(properties(prop("knowledgeBaseId", "integer", "知识库 ID"),
-           prop("query", "string", "检索语句"), prop("topK", "integer", "召回数量，默认 10"),
-           arrayProp("permissionTags", "可选的检索标签过滤；知识库 ACL 仍由服务端强制执行"),
-           prop("minScore", "number", "最低相关度分数（0~1）：低于该分数的候选不返回；不传即不过滤。返回里的 returned 是过滤后实际给出的条数")),
-           Arrays.asList("knowledgeBaseId", "query"))));
+        tools.add(tool("knowledge_query",
+            "可追溯知识问答：返回答案、引用与 queryId，可用于后续溯源；答案可按 answerFormat 交付成 Markdown / 纯文本 / HTML",
+            schema(properties(
+                prop("knowledgeBaseId", "integer", "知识库 ID，兼容旧调用"),
+                prop("knowledgeBaseCode", "string", "知识库稳定编码；绑定式 API Key 可省略此项"),
+                prop("question", "string", "要提问的问题"), prop("topK", "integer", "召回数量，默认 10"),
+                arrayProp("permissionTags", "可选的检索标签过滤；知识库 ACL 仍由服务端强制执行"),
+                prop("minScore", "number", "最低相关度分数（0~1）：低于该分数的候选不参与答案生成；不传即不过滤"),
+                prop("answerFormat", "string", "答案返回格式：default（不传即此项）/ markdown / text / html；返回值里的 answerFormat 是实际生效的那个")),
+                Arrays.asList("question"))));
+        tools.add(tool("knowledge_search",
+            "只做检索不生成答案：返回召回候选、重排结果与引用，便于自行装配上下文",
+            schema(properties(
+                prop("knowledgeBaseId", "integer", "知识库 ID，兼容旧调用"),
+                prop("knowledgeBaseCode", "string", "知识库稳定编码；绑定式 API Key 可省略此项"),
+                prop("query", "string", "检索语句"), prop("topK", "integer", "召回数量，默认 10"),
+                arrayProp("permissionTags", "可选的检索标签过滤；知识库 ACL 仍由服务端强制执行"),
+                prop("minScore", "number", "最低相关度分数（0~1）：低于该分数的候选不返回；不传即不过滤。返回里的 returned 是过滤后实际给出的条数")),
+                Arrays.asList("query"))));
         tools.add(tool("list_knowledge_bases", "列出当前 API Key 可见的知识库", schema(new LinkedHashMap<String, Object>(), new ArrayList<String>())));
         tools.add(tool("list_knowledge_cards", "列出知识卡片（结构化标准答案，如 SOP）", schema(properties(prop("knowledgeBaseId", "integer", "知识库 ID")),
             Arrays.asList("knowledgeBaseId"))));
@@ -129,8 +142,15 @@ public class McpServerService {
             "string", "证据编码")), Arrays.asList("knowledgeBaseId", "evidenceCode"))));
         tools.add(tool("graph_neighbors", "读取实体/知识对象的图谱邻域", schema(properties(prop("knowledgeBaseId", "integer", "知识库 ID"), prop("code", "string",
             "对象编码"), prop("depth", "integer", "跳数，默认 2"), prop("limit", "integer", "返回上限，默认 50")), Arrays.asList("knowledgeBaseId", "code"))));
-        tools.add(tool("ingest_text", "把一段文本接入知识库（需要 INGEST 权限）", schema(properties(prop("knowledgeBaseId", "integer", "知识库 ID"), prop("title",
-            "string", "标题，作为来源名"), prop("text", "string", "正文内容"), prop("permissionTags", "string", "权限标签，逗号分隔")), Arrays.asList("knowledgeBaseId", "text"))));
+        if (key != null && key.hasScope(ApiKey.SCOPE_INGEST)) {
+            tools.add(tool("ingest_text", "把一段文本接入知识库（需要 INGEST 权限）",
+                schema(properties(
+                    prop("knowledgeBaseId", "integer", "知识库 ID"),
+                    prop("title", "string", "标题，作为来源名"),
+                    prop("text", "string", "正文内容"),
+                    prop("permissionTags", "string", "权限标签，逗号分隔")),
+                    Arrays.asList("knowledgeBaseId", "text"))));
+        }
         Map<String, Object> payload = new LinkedHashMap<String, Object>();
         payload.put("tools", tools);
         return payload;
@@ -254,6 +274,30 @@ public class McpServerService {
             requested = ((Number) raw).longValue();
         } else if (raw != null && !String.valueOf(raw).isEmpty()) {
             requested = Long.valueOf(String.valueOf(raw).trim());
+        }
+        Object rawCode = args.get("knowledgeBaseCode");
+        if (rawCode != null && !String.valueOf(rawCode).trim().isEmpty()) {
+            String code = String.valueOf(rawCode).trim();
+            if (code.length() > 128) {
+                throw new IllegalArgumentException("knowledgeBaseCode 超出长度限制");
+            }
+            Long codeMatch = null;
+            for (Map<String, Object> base : facade.bases(key.getKnowledgeBaseId())) {
+                if (code.equals(String.valueOf(base.get("baseCode")))) {
+                    Object id = base.get("id");
+                    if (id instanceof Number) {
+                        codeMatch = ((Number) id).longValue();
+                    }
+                    break;
+                }
+            }
+            if (codeMatch == null) {
+                throw new IllegalArgumentException("knowledgeBaseCode 不存在或当前 API Key 不可访问");
+            }
+            if (requested != null && !requested.equals(codeMatch)) {
+                throw new IllegalArgumentException("knowledgeBaseId 与 knowledgeBaseCode 不匹配");
+            }
+            requested = codeMatch;
         }
         return accessService.resolveKnowledgeBase(key, requested);
     }

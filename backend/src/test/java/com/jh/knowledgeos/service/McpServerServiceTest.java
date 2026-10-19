@@ -1,7 +1,9 @@
 package com.jh.knowledgeos.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
@@ -10,6 +12,7 @@ import static org.mockito.Mockito.when;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.jh.knowledgeos.domain.ApiKey;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -31,6 +34,61 @@ class McpServerServiceTest {
 
         assertNotNull(((Map<?, ?>) ((Map<?, ?>) search.get("inputSchema")).get("properties")).get("permissionTags"));
         assertNotNull(((Map<?, ?>) ((Map<?, ?>) query.get("inputSchema")).get("properties")).get("permissionTags"));
+        assertFalse(((List<?>) ((Map<?, ?>) search.get("inputSchema")).get("required")).contains("knowledgeBaseId"));
+        assertNotNull(((Map<?, ?>) ((Map<?, ?>) search.get("inputSchema")).get("properties")).get("knowledgeBaseCode"));
+    }
+
+    @Test
+    void readOnlyKeyDoesNotAdvertiseIngestionTool() {
+        ApiKey key = mock(ApiKey.class);
+        when(key.hasScope(ApiKey.SCOPE_INGEST)).thenReturn(false);
+        McpServerService service = new McpServerService(null, null, new ObjectMapper());
+
+        List<Map<String, Object>> tools = (List<Map<String, Object>>) service.toolsList(key).get("tools");
+
+        assertFalse(tools.stream().anyMatch(tool -> "ingest_text".equals(tool.get("name"))));
+    }
+
+    @Test
+    void searchAcceptsStableKnowledgeBaseCodeAndStillChecksApiKeyScope() throws Exception {
+        ExternalAccessService access = mock(ExternalAccessService.class);
+        ExternalKnowledgeFacade facade = mock(ExternalKnowledgeFacade.class);
+        ApiKey key = mock(ApiKey.class);
+        when(key.getKnowledgeBaseId()).thenReturn(23L);
+        when(facade.bases(23L)).thenReturn(Arrays.asList(Map.of("id", 23L, "baseCode", "ops-runbook")));
+        when(access.resolveKnowledgeBase(key, 23L)).thenReturn(23L);
+        when(facade.search(eq(key), eq(23L), eq("leave policy"), eq((Integer) null), eq(Collections.emptyList()), eq(PlatformEventPublisher.SOURCE_MCP),
+            eq((Double) null))).thenReturn(Map.of("queryId", "q-code"));
+
+        McpServerService service = new McpServerService(access, facade, new ObjectMapper());
+        Map<String, Object> args = new LinkedHashMap<String, Object>();
+        args.put("knowledgeBaseCode", "ops-runbook");
+        args.put("query", "leave policy");
+
+        Map<String, Object> result = service.toolsCall(key, toolCall("knowledge_search", args));
+
+        verify(access).resolveKnowledgeBase(key, 23L);
+        verify(access).assertScope(key, ApiKey.SCOPE_READ);
+        assertEquals("q-code", ((Map<?, ?>) result.get("structuredContent")).get("queryId"));
+    }
+
+    @Test
+    void rejectsMismatchedNumericIdAndStableCode() {
+        ExternalAccessService access = mock(ExternalAccessService.class);
+        ExternalKnowledgeFacade facade = mock(ExternalKnowledgeFacade.class);
+        ApiKey key = mock(ApiKey.class);
+        when(key.getKnowledgeBaseId()).thenReturn(23L);
+        when(facade.bases(23L)).thenReturn(Arrays.asList(Map.of("id", 23L, "baseCode", "ops-runbook")));
+        McpServerService service = new McpServerService(access, facade, new ObjectMapper());
+        Map<String, Object> args = new LinkedHashMap<String, Object>();
+        args.put("knowledgeBaseId", 24L);
+        args.put("knowledgeBaseCode", "ops-runbook");
+        args.put("query", "leave policy");
+
+        assertThrows(
+            IllegalArgumentException.class,
+            () -> service.toolsCall(key, toolCall("knowledge_search", args))
+        );
     }
 
     @Test

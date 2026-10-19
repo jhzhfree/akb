@@ -12,9 +12,11 @@ AKB 可作为 Octop 的企业知识来源，通过 AKB MCP Server 让 Agent 使�
 | 建议权限 | `READ` |
 | MCP 工具 | `knowledge_search`、`knowledge_query`、`list_knowledge_bases` 等 |
 
-建议为每个知识空间创建绑定的 API Key，并只授予 `READ`。绑定 Key 会限制可访问的知识库；MCP 请求携带的 `knowledgeBaseId` 仍由 AKB 服务端验证。API Key 不应写入 Agent Prompt、业务文档或代码仓库。
+建议为每个知识空间创建绑定的 API Key，并只授予 `READ`。只读 Key 的 MCP `tools/list` 不会公布 `ingest_text`，而且服务端仍会在每次调用校验 scope。绑定 Key 会限制可访问的知识库。旧调用可继续传 `knowledgeBaseId`；新调用可用稳定的 `knowledgeBaseCode`（即知识库 `baseCode`），绑定 Key 也可省略两者。AKB 只会在该 Key 可见的知识库中解析编码，再执行原有绑定、READ scope 与 ACL 检查；同时传入不匹配的 ID 和编码会被拒绝。API Key 不应写入 Agent Prompt、业务文档或代码仓库。
 
 在 Octop 的 **Agent → Connectors → 自定义 MCP** 中选择 **添加 AKB 知识库**，填写 MCP URL 与 `X-API-Key`，保存后执行探测。将该连接加入目标 Agent 的 MCP 配置，再由 Agent 调用 `knowledge_search` 获取段落、候选与引用，或调用 `knowledge_query` 获取带引用答案。
+
+数字员工使用时，还需在 Octop 将连接加入目标企业场景，并通过数字员工的 `akb-knowledge-sources` 接口绑定 `mcp_server` 与 `knowledge_base_code`。Octop 会在计划快照和审批时复核绑定；AKB Key 仍是远端权限边界。
 
 ## 工具参数
 
@@ -22,7 +24,7 @@ AKB 可作为 Octop 的企业知识来源，通过 AKB MCP Server 让 Agent 使�
 
 ```json
 {
-  "knowledgeBaseId": 23,
+  "knowledgeBaseCode": "HR-POLICY",
   "query": "员工年假政策",
   "topK": 5,
   "permissionTags": ["hr"],
@@ -30,7 +32,7 @@ AKB 可作为 Octop 的企业知识来源，通过 AKB MCP Server 让 Agent 使�
 }
 ```
 
-`knowledge_query` 使用 `question` 代替 `query`，并可指定 `answerFormat`。`permissionTags` 是检索过滤条件，不能代替知识库 ACL。返回中的 `queryId` 和 `citations` 可用于追踪与展示知识来源；MCP 查询也会在 AKB 记录为 MCP 来源。
+`knowledge_query` 使用 `question` 代替 `query`，并可指定 `answerFormat`。`knowledgeBaseId` 与 `knowledgeBaseCode` 至少选一个（绑定 Key 可都省略）。`permissionTags` 是检索过滤条件，不能代替知识库 ACL。返回中的 `queryId` 和 `citations` 可用于追踪与展示知识来源；MCP 查询也会在 AKB 记录为 MCP 来源。
 
 ## 联调检查
 
