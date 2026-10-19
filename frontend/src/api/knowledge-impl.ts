@@ -23,8 +23,19 @@ export const createKnowledgeBase = (
 export const updateKnowledgeBase = (
   id:number, payload:{name:string; description?:string; visibility?:string; ownerGroupId?:number|null; scenario?:string;
     defaultQuery?:string|null},
-):Promise<ApiResponse<KnowledgeBase>> =>
-  axios.put(`/api/knowledge/bases/${id}`, payload)
+):Promise<ApiResponse<KnowledgeBase>> => axios.put(`/api/knowledge/bases/${id}`, payload)
+
+/**
+ * Knowledge ledger batch maintenance.
+ *
+ * <p>Only the keys present in the payload are written — passing {@code scope: ''} sets scope to
+ * null, which is what the "clear" button wants; passing nothing for owner/effective/expire keeps
+ * the old value. This matches the stock-take flow where one column is filled at a time.</p>
+ */
+export const updateSourceGovernance = (
+  kb:number, payload:Record<string, unknown>,
+):Promise<ApiResponse<unknown>> =>
+  axios.post(`/api/knowledge/lifecycle/${kb}/sources/governance`, payload)
 /** 读取知识库场景配置：模板目录、字段取值范围与当前生效档案。 */
 export const getKbScenario = (kb:number):Promise<ApiResponse<KbScenarioSettings>> =>
   axios.get('/api/knowledge/settings/scenario', { params:{ kb } })

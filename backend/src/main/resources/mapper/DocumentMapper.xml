@@ -2,7 +2,7 @@
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.jh.knowledgeos.mapper.DocumentMapper">
 
-<insert id="insertSource" parameterType="com.jh.knowledgeos.domain.KnowledgeSource" useGeneratedKeys="true" keyProperty="id">INSERT INTO t_source(source_code,knowledge_base_id,name,source_type,source_uri,storage_path,authority_score,status,permission_tags)VALUES(#{sourceCode},#{knowledgeBaseId},#{name},#{sourceType},#{sourceUri},#{storagePath},#{authorityScore},#{status},CAST(#{permissionTags} AS JSON))</insert>
+<insert id="insertSource" parameterType="com.jh.knowledgeos.domain.KnowledgeSource" useGeneratedKeys="true" keyProperty="id">INSERT INTO t_source(source_code,knowledge_base_id,name,source_type,source_uri,storage_path,authority_score,owner_user_id,effective_at,expire_at,scope,status,permission_tags)VALUES(#{sourceCode},#{knowledgeBaseId},#{name},#{sourceType},#{sourceUri},#{storagePath},#{authorityScore},#{ownerUserId},#{effectiveAt},#{expireAt},#{scope},#{status},CAST(#{permissionTags} AS JSON))</insert>
 
 
 <insert id="insertSourceVersion">INSERT INTO t_source_version(source_id,version_no,source_hash,object_uri,status)VALUES(#{sourceId},#{versionNo},#{sourceHash},#{objectUri},'ACTIVE')</insert>
@@ -23,7 +23,18 @@
 <select id="findDocumentRetryContext" resultType="map">SELECT d.id,d.document_code documentCode,d.title,d.status,d.retry_count retryCount,s.id sourceId,s.name sourceName,s.storage_path storagePath,s.authority_score authorityScore,s.permission_tags permissionTags,s.source_type sourceType,sv.version_no sourceVersion,sv.id sourceVersionId,s.knowledge_base_id knowledgeBaseId,COALESCE((SELECT MAX(cu.revision) FROM t_content_unit cu WHERE cu.document_id=d.id),1) chunkRevision FROM t_document d JOIN t_source_version sv ON sv.id=d.source_version_id JOIN t_source s ON s.id=sv.source_id WHERE d.id=#{id}</select>
 
 
-<select id="listSources" resultType="com.jh.knowledgeos.domain.KnowledgeSource">SELECT id,source_code sourceCode,knowledge_base_id knowledgeBaseId,name,source_type sourceType,source_uri sourceUri,authority_score authorityScore,status,permission_tags permissionTags,created_time createdTime FROM t_source WHERE knowledge_base_id=#{kb}<choose><when test="permissionTags == null"></when><when test="permissionTags != null and permissionTags.size() > 0"> AND (permission_tags IS NULL OR JSON_LENGTH(permission_tags)=0 OR <foreach collection="permissionTags" item="tag" open="(" separator=" OR " close=")">JSON_CONTAINS(permission_tags, JSON_QUOTE(#{tag}))</foreach>)</when><otherwise> AND (permission_tags IS NULL OR JSON_LENGTH(permission_tags)=0)</otherwise></choose> ORDER BY created_time DESC</select>
+<select id="listSources" resultType="com.jh.knowledgeos.domain.KnowledgeSource">SELECT id,source_code sourceCode,knowledge_base_id knowledgeBaseId,name,source_type sourceType,source_uri sourceUri,authority_score authorityScore,owner_user_id ownerUserId,effective_at effectiveAt,expire_at expireAt,scope,status,permission_tags permissionTags,created_time createdTime FROM t_source WHERE knowledge_base_id=#{kb}<choose><when test="permissionTags == null"></when><when test="permissionTags != null and permissionTags.size() > 0"> AND (permission_tags IS NULL OR JSON_LENGTH(permission_tags)=0 OR <foreach collection="permissionTags" item="tag" open="(" separator=" OR " close=")">JSON_CONTAINS(permission_tags, JSON_QUOTE(#{tag}))</foreach>)</when><otherwise> AND (permission_tags IS NULL OR JSON_LENGTH(permission_tags)=0)</otherwise></choose> ORDER BY created_time DESC</select>
+
+<!-- 台账治理：只改请求里出现的列。盘点是一次补一列的活儿，指定了责任人就不该把有效期抹掉。 -->
+<update id="updateSourceGovernance">UPDATE t_source
+<set>
+  <if test="ownerUserId != null">owner_user_id=#{ownerUserId},</if>
+  <if test="effectiveAt != null">effective_at=#{effectiveAt},</if>
+  <if test="expireAt != null">expire_at=#{expireAt},</if>
+  <if test="scope != null">scope=#{scope},</if>
+  <if test="status != null and status != ''">status=#{status},</if>
+</set>
+WHERE id=#{id} AND knowledge_base_id=#{kb}</update>
 
 
 <select id="getSourcePreview" resultType="map">

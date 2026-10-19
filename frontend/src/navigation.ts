@@ -124,6 +124,11 @@ export const NAV_SECTIONS: NavSection[] = [
       { key: 'create.connector', label: '连接器', icon: 'link', adminOnly: true, focus: 'sources', permission: PERM.GENERATE_CONNECTOR },
       /** 连接器的知识目录：按外部系统的类型与属性浏览同步下来的条目。 */
       { key: 'create.connectorCatalog', label: '外部知识', icon: 'layers', adminOnly: true, permission: PERM.GENERATE_CONNECTOR },
+      /**
+       * 知识台账：来源的责任人 / 有效期 / 适用范围挂在库上。
+       * 与「连接器 / 外部知识」同一级（adminOnly），是接入资料后的下一步治理动作。
+       */
+      { key: 'create.ledger', label: '知识台账', icon: 'clipboard', adminOnly: true, permission: PERM.GENERATE_IMPORT },
       { key: 'create.judgment', label: '知识裁决', icon: 'scale', badge: 'openConflict', focus: 'judgment', permission: PERM.GENERATE_JUDGE },
       { key: 'create.derive', label: '知识衍生', icon: 'branch', permission: PERM.GENERATE_DERIVE },
     ],

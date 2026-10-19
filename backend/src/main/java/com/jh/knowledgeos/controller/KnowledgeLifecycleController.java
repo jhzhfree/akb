@@ -44,4 +44,14 @@ public class KnowledgeLifecycleController {
     public ApiResponse<Object> sourceImpact(@PathVariable Long sourceId) {
         return ApiResponse.ok(knowledgeLifecycleService.sourceImpact(sourceId));
     }
+    /**
+     * Knowledge ledger batch maintenance: assign the owner / validity window / scope on multiple
+     * sources at once, or retire them in bulk. The body is loose on purpose: an operator
+     * editing a ledger rarely changes every column at the same time.
+     */
+    @PostMapping("/lifecycle/{kb}/sources/governance")
+    @Operation(summary = "知识台账批量治理：补责任人/生失效/适用范围，或批量标记废弃")
+    public ApiResponse<Object> updateSourceGovernance(@PathVariable Long kb, @RequestBody Map<String, Object> request) {
+        return ApiResponse.ok(knowledgeLifecycleService.updateSourceGovernance(kb, request));
+    }
 }

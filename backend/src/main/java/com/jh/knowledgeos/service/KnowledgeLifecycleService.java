@@ -3,6 +3,7 @@ package com.jh.knowledgeos.service;
 import com.jh.knowledgeos.common.KnowledgeStatus;
 import com.jh.knowledgeos.common.PlatformEventTypes;
 import com.jh.knowledgeos.mapper.KnowledgeMapper;
+import com.jh.knowledgeos.mapper.DocumentMapper;
 import com.jh.knowledgeos.mapper.CardClaimMapper;
 import com.jh.knowledgeos.mapper.GovernanceMapper;
 import org.springframework.stereotype.Service;
@@ -25,6 +26,8 @@ public class KnowledgeLifecycleService {
 
     private final KnowledgeMapper mapper;
 
+    private final DocumentMapper documentMapper;
+
     private final CardClaimMapper cardClaimMapper;
 
     private final GovernanceMapper governanceMapper;
@@ -37,8 +40,10 @@ public class KnowledgeLifecycleService {
     private final PlatformEventPublisher publisher;
 
     public KnowledgeLifecycleService(KnowledgeMapper mapper, IndexOutboxService indexOutboxService, TransactionRunner transactionRunner,
-        PlatformEventPublisher publisher, GovernanceMapper governanceMapper, CardClaimMapper cardClaimMapper) {
+        PlatformEventPublisher publisher, GovernanceMapper governanceMapper, CardClaimMapper cardClaimMapper,
+        DocumentMapper documentMapper) {
         this.cardClaimMapper = cardClaimMapper;
+        this.documentMapper = documentMapper;
         this.governanceMapper = governanceMapper;
         this.mapper = mapper;
         this.indexOutboxService = indexOutboxService;
@@ -279,6 +284,117 @@ public class KnowledgeLifecycleService {
             return new Date(((Number) value).longValue());
         }
         return null;
+    }
+
+    /**
+     * Knowledge ledger maintenance: hand a batch of sources their identity card — owner, validity
+     * window, scope — or retire them in one go.
+     *
+     * <p>Only the keys present in the request are written. A stock-take fills the ledger one
+     * column at a time, so nominating an owner must not wipe the expiry date entered last week.</p>
+     *
+     * @return how many rows changed plus the fields actually applied, so the console can tell the
+     *         operator what landed
+     */
+    public Map<String, Object> updateSourceGovernance(Long knowledgeBaseId, Map<String, Object> request) {
+        if (knowledgeBaseId == null) {
+            throw new IllegalArgumentException("缺少知识库 ID");
+        }
+        List<Long> ids = toIdList(request == null ? null : request.get("ids"));
+        if (ids.isEmpty()) {
+            throw new IllegalArgumentException("请先在台账里选择要维护的来源");
+        }
+        Long ownerUserId = request.containsKey("ownerUserId") ? toLongOrNull(request.get("ownerUserId")) : null;
+        Date effectiveAt = request.containsKey("effectiveAt") ? parseMoment(request.get("effectiveAt"), "生效日期") : null;
+        Date expireAt = request.containsKey("expireAt") ? parseMoment(request.get("expireAt"), "失效日期") : null;
+        String scope = request.containsKey("scope") ? trimToNull(request.get("scope")) : null;
+        String status = request.containsKey("status") ? normalizeSourceStatus(request.get("status")) : null;
+        int updated = 0;
+        for (Long id : ids) {
+            updated += documentMapper.updateSourceGovernance(knowledgeBaseId, id, ownerUserId, effectiveAt, expireAt, scope, status);
+        }
+        Map<String, Object> result = new LinkedHashMap<String, Object>();
+        result.put("requested", ids.size());
+        result.put("updated", updated);
+        result.put("ownerUserId", ownerUserId);
+        result.put("effectiveAt", request.containsKey("effectiveAt") ? request.get("effectiveAt") : null);
+        result.put("expireAt", request.containsKey("expireAt") ? request.get("expireAt") : null);
+        result.put("scope", scope);
+        result.put("status", status);
+        return result;
+    }
+
+    /** Ids arrive as JSON numbers from the console and as numeric strings from curl; both work. */
+    private List<Long> toIdList(Object raw) {
+        List<Long> ids = new ArrayList<Long>();
+        if (!(raw instanceof List<?>)) {
+            return ids;
+        }
+        for (Object item : (List<?>) raw) {
+            Long parsed = toLongOrNull(item);
+            if (parsed != null && !ids.contains(parsed)) {
+                ids.add(parsed);
+            }
+        }
+        return ids;
+    }
+
+    private Long toLongOrNull(Object raw) {
+        if (raw == null) {
+            return null;
+        }
+        if (raw instanceof Number) {
+            return ((Number) raw).longValue();
+        }
+        String text = String.valueOf(raw).trim();
+        if (text.isEmpty()) {
+            return null;
+        }
+        try {
+            return Long.valueOf(text);
+        } catch (NumberFormatException ignored) {
+            return null;
+        }
+    }
+
+    /**
+     * A date picker sends "2026-10-19", an API caller sends "2026-10-19T00:00"; both are accepted
+     * and anything else is refused, because a silently ignored expiry date is worse than an error.
+     */
+    private Date parseMoment(Object raw, String label) {
+        if (raw == null || String.valueOf(raw).trim().isEmpty()) {
+            return null;
+        }
+        String text = String.valueOf(raw).trim().replace('T', ' ');
+        String[] patterns = { "yyyy-MM-dd HH:mm:ss", "yyyy-MM-dd HH:mm", "yyyy-MM-dd" };
+        for (String pattern : patterns) {
+            try {
+                return new java.text.SimpleDateFormat(pattern).parse(text);
+            } catch (java.text.ParseException ignored) {
+                // try the next shape
+            }
+        }
+        throw new IllegalArgumentException(label + "格式不正确，示例：2026-10-19");
+    }
+
+    /** A source is either live or archived: retired knowledge is kept for traceability, never dropped. */
+    private String normalizeSourceStatus(Object raw) {
+        if (raw == null || String.valueOf(raw).trim().isEmpty()) {
+            return null;
+        }
+        String text = String.valueOf(raw).trim().toUpperCase();
+        if (!"ACTIVE".equals(text) && !"ARCHIVED".equals(text)) {
+            throw new IllegalArgumentException("来源状态只能是 ACTIVE 或 ARCHIVED");
+        }
+        return text;
+    }
+
+    private String trimToNull(Object raw) {
+        if (raw == null) {
+            return null;
+        }
+        String text = String.valueOf(raw).trim();
+        return text.isEmpty() ? null : text;
     }
 
     private int deduplicatedCount(List<Map<String, Object>> rows) {

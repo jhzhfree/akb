@@ -29,6 +29,16 @@ public interface DocumentMapper {
 
     List<KnowledgeSource> listSources(@Param("kb") Long kb, @Param("permissionTags") List<String> permissionTags);
 
+    /**
+     * Update the governance columns a ledger row owns.
+     *
+     * <p>Every parameter may be null, which means "leave it alone": the ledger is filled in one
+     * column at a time — nominating an owner must not silently erase the expiry date.</p>
+     */
+    int updateSourceGovernance(@Param("kb") Long kb, @Param("id") Long id, @Param("ownerUserId") Long ownerUserId,
+        @Param("effectiveAt") Date effectiveAt, @Param("expireAt") Date expireAt, @Param("scope") String scope,
+        @Param("status") String status);
+
     Map<String, Object> getSourcePreview(@Param("kb") Long kb, @Param("sourceId") Long sourceId, @Param("permissionTags") List<String> permissionTags);
 
     List<Map<String, Object>> listDocuments(@Param("kb") Long kb, @Param("permissionTags") List<String> permissionTags);

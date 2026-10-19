@@ -41,6 +41,8 @@ export interface PurgeResult {
 export interface KnowledgeSource {
   id:number; sourceCode:string; knowledgeBaseId:number; name:string; sourceType:string
   sourceUri:string; authorityScore:number; status:string; createdTime?:string
+  /** 台账身份证：责任人 / 生效日 / 失效日 / 适用范围。空表示「未登记」而非「已失效」。 */
+  ownerUserId?:number|null; effectiveAt?:string|null; expireAt?:string|null; scope?:string|null
 }
 export interface KnowledgeDocument {
   id:number; documentCode:string; title:string; mimeType?:string; parseStatus:string

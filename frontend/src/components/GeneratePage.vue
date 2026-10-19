@@ -85,6 +85,14 @@
     @adjudicate-conflict="(id,decision,comment)=>shell.adjudicateConflict(id,decision,comment)"
     @open-evidence="shell.openEvidence" />
 
+  <!-- 知识台账：把库里每一条来源都挂上责任人 / 生效 / 失效 / 适用范围。
+       治理动作挂在「知识生成」下是因为它紧跟在「文档导入」之后——刚把资料接进来
+       的时候正好顺手把身份证补齐，比半年后再盘点省事得多。 -->
+  <KnowledgeLedgerPanel
+    v-else-if="active==='create.ledger'"
+    :knowledge-base-id="knowledgeBaseId"
+    :sources="sources" />
+
   <DerivationPanel v-else-if="active==='create.derive'" :knowledge-base-id="knowledgeBaseId" />
 
   <PanelState v-else :empty="true" empty-text="请选择一个生成能力"
@@ -106,6 +114,7 @@ import ReviewPanel from './ReviewPanel.vue'
 import PanelState from './PanelState.vue'
 import GenerationConfigPanel from './GenerationConfigPanel.vue'
 import DerivationPanel from './DerivationPanel.vue'
+import KnowledgeLedgerPanel from './KnowledgeLedgerPanel.vue'
 
 const props = defineProps<{
   active: string

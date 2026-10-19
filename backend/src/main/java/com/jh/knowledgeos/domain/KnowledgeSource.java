@@ -24,6 +24,21 @@ public class KnowledgeSource {
 
     private Double authorityScore;
 
+    /**
+     * Who keeps this source current. Answers "who do I ask when the answer is wrong";
+     * a source without one is the first thing a knowledge ledger should chase.
+     */
+    private Long ownerUserId;
+
+    /** Start of the window in which this source may be cited. */
+    private java.util.Date effectiveAt;
+
+    /** End of that window; past it the source is stale until someone revalidates it. */
+    private java.util.Date expireAt;
+
+    /** Who this source applies to — whole company, one department, one product line. */
+    private String scope;
+
     private String status;
 
     private String permissionTags;
@@ -90,6 +105,38 @@ public class KnowledgeSource {
 
     public void setAuthorityScore(Double authorityScore) {
         this.authorityScore = authorityScore;
+    }
+
+    public Long getOwnerUserId() {
+        return ownerUserId;
+    }
+
+    public void setOwnerUserId(Long ownerUserId) {
+        this.ownerUserId = ownerUserId;
+    }
+
+    public java.util.Date getEffectiveAt() {
+        return effectiveAt;
+    }
+
+    public void setEffectiveAt(java.util.Date effectiveAt) {
+        this.effectiveAt = effectiveAt;
+    }
+
+    public java.util.Date getExpireAt() {
+        return expireAt;
+    }
+
+    public void setExpireAt(java.util.Date expireAt) {
+        this.expireAt = expireAt;
+    }
+
+    public String getScope() {
+        return scope;
+    }
+
+    public void setScope(String scope) {
+        this.scope = scope;
     }
 
     public String getStatus() {
