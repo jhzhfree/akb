@@ -49,23 +49,38 @@ public class PlatformEventStore {
      */
     @Transactional(propagation = Propagation.SUPPORTS, readOnly = true)
     public List<PlatformEvent> since(Long kb, List<String> types, Long sinceId, int limit) {
-        return mapper.listPlatformEvents(kb, types, sinceId, true, limit);
+        return mapper.listPlatformEvents(kb, types, sinceId, null, null, true, limit);
     }
 
     /**
      * Latest-first console view of the activity trail.
+     *
+     * <p>{@code untilId} is the oldest id already on screen: passing it back pages further into the
+     * past without an offset, which stays correct while new events keep arriving at the head.</p>
      */
     @Transactional(propagation = Propagation.SUPPORTS, readOnly = true)
-    public List<PlatformEvent> recent(Long kb, List<String> types, int limit) {
-        return mapper.listPlatformEvents(kb, types, null, false, limit);
+    public List<PlatformEvent> recent(Long kb, List<String> types, Long sinceId, Long untilId, String keyword, int limit) {
+        return mapper.listPlatformEvents(kb, types, sinceId, untilId, keyword, false, limit);
     }
 
+    /**
+     * Deletes one batch of expired rows and reports how many went, so a caller can loop without
+     * ever holding a transaction over the whole backlog.
+     */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public int purgeBefore(LocalDateTime cutoff) {
-        if (cutoff == null) {
+    public int purgeBefore(LocalDateTime cutoff, int limit) {
+        if (cutoff == null || limit <= 0) {
             return 0;
         }
-        return mapper.deletePlatformEventsBefore(cutoff);
+        return mapper.deletePlatformEventsBefore(cutoff, limit);
+    }
+
+    /**
+     * Oldest surviving id: the console uses it to say "已到最早一条" instead of offering another page.
+     */
+    @Transactional(propagation = Propagation.SUPPORTS, readOnly = true)
+    public Long oldestId() {
+        return mapper.minPlatformEventId();
     }
 
     /**

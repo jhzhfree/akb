@@ -13,6 +13,12 @@ VALUES(#{eventId},#{eventTime},#{eventType},#{knowledgeBaseId},#{source},#{actor
   <where>
     <if test="kb != null">knowledge_base_id=#{kb}</if>
     <if test="sinceId != null">AND id &gt; #{sinceId}</if>
+    <if test="untilId != null">AND id &lt; #{untilId}</if>
+    <if test="keyword != null and keyword != ''">AND (summary LIKE CONCAT('%',#{keyword},'%')
+      OR target_code LIKE CONCAT('%',#{keyword},'%')
+      OR actor_name LIKE CONCAT('%',#{keyword},'%')
+      OR event_id = #{keyword}
+      OR trace_id = #{keyword})</if>
     <if test="types != null and types.size() > 0">AND event_type IN
       <foreach collection="types" item="t" open="(" separator="," close=")">#{t}</foreach>
     </if>
@@ -23,8 +29,12 @@ VALUES(#{eventId},#{eventTime},#{eventType},#{knowledgeBaseId},#{source},#{actor
   </choose>
   LIMIT #{limit}</select>
 
-<delete id="deletePlatformEventsBefore">DELETE FROM t_platform_event WHERE created_time &lt; #{cutoff}</delete>
+<!-- Batched on purpose: the event log is append-only, so retention deletes it in bounded chunks
+     instead of one long transaction that would hold the table while it scans. -->
+<delete id="deletePlatformEventsBefore">DELETE FROM t_platform_event WHERE created_time &lt; #{cutoff} LIMIT #{limit}</delete>
 
 <select id="maxPlatformEventId" resultType="long">SELECT COALESCE(MAX(id),0) FROM t_platform_event</select>
+
+<select id="minPlatformEventId" resultType="long">SELECT COALESCE(MIN(id),0) FROM t_platform_event</select>
 
 </mapper>

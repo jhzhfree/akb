@@ -2,17 +2,20 @@
   <section class="kb-page">
     <header class="kb-section-head">
       <div>
-        <div class="kb-eyebrow">外部服务</div>
-        <h1 class="kb-title mt-1">外部服务</h1>
+        <div class="kb-eyebrow">接口服务</div>
+        <h1 class="kb-title mt-1">{{ section === 'credentials' ? '凭证' : '服务' }}</h1>
         <p class="kb-muted mt-1">
-          对外以 RESTful、MCP 服务、SSE 三种形态开放同一套知识能力：一个 API 密钥 决定可见的知识库范围与可用动作，
-          三个通道共用一套限流与调用审计。
+          <template v-if="section==='credentials'">
+            API 密钥决定调用方可见的知识库范围与可用动作：明文只在签发时展示一次，吊销即让外部系统立即失去访问能力。
+          </template>
+          <template v-else>
+            对外以 RESTful、MCP 服务、SSE 三种形态开放同一套知识能力：一个 API 密钥 决定可见的知识库范围与可用动作，
+            三个通道共用一套限流与调用审计。
+          </template>
         </p>
       </div>
       <div class="flex shrink-0 items-center gap-2">
-        <!-- V2.2：服务与凭证在知识集成内是两个 Tab，同一面板按入口聚焦到对应区块。 -->
-        <button class="kb-btn-outline" :class="{'kb-btn-primary':section==='services'}" @click="section='services'">服务</button>
-        <button v-if="canCredentials" class="kb-btn-outline" :class="{'kb-btn-primary':section==='credentials'}" @click="section='credentials'">凭证</button>
+        <!-- V2.2：服务与凭证是「接口服务」下的两个 Tab，区块由 Tab 的 focus 决定，面板内不再重复开关。 -->
         <button class="kb-btn-outline" :disabled="loading" @click="loadAll">刷新</button>
       </div>
     </header>
@@ -28,7 +31,9 @@
       {{ error }}
     </div>
 
-    <div class="mt-4 grid grid-cols-1 gap-4 xl:grid-cols-3">
+    <div v-if="section==='services'" class="mt-4 grid grid-cols-1 gap-4 xl:grid-cols-3">
+      <!-- 协议三卡属于「服务」视角：凭证 Tab 只留凭证表，免得焦点被协议信息带偏。 -->
+      <template v-if="section==='services'">
       <article class="kb-card">
         <div class="kb-card-head">
           <b class="text-sm">REST 接口</b>
@@ -92,6 +97,7 @@
           </div>
         </div>
       </article>
+      </template>
     </div>
 
     <article v-if="section==='credentials'" class="kb-card mt-4">
@@ -183,48 +189,30 @@
         </div>
       </article>
 
+      <!-- 对外调用只在这里露最近几条做健康佐证：全量明细统一去「调用日志」看，
+           同一批审计数据不在两个 Tab 各摆一张口径不同的表。 -->
       <article class="kb-card">
         <div class="kb-card-head">
-          <b class="text-sm">调用审计</b>
-          <div class="flex items-center gap-2">
-            <select v-model.number="auditLimit" class="kb-input w-28" @change="loadAudits">
-              <option v-for="size in [20, 50, 100]" :key="size" :value="size">{{ size }} 条</option>
-            </select>
-            <button class="kb-btn-outline" :disabled="auditLoading" @click="loadAudits">刷新</button>
-          </div>
+          <b class="text-sm">最近调用</b>
+          <button class="text-xs font-medium text-accent hover:text-accent" @click="shell.navigate('integration.logs')">
+            调用日志 →
+          </button>
         </div>
-        <div class="p-3">
-          <PanelState :loading="auditLoading" :empty="!audits.length" empty-text="暂无对外调用记录"
-            empty-hint="外部系统发起调用后会在此留痕" retryable @retry="loadAudits">
-            <el-table :data="audits" border size="small" height="320">
-              <el-table-column label="时间" width="170">
-                <template #default="{ row }">{{ row.createdTime || '—' }}</template>
-              </el-table-column>
-              <el-table-column label="通道" width="90">
-                <template #default="{ row }">
-                  <el-tag size="small" effect="plain" :type="channelType(row.channel)">{{ row.channel }}</el-tag>
-                </template>
-              </el-table-column>
-              <el-table-column prop="method" label="方法 / 工具" min-width="180" show-overflow-tooltip />
-              <el-table-column label="调用方" width="140" show-overflow-tooltip>
-                <template #default="{ row }">{{ row.callerName || row.keyCode || '—' }}</template>
-              </el-table-column>
-              <el-table-column label="知识库" width="100">
-                <template #default="{ row }">{{ row.knowledgeBaseId || '—' }}</template>
-              </el-table-column>
-              <el-table-column label="结果" width="90">
-                <template #default="{ row }">
-                  <span :class="row.statusCode >= 400 ? 'text-[color:var(--danger)]' : 'text-[color:var(--ok)]'">{{ row.statusCode }}</span>
-                </template>
-              </el-table-column>
-              <el-table-column label="耗时" width="90">
-                <template #default="{ row }">{{ row.durationMs }} ms</template>
-              </el-table-column>
-              <el-table-column label="Trace" min-width="150" show-overflow-tooltip>
-                <template #default="{ row }">{{ row.traceId || '—' }}</template>
-              </el-table-column>
-            </el-table>
-          </PanelState>
+        <div class="divide-y divide-ink-100 px-4">
+          <div v-for="(row,i) in audits" :key="i" class="flex items-center gap-2 py-2 text-[12px]">
+            <el-tag size="small" effect="plain" :type="channelType(row.channel)">{{ row.channel }}</el-tag>
+            <span class="min-w-0 flex-1 truncate text-ink-700">{{ row.method || '—' }}</span>
+            <span class="shrink-0 text-[11px] text-ink-500">{{ row.durationMs }} ms</span>
+            <span
+              class="shrink-0 text-[11px]"
+              :class="row.statusCode >= 400 ? 'text-[color:var(--danger)]' : 'text-[color:var(--ok)]'">
+              {{ row.statusCode ?? '—' }}
+            </span>
+          </div>
+          <div v-if="auditLoading" class="py-6 text-center text-[12px] text-ink-500">加载中…</div>
+          <div v-else-if="!audits.length" class="py-6 text-center text-[12px] text-ink-500">
+            暂无对外调用记录，外部系统发起调用后会在此留痕
+          </div>
         </div>
       </article>
     </div>
@@ -306,7 +294,8 @@ const loading = ref(false)
 const auditLoading = ref(false)
 const saving = ref(false)
 const error = ref('')
-const auditLimit = ref(50)
+/** 最近调用只取几条做健康佐证：全量明细统一在「调用日志」Tab 看。 */
+const auditLimit = ref(5)
 
 const createVisible = ref(false)
 const secretVisible = ref(false)

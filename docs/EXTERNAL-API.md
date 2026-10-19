@@ -220,7 +220,9 @@ curl -X POST http://<host>:8080/api/v1/external/query \
 
 **参数**：无。
 
-**返回**：数组，元素字段 `id / baseCode / name / description / status / visibility / createdByName`。
+**返回**：数组，元素字段 `id / baseCode / name / description / status / visibility / createdByName / defaultQuery`。
+
+> `defaultQuery` 是知识库预置的示例问句（在「知识库管理」里随库一起设置），只作输入框提示与一键发起，不参与召回；留空时调用方退回自己的通用提示语。
 
 ```bash
 curl -H 'X-API-Key: kos_ak_xxx' http://<host>:8080/api/v1/external/bases
@@ -1145,6 +1147,23 @@ knowledge:
 ```
 
 对应环境变量：`EXTERNAL_API_ENABLED`、`EXTERNAL_MCP_ENABLED`、`EXTERNAL_SSE_ENABLED`、`EXTERNAL_SSE_HEARTBEAT_SECONDS`、`EXTERNAL_SSE_MAX_MINUTES`、`EXTERNAL_ANSWER_CHUNK_CHARS`、`EXTERNAL_ANSWER_CHUNK_DELAY_MILLIS`、`EXTERNAL_DEFAULT_RATE_LIMIT`。
+
+事件总线（SSE 推送的数据来源）是追加写，需要配保留期，否则 `t_platform_event` 只增不减：
+
+```yaml
+knowledge:
+  platform-event:
+    retention:
+      enabled: true           # 关闭后不再清理
+      days: 30                # 保留天数；<= 0 表示永不清理（仅调试用）
+      batch-size: 1000        # 单批删除条数，避免长事务
+      interval-ms: 3600000    # 清理间隔
+```
+
+对应环境变量：`PLATFORM_EVENT_RETENTION_ENABLED`、`PLATFORM_EVENT_RETENTION_DAYS`、`PLATFORM_EVENT_RETENTION_BATCH_SIZE`、`PLATFORM_EVENT_RETENTION_INTERVAL_MS`。
+
+控制台「接口服务 → 事件总线」可直接翻事件历史（按知识库 / 类型 / 关键字筛选，按事件号向后翻页），
+并展示当前活跃订阅路数。历史事件与 SSE 下发走同一套可见性规则：管理员看全量，外部 Key 看脱敏后的 detail。
 
 在线接口文档：`/v3/api-docs`（OpenAPI）、`/swagger-ui.html`（Swagger UI）。
 

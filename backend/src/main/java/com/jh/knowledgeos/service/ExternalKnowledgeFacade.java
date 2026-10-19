@@ -313,6 +313,9 @@ public class ExternalKnowledgeFacade {
         row.put("description", base.getDescription());
         row.put("status", base.getStatus());
         row.put("visibility", base.getVisibility());
+        // 示例问句随库一起给出去：调用方（对外 API、MCP、嵌入挂件）读到的是同一句提示，
+        // 不必各自维护一份“这个库该怎么问”的文案。
+        row.put("defaultQuery", base.getDefaultQuery());
         row.put("createdByName", base.getCreatedByName());
         return row;
     }

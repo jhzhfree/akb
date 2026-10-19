@@ -10,8 +10,13 @@
         </p>
       </div>
       <div class="flex shrink-0 items-center gap-2">
+        <select v-model.number="hours" class="kb-input w-32" @change="load">
+          <option :value="24">最近 24 小时</option>
+          <option :value="72">最近 3 天</option>
+          <option :value="168">最近 7 天</option>
+        </select>
         <select v-model="protocol" class="kb-input w-32" @change="load">
-          <option value="">全部协议</option>
+          <option value="">全部通道</option>
           <option value="REST">REST</option>
           <option value="MCP">MCP</option>
           <option value="SSE">SSE</option>
@@ -21,6 +26,9 @@
           <option value="SUCCESS">成功</option>
           <option value="ERROR">失败</option>
         </select>
+        <select v-model.number="limit" class="kb-input w-28" @change="load">
+          <option v-for="size in [50, 100, 200]" :key="size" :value="size">{{ size }} 条</option>
+        </select>
         <button class="kb-btn-outline" @click="load">刷新</button>
       </div>
     </header>
@@ -28,7 +36,7 @@
     <article class="kb-card">
       <div class="kb-card-head">
         <b class="text-sm">调用记录</b>
-        <span class="kb-muted">{{ rows.length }} 条</span>
+        <span class="kb-muted">{{ rows.length }} 条 · 最近 {{ hours }} 小时</span>
       </div>
       <div class="p-3">
         <PanelState
@@ -36,7 +44,7 @@
           :error="error"
           :empty="!rows.length"
           empty-text="窗口内没有调用记录"
-          empty-hint="在「接口联调」或业务系统中发起一次集成调用后即可看到记录"
+          empty-hint="外部系统发起一次集成调用，或在「接口联调台」发一次请求后即可看到记录"
           retryable
           @retry="load">
           <el-table :data="rows" border size="small">
@@ -45,7 +53,7 @@
                 <div class="space-y-3 px-3 py-2 text-[12px]">
                   <div class="flex gap-2">
                     <b class="w-20 shrink-0 font-normal text-ink-500">调用方</b>
-                    <span class="kb-muted">{{ row.caller || row.client || '—' }}</span>
+                    <span class="kb-muted">{{ row.caller || '—' }}</span>
                   </div>
                   <div class="flex gap-2">
                     <b class="w-20 shrink-0 font-normal text-ink-500">凭证</b>
@@ -69,13 +77,13 @@
             <el-table-column label="时间" width="170">
               <template #default="{ row }">{{ row.time ? String(row.time).slice(0,19) : '—' }}</template>
             </el-table-column>
-            <el-table-column prop="protocol" label="协议" width="90" />
+            <el-table-column prop="protocol" label="通道" width="90" />
             <el-table-column label="调用方" width="140" show-overflow-tooltip>
-              <template #default="{ row }">{{ row.caller || row.client || '—' }}</template>
+              <template #default="{ row }">{{ row.caller || '—' }}</template>
             </el-table-column>
             <el-table-column prop="client" label="凭证" width="140" show-overflow-tooltip />
             <el-table-column prop="method" label="方法" width="160" show-overflow-tooltip />
-            <el-table-column label="状态" width="90">
+            <el-table-column label="HTTP" width="90">
               <template #default="{ row }">
                 <span :class="row.status != null && row.status >= 400 ? 'text-[color:var(--danger)]' : 'text-[color:var(--ok)]'">
                   {{ row.status ?? '—' }}
@@ -109,14 +117,17 @@ import PanelState from './PanelState.vue'
 import { getIntegrationCallLogs, unwrap } from '../api/knowledge'
 import type { IntegrationCallRow } from '../types'
 
-const props = defineProps<{ knowledgeBaseId:number; hours?:number }>()
+/** defaultProtocol：从 MCP 这类协议视角跳进来时预置过滤条件，省一次手工筛选。 */
+const props = defineProps<{ knowledgeBaseId:number; hours?:number; defaultProtocol?:string }>()
 defineEmits<{ 'open-trace':[traceId:string] }>()
 
 const rows = ref<IntegrationCallRow[]>([])
 const loading = ref(false)
 const error = ref('')
-const protocol = ref('')
+const hours = ref(props.hours || 24)
+const protocol = ref(props.defaultProtocol || '')
 const status = ref('')
+const limit = ref(50)
 
 /** 服务端以 JSON 文本存参，这里还原成缩进格式；空值或非 JSON 原样展示。 */
 function pretty(raw?:string|null, empty = '—') {
@@ -134,10 +145,10 @@ async function load() {
   error.value = ''
   try {
     rows.value = unwrap(await getIntegrationCallLogs({
-      hours:props.hours || 24,
+      hours:hours.value,
       protocol:protocol.value || undefined,
       status:status.value || undefined,
-      limit:50,
+      limit:limit.value,
     }), [] as IntegrationCallRow[])
   } catch (e) {
     error.value = e instanceof Error ? e.message : '加载失败'

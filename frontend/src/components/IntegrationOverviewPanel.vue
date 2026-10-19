@@ -156,24 +156,23 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import { getIntegrationOverview, unwrap } from '../api/knowledge'
+import { useShell } from '../shell'
 import type { IntegrationOverview } from '../types'
 
 const props = defineProps<{ knowledgeBaseId:number }>()
 defineEmits<{ navigate:[key:string]; 'open-trace':[traceId:string] }>()
+const shell = useShell()
 
 const overview = ref<IntegrationOverview|null>(null)
 const hours = ref(24)
 const loading = ref(false)
 
-/** 接口服务模块的二级入口：协议适配与凭证管理（图标名与 IA 保持一致）。 */
-const entries = [
-  { key:'integration.services', icon:'server', label:'服务' },
-  { key:'integration.api', icon:'code', label:'API' },
-  { key:'integration.mcp', icon:'blocks', label:'MCP' },
-  { key:'integration.sse', icon:'broadcast', label:'SSE' },
-  { key:'integration.credentials', icon:'key', label:'凭证' },
-  { key:'integration.logs', icon:'doc', label:'调用日志' },
-]
+/**
+ * 快捷入口与页面顶部 Tab 同源：从 IA 取而不是再抄一份，
+ * 免得加了新 Tab（如「嵌入组件」）这里漏掉、两处越走越偏。
+ * 概览自身不列入——用户已经在这一页。
+ */
+const entries = computed(() => shell.tabs('integration').filter(leaf => leaf.key !== 'integration.overview'))
 
 const healthSummary = computed(() => {
   const rows = overview.value?.health || []

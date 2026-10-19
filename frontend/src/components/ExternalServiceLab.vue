@@ -2,8 +2,8 @@
   <section class="kb-page">
     <header class="kb-section-head">
       <div>
-        <div class="kb-eyebrow">外部服务联调</div>
-        <h1 class="kb-title mt-1">外部服务联调台</h1>
+        <div class="kb-eyebrow">接口服务</div>
+        <h1 class="kb-title mt-1">接口联调台</h1>
         <p class="kb-muted mt-1">
           用真实的 API Key 直接调用 RESTful / MCP / SSE 三个通道，逐条比对返回结构并给出判定：
           凭证是否有效、知识库范围是否生效、协议字段是否规范、流式事件顺序是否正确。
@@ -384,7 +384,7 @@
     <article class="kb-card mt-4">
       <div class="kb-card-head">
         <b class="text-sm">调用记录</b>
-        <span class="kb-muted">RESTful / MCP / SSE / 事件总线共用，最近 {{ logs.length }} 条</span>
+        <span class="kb-muted">本次会话 {{ logs.length }} 条 · 服务端全量记录在「调用日志」</span>
         <button class="kb-btn-outline" :disabled="!logs.length" @click="clearLogs()">清空</button>
       </div>
       <div class="kb-card-body max-h-[520px] overflow-auto">

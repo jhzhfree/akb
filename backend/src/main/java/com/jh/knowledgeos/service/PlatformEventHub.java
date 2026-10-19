@@ -9,6 +9,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -122,6 +124,39 @@ public class PlatformEventHub {
 
     public int activeSubscriptions() {
         return subscriptions.size();
+    }
+
+    /**
+     * Who is listening right now, grouped by credential.
+     *
+     * <p>Principals are the internal forms ("user:12", "key:KC_…") and are shown as-is: an operator
+     * asking "why did my stream stop" needs to recognise their own credential, and the count next to
+     * it is what explains the per-credential cap being hit.</p>
+     */
+    public Map<String, Object> subscriptionStats() {
+        Map<String, Integer> counts = new LinkedHashMap<String, Integer>();
+        for (Subscription subscription : subscriptions.values()) {
+            Integer held = counts.get(subscription.principal);
+            counts.put(subscription.principal, held == null ? 1 : held + 1);
+        }
+        List<Map<String, Object>> items = new ArrayList<Map<String, Object>>();
+        for (Map.Entry<String, Integer> entry : counts.entrySet()) {
+            Map<String, Object> row = new LinkedHashMap<String, Object>();
+            row.put("principal", entry.getKey());
+            row.put("streams", entry.getValue());
+            items.add(row);
+        }
+        Collections.sort(items, new Comparator<Map<String, Object>>() {
+            @Override
+            public int compare(Map<String, Object> left, Map<String, Object> right) {
+                return ((Integer) right.get("streams")).compareTo((Integer) left.get("streams"));
+            }
+        });
+        Map<String, Object> stats = new LinkedHashMap<String, Object>();
+        stats.put("active", subscriptions.size());
+        stats.put("maxPerPrincipal", MAX_SUBSCRIPTIONS_PER_PRINCIPAL);
+        stats.put("items", items);
+        return stats;
     }
 
     /**

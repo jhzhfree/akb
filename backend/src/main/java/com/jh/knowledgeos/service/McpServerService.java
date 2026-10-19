@@ -201,7 +201,12 @@ public class McpServerService {
             Map<String, Object> resource = new LinkedHashMap<String, Object>();
             resource.put("uri", "knowledge://kb/" + base.get("id"));
             resource.put("name", String.valueOf(base.get("name")));
-            resource.put("description", "知识库概览：" + base.get("baseCode") + "（可见范围 " + base.get("visibility") + "）");
+            String description = "知识库概览：" + base.get("baseCode") + "（可见范围 " + base.get("visibility") + "）";
+            Object sample = base.get("defaultQuery");
+            if (sample != null && !String.valueOf(sample).trim().isEmpty()) {
+                description = description + "，示例问句：" + String.valueOf(sample).trim();
+            }
+            resource.put("description", description);
             resource.put("mimeType", "application/json");
             resources.add(resource);
         }

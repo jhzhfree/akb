@@ -1,6 +1,7 @@
 package com.jh.knowledgeos.dto;
 
 import javax.validation.constraints.NotBlank;
+import javax.validation.constraints.Size;
 
 /**
  * Request for creating a knowledge-base workspace.
@@ -24,6 +25,11 @@ public class KnowledgeBaseRequest {
      * template, so an older caller or a script that never heard of scenarios keeps working.
      */
     private String scenario;
+
+    /**
+     * 默认检索语句：知识库预置的示例问句，只作提问输入框的提示与一键发起，不参与召回。
+     */
+    private String defaultQuery;
 
     public String getName() {
         return name;
@@ -63,5 +69,13 @@ public class KnowledgeBaseRequest {
 
     public void setScenario(String v) {
         scenario = v;
+    }
+
+    public String getDefaultQuery() {
+        return defaultQuery;
+    }
+
+    public void setDefaultQuery(String v) {
+        defaultQuery = v;
     }
 }

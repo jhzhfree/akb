@@ -10,6 +10,9 @@ INCLUDE_MIDDLEWARE ?= 1
 OLLAMA_URL ?= http://192.168.22.6:11434
 LLM_MODEL ?= qwen2.5:7b
 
+# 检索回归验证打到哪个 backend（默认本机 dev）
+BASE ?= http://127.0.0.1:8080
+
 # ---------- Python 运行环境（conda）----------
 # 开发统一使用 conda 环境 llmkb，等价于手工执行：conda activate llmkb
 # Makefile 每条配方是独立的 /bin/sh，无法沿用 shell 里的 conda 函数，
@@ -39,7 +42,7 @@ MVN ?= mvn $(MVN_PROXY_OPTS)
 	dev-milvus-up dev-milvus-down dev-milvus-status \
 	dev-install dev-pip dev-ai dev-backend dev-frontend dev-all \
 	prod-env prod-up prod-down prod-ps prod-logs \
-	release-build release-push package
+	release-build release-push push-images package validate-kb
 check:
 	./scripts/check-v11.sh
 up:
@@ -216,6 +219,16 @@ release-push:
 		echo "push $(IMAGE_PREFIX)/$$s:$(VERSION)"; \
 		docker push $(IMAGE_PREFIX)/$$s:$(VERSION); \
 	done
+
+# 重新做应用镜像并推到 22.6（版本不变，覆盖式发布）；只做前端：make push-images s=frontend
+# 可选：PUSH=0 只构建不推送，BACKUP=0 不备份旧 tag，DRY_RUN=1 只打印
+push-images:
+	VERSION=$(VERSION) REGISTRY=$(TARGET_REGISTRY) SERVICES="$(s)" ./scripts/release-push.sh
+
+# 默认五库检索回归验证：跑 dataset/enterprise_kb_validation_5sets 的 5 条用例
+# 只跑一个库：make validate-kb only=漏洞库；打目标机：make validate-kb BASE=http://192.168.22.6:8080
+validate-kb:
+	BASE=$(BASE) python3 dataset/enterprise_kb_validation_5sets/validate.py $(only)
 
 # 生成离线安装产品包：dist/ai-knowledge-$(VERSION).tar.gz
 package:

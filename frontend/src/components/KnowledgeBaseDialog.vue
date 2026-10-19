@@ -26,6 +26,10 @@
             <el-option v-for="g in groups" :key="g.id" :value="g.id" :label="g.name"/>
           </el-select>
         </label>
+        <label class="kb-field kb-span-2">
+          <span>默认检索语句<em>示例问句：只作输入框提示与一键发起，不参与召回</em></span>
+          <el-input v-model="defaultQuery" :maxlength="500" show-word-limit placeholder="如：这份合同有哪些交付范围？"/>
+        </label>
       </div>
     </section>
 
@@ -190,7 +194,7 @@ import{getKbScenario,saveKbScenario,resetKbScenario}from'../api/knowledge/base'
 const VISIBILITIES=['PUBLIC','PRIVATE','GROUP'] as const
 type BasePayload={
   name:string;description:string;visibility:string;ownerGroupId:number|null
-  scenario:string;profile:KbScenarioProfile|null
+  scenario:string;defaultQuery:string;profile:KbScenarioProfile|null
 }
 const props=defineProps<{
   visible:boolean;bases:KnowledgeBase[];activeId:number;groups:UserGroupRow[]
@@ -206,6 +210,8 @@ const emit=defineEmits<{
   update:[payload:BasePayload&{id:number}]
 }>()
 const name=ref('');const description=ref('')
+/** 默认检索语句：库自带的示例问句，留空时各端退回通用提示语。 */
+const defaultQuery=ref('')
 const visibility=ref<string>('PUBLIC');const ownerGroupId=ref<number|null>(null)
 const editingId=ref<number|null>(null)
 const editing=computed(()=>editingId.value!==null)
@@ -300,12 +306,14 @@ function canEdit(base:KnowledgeBase){
 }
 function reset(){
   name.value='';description.value='';visibility.value='PUBLIC';ownerGroupId.value=null
+  defaultQuery.value=''
   editingId.value=null;dirty.value=false
 }
 async function startEdit(base:KnowledgeBase){
   editingId.value=base.id
   name.value=base.name
   description.value=base.description||''
+  defaultQuery.value=base.defaultQuery||''
   visibility.value=base.visibility||'PUBLIC'
   ownerGroupId.value=base.ownerGroupId??null
   dirty.value=false
@@ -319,6 +327,7 @@ async function submit(){
     visibility:visibility.value,
     ownerGroupId:visibility.value==='GROUP'?ownerGroupId.value:null,
     scenario:scenario.value,
+    defaultQuery:defaultQuery.value.trim(),
     profile:profile.value,
   }
   if(editingId.value!==null){
@@ -376,6 +385,10 @@ gap:4px;
 min-width:0}
 .kb-field>span{font-size:11px;
 color:var(--ink-3)}
+.kb-field>span em{font-size:10px;
+font-style:normal;
+color:var(--ink-3);
+margin-left:5px}
 .kb-block-inline{margin-bottom:10px}
 .kb-templates{display:grid;
 grid-template-columns:repeat(auto-fit,minmax(190px,1fr));

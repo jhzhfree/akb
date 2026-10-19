@@ -25,6 +25,9 @@ public class KnowledgeBaseService {
 
     private static final Logger LOG = LoggerFactory.getLogger(KnowledgeBaseService.class);
 
+    /** 默认检索语句只作提示语，与列宽一致：过长直接拒绝，不静默截断用户输入。 */
+    private static final int DEFAULT_QUERY_MAX = 500;
+
     private final KnowledgeMapper mapper;
 
     private final IdGenerator ids;
@@ -58,7 +61,7 @@ public class KnowledgeBaseService {
     }
 
     public KnowledgeBase create(String name, String description, String visibility, Long ownerGroupId, User creator) {
-        return create(name, description, visibility, ownerGroupId, null, creator);
+        return create(name, description, visibility, ownerGroupId, null, null, creator);
     }
 
     /**
@@ -68,8 +71,12 @@ public class KnowledgeBaseService {
      * so it is part of creation rather than a setting somebody discovers later: a library created
      * as "漏洞库" answers CVE questions correctly from its first upload, and one created as
      * "制度条款" quotes clauses instead of summarising them.</p>
+     *
+     * <p>{@code defaultQuery} is the sample sentence the library suggests: it shows up as the
+     * question-box hint and as a one-click chip, and never joins a recall.</p>
      */
-    public KnowledgeBase create(String name, String description, String visibility, Long ownerGroupId, String scenario, User creator) {
+    public KnowledgeBase create(String name, String description, String visibility, Long ownerGroupId, String scenario, String defaultQuery,
+        User creator) {
         if (creator != null && !UserRole.of(creator.getRole()).canWriteKnowledge()) {
             throw new SecurityException("当前角色无权创建知识库");
         }
@@ -78,6 +85,7 @@ public class KnowledgeBaseService {
         base.setBaseCode(ids.next("KB_"));
         base.setName(name.trim());
         base.setDescription(description);
+        base.setDefaultQuery(normalizeDefaultQuery(defaultQuery));
         base.setStatus("ACTIVE");
         base.setCreatedBy(creator == null ? null : creator.getId());
         base.setVisibility(scope.visibility.name());
@@ -90,6 +98,7 @@ public class KnowledgeBaseService {
         Map<String, Object> detail = describe(base);
         detail.put("description", base.getDescription());
         detail.put("scenario", code);
+        detail.put("defaultQuery", base.getDefaultQuery());
         publisher.emitUser(PlatformEventTypes.KNOWLEDGE_BASE_CREATED, base.getId(), PlatformEventPublisher.SOURCE_UI, "KNOWLEDGE_BASE",
             base.getBaseCode(), "创建知识库：" + base.getName(), detail);
         return base;
@@ -100,15 +109,19 @@ public class KnowledgeBaseService {
      * in one request, so the console edits a knowledge base the way it created it.
      */
     public KnowledgeBase update(Long id, String name, String description, String visibility, Long ownerGroupId) {
-        return update(id, name, description, visibility, ownerGroupId, null);
+        return update(id, name, description, visibility, ownerGroupId, null, null);
     }
 
     /**
      * Edit a workspace and, when the scenario changes, re-seed it: moving a library to another
      * template has to move its chunking, derivation rules and query strategy with it, or the
      * label says "漏洞库" while the library still answers like a generic one.
+     *
+     * <p>{@code defaultQuery} replaces the sample sentence outright: passing null or blank keeps
+     * whatever is stored, because the console sends the full form on every save.</p>
      */
-    public KnowledgeBase update(Long id, String name, String description, String visibility, Long ownerGroupId, String scenario) {
+    public KnowledgeBase update(Long id, String name, String description, String visibility, Long ownerGroupId, String scenario,
+        String defaultQuery) {
         User user = AuthContext.get();
         KnowledgeBase base = mapper.getKnowledgeBase(id);
         if (base == null) {
@@ -128,13 +141,17 @@ public class KnowledgeBaseService {
             : resolveScope(visibility, ownerGroupId);
         String previousName = base.getName();
         String previousVisibility = base.getVisibility();
-        mapper.updateKnowledgeBase(id, name.trim(), description, scope.visibility.name(), scope.ownerGroupId);
+        // 不传表示“这次没动它”，传空白才是清空：控制台每次保存都提交整张表单，而
+        // 只改可见范围的接口不该顺手抹掉别人写的示例问句。
+        String query = defaultQuery == null ? base.getDefaultQuery() : normalizeDefaultQuery(defaultQuery);
+        mapper.updateKnowledgeBase(id, name.trim(), description, scope.visibility.name(), scope.ownerGroupId, query);
         KnowledgeBase updated = mapper.getKnowledgeBase(id);
         String applied = applyScenario(id, scenario);
         // 回写生效场景：没换模板时也要把当前模板带回去，界面上标注的才是库真正在跑的那套。
         updated.setScenario(applied != null ? applied : currentScenario(id));
         Map<String, Object> detail = describe(updated);
         detail.put("description", updated.getDescription());
+        detail.put("defaultQuery", updated.getDefaultQuery());
         detail.put("previousName", previousName);
         detail.put("previousVisibility", previousVisibility);
         if (applied != null) {
@@ -255,6 +272,24 @@ public class KnowledgeBaseService {
         detail.put("status", base.getStatus());
         detail.put("createdBy", base.getCreatedBy());
         return detail;
+    }
+
+    /**
+     * Blank means "no sample sentence"; anything longer than the column is refused so the
+     * operator sees the limit instead of finding a silently clipped sentence later.
+     */
+    private String normalizeDefaultQuery(String value) {
+        if (value == null) {
+            return null;
+        }
+        String text = value.trim();
+        if (text.isEmpty()) {
+            return null;
+        }
+        if (text.length() > DEFAULT_QUERY_MAX) {
+            throw new IllegalArgumentException("默认检索语句不能超过 " + DEFAULT_QUERY_MAX + " 个字符");
+        }
+        return text;
     }
 
     /**

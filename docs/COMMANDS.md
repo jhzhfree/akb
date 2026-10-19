@@ -105,6 +105,34 @@ make release-build release-push          # 打标签并推送到远端仓库
 
 镜像名规则：`$(REGISTRY)knowledge-os/{ai-service,backend,frontend}:$(VERSION)`。
 
+### 2.1.1 版本不变：重做镜像并推到 22.6
+
+改完代码、只想让目标机用上新镜像而**不动版本号**时用这个：tag 仍是 `1.1.0`，
+registry 上的同名 tag 被新镜像覆盖（旧镜像会先被另存为 `1.1.0-prev`）。
+
+```bash
+./scripts/release-push.sh                 # 三个应用镜像全量重建 + 推送
+./scripts/release-push.sh frontend        # 只做前端（改动只涉及前端时，十几秒）
+make push-images                          # 等价的 make 入口（默认推 192.168.22.6:5000）
+make push-images s=frontend               # 只做前端
+PUSH=0 ./scripts/release-push.sh          # 只构建 + 打 tag，不推送
+DRY_RUN=1 ./scripts/release-push.sh       # 只打印将要执行的命令
+VERSION=1.4.0 ./scripts/release-push.sh   # 换版本号（默认 1.1.0）
+```
+
+流程：构建 → 备份 registry 上旧 tag 为 `<VERSION>-prev` → 推送 → 校验 registry digest
+与 push 回执一致（不一致会报错）。中间件镜像不在范围内。
+
+> **目标机必须手工更新容器**：tag 没变时 docker 不会自动拉新镜像，需要
+> `docker compose pull <服务> && docker compose up -d <服务>`。
+
+回滚（覆盖发布后仍可退回上一版）：
+
+```bash
+R=192.168.22.6:5000/knowledge-os
+docker tag $R/frontend:1.1.0-prev $R/frontend:1.1.0 && docker push $R/frontend:1.1.0
+```
+
 ### 2.2 生成离线安装产品包
 
 ```bash

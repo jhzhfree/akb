@@ -85,6 +85,7 @@
   <SearchPage
     v-else-if="activeSection==='search'"
     :active="active" :knowledge-base-id="knowledgeBaseId"
+    :default-query="activeBase?.defaultQuery||''"
     :query="q" @update:query="q=$event"
     :result="result" :asking="asking"
     :history="queryHistory" :history-loading="historyLoading"
@@ -153,7 +154,7 @@ import type { KbScenarioProfile } from './types/knowledge'
 /** 建库 / 改库提交体：基础信息 + 场景模板 + 该库的生成 / 衍生 / 查询配置。 */
 type KbBasePayload={
   name:string;description:string;visibility:string;ownerGroupId:number|null
-  scenario:string;profile:KbScenarioProfile|null
+  scenario:string;defaultQuery:string;profile:KbScenarioProfile|null
 }
 import type { AssetType } from './components/AssetBrowserPanel.vue'
 import TaskCenterDrawer from './components/TaskCenterDrawer.vue'
@@ -579,7 +580,8 @@ finally{basesLoading.value=false}}
 async function createBase(payload:KbBasePayload){
 try{
   const base=unwrap(
-    await createKnowledgeBase(payload.name,payload.description,payload.visibility,payload.ownerGroupId,payload.scenario),
+    await createKnowledgeBase(payload.name,payload.description,payload.visibility,payload.ownerGroupId,payload.scenario,
+      payload.defaultQuery),
     null as unknown as KnowledgeBase)
 await loadBases();
 selectBase(base.id);
@@ -595,6 +597,7 @@ try{
       visibility:payload.visibility,
       ownerGroupId:payload.ownerGroupId,
       scenario:payload.scenario,
+      defaultQuery:payload.defaultQuery,
     }),
     null as unknown as KnowledgeBase)
 await loadBases();

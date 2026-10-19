@@ -145,6 +145,77 @@ export const revokeEmbedToken = (body: {
 export const restoreEmbedToken = (jti: string): Promise<ApiResponse<{ jti: string; restored: boolean }>> =>
   axios.post(`/api/external/admin/embed/tokens/${encodeURIComponent(jti)}/restore`)
 
+/* ---- 平台事件总线：历史回放与订阅观测（管理员，登录会话） ---- */
+
+/** 一条平台事件：与 SSE 下发的信封同构，便于「历史里看到的」和「订阅收到的」对照 */
+export interface PlatformEventItem {
+  id: number
+  eventId: string
+  type: string
+  time: string
+  knowledgeBaseId: number | null
+  source: string
+  actor: { type?: string; id?: string; name?: string } | null
+  targetType: string | null
+  targetCode: string | null
+  summary: string | null
+  traceId: string | null
+  taskId: string | null
+  detail: Record<string, unknown> | null
+}
+
+export interface PlatformEventRetention {
+  enabled: boolean
+  retentionDays: number
+  batchSize: number
+  purgedTotal: number
+  lastRun: string | null
+  lastPurged: number
+}
+
+export interface PlatformSubscriptionStats {
+  active: number
+  maxPerPrincipal: number
+  items: { principal: string; streams: number }[]
+}
+
+export interface PlatformEventHistory {
+  items: PlatformEventItem[]
+  count: number
+  /** 还有更旧的：用 nextUntilId 翻页，不用 offset，避免新事件插队导致重页/漏页 */
+  hasMore: boolean
+  nextUntilId: number | null
+  oldestId: number | null
+  activeSubscriptions: number
+  subscriptions: PlatformSubscriptionStats | null
+  retention: PlatformEventRetention | null
+}
+
+export const fetchPlatformEventTypes = (): Promise<ApiResponse<string[]>> =>
+  axios.get('/api/internal/platform/events/types')
+
+export const fetchPlatformEventHistory = (params: {
+  knowledgeBaseId?: number | null
+  types?: string[]
+  sinceId?: number | null
+  untilId?: number | null
+  keyword?: string
+  limit?: number
+}): Promise<ApiResponse<PlatformEventHistory>> =>
+  axios.get('/api/internal/platform/events', {
+    params: {
+      knowledgeBaseId: params.knowledgeBaseId ?? undefined,
+      types: params.types?.length ? params.types.join(',') : undefined,
+      sinceId: params.sinceId ?? undefined,
+      untilId: params.untilId ?? undefined,
+      keyword: params.keyword || undefined,
+      limit: params.limit ?? 100,
+    },
+  })
+
+export const fetchPlatformSubscriptions = (): Promise<ApiResponse<PlatformSubscriptionStats>> =>
+  axios.get('/api/internal/platform/events/subscriptions')
+
 /* ---- MCP Server 管理：工具清单与通道调用审计（管理员） ---- */
 
 export const getMcpManifest = ():Promise<ApiResponse<import('../types').McpManifest>> =>

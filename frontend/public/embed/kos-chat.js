@@ -49,6 +49,14 @@
   function resolveStreamUrl(apiBase) {
     return resolveApiBase(apiBase) + '/stream/query';
   }
+  /** 组件配置在 /api/v1/embed/config：与 external 同根，只换最后一段。 */
+  function resolveConfigUrl(apiBase, knowledgeBaseId) {
+    var url = resolveApiBase(apiBase).replace(/\/api\/v1\/external$/i, '/api/v1/embed') + '/config';
+    if (knowledgeBaseId) {
+      url += '?knowledgeBaseId=' + encodeURIComponent(knowledgeBaseId);
+    }
+    return url;
+  }
   /** 证据原文走同一个外部契约：同一枚令牌、同一套审计，不额外开口子。 */
   function resolveEvidenceUrl(apiBase, code, knowledgeBaseId) {
     var url = resolveApiBase(apiBase) + '/evidence/' + encodeURIComponent(code);
@@ -118,7 +126,9 @@
       title: attrOf('data-title', '知识库助手'),
       subtitle: attrOf('data-subtitle', '回答可追溯到引用来源'),
       welcome: attrOf('data-welcome', '你好，我可以基于知识库回答你的问题，答案会带上引用来源，可展开查看证据原文。'),
-      placeholder: attrOf('data-placeholder', '输入你的问题，回车发送'),
+      /* 留空表示宿主没指定：挂载后取知识库自带的示例问句，取不到再退回内置文案。 */
+      placeholder: attrOf('data-placeholder', ''),
+      defaultQuery: '',
       primary: attrOf('data-primary', '#2f6bff'),
       position: attrOf('data-position', 'right'),
       topK: toNumber(attrOf('data-top-k', ''), 10),
@@ -621,6 +631,8 @@
     this.shadow.appendChild(this.buildMarkup());
     doc.body.appendChild(host);
     this.bind();
+    // 知识库自带的示例问句：拿到就换掉输入框提示，拿不到也不影响问答。
+    this.applyRemoteConfig();
     return this;
   };
 
@@ -987,7 +999,8 @@
       '  <div class="kos-body" data-role="body"></div>',
       '  <div class="kos-footer">',
       '    <div class="kos-composer">',
-      '      <textarea data-role="input" rows="1" placeholder="' + escapeHtml(this.options.placeholder) + '"></textarea>',
+      '      <textarea data-role="input" rows="1" placeholder="' +
+        escapeHtml(this.options.placeholder || '输入你的问题，回车发送') + '"></textarea>',
       '      <button class="kos-send" type="button" data-role="send">发送</button>',
       '    </div>',
       '    <p class="kos-footnote">回车发送 · Shift + 回车换行 · 回答附引用来源</p>',
@@ -1107,6 +1120,34 @@
       box.appendChild(button);
     });
     this.bodyEl.appendChild(box);
+  };
+
+  /**
+   * 知识库预置的示例问句：宿主页面没写 data-placeholder 时拿它当输入框提示，
+   * 嵌入页不必为每个知识库再抄一份文案；没给示例问题时，它也是唯一的示例入口。
+   */
+  Widget.prototype.applyRemoteConfig = function () {
+    var self = this;
+    var url = resolveConfigUrl(this.options.apiBase, this.options.knowledgeBaseId);
+    return fetch(url, { method: 'GET', headers: this.authHeaders() }).then(function (res) {
+      return res.ok ? res.json() : null;
+    }).then(function (payload) {
+      var data = payload && payload.data ? payload.data : null;
+      var sentence = data ? String(data.knowledgeBaseDefaultQuery || '').trim() : '';
+      if (!sentence) {
+        return;
+      }
+      self.options.defaultQuery = sentence;
+      if (self.input && !self.options.placeholder) {
+        self.input.setAttribute('placeholder', sentence);
+      }
+      if (!self.options.sampleQuestions.length) {
+        self.options.sampleQuestions = [sentence];
+        self.renderSamples();
+      }
+    }).catch(function () {
+      // 配置不可达不影响问答：提示语与示例都退回宿主给的或内置的。
+    });
   };
 
   Widget.prototype.scrollToEnd = function () {

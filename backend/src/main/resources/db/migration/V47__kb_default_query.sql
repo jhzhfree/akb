@@ -1,0 +1,12 @@
+-- Default sample question per knowledge base.
+--
+-- A library knows better than the console how it expects to be asked: an operations
+-- runbook wants "这个告警的处置步骤是什么", a contract library wants "这份合同有哪些交付范围".
+-- Without a stored sentence the input box falls back to a generic "向企业知识库提问…",
+-- and every library shows the same hint no matter what it holds.
+--
+-- It is a hint only — it never joins a recall. The console shows it as the input
+-- placeholder and as a one-click chip, and the embed widget falls back to it when the
+-- host page did not pass data-placeholder, so the same sentence follows the library
+-- into every surface that can read it.
+ALTER TABLE t_knowledge_base ADD COLUMN default_query VARCHAR(500) NULL AFTER owner_group_id;

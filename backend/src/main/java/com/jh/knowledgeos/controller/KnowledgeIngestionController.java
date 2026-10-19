@@ -109,7 +109,7 @@ public class KnowledgeIngestionController {
     @Operation(summary = "创建知识库工作区，并指定创建人与可见范围（公开 / 私有 / 用户组）")
     public ApiResponse<Object> createBase(@Valid @RequestBody KnowledgeBaseRequest request) {
         return ApiResponse.ok(knowledgeBaseService.create(request.getName(), request.getDescription(), request.getVisibility(),
-            request.getOwnerGroupId(), request.getScenario(), AuthContext.get()));
+            request.getOwnerGroupId(), request.getScenario(), request.getDefaultQuery(), AuthContext.get()));
     }
 
 
@@ -117,7 +117,7 @@ public class KnowledgeIngestionController {
     @Operation(summary = "编辑知识库：名称、描述与可见范围（创建人或管理员）")
     public ApiResponse<Object> updateBase(@PathVariable Long id, @Valid @RequestBody KnowledgeBaseRequest request) {
         return ApiResponse.ok(knowledgeBaseService.update(id, request.getName(), request.getDescription(), request.getVisibility(),
-            request.getOwnerGroupId(), request.getScenario()));
+            request.getOwnerGroupId(), request.getScenario(), request.getDefaultQuery()));
     }
 
 

@@ -6,7 +6,7 @@
     v-if="active==='search.query'"
     :query="query" @update:query="$emit('update:query',$event)"
     :result="result" :asking="asking" :history="history" :answer-format="answerFormat"
-    :samples="samples"
+    :samples="samples" :default-query="defaultQuery"
     @update:answer-format="$emit('update:answerFormat',$event)"
     @ask="$emit('ask')" @open-trace="shell.openTrace" @refresh-history="$emit('refresh-history')"
     @open-citation="shell.openCitation" />
@@ -60,6 +60,8 @@ const tabs = computed(() => shell.tabs('search'))
 const props = defineProps<{
   active: string
   knowledgeBaseId: number
+  /** 知识库预置的默认检索语句：留空时输入框退回通用提示语。 */
+  defaultQuery?:string|null
   query: string
   result: QueryResult | null
   asking: boolean

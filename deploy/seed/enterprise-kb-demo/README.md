@@ -38,8 +38,15 @@ Elasticsearch / Milvus / Neo4j 里的是可重建视图，不随镜像复制。�
 ## 回归验证
 
 ```bash
-cd /tmp && python3 kos_validate.py   # 5 个验证问题，逐个比对答案与引用来源
+python3 dataset/enterprise_kb_validation_5sets/validate.py   # 5 条验收用例
+make validate-kb                                             # 等价入口
+make validate-kb only=漏洞库                                  # 只跑一个库
+BASE=http://192.168.22.6:8080 make validate-kb                # 打目标机
 ```
+
+判定三项：期望证据是否命中、答案是否被引用校验拦截、期望行为关键词是否出现。
+被引用校验拦掉（答案里出现「已阻止输出 / 现有知识不足以」）直接判 FAIL，
+因为此时用户拿不到结论。退出码 0 表示全通过。
 
 期望：5/5 命中期望证据。重点看三处：
 

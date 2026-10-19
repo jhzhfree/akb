@@ -42,7 +42,7 @@
 | 答案排版基准 | `frontend/src/answer.css` | 全站 `.md-*` 规则的唯一来源，组件内在 `buildStyles()` 有一份同值副本，由 `scripts/check-answer-style.mjs` 守住一致 |
 | 演示 | `frontend/public/embed/demo.html` | 接入示例与本地联调页 |
 | 跨域 | `backend/…/config/EmbedCorsFilter.java` | 按凭证白名单动态回显 `Access-Control-Allow-Origin`，处理预检 |
-| 握手 | `backend/…/controller/EmbedController.java` | `/embed/token` 换令牌、`/embed/config` 下发阶段定义 |
+| 握手 | `backend/…/controller/EmbedController.java` | `/embed/token` 换令牌、`/embed/config` 下发阶段定义与知识库默认检索语句（`knowledgeBaseDefaultQuery`） |
 | 令牌 | `backend/…/service/EmbedTokenService.java` | HMAC-SHA256 自包含令牌，无会话表，任意实例可校验 |
 | 鉴权 | `backend/…/service/ExternalAccessService.java` | 新增 `authenticateEmbed / authenticateEmbedToken / assertOrigin / allowsOrigin` |
 | 流式 | `backend/…/service/ExternalStreamService.java` | 推送真实 pipeline 阶段（原来只有 5 个硬编码假阶段） |
@@ -176,6 +176,8 @@ KnowledgeOSChat.init({
 ```
 
 可选参数：`title / subtitle / welcome / placeholder / primary / position(left|right) / topK / minScore(0~1，最低相关度阈值) / answerFormat / content(stream|final) / showTrace / showCitations / apiKey（不推荐）`。
+
+> `placeholder` 留空时，组件挂载后会用 `/embed/config` 下发的 `knowledgeBaseDefaultQuery`（知识库预置的示例问句）作输入框提示，并在宿主未指定 `data-samples` 时把它作为唯一示例问题；知识库没配或配置取不到时退回内置文案「输入你的问题，回车发送」。
 
 ### 步骤 4：样式接入（Light DOM + 作用域限定）
 

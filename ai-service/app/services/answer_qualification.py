@@ -69,6 +69,11 @@ class AnswerQualification:
         ledger: list[dict[str, Any]],
     ) -> tuple[str, str, list[str], set[int] | None]:
         """Return status, deliverable text, reasons, and the set of delivered claim indexes."""
+        if not rows:
+            # No factual claim was extracted, so there is nothing a gate could redact. Deliver
+            # the answer as written: replacing an insufficiency statement with a canned refusal
+            # hides what the corpus is missing instead of telling the user.
+            return "PASS", original, [], None
         decisions = self._decisions(rows, ledger)
         # The evidence gate has priority: a sentence without a trustworthy citation never ships.
         if evidence.get("gateStatus") != "PASS":
@@ -92,7 +97,24 @@ class AnswerQualification:
                 StructuredAnswerGate.safe_answer(original, structured),
             )
         if structured.get("gateStatus") == "PARTIAL":
-            return "PARTIAL", StructuredAnswerGate.safe_answer(original, structured), ["PARTIAL_CLAIM_SUPPORT"], None
+            # Same claim-led delivery as the evidence branch: the sentences that did clear
+            # verification are kept and only the rest is withheld. Replacing the whole answer
+            # with a canned sentence threw away conclusions the corpus actually supported.
+            kept = [i for i in range(len(rows)) if decisions[i] == "SUPPORTED"]
+            if not kept:
+                # Nothing reached SUPPORTED, so no sentence can rebuild the answer. The gate is
+                # still PARTIAL (uncertain, not contradicted), so the status stays PARTIAL with
+                # every claim marked as not delivered instead of collapsing to BLOCKED.
+                return "PARTIAL", StructuredAnswerGate.safe_answer(original, structured), \
+                    ["PARTIAL_CLAIM_SUPPORT"], set()
+            return self._render(
+                original,
+                rows,
+                kept,
+                "STRUCTURED_ANSWER_GATE_PARTIAL_REDACTION",
+                "STRUCTURED_ANSWER_GATE_BLOCKED",
+                StructuredAnswerGate.safe_answer(original, structured),
+            )
         return "PASS", original, [], None
 
     def _render(

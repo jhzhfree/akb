@@ -97,6 +97,7 @@ public class EmbedController {
         Map<String, Object> data = new LinkedHashMap<String, Object>();
         data.put("knowledgeBaseId", kb);
         data.put("knowledgeBaseName", knowledgeBaseName(key, kb));
+        data.put("knowledgeBaseDefaultQuery", knowledgeBaseDefaultQuery(key, kb));
         data.put("stages", stages());
         data.put("answerFormats", Arrays.asList("default", "markdown", "text", "html"));
         data.put("maxTopK", 50);
@@ -151,6 +152,24 @@ public class EmbedController {
             }
         } catch (Exception ignored) {
             // A missing display name must not break the handshake.
+        }
+        return "";
+    }
+
+    /**
+     * 知识库预置的示例问句：宿主页面没有指定 data-placeholder 时，组件拿它当输入框提示。
+     */
+    private String knowledgeBaseDefaultQuery(ApiKey key, Long kb) {
+        try {
+            for (Map<String, Object> base : facade.bases(key.getKnowledgeBaseId())) {
+                Object id = base.get("id");
+                if (id != null && String.valueOf(id).equals(String.valueOf(kb))) {
+                    Object query = base.get("defaultQuery");
+                    return query == null ? "" : String.valueOf(query);
+                }
+            }
+        } catch (Exception ignored) {
+            // A missing sample sentence must not break the handshake.
         }
         return "";
     }

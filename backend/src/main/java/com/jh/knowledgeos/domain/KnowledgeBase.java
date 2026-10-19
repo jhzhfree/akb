@@ -31,6 +31,14 @@ public class KnowledgeBase {
     private String ownerGroupName;
 
     /**
+     * 预置示例问句：作为提问输入框的默认提示，可一键发起，不参与召回。
+     *
+     * <p>库自己最清楚该被怎么问——运维库想听「这个告警的处置步骤是什么」，合同库想听
+     * 「这份合同有哪些交付范围」。留空时各端退回各自的通用提示语。</p>
+     */
+    private String defaultQuery;
+
+    /**
      * 场景模板编码（GENERAL / OPS / POLICY / BUSINESS / VULN）：决定该库的切分、衍生与检索策略。
      * 由 t_kb_scenario 联表带出，无配置行时为 GENERAL，保证列表与编辑弹窗看到的是同一个值。
      */
@@ -124,6 +132,14 @@ public class KnowledgeBase {
 
     public void setScenario(String v) {
         scenario = v;
+    }
+
+    public String getDefaultQuery() {
+        return defaultQuery;
+    }
+
+    public void setDefaultQuery(String v) {
+        defaultQuery = v;
     }
 
     public java.time.LocalDateTime getCreatedTime() {

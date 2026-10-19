@@ -98,6 +98,14 @@ knowledge:
     embed-token-hours: ${EXTERNAL_EMBED_TOKEN_HOURS:12}
     # 调用方指定有效期时的上限（小时，0 表示不限制）；是否允许签发长期有效令牌
     embed-token-max-hours: ${EXTERNAL_EMBED_TOKEN_MAX_HOURS:8760}
+  # 平台事件总线：SSE 订阅与历史回放的来源表，按保留期滚动清理
+  platform-event:
+    retention:
+      enabled: ${PLATFORM_EVENT_RETENTION_ENABLED:true}
+      # 保留天数；<= 0 表示永不清理（表会持续增长，仅在调试时这样配）
+      days: ${PLATFORM_EVENT_RETENTION_DAYS:30}
+      batch-size: ${PLATFORM_EVENT_RETENTION_BATCH_SIZE:1000}
+      interval-ms: ${PLATFORM_EVENT_RETENTION_INTERVAL_MS:3600000}
     embed-token-permanent: ${EXTERNAL_EMBED_TOKEN_PERMANENT:true}
     embed-token-secret: ${EXTERNAL_EMBED_TOKEN_SECRET:}
 logging:

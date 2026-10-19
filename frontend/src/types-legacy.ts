@@ -20,6 +20,8 @@ export interface KnowledgeBase {
   ownerGroupId?:number|null; ownerGroupName?:string|null
   /** 场景模板编码：GENERAL / OPS / POLICY / BUSINESS / VULN，与编辑弹窗里选中的模板一致。 */
   scenario?:string|null
+  /** 默认检索语句：知识库预置的示例问句，作输入框提示与一键发起，不参与召回。 */
+  defaultQuery?:string|null
 }
 export interface Overview {
   knowledgeBaseId:number; sourceCount:number; documentCount:number; chunkCount:number

@@ -31,7 +31,7 @@ public interface KnowledgeBaseMapper {
     int updateKnowledgeBaseAccess(@Param("id") Long id, @Param("visibility") String visibility, @Param("ownerGroupId") Long ownerGroupId);
 
     int updateKnowledgeBase(@Param("id") Long id, @Param("name") String name, @Param("description") String description,
-        @Param("visibility") String visibility, @Param("ownerGroupId") Long ownerGroupId);
+        @Param("visibility") String visibility, @Param("ownerGroupId") Long ownerGroupId, @Param("defaultQuery") String defaultQuery);
 
     int updateKnowledgeBaseOwner(@Param("id") Long id, @Param("createdBy") Long createdBy);
 

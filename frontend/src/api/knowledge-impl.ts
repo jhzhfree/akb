@@ -16,12 +16,13 @@ export const getKnowledgeBases = ():Promise<ApiResponse<KnowledgeBase[]>> =>
   axios.get('/api/knowledge/bases')
 /** 创建知识库：visibility 为 PUBLIC / PRIVATE / GROUP，GROUP 时须传 ownerGroupId；scenario 为场景模板编码。 */
 export const createKnowledgeBase = (
-  name:string, description='', visibility='PUBLIC', ownerGroupId:number|null=null, scenario='',
+  name:string, description='', visibility='PUBLIC', ownerGroupId:number|null=null, scenario='', defaultQuery='',
 ):Promise<ApiResponse<KnowledgeBase>> =>
-  axios.post('/api/knowledge/bases', { name, description, visibility, ownerGroupId, scenario })
+  axios.post('/api/knowledge/bases', { name, description, visibility, ownerGroupId, scenario, defaultQuery })
 /** 编辑知识库：改名 / 改描述，并可在同一次提交中调整可见范围（GROUP 时须传 ownerGroupId）。 */
 export const updateKnowledgeBase = (
-  id:number, payload:{name:string; description?:string; visibility?:string; ownerGroupId?:number|null; scenario?:string},
+  id:number, payload:{name:string; description?:string; visibility?:string; ownerGroupId?:number|null; scenario?:string;
+    defaultQuery?:string|null},
 ):Promise<ApiResponse<KnowledgeBase>> =>
   axios.put(`/api/knowledge/bases/${id}`, payload)
 /** 读取知识库场景配置：模板目录、字段取值范围与当前生效档案。 */

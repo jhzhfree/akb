@@ -159,6 +159,11 @@ export const NAV_SECTIONS: NavSection[] = [
       { key: 'integration.api', label: 'API', icon: 'code', debug: true, adminOnly: true, permission: PERM.INTEGRATION_VIEW },
       { key: 'integration.mcp', label: 'MCP', icon: 'blocks', adminOnly: true, permission: PERM.INTEGRATION_VIEW },
       { key: 'integration.sse', label: 'SSE', icon: 'broadcast', adminOnly: true, permission: PERM.INTEGRATION_VIEW },
+      /**
+       * 事件总线不是 SSE 的一个子功能：SSE 只是它的投递通道之一，另一半是持久化的事件历史。
+       * 放在 SSE 旁边便于对照，但独立成页——历史事件要能单独进来翻，而不是先开一条订阅。
+       */
+      { key: 'integration.events', label: '事件总线', icon: 'rss', adminOnly: true, permission: PERM.INTEGRATION_VIEW },
       { key: 'integration.credentials', label: '凭证', icon: 'key', adminOnly: true, permission: PERM.INTEGRATION_VIEW },
       { key: 'integration.embed', label: '嵌入组件', icon: 'code', adminOnly: true, permission: PERM.INTEGRATION_VIEW },
       { key: 'integration.logs', label: '调用日志', icon: 'doc', adminOnly: true, permission: PERM.INTEGRATION_VIEW },

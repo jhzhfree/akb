@@ -57,9 +57,27 @@ class AnswerEvidenceGate:
                 }
             )
         count = len(claims)
-        completeness = supported / count if count else (1.0 if not answer.strip() else 0.0)
-        faithfulness = sum(item["faithfulnessScore"] for item in details) / count if count else completeness
-        passed = count > 0 and supported == count
+        if not count:
+            # Nothing factual to verify: the answer is an insufficiency statement or meta
+            # narration, and every one of its sentences was skipped upstream. Blocking here
+            # would turn an honest "I do not have this" into the same canned refusal, so the
+            # gate passes with an empty ledger instead of failing closed on zero claims.
+            return {
+                "gateStatus": "PASS",
+                "policy": "FACTUAL_CLAIM_REQUIRES_EXACT_VISIBLE_EVIDENCE",
+                "factualClaimCount": 0,
+                "supportedClaimCount": 0,
+                "citationCount": len(citations),
+                "completenessScore": 1.0,
+                "faithfulnessScore": 1.0,
+                "unsupportedClaims": [],
+                "blockReasons": block_reasons,
+                "claims": [],
+                "noFactualClaim": True,
+            }
+        completeness = supported / count
+        faithfulness = sum(item["faithfulnessScore"] for item in details) / count
+        passed = supported == count
         return {
             "gateStatus": "PASS" if passed else "BLOCKED",
             "policy": "FACTUAL_CLAIM_REQUIRES_EXACT_VISIBLE_EVIDENCE",

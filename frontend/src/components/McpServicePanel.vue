@@ -85,7 +85,12 @@
         </article>
 
         <article class="kb-card">
-          <div class="kb-card-head"><b>最近调用</b><span class="kb-muted">MCP 通道</span></div>
+          <div class="kb-card-head">
+            <b>最近调用</b>
+            <button class="text-xs font-medium text-accent hover:text-accent" @click="$emit('view-calls','MCP')">
+              调用日志 →
+            </button>
+          </div>
           <PanelState :loading="loading" :error="error" :empty="!calls.length" empty-text="暂无 MCP 调用"
             empty-hint="用 API Key 调一次 tools/list 或 tools/call 后这里会出现记录" @retry="loadAll">
             <ul class="divide-y divide-ink-100">
@@ -130,6 +135,10 @@ import MetricCard from './MetricCard.vue'
 import PanelState from './PanelState.vue'
 import { getMcpManifest, listMcpCalls } from '../api/external'
 import type { McpCallAudit, McpManifest, McpTool } from '../types'
+
+defineProps<{ knowledgeBaseId:number }>()
+/** 从协议视角跳到全量调用日志：带上协议，省掉一次手工筛选。 */
+defineEmits<{ 'view-calls':[protocol:string] }>()
 
 const manifest = ref<McpManifest | null>(null)
 const calls = ref<McpCallAudit[]>([])

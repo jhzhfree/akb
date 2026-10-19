@@ -8,7 +8,7 @@
     <div>
       <article class="kb-card overflow-hidden">
         <textarea :value="query" rows="5" class="w-full resize-none border-0 px-5 py-4 text-[15px] leading-7 text-ink-900 outline-none"
-          placeholder="向企业知识库提问…" @input="$emit('update:query',($event.target as HTMLTextAreaElement).value)" />
+          :placeholder="defaultQuery || '向企业知识库提问…'" @input="$emit('update:query',($event.target as HTMLTextAreaElement).value)" />
         <footer class="flex items-center justify-between border-t border-ink-100 bg-ink-50/70 px-4 py-2.5">
           <span class="text-[11px] text-ink-500">回答必须可追溯到 证据 / 来源</span>
           <div class="flex items-center gap-2">
@@ -27,7 +27,7 @@
           </div>
         </footer>
         <div class="px-4 pb-3">
-          <SampleQuestionChips :items="samples || []" @pick="pickQuestion" />
+          <SampleQuestionChips :items="chips" @pick="pickQuestion" />
         </div>
       </article>
 
@@ -161,12 +161,20 @@ const props = defineProps<{
   answerFormat:AnswerFormat
   /** 当前知识库的场景测试语句：换库即换示例，点选后直接提问。 */
   samples?:SampleQuestion[]
+  /** 知识库预置的默认检索语句：作输入框提示，并排在示例句首位，点选即发起。 */
+  defaultQuery?:string|null
 }>()
 const emit = defineEmits<{
   ask:[]; 'update:query':[value:string]; 'update:answerFormat':[value:AnswerFormat]
   'open-trace':[qid:string]; 'refresh-history':[]; 'open-citation':[citation:QueryCitation]
 }>()
 
+/** 库自带的默认句排在评测示例之前：它是这个库的“入口问题”，点一下即可发起。 */
+const chips=computed<SampleQuestion[]>(()=>{
+  const text=(props.defaultQuery||'').trim()
+  const items:SampleQuestion[]=text?[{question:text,difficulty:'库默认',expectedObjectCodes:[]}]:[]
+  return items.concat((props.samples||[]).filter(v=>v.question!==text))
+})
 /** 点选示例后等 query 回写到父级再发起提问，避免用旧问题检索。 */
 function pickQuestion(text:string) {
   emit('update:query', text)
