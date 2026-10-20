@@ -59,6 +59,11 @@ public class ApiKey {
     /** Trusted Agent identity assigned by an administrator, never supplied by a model call. */
     private String memoryAgentCode;
 
+    /** Nullable overrides preserve existing scope behavior until an operator sets a memory policy. */
+    private Boolean memoryReadEnabled;
+
+    private Boolean memoryWriteEnabled;
+
     private String status;
 
     private LocalDateTime expiresAt;
@@ -84,8 +89,18 @@ public class ApiKey {
         }
         List<String> owned = scopeList();
         String requested = scope.toUpperCase();
-        return owned.contains(requested) || (owned.contains(SCOPE_WRITE)
+        boolean granted = owned.contains(requested) || (owned.contains(SCOPE_WRITE)
             && (SCOPE_READ.equals(requested) || SCOPE_INGEST.equals(requested)));
+        if (!granted) {
+            return false;
+        }
+        if (SCOPE_MEMORY_READ.equals(requested)) {
+            return !Boolean.FALSE.equals(memoryReadEnabled);
+        }
+        if (SCOPE_MEMORY_WRITE.equals(requested)) {
+            return !Boolean.FALSE.equals(memoryWriteEnabled);
+        }
+        return true;
     }
 
     public List<String> scopeList() {
@@ -196,6 +211,11 @@ public class ApiKey {
     public void setMemoryAgentCode(String v) {
         memoryAgentCode = v;
     }
+
+    public Boolean getMemoryReadEnabled() { return memoryReadEnabled; }
+    public void setMemoryReadEnabled(Boolean value) { memoryReadEnabled = value; }
+    public Boolean getMemoryWriteEnabled() { return memoryWriteEnabled; }
+    public void setMemoryWriteEnabled(Boolean value) { memoryWriteEnabled = value; }
 
     public String getStatus() {
         return status;

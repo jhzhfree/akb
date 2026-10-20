@@ -17,6 +17,8 @@ export const createExternalKey = (payload:{
 }):Promise<ApiResponse<ExternalKeyRow>> => axios.post('/api/external/admin/keys', payload)
 export const revokeExternalKey = (id:number):Promise<ApiResponse<ExternalKeyRow>> =>
   axios.post(`/api/external/admin/keys/${id}/revoke`)
+export const updateExternalMemoryPolicy = (id:number, policy:{readEnabled:boolean;writeEnabled:boolean}):Promise<ApiResponse<ExternalKeyRow>> =>
+  axios.put(`/api/external/admin/keys/${id}/memory-policy`, policy)
 export interface MemoryScopeGrant {
   scopeType:'TEAM'|'PROJECT'|'TASK'|'WORKFLOW'|'SESSION'; scopeCode:string; canRead:boolean; canWrite:boolean
 }

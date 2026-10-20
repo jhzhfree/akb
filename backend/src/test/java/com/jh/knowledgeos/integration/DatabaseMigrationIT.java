@@ -68,6 +68,8 @@ public class DatabaseMigrationIT {
             assertTrue(columnExists(st, "t_query_trace", "actor_user_id"));
             assertTrue(columnExists(st, "t_api_key", "memory_namespace"));
             assertTrue(columnExists(st, "t_api_key", "memory_agent_code"));
+            assertTrue(columnExists(st, "t_api_key", "memory_read_enabled"));
+            assertTrue(columnExists(st, "t_api_key", "memory_write_enabled"));
             assertTrue(columnExists(st, "t_query_trace", "rerank_json"));
             assertTrue(columnExists(st, "t_query_trace", "latency_ms"));
             assertTrue(indexExists(st, "t_claim", "idx_claim_lookup"));

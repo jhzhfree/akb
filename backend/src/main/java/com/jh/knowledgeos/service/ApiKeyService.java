@@ -93,6 +93,25 @@ public class ApiKeyService {
     }
 
     /**
+     * Turns existing memory capabilities off or on without changing the key's knowledge scopes.
+     * A policy can disable a granted capability, but cannot grant a capability absent from scopes.
+     */
+    public Map<String, Object> updateMemoryPolicy(Long id, boolean readEnabled, boolean writeEnabled) {
+        ApiKey key = mapper.getApiKey(id);
+        if (key == null) {
+            throw new IllegalArgumentException("API Key 不存在");
+        }
+        if (readEnabled && !key.scopeList().contains(ApiKey.SCOPE_MEMORY_READ)) {
+            throw new IllegalArgumentException("该 API Key 未签发 MEMORY_READ scope，不能通过策略新增读取权限");
+        }
+        if (writeEnabled && !key.scopeList().contains(ApiKey.SCOPE_MEMORY_WRITE)) {
+            throw new IllegalArgumentException("该 API Key 未签发 MEMORY_WRITE scope，不能通过策略新增写入权限");
+        }
+        mapper.updateApiKeyMemoryPolicy(id, Boolean.valueOf(readEnabled), Boolean.valueOf(writeEnabled));
+        return profile(mapper.getApiKey(id));
+    }
+
+    /**
      * Resolves a presented secret to an active credential, or returns null.
      */
     public ApiKey authenticate(String secret) {
@@ -133,6 +152,8 @@ public class ApiKeyService {
         row.put("allowedOrigins", key.getAllowedOrigins());
         row.put("memoryNamespace", key.getMemoryNamespace());
         row.put("memoryAgentCode", key.getMemoryAgentCode());
+        row.put("memoryReadEnabled", Boolean.valueOf(key.hasScope(ApiKey.SCOPE_MEMORY_READ)));
+        row.put("memoryWriteEnabled", Boolean.valueOf(key.hasScope(ApiKey.SCOPE_MEMORY_WRITE)));
         row.put("lastUsedAt", key.getLastUsedAt());
         row.put("createdByName", key.getCreatedByName());
         row.put("createdTime", key.getCreatedTime());

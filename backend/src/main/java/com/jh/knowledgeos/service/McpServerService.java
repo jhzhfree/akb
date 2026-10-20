@@ -112,7 +112,7 @@ public class McpServerService {
         payload.put("capabilities", capabilities);
         payload.put("serverInfo", serverInfo);
         payload.put("instructions", "用 knowledge_query 提问会返回带引用的答案；knowledge_search 只做检索。"
-            + "拥有 MEMORY_READ / MEMORY_WRITE 的凭证会额外显示 memory_recall / memory_capture / memory_forget。"
+            + "平台启用记忆服务且凭证允许 MEMORY_READ / MEMORY_WRITE 时，会显示对应记忆工具。"
             + "知识库范围、Agent 身份和记忆命名空间授权始终由服务端强制执行。");
         return payload;
     }
@@ -155,13 +155,13 @@ public class McpServerService {
             "string", "证据编码")), Arrays.asList("knowledgeBaseId", "evidenceCode"))));
         tools.add(tool("graph_neighbors", "读取实体/知识对象的图谱邻域", schema(properties(prop("knowledgeBaseId", "integer", "知识库 ID"), prop("code", "string",
             "对象编码"), prop("depth", "integer", "跳数，默认 2"), prop("limit", "integer", "返回上限，默认 50")), Arrays.asList("knowledgeBaseId", "code"))));
-        if (key != null && key.hasScope(ApiKey.SCOPE_MEMORY_READ)) {
+        if (isMemoryEnabled() && key != null && key.hasScope(ApiKey.SCOPE_MEMORY_READ)) {
             tools.add(tool("memory_recall", "按当前 Agent 或已授权团队/项目/任务/工作流/会话作用域召回记忆",
                 schema(properties(prop("query", "string", "待召回的关键词或问题"), prop("scopeType", "string", "AGENT（默认）/ TEAM / PROJECT / TASK / WORKFLOW / SESSION"),
                     prop("scopeCode", "string", "共享空间或会话编码；AGENT 身份由 API Key 确定"), prop("limit", "integer", "返回数量，默认 10，最多 50")),
                     Arrays.asList("query"))));
         }
-        if (key != null && key.hasScope(ApiKey.SCOPE_MEMORY_WRITE)) {
+        if (isMemoryEnabled() && key != null && key.hasScope(ApiKey.SCOPE_MEMORY_WRITE)) {
             tools.add(tool("memory_capture", "保存有来源、作用域和有效期的 Agent 记忆",
                 schema(properties(prop("memoryLevel", "string", "L0 会话片段 / L1 原子记忆 / L2 场景记忆 / L3 Agent 画像"),
                     prop("scopeType", "string", "AGENT / TEAM / PROJECT / TASK / WORKFLOW / SESSION"), prop("scopeCode", "string", "共享空间或会话编码"),
@@ -364,6 +364,12 @@ public class McpServerService {
         if (memoryService == null) {
             throw new IllegalStateException("Agent 记忆服务不可用");
         }
+    }
+
+    private boolean isMemoryEnabled() {
+        // A null service occurs only in legacy lightweight unit fixtures; the production Spring
+        // graph always supplies AgentMemoryService, whose deployment switch is authoritative.
+        return memoryService == null || memoryService.isEnabled();
     }
 
     private Map<String, Object> textContent(Object value) {

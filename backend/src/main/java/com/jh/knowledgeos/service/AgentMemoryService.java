@@ -3,6 +3,7 @@ package com.jh.knowledgeos.service;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.jh.knowledgeos.domain.ApiKey;
+import com.jh.knowledgeos.config.KnowledgeProperties;
 import com.jh.knowledgeos.dto.MemoryCaptureRequest;
 import com.jh.knowledgeos.dto.MemoryRecallRequest;
 import com.jh.knowledgeos.mapper.AgentMemoryMapper;
@@ -14,6 +15,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.transaction.annotation.Transactional;
 
 /** Platform memory engine shared by the REST and MCP integration surfaces. */
@@ -24,14 +26,34 @@ public class AgentMemoryService {
     private final ExternalAccessService access;
     private final ObjectMapper objectMapper;
 
-    public AgentMemoryService(AgentMemoryMapper mapper, ExternalAccessService access, ObjectMapper objectMapper) {
+    private final boolean enabled;
+
+    @Autowired
+    public AgentMemoryService(AgentMemoryMapper mapper, ExternalAccessService access, ObjectMapper objectMapper, KnowledgeProperties properties) {
         this.mapper = mapper;
         this.access = access;
         this.objectMapper = objectMapper;
+        this.enabled = properties.external().isAgentMemoryEnabled();
+    }
+
+    /** Compatibility constructor for focused unit tests; production uses the configured constructor. */
+    public AgentMemoryService(AgentMemoryMapper mapper, ExternalAccessService access, ObjectMapper objectMapper) {
+        this(mapper, access, objectMapper, new KnowledgeProperties());
+    }
+
+    public boolean isEnabled() {
+        return enabled;
+    }
+
+    private void assertEnabled() {
+        if (!enabled) {
+            throw new SecurityException("Agent 记忆服务已关闭");
+        }
     }
 
     @Transactional
     public Map<String, Object> capture(ApiKey key, MemoryCaptureRequest request) {
+        assertEnabled();
         access.assertScope(key, ApiKey.SCOPE_MEMORY_WRITE);
         String namespace = namespace(key);
         String agent = agentCode(key);
@@ -118,6 +140,7 @@ public class AgentMemoryService {
     }
 
     public Map<String, Object> recall(ApiKey key, MemoryRecallRequest request) {
+        assertEnabled();
         access.assertScope(key, ApiKey.SCOPE_MEMORY_READ);
         String namespace = namespace(key);
         String agent = agentCode(key);
@@ -145,6 +168,7 @@ public class AgentMemoryService {
 
     @Transactional
     public Map<String, Object> forget(ApiKey key, String memoryCode) {
+        assertEnabled();
         access.assertScope(key, ApiKey.SCOPE_MEMORY_WRITE);
         if (memoryCode == null || memoryCode.trim().isEmpty()) {
             throw new IllegalArgumentException("memoryCode 不能为空");

@@ -11,6 +11,7 @@ import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.jh.knowledgeos.domain.ApiKey;
+import com.jh.knowledgeos.config.KnowledgeProperties;
 import com.jh.knowledgeos.dto.MemoryCaptureRequest;
 import com.jh.knowledgeos.dto.MemoryRecallRequest;
 import com.jh.knowledgeos.mapper.AgentMemoryMapper;
@@ -145,6 +146,19 @@ class AgentMemoryServiceTest {
 
         assertThrows(SecurityException.class, () -> service.forget(key, "MEMORY_PRIVATE"));
         verify(mapper, never()).forget("octop-prod", "MEMORY_PRIVATE", "agent-ops");
+    }
+
+    @Test
+    void platformMemorySwitchBlocksServiceCallsBeforeCredentialOrStorageAccess() {
+        KnowledgeProperties properties = new KnowledgeProperties();
+        properties.external().setAgentMemoryEnabled(false);
+        AgentMemoryService disabled = new AgentMemoryService(mapper, access, new ObjectMapper(), properties);
+        MemoryRecallRequest request = new MemoryRecallRequest();
+        request.setQuery("rollback");
+
+        assertThrows(SecurityException.class, () -> disabled.recall(key(), request));
+        verify(access, never()).assertScope(any(ApiKey.class), eq(ApiKey.SCOPE_MEMORY_READ));
+        verify(mapper, never()).recall(any(String.class), any(String.class), any(String.class), any(String.class), any(String.class), any(Integer.class));
     }
 
     private ApiKey key() {

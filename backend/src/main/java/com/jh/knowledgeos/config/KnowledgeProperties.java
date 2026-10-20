@@ -204,6 +204,9 @@ public class KnowledgeProperties {
 
         private boolean sseEnabled = true;
 
+        /** Emergency deployment-wide switch for the Agent memory APIs and MCP tools. */
+        private boolean agentMemoryEnabled = true;
+
         private int sseHeartbeatSeconds = 15;
 
         private int sseMaxMinutes = 30;
@@ -256,6 +259,14 @@ public class KnowledgeProperties {
 
         public void setSseEnabled(boolean value) {
             sseEnabled = value;
+        }
+
+        public boolean isAgentMemoryEnabled() {
+            return agentMemoryEnabled;
+        }
+
+        public void setAgentMemoryEnabled(boolean value) {
+            agentMemoryEnabled = value;
         }
 
         public int getSseHeartbeatSeconds() {

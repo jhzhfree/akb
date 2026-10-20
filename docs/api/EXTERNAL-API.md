@@ -129,6 +129,8 @@ curl -X POST http://<host>:8080/api/v1/external/query \
 
 启用记忆权限时可同时配置 API Key 的 `memoryNamespace` 与 `memoryAgentCode`：默认命名空间按 API Key 隔离；多个 Agent Key 配置相同 namespace 后仍需管理员逐 Key 授予 TEAM / PROJECT / TASK / WORKFLOW / SESSION 的读取或写入权限。只有精确授权的 `scopeType + scopeCode` 可访问，且 scope code 区分大小写。`memoryAgentCode` 是服务端信任的 Agent 身份，调用参数不能更改。不同租户/应用不得复用 namespace。
 
+记忆能力另有三项开关：平台总开关 `EXTERNAL_AGENT_MEMORY_ENABLED`（默认 `true`，关闭后 REST 记忆端点拒绝调用、MCP 不公开记忆工具）；API Key 的 `MEMORY_READ` / `MEMORY_WRITE` 签发 scope；以及凭证控制台中的逐 Key 记忆策略开关。逐 Key 策略只能关闭或恢复签发时已经授予的 scope，不能借此增加权限。普通 `POST /query` 和 MCP `knowledge_query` 不自动调用记忆；需要记忆的 Agent 应显式调用 `memory_recall`，任务完成后按策略调用 `memory_capture`。
+
 ### 2.3 知识库归属规则
 
 | Key 形态 | 行为 |
@@ -1043,6 +1045,8 @@ curl -X POST http://<host>:8080/api/v1/external/documents/text \
 
 Agent Memory 与知识卡片、断言和证据使用独立表与生命周期。服务只保存调用方显式提交的记忆，不会自动收集员工聊天。Agent 身份和 namespace 从 API Key 配置确定；请求体里的 `scopeCode` 是待授权的项目/任务/工作流标识，服务会按 API Key 校验精确作用域授权。
 
+记忆能力由部署级开关和 API Key 级开关共同控制。部署可通过 `EXTERNAL_AGENT_MEMORY_ENABLED=false` 全局关闭 REST 记忆端点的读写，并从 MCP `tools/list` 隐藏记忆工具；该配置在服务启动时读取，修改后需重启。控制台管理员可对已签发 `MEMORY_READ` / `MEMORY_WRITE` scope 的 Key 分别关闭或恢复读写，不能借此新增原本未授予的 scope。普通 `/query`、`/search` 不会自动读取或写入记忆；调用方必须显式调用记忆 API 或 MCP 工具。
+
 记忆层级：`L0` 会话片段（只允许 `SESSION`，默认 7 天且最多 30 天）；`L1` 原子记忆（默认 30 天）；`L2` 团队/项目/任务/工作流场景记忆（默认 180 天）；`L3` Agent 画像（只允许 `AGENT` 且来源必须为 `USER_CONFIRMED` 或 `MANUAL`，默认 365 天）。可通过 `expiresInDays` 覆盖默认 TTL，范围 1–3650 天，L0 上限仍为 30 天。到期记忆不会进入召回结果；L0 到期后由小时级任务清理，其他层级在 30 天恢复窗口后清理。Forget 会立即物理删除记忆。
 
 #### Capture
@@ -1076,6 +1080,7 @@ Agent 只能 Forget 自己的私有记忆；共享记忆还要求调用方对其
 
 管理员可在控制台“接口服务 → 凭证”管理记忆授权和资产，也可调用：
 
+- `PUT /api/external/admin/keys/{keyId}/memory-policy`：分别设置 `readEnabled`、`writeEnabled`；例如 `{ "readEnabled": false, "writeEnabled": true }`。
 - `GET /api/external/admin/keys/{keyId}/memory-access`、`PUT /api/external/admin/keys/{keyId}/memory-access`：查看或原子替换共享作用域授权；空数组撤销全部授权。
 - `GET /api/external/admin/keys/{keyId}/memories?status=&scopeType=&scopeCode=&limit=&offset=`：浏览该 namespace 内的记忆资产。
 - `PUT /api/external/admin/keys/{keyId}/memories/{memoryCode}/status?status=SUSPENDED|ACTIVE`：暂停或恢复召回，正文 `{ "reason": "..." }`。

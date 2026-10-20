@@ -586,7 +586,7 @@ export interface RoleCatalog { roles:RoleCatalogItem[]; permissions:Record<strin
 
 export interface ExternalEndpoint { method:string; path:string; summary:string }
 export interface ExternalRestChannel {
-  enabled:boolean; basePath:string; auth:string; endpoints:ExternalEndpoint[]
+  enabled:boolean; agentMemoryEnabled:boolean; basePath:string; auth:string; endpoints:ExternalEndpoint[]
 }
 export interface ExternalMcpChannel {
   enabled:boolean; endpoint:string; protocolVersion:string; methods:string[]; tools:string[]
@@ -603,6 +603,7 @@ export interface ExternalKeyRow {
   knowledgeBaseId:number|null; knowledgeBaseName:string|null
   scopes:string; rateLimitPerMinute:number; status:string
   memoryNamespace?:string|null; memoryAgentCode?:string|null
+  memoryReadEnabled?:boolean; memoryWriteEnabled?:boolean
   expiresAt:string|null; lastUsedAt:string|null; createdByName:string|null; createdTime:string
   /** 明文仅创建响应携带一次。 */
   secret?:string

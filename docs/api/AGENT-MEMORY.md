@@ -85,11 +85,13 @@ API Key 撤销会立即阻止继续读写。旧记忆仍留在 namespace 中，�
 - `MEMORY_READ`：`memory_recall`
 - `MEMORY_WRITE`：`memory_capture`、`memory_forget`
 
+记忆开关分两层：部署环境变量 `EXTERNAL_AGENT_MEMORY_ENABLED` 是平台总开关，关闭后 REST 记忆接口拒绝调用且 MCP 不公布记忆工具；每把 API Key 还可分别关闭已签发的 `MEMORY_READ` / `MEMORY_WRITE` 能力。单 Key 策略只能收回既有 scope，不能新增 scope；新增权限需重新签发凭证。以上开关不会让普通 `knowledge_query` 自动读取或写入记忆。
+
 Octop 和其他兼容 MCP 的平台可直接将 AKB 注册为远程 MCP Server。只支持 REST 的平台也可直接调用上述 HTTP 契约。
 
 ### 当前交付与后续阶段
 
-本次版本包含独立存储、API Key 共享作用域 ACL、L0–L3 写入规则、TTL、幂等 Capture、关键词 Recall、Forget、REST/MCP、记忆治理控制台的查询/暂停/恢复/删除和操作审计。BM25/向量混合 Recall、异步记忆归并、可信员工 subject 身份映射和跨系统经验审批仍属于后续阶段；Memory 结果不会自动写成权威知识或 Skill。
+本次版本包含独立存储、API Key 共享作用域 ACL、L0–L3 写入规则、TTL、幂等 Capture、关键词 Recall、Forget、REST/MCP、平台总开关、API Key 记忆读写策略，以及记忆治理控制台的查询/暂停/恢复/删除和操作审计。Octop 虚拟员工的任务级自动召回/写入策略需在 Octop 侧配置；AKB 不会因 API Key 有记忆权限而自动向普通知识问答注入记忆。BM25/向量混合 Recall、异步记忆归并、可信员工 subject 身份映射和跨系统经验审批仍属于后续阶段；Memory 结果不会自动写成权威知识或 Skill。
 
 
 

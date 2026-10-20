@@ -3,7 +3,8 @@
 <sql id="apiKeyColumns">k.id,k.key_code,k.name,k.secret_hash,k.key_prefix,k.knowledge_base_id,
   b.name AS knowledge_base_name,k.scopes,k.rate_limit_per_minute,k.status,k.expires_at,k.last_used_at,
   k.created_by,u.display_name AS created_by_name,k.created_time,k.updated_time,k.allowed_origins,
-  k.memory_namespace AS memoryNamespace,k.memory_agent_code AS memoryAgentCode</sql>
+  k.memory_namespace AS memoryNamespace,k.memory_agent_code AS memoryAgentCode,
+  k.memory_read_enabled AS memoryReadEnabled,k.memory_write_enabled AS memoryWriteEnabled</sql>
 
 <select id="listApiKeys" resultType="com.jh.knowledgeos.domain.ApiKey">SELECT <include refid="apiKeyColumns"/> FROM t_api_key k
   LEFT JOIN t_knowledge_base b ON b.id=k.knowledge_base_id
@@ -24,6 +25,8 @@
   VALUES(#{keyCode},#{name},#{secretHash},#{keyPrefix},#{knowledgeBaseId},#{scopes},#{rateLimitPerMinute},#{status},#{expiresAt},#{createdBy},#{allowedOrigins},#{memoryNamespace},#{memoryAgentCode})</insert>
 
 <update id="updateApiKeyStatus">UPDATE t_api_key SET status=#{status} WHERE id=#{id}</update>
+
+<update id="updateApiKeyMemoryPolicy">UPDATE t_api_key SET memory_read_enabled=#{readEnabled},memory_write_enabled=#{writeEnabled} WHERE id=#{id}</update>
 
 <update id="touchApiKey">UPDATE t_api_key SET last_used_at=CURRENT_TIMESTAMP WHERE id=#{id}</update>
 

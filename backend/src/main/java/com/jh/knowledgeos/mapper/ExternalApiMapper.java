@@ -23,6 +23,9 @@ public interface ExternalApiMapper {
 
     int updateApiKeyStatus(@Param("id") Long id, @Param("status") String status);
 
+    int updateApiKeyMemoryPolicy(@Param("id") Long id, @Param("readEnabled") Boolean readEnabled,
+        @Param("writeEnabled") Boolean writeEnabled);
+
     int touchApiKey(@Param("id") Long id);
 
     int insertApiCallAudit(ApiCallAudit audit);

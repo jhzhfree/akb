@@ -9,6 +9,7 @@ import com.jh.knowledgeos.dto.EmbedTokenRevokeRequest;
 import com.jh.knowledgeos.dto.ExternalKeyRequest;
 import com.jh.knowledgeos.dto.AgentMemoryScopeGrantRequest;
 import com.jh.knowledgeos.dto.AgentMemoryGovernanceRequest;
+import com.jh.knowledgeos.dto.AgentMemoryKeyPolicyRequest;
 import com.jh.knowledgeos.exception.UnauthorizedException;
 import com.jh.knowledgeos.service.ApiKeyService;
 import com.jh.knowledgeos.service.AgentMemoryScopeAccessService;
@@ -82,6 +83,7 @@ public class ExternalServiceAdminController {
         rest.put("enabled", properties.isEnabled());
         rest.put("basePath", "/api/v1/external");
         rest.put("auth", "X-API-Key 或 Authorization: Bearer");
+        rest.put("agentMemoryEnabled", properties.isAgentMemoryEnabled());
         rest.put("endpoints", Arrays.asList(endpoint("GET", "/bases", "可见知识库列表"), endpoint("POST", "/query", "可追溯问答"), endpoint("POST", "/search",
             "检索（不生成答案）"), endpoint("GET", "/cards", "知识卡片清单"), endpoint("GET", "/cards/{code}", "知识卡片详情"), endpoint("GET", "/claims", "断言清单"),
             endpoint("GET", "/claims/{code}", "断言详情"), endpoint("GET", "/evidence/{code}", "证据原文"), endpoint("GET", "/graph/{code}", "图谱邻域"),
@@ -143,6 +145,16 @@ public class ExternalServiceAdminController {
     public ApiResponse<Object> revokeKey(@PathVariable Long id) {
         requireManager();
         return ApiResponse.ok(apiKeyService.revoke(id));
+    }
+
+    @PutMapping("/keys/{id}/memory-policy")
+    @Operation(summary = "开关 API Key 的记忆读取和写入能力；不能新增未签发的 scope")
+    public ApiResponse<Object> memoryPolicy(@PathVariable Long id, @RequestBody @javax.validation.Valid AgentMemoryKeyPolicyRequest body) {
+        requireManager();
+        if (body == null || body.getReadEnabled() == null || body.getWriteEnabled() == null) {
+            throw new IllegalArgumentException("readEnabled 和 writeEnabled 必须同时提供");
+        }
+        return ApiResponse.ok(apiKeyService.updateMemoryPolicy(id, body.getReadEnabled().booleanValue(), body.getWriteEnabled().booleanValue()));
     }
 
     @GetMapping("/keys/{id}/memory-access")
@@ -336,9 +348,11 @@ public class ExternalServiceAdminController {
                 }
             }
         }
-        names.add("memory_capture");
-        names.add("memory_recall");
-        names.add("memory_forget");
+        if (properties.isAgentMemoryEnabled()) {
+            names.add("memory_capture");
+            names.add("memory_recall");
+            names.add("memory_forget");
+        }
         return names;
     }
 

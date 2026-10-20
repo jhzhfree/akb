@@ -87,6 +87,7 @@ knowledge:
     enabled: ${EXTERNAL_API_ENABLED:true}
     mcp-enabled: ${EXTERNAL_MCP_ENABLED:true}
     sse-enabled: ${EXTERNAL_SSE_ENABLED:true}
+    agent-memory-enabled: ${EXTERNAL_AGENT_MEMORY_ENABLED:true}
     sse-heartbeat-seconds: ${EXTERNAL_SSE_HEARTBEAT_SECONDS:15}
     sse-max-minutes: ${EXTERNAL_SSE_MAX_MINUTES:30}
     answer-chunk-chars: ${EXTERNAL_ANSWER_CHUNK_CHARS:40}

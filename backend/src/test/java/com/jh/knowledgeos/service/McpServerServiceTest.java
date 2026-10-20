@@ -11,6 +11,7 @@ import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.jh.knowledgeos.domain.ApiKey;
+import com.jh.knowledgeos.config.KnowledgeProperties;
 import com.jh.knowledgeos.dto.MemoryRecallRequest;
 import java.util.Arrays;
 import java.util.Collections;
@@ -62,6 +63,21 @@ class McpServerServiceTest {
         assertEquals(true, tools.stream().anyMatch(tool -> "memory_recall".equals(tool.get("name"))));
         assertFalse(tools.stream().anyMatch(tool -> "memory_capture".equals(tool.get("name"))));
         assertFalse(tools.stream().anyMatch(tool -> "memory_forget".equals(tool.get("name"))));
+    }
+
+    @Test
+    void platformMemorySwitchHidesMemoryToolsEvenWhenKeyHasScopes() {
+        KnowledgeProperties properties = new KnowledgeProperties();
+        properties.external().setAgentMemoryEnabled(false);
+        AgentMemoryService memory = new AgentMemoryService(mock(AgentMemoryMapper.class), mock(ExternalAccessService.class), new ObjectMapper(), properties);
+        ApiKey key = mock(ApiKey.class);
+        when(key.hasScope(ApiKey.SCOPE_MEMORY_READ)).thenReturn(true);
+        when(key.hasScope(ApiKey.SCOPE_MEMORY_WRITE)).thenReturn(true);
+        McpServerService service = new McpServerService(null, null, new ObjectMapper(), memory);
+
+        List<Map<String, Object>> tools = (List<Map<String, Object>>) service.toolsList(key).get("tools");
+
+        assertFalse(tools.stream().anyMatch(tool -> String.valueOf(tool.get("name")).startsWith("memory_")));
     }
 
     @Test

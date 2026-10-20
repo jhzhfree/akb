@@ -44,6 +44,13 @@
         <div class="p-3">
           <div class="kb-muted">基础路径 <b class="text-ink-700">{{ overview?.rest?.basePath || '—' }}</b></div>
           <div class="kb-muted mt-1">鉴权 {{ overview?.rest?.auth || '—' }}</div>
+          <div class="mt-2 flex items-center gap-2 text-xs">
+            <span class="kb-muted">平台记忆服务</span>
+            <el-tag :type="overview?.rest?.agentMemoryEnabled ? 'success' : 'info'" size="small" effect="plain">
+              {{ overview?.rest?.agentMemoryEnabled ? '已启用' : '已关闭' }}
+            </el-tag>
+            <span class="kb-muted">由部署配置控制</span>
+          </div>
           <div class="mt-3 max-h-64 overflow-auto">
             <div v-for="item in overview?.rest?.endpoints || []" :key="item.method + item.path"
               class="flex items-start gap-2 border-b border-ink-100 py-1.5 last:border-0">
@@ -150,8 +157,9 @@
             <el-table-column label="最近调用" width="170">
               <template #default="{ row }">{{ row.lastUsedAt || '—' }}</template>
             </el-table-column>
-            <el-table-column label="操作" width="250" fixed="right">
+            <el-table-column label="操作" width="330" fixed="right">
               <template #default="{ row }">
+                <el-button v-if="hasMemoryCapability(row)" link type="primary" size="small" @click="openMemoryPolicy(row)">记忆开关</el-button>
                 <el-button v-if="hasMemoryScope(row)" link type="primary" size="small" @click="openMemoryAccess(row)">记忆授权</el-button>
                 <el-button v-if="hasMemoryScope(row)" link type="primary" size="small" @click="openMemoryManager(row)">记忆管理</el-button>
                 <el-button v-if="row.status === 'ACTIVE'" link type="danger" size="small" @click="revoke(row)">吊销</el-button>
@@ -269,6 +277,29 @@
       </template>
     </el-dialog>
 
+    <el-dialog v-model="memoryPolicyVisible" title="API Key 记忆开关" width="460px">
+      <div v-if="memoryPolicyKey" class="space-y-3">
+        <div class="kb-muted">{{ memoryPolicyKey.name }} · {{ memoryPolicyKey.keyPrefix }}</div>
+        <el-alert v-if="!overview?.rest?.agentMemoryEnabled" type="warning" :closable="false"
+          title="平台级记忆服务当前已关闭；打开此凭证权限也不会启用记忆接口。" />
+        <el-form label-width="110px" size="small">
+          <el-form-item label="允许召回">
+            <el-switch v-model="memoryPolicy.readEnabled" :disabled="!hasDeclaredScope(memoryPolicyKey, 'MEMORY_READ')" />
+            <span v-if="!hasDeclaredScope(memoryPolicyKey, 'MEMORY_READ')" class="ml-2 kb-muted">签发时未授予 MEMORY_READ</span>
+          </el-form-item>
+          <el-form-item label="允许写入 / 删除">
+            <el-switch v-model="memoryPolicy.writeEnabled" :disabled="!hasDeclaredScope(memoryPolicyKey, 'MEMORY_WRITE')" />
+            <span v-if="!hasDeclaredScope(memoryPolicyKey, 'MEMORY_WRITE')" class="ml-2 kb-muted">签发时未授予 MEMORY_WRITE</span>
+          </el-form-item>
+        </el-form>
+        <p class="kb-muted">此策略只能关闭或恢复签发时已授予的权限，不能增加新的 scope。关闭后 REST 调用会被拒绝，MCP 不再公布对应工具。</p>
+      </div>
+      <template #footer>
+        <el-button size="small" @click="memoryPolicyVisible=false">取消</el-button>
+        <el-button size="small" type="primary" :loading="memoryPolicySaving" @click="saveMemoryPolicy">保存</el-button>
+      </template>
+    </el-dialog>
+
     <el-dialog v-model="memoryAccessVisible" title="共享记忆授权" width="740px">
       <p class="kb-muted mb-3">私有 AGENT 记忆仍按密钥身份隔离。共享记忆必须逐项授权；scope code 相同不代表有访问权限。</p>
       <div v-for="(grant, index) in memoryGrants" :key="index" class="mb-2 grid grid-cols-12 items-center gap-2">
@@ -360,7 +391,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import type { ExternalAuditRow, ExternalKeyRow, ExternalServiceOverview, KnowledgeBase } from '../types'
 import {
   createExternalKey, getExternalServices, getMemoryScopeGrants, listExternalAudits, listExternalKeys,
-  forgetManagedMemory, listManagedMemories, replaceMemoryScopeGrants, setManagedMemoryStatus,
+  forgetManagedMemory, listManagedMemories, replaceMemoryScopeGrants, setManagedMemoryStatus, updateExternalMemoryPolicy,
   listMemoryGovernanceEvents, type ManagedMemoryItem, type MemoryGovernanceEvent, type MemoryScopeGrant,
   probeExternal, revokeExternalKey,
 } from '../api/external'
@@ -396,6 +427,10 @@ const memoryAccessVisible = ref(false)
 const memoryAccessSaving = ref(false)
 const memoryAccessKey = ref<ExternalKeyRow | null>(null)
 const memoryGrants = ref<MemoryScopeGrant[]>([])
+const memoryPolicyVisible = ref(false)
+const memoryPolicySaving = ref(false)
+const memoryPolicyKey = ref<ExternalKeyRow | null>(null)
+const memoryPolicy = ref({ readEnabled:false, writeEnabled:false })
 const memoryManagerVisible = ref(false)
 const memoryManagerLoading = ref(false)
 const memoryManagerKey = ref<ExternalKeyRow | null>(null)
@@ -461,7 +496,14 @@ function scopeList(row:ExternalKeyRow) {
   return String(row.scopes || 'READ').split(',').filter(Boolean)
 }
 function hasMemoryScope(row:ExternalKeyRow) {
-  return scopeList(row).some(scope => scope === 'MEMORY_READ' || scope === 'MEMORY_WRITE')
+  // Keep governance actions available when both runtime capabilities are disabled.
+  return hasMemoryCapability(row)
+}
+function hasDeclaredScope(row:ExternalKeyRow, scope:string) {
+  return scopeList(row).includes(scope)
+}
+function hasMemoryCapability(row:ExternalKeyRow) {
+  return hasDeclaredScope(row, 'MEMORY_READ') || hasDeclaredScope(row, 'MEMORY_WRITE')
 }
 function scopeLabel(scope:string) {
   const labels:Record<string,string> = {
@@ -515,6 +557,26 @@ async function openMemoryAccess(row:ExternalKeyRow) {
       .map(grant => ({ ...grant, canRead:Boolean(grant.canRead), canWrite:Boolean(grant.canWrite) }))
     memoryAccessVisible.value = true
   } catch (e) { ElMessage.error(message(e)) }
+}
+function openMemoryPolicy(row:ExternalKeyRow) {
+  memoryPolicyKey.value = row
+  memoryPolicy.value = {
+    readEnabled:Boolean(row.memoryReadEnabled ?? hasDeclaredScope(row, 'MEMORY_READ')),
+    writeEnabled:Boolean(row.memoryWriteEnabled ?? hasDeclaredScope(row, 'MEMORY_WRITE')),
+  }
+  memoryPolicyVisible.value = true
+}
+async function saveMemoryPolicy() {
+  const key = memoryPolicyKey.value
+  if (!key) return
+  memoryPolicySaving.value = true
+  try {
+    await updateExternalMemoryPolicy(key.id, memoryPolicy.value)
+    memoryPolicyVisible.value = false
+    ElMessage.success('API Key 记忆权限已更新')
+    await loadAll()
+  } catch (e) { ElMessage.error(message(e)) }
+  finally { memoryPolicySaving.value = false }
 }
 function addMemoryGrant() {
   memoryGrants.value.push({ scopeType:'PROJECT', scopeCode:'', canRead:true, canWrite:false })
