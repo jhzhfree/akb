@@ -11,6 +11,7 @@ import com.jh.knowledgeos.dto.PasswordChangeRequest;
 import com.jh.knowledgeos.mapper.AuthMapper;
 import com.jh.knowledgeos.service.AuthContext;
 import com.jh.knowledgeos.service.AuthService;
+import com.jh.knowledgeos.service.RoleMenuService;
 import com.jh.knowledgeos.service.UserService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -42,11 +43,15 @@ public class AuthController {
 
     private final KnowledgeProperties.Auth properties;
 
-    public AuthController(AuthService authService, UserService users, AuthMapper mapper, KnowledgeProperties properties) {
+    private final RoleMenuService roleMenuService;
+
+    public AuthController(AuthService authService, UserService users, AuthMapper mapper, KnowledgeProperties properties,
+        RoleMenuService roleMenuService) {
         this.authService = authService;
         this.users = users;
         this.mapper = mapper;
         this.properties = properties.auth();
+        this.roleMenuService = roleMenuService;
     }
 
     @PostMapping("/login")
@@ -76,6 +81,9 @@ public class AuthController {
         out.put("canWriteKnowledge", role != null && role.canWriteKnowledge());
         // 未开启认证时授予全部权限，前端据此裁剪菜单；开启后按角色下发权限码。
         out.put("permissions", new java.util.ArrayList<String>(Permissions.granted()));
+        // 菜单按角色配置下发，与 permissions 同源（都由该角色的可见菜单派生）；未开启认证时全开。
+        out.put("menu", new java.util.ArrayList<String>(
+            user == null ? roleMenuService.allKeys() : roleMenuService.visibleKeys(user.getRole())));
         out.put("roleLabel", role == null ? "" : role.label());
         out.put("homeView", role == null ? "workbench" : role.homeView());
         return ApiResponse.ok(out);

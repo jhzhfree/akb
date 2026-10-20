@@ -178,6 +178,11 @@ public final class Permissions {
         if (permission == null || permission.isEmpty()) {
             return true;
         }
+        // 优先按角色菜单配置派生出的权限判定：菜单可配置化后，角色的实际能力由配置决定。
+        Set<String> granted = AuthContext.granted();
+        if (granted != null) {
+            return granted.contains(permission);
+        }
         com.jh.knowledgeos.domain.User user = AuthContext.get();
         if (user == null) {
             return true;
@@ -187,8 +192,13 @@ public final class Permissions {
 
     /**
      * 当前登录人的权限码集合；未开启认证时返回全部权限。
+     * 已解析过角色菜单配置时直接返回配置派生的结果。
      */
     public static Set<String> granted() {
+        Set<String> granted = AuthContext.granted();
+        if (granted != null) {
+            return granted;
+        }
         com.jh.knowledgeos.domain.User user = AuthContext.get();
         if (user == null) {
             return all();

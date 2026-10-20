@@ -6,6 +6,7 @@ import com.jh.knowledgeos.common.ApiResponse;
 import com.jh.knowledgeos.domain.User;
 import com.jh.knowledgeos.service.AuthContext;
 import com.jh.knowledgeos.service.AuthService;
+import com.jh.knowledgeos.service.RoleMenuService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
@@ -46,10 +47,14 @@ public class AuthInterceptor implements HandlerInterceptor {
 
     private final ObjectMapper objectMapper;
 
-    public AuthInterceptor(AuthService authService, KnowledgeProperties properties, ObjectMapper objectMapper) {
+    private final RoleMenuService roleMenuService;
+
+    public AuthInterceptor(AuthService authService, KnowledgeProperties properties, ObjectMapper objectMapper,
+        RoleMenuService roleMenuService) {
         this.authService = authService;
         this.properties = properties.auth();
         this.objectMapper = objectMapper;
+        this.roleMenuService = roleMenuService;
     }
 
     @Override
@@ -66,6 +71,9 @@ public class AuthInterceptor implements HandlerInterceptor {
         User user = token == null ? null : authService.authenticate(token);
         if (user != null) {
             AuthContext.set(user);
+            // 菜单可配置化之后，本次请求生效的权限码由该角色的可见菜单派生，
+            // 不再是角色枚举里写死的清单（见 RoleMenuService.permissionsFor）。
+            AuthContext.setGranted(roleMenuService.permissionsFor(user.getRole()));
             request.setAttribute(AuthContext.REQUEST_ATTRIBUTE, user);
             MDC.put("userId", String.valueOf(user.getId()));
             return true;

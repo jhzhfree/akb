@@ -46,7 +46,9 @@ public class PermissionInterceptor implements HandlerInterceptor {
     new Rule("/api/knowledge/extract", Permissions.GENERATE_IMPORT, WRITE_ONLY), // 任务与告警属于平台运维：只有系统管理员能看告警、改规则。
     new Rule("/api/knowledge/entities", Permissions.GENERATE_IMPORT, WRITE_ONLY), // 任务与告警属于平台运维：只有系统管理员能看告警、改规则。
     new Rule("/api/knowledge/index/", Permissions.SYSTEM_INDEX, WRITE_ONLY), // 任务与告警属于平台运维：只有系统管理员能看告警、改规则。
-    new Rule("/api/knowledge/acl", Permissions.SYSTEM_ACL, WRITE_ONLY), new Rule("/api/knowledge/tasks/alerts", Permissions.SYSTEM_TASK, ALL_METHODS));
+    new Rule("/api/knowledge/acl", Permissions.SYSTEM_ACL, WRITE_ONLY), new Rule("/api/knowledge/tasks/alerts", Permissions.SYSTEM_TASK, ALL_METHODS),
+    // 角色可见菜单配置属于权限治理：读写都需要「角色与权限」权限码。
+    new Rule("/api/system/role-menu", Permissions.SYSTEM_ACL, ALL_METHODS));
 
     @Override
     public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) {

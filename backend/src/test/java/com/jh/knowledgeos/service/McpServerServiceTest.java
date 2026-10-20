@@ -13,6 +13,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.jh.knowledgeos.domain.ApiKey;
 import com.jh.knowledgeos.config.KnowledgeProperties;
 import com.jh.knowledgeos.dto.MemoryRecallRequest;
+import com.jh.knowledgeos.mapper.AgentMemoryMapper;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.LinkedHashMap;

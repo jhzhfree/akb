@@ -153,7 +153,7 @@ AKB 已实现文档接入与治理、知识卡片和断言、知识图谱、多�
 
 迁移 `V48__query_feedback_workflow.sql` 为 Query Trace 增加调用者归属，并创建持久化反馈工作流表。
 
-记忆 API 与 MCP 契约详见本文件；数据库迁移依次为 `V49__agent_memory_platform.sql`、`V50__agent_memory_scope_access.sql`、`V51__agent_memory_governance.sql`。
+记忆 API 与 MCP 契约详见本文件；数据库迁移依次为 `V49__agent_memory_platform.sql`、`V51__agent_memory_scope_access.sql`、`V52__agent_memory_governance.sql`、`V53__agent_memory_key_policy.sql`。
 
 ### 后续实施次序
 
