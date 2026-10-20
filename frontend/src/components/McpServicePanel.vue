@@ -113,11 +113,15 @@
                 <div v-if="openCall === call.id" class="mt-1 space-y-2">
                   <div>
                     <b class="text-[11px] font-normal text-ink-500">传入参数（工具名与 arguments）</b>
-                    <pre class="mt-0.5 max-h-56 overflow-auto whitespace-pre-wrap break-all rounded border border-black/10 bg-black/[0.03] p-2 text-[11px] leading-5">{{ pretty(call.requestParams, '本次调用没有入参') }}</pre>
+                    <pre class="mt-0.5 max-h-56 overflow-auto whitespace-pre-wrap break-all rounded border border-black/10 bg-black/[0.03] p-2 text-[11px] leading-5">
+                      {{ pretty(call.requestParams, '本次调用没有入参') }}
+                    </pre>
                   </div>
                   <div>
                     <b class="text-[11px] font-normal text-ink-500">返回数据（工具的业务结果）</b>
-                    <pre class="mt-0.5 max-h-56 overflow-auto whitespace-pre-wrap break-all rounded border border-black/10 bg-black/[0.03] p-2 text-[11px] leading-5">{{ pretty(call.responseData, '本次调用没有返回数据') }}</pre>
+                    <pre class="mt-0.5 max-h-56 overflow-auto whitespace-pre-wrap break-all rounded border border-black/10 bg-black/[0.03] p-2 text-[11px] leading-5">
+                      {{ pretty(call.responseData, '本次调用没有返回数据') }}
+                    </pre>
                   </div>
                 </div>
               </li>

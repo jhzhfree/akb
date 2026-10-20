@@ -108,7 +108,9 @@
                 </header>
                 <div class="judge-side-value">{{ side.content || '—' }}</div>
                 <div class="judge-side-meta">
-                  {{ side.objectCode || '—' }} · {{ statusLabel(side.status) }} · 版本 v{{ side.versionNo ?? 1 }} · 置信度 {{ score(side.confidence) }} · 证据 {{ side.evidenceCount ?? 0 }}
+                  {{ side.objectCode || '—' }} · {{ statusLabel(side.status) }} ·
+                  版本 v{{ side.versionNo ?? 1 }} · 置信度 {{ score(side.confidence) }} ·
+                  证据 {{ side.evidenceCount ?? 0 }}
                 </div>
                 <div v-if="conditionText(side)" class="judge-side-cond">条件：{{ conditionText(side) }}</div>
               </article>
@@ -384,7 +386,15 @@ const submitReview=(decision:string):void=>{
 .judge-comment{margin-top:4px}
 .judge-evidence-group{margin-bottom:12px}
 .judge-evidence-label{font-size:11px;font-weight:600;color:var(--el-text-color-secondary);margin-bottom:6px}
-.judge-evidence{border:1px solid var(--el-border-color-lighter);border-radius:8px;padding:8px 10px;margin-bottom:8px;cursor:pointer;background:var(--bg-sub);transition:border-color .15s}
+.judge-evidence {
+  border: 1px solid var(--el-border-color-lighter);
+  border-radius: 8px;
+  padding: 8px 10px;
+  margin-bottom: 8px;
+  cursor: pointer;
+  background: var(--bg-sub);
+  transition: border-color .15s;
+}
 .judge-evidence:hover{border-color:var(--el-color-primary-light-5)}
 .judge-evidence-quote{margin:0;font-size:12px;line-height:19px;color:var(--el-text-color-regular)}
 .judge-evidence-meta{display:flex;flex-wrap:wrap;gap:10px;margin-top:6px;font-size:11px;color:var(--el-text-color-secondary)}

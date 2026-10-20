@@ -62,7 +62,11 @@ public class KnowledgeQueryController {
     private final AclContextResolver aclContextResolver;
     private final KnowledgeBaseAccessService accessService;
 
-    public KnowledgeQueryController(KnowledgeService service, ObjectMapper objectMapper, AclContextResolver aclContextResolver, KnowledgeBaseAccessService accessService) {
+    public KnowledgeQueryController(
+        KnowledgeService service,
+        ObjectMapper objectMapper,
+        AclContextResolver aclContextResolver,
+        KnowledgeBaseAccessService accessService) {
         this.service = service;
         this.objectMapper = objectMapper;
         this.aclContextResolver = aclContextResolver;

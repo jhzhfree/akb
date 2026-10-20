@@ -132,7 +132,9 @@ export function useExternalServiceLab(props: ExternalServiceLabProps) {
   const REST_PARAM_DOCS:Record<string, string> = {
     bases:'无参数；knowledgeBaseId 由凭证绑定解析',
     overview:'knowledgeBaseId（可选）',
-    query:'knowledgeBaseId（可选）· question（必填）· topK（1–50，默认 10）· permissionTags[]（可选）· answerFormat（default / markdown / text / html，默认 default）· minScore（0~1，可选，最低相关度）',
+    query: 'knowledgeBaseId（可选）· question（必填）· topK（1–50，默认 10）· '
+      + 'permissionTags[]（可选）· answerFormat（default / markdown / text / html，默认 default）· '
+      + 'minScore（0~1，可选，最低相关度）',
     search:'同 /query（answerFormat 对返回内容无影响，这里没有答案正文）· minScore（0~1，可选）过滤候选，返回的 returned 是过滤后条数',
     cards:'knowledgeBaseId（可选）',
     card:'code（路径，必填）· knowledgeBaseId（可选）',

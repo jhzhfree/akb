@@ -72,8 +72,15 @@ def check_java_docs_and_architecture():
         )
         if not match:
             continue
-        window = text[max(0, match.start() - 800) : match.start()]
-        if "/**" not in window:
+        prefix = text[: match.start()]
+        doc_start = prefix.rfind("/**")
+        doc_end = prefix.find("*/", doc_start) if doc_start >= 0 else -1
+        annotation_lines = prefix[doc_end + 2 :].splitlines() if doc_end >= 0 else []
+        has_class_doc = doc_end >= 0 and all(
+            not line.strip() or line.lstrip().startswith("@")
+            for line in annotation_lines
+        )
+        if not has_class_doc:
             missing_docs.append((path.relative_to(ROOT), match.group(1)))
     assert not missing_docs, "public Java types require class Javadoc: %s" % missing_docs
 

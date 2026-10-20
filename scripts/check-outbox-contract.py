@@ -4,7 +4,7 @@ from pathlib import Path
 
 root = Path(__file__).resolve().parents[1]
 migration = (root / "backend/src/main/resources/db/migration/V4__transactional_outbox.sql").read_text(encoding="utf-8")
-mapper = (root / "backend/src/main/resources/mapper/KnowledgeMapper.xml").read_text(encoding="utf-8")
+mapper = (root / "backend/src/main/resources/mapper/IndexMapper.xml").read_text(encoding="utf-8")
 worker = (root / "backend/src/main/java/com/jh/knowledgeos/service/IndexOutboxWorker.java").read_text(encoding="utf-8")
 outbox = (root / "backend/src/main/java/com/jh/knowledgeos/service/IndexOutboxService.java").read_text(encoding="utf-8")
 required_tables = ["t_index_outbox", "t_index_aggregate_version", "t_index_delivery_attempt"]

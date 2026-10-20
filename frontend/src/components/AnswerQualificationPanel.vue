@@ -34,7 +34,14 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 interface ClaimAudit { claimId:string; statement:string; decision:string; entailmentScore:number; evidenceIds?:unknown; evidenceIdsJson?:unknown }
-interface Qualification { gateStatus?:string; policyVersion?:string; evidenceGateStatus?:string; structuredGateStatus?:string; claims?:ClaimAudit[]; blockReasons?:Record<string,number> }
+interface Qualification {
+  gateStatus?: string
+  policyVersion?: string
+  evidenceGateStatus?: string
+  structuredGateStatus?: string
+  claims?: ClaimAudit[]
+  blockReasons?: Record<string, number>
+}
 const props=defineProps<{ value:Qualification|null|undefined }>()
 const claims=computed(()=>props.value?.claims || [])
 const BLOCK_LABELS:Record<string,string> = { missingCitation:'缺引用', nonExactEvidence:'引用无精确证据', lowFaithfulness:'忠实度不足' }

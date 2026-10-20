@@ -13,7 +13,7 @@ from typing import Any
 import numpy as np
 
 from app.core.config import settings
-from app.core.contracts import RETRIEVABLE_STATUSES
+from app.core.contracts import retrievable_statuses, statusless_objects_retrievable
 from app.services.embedding import get_embedding_provider
 from app.services.graph_provider import get_graph_provider
 from app.services.retrieval.external import get_elasticsearch_provider, get_milvus_provider
@@ -39,7 +39,10 @@ def toks(text: str) -> list[str]:
 def allowed(doc: dict[str, Any], tags: Iterable[str] | None) -> bool:
     """Evaluate publication-state and ACL visibility before local Top-K selection."""
     status = doc.get("status")
-    if status and str(status).upper() not in RETRIEVABLE_STATUSES:
+    if status is None or not str(status).strip():
+        if not statusless_objects_retrievable():
+            return False
+    elif str(status).upper() not in retrievable_statuses():
         return False
     required = doc.get("permission_tags") or []
     if not required:

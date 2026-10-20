@@ -134,10 +134,16 @@
                 </select>
               </label>
               <label class="text-xs text-ink-600">补充说明
-                <textarea v-model="feedbackComment" rows="2" maxlength="1000" class="mt-1 w-full rounded border border-ink-200 bg-white px-2 py-1.5 text-xs" placeholder="描述哪里需要改进" />
+                <textarea
+                  v-model="feedbackComment" rows="2" maxlength="1000"
+                  class="mt-1 w-full rounded border border-ink-200 bg-white px-2 py-1.5 text-xs"
+                  placeholder="描述哪里需要改进" />
               </label>
               <label class="text-xs text-ink-600">建议答案（可选）
-                <textarea v-model="suggestedAnswer" rows="2" maxlength="4000" class="mt-1 w-full rounded border border-ink-200 bg-white px-2 py-1.5 text-xs" placeholder="如果你知道正确答案，可以补充在这里" />
+                <textarea
+                  v-model="suggestedAnswer" rows="2" maxlength="4000"
+                  class="mt-1 w-full rounded border border-ink-200 bg-white px-2 py-1.5 text-xs"
+                  placeholder="如果你知道正确答案，可以补充在这里" />
               </label>
               <div class="flex justify-end gap-2">
                 <button class="kb-btn kb-btn-outline text-xs" @click="showNegativeFeedback=false">取消</button>

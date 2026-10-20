@@ -39,7 +39,11 @@
             <p class="mt-1 line-clamp-4 whitespace-pre-wrap text-sm text-ink-700">{{ row.answer || '（回答记录不可用）' }}</p>
           </div>
           <p v-if="row.comment" class="mt-3 whitespace-pre-wrap text-sm text-ink-700"><b>补充说明：</b>{{ row.comment }}</p>
-          <p v-if="row.suggestedAnswer" class="mt-2 whitespace-pre-wrap rounded-md border border-brand-200 bg-brand-50 p-3 text-sm text-ink-800"><b>用户建议：</b>{{ row.suggestedAnswer }}</p>
+          <p
+            v-if="row.suggestedAnswer"
+            class="mt-2 whitespace-pre-wrap rounded-md border border-brand-200 bg-brand-50 p-3 text-sm text-ink-800">
+            <b>用户建议：</b>{{ row.suggestedAnswer }}
+          </p>
           <div class="mt-3 grid gap-2 md:grid-cols-[180px_1fr_auto] md:items-end">
             <label class="text-xs text-ink-600">处理结果
               <select v-model="draftStatus[row.id]" class="mt-1 w-full rounded border border-ink-200 bg-white px-2 py-1.5 text-xs">

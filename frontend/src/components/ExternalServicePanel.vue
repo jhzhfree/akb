@@ -344,11 +344,19 @@
           <template #default="{ row }">{{ row.sourceType || '—' }} · {{ row.sourceRef || '无引用' }}</template>
         </el-table-column>
         <el-table-column label="状态" width="100">
-          <template #default="{ row }"><el-tag :type="row.status === 'ACTIVE' ? 'success' : 'warning'" size="small">{{ row.status === 'ACTIVE' ? '可召回' : '已暂停' }}</el-tag></template>
+          <template #default="{ row }">
+            <el-tag :type="row.status === 'ACTIVE' ? 'success' : 'warning'" size="small">
+              {{ row.status === 'ACTIVE' ? '可召回' : '已暂停' }}
+            </el-tag>
+          </template>
         </el-table-column>
         <el-table-column label="操作" width="170" fixed="right">
           <template #default="{ row }">
-            <el-button link size="small" :type="row.status === 'ACTIVE' ? 'warning' : 'success'" @click="changeManagedStatus(row)">{{ row.status === 'ACTIVE' ? '暂停' : '恢复' }}</el-button>
+            <el-button
+              link size="small" :type="row.status === 'ACTIVE' ? 'warning' : 'success'"
+              @click="changeManagedStatus(row)">
+              {{ row.status === 'ACTIVE' ? '暂停' : '恢复' }}
+            </el-button>
             <el-button link type="danger" size="small" @click="forgetManaged(row)">删除</el-button>
           </template>
         </el-table-column>

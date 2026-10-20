@@ -1,1 +1,7 @@
-export { getPendingReviews, getOpenConflicts, getAssessments, runAdjudication, regenerateKnowledge, reviewKnowledge, resolveKnowledgeConflict, getConflictTargets, adjudicateConflict, getEntities, getEntityDetail, addEntityAlias, removeEntityAlias, mergeEntity, updateEntityStatus, getLifecycleSummary, getExpiringClaims, expireDueKnowledge, supersedeKnowledge, getSourceImpact } from '../knowledge-impl'
+export {
+  getPendingReviews, getOpenConflicts, getAssessments, runAdjudication,
+  regenerateKnowledge, reviewKnowledge, resolveKnowledgeConflict, getConflictTargets,
+  adjudicateConflict, getEntities, getEntityDetail, addEntityAlias, removeEntityAlias,
+  mergeEntity, updateEntityStatus, getLifecycleSummary, getExpiringClaims,
+  expireDueKnowledge, supersedeKnowledge, getSourceImpact,
+} from '../knowledge-impl'

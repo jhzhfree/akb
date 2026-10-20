@@ -13,7 +13,7 @@ from typing import Any
 import httpx
 
 from app.core.config import settings
-from app.core.contracts import RETRIEVABLE_STATUSES
+from app.core.contracts import retrievable_statuses, statusless_objects_retrievable
 from app.services.retrieval.provider_common import candidate
 
 logger = logging.getLogger(__name__)
@@ -362,8 +362,11 @@ class MilvusProvider:
         if object_type:
             safe_type = str(object_type).replace('"', '"')
             clauses.append('object_type == "%s"' % safe_type)
-        recallable = ", ".join('"%s"' % item for item in sorted(RETRIEVABLE_STATUSES))
-        clauses.append("(status in [%s] or status == \"\")" % recallable)
+        recallable = ", ".join('"%s"' % item for item in sorted(retrievable_statuses()))
+        status_clause = "status in [%s]" % recallable
+        if statusless_objects_retrievable():
+            status_clause = "(%s or status == \"\")" % status_clause
+        clauses.append(status_clause)
         # tags is None: caller is unrestricted (platform admin / auth off) → no ACL clause,
         # otherwise restricted knowledge (e.g. the ops knowledge base) would never be recalled.
         if tags is not None:

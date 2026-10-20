@@ -484,10 +484,7 @@ def _coerce_name(raw: str) -> str:
     """
     text = str(raw or "")
     if "%" in text:
-        try:
-            text = urllib.parse.unquote(text, encoding="utf-8", errors="replace")
-        except Exception:
-            pass
+        text = urllib.parse.unquote(text, encoding="utf-8", errors="replace")
     return _profile_name(text)
 
 

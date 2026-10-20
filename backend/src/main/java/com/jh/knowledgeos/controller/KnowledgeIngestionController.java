@@ -65,7 +65,14 @@ public class KnowledgeIngestionController {
     private final KnowledgeBasePurgeService purgeService;
     private final BatchIngestionService batchIngestionService;
 
-    public KnowledgeIngestionController(KnowledgeService service, AclContextResolver aclContextResolver, AiClient aiClient, KnowledgeBaseService knowledgeBaseService, IngestionObservabilityService ingestionObservabilityService, KnowledgeBasePurgeService purgeService, BatchIngestionService batchIngestionService) {
+    public KnowledgeIngestionController(
+        KnowledgeService service,
+        AclContextResolver aclContextResolver,
+        AiClient aiClient,
+        KnowledgeBaseService knowledgeBaseService,
+        IngestionObservabilityService ingestionObservabilityService,
+        KnowledgeBasePurgeService purgeService,
+        BatchIngestionService batchIngestionService) {
         this.service = service;
         this.aclContextResolver = aclContextResolver;
         this.aiClient = aiClient;

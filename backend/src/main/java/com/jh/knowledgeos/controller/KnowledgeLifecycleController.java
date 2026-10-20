@@ -13,6 +13,7 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.Map;
 import com.jh.knowledgeos.service.KnowledgeLifecycleService;
 
+/** Exposes lifecycle operations for expiry, supersession, and source impact reviews. */
 @RestController
 @RequestMapping("/api/knowledge")
 @CrossOrigin

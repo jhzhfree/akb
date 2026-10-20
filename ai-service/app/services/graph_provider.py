@@ -12,7 +12,7 @@ from functools import lru_cache
 from typing import Any
 
 from app.core.config import settings
-from app.core.contracts import RETRIEVABLE_STATUSES
+from app.core.contracts import retrievable_statuses, statusless_objects_retrievable
 
 
 class GraphProvider(ABC):
@@ -586,15 +586,18 @@ class Neo4jGraphProvider(GraphProvider):
         permission_tags=None,
     ) -> list[dict[str, Any]]:
         """Search only the active governed graph generation with pre-TopK ACL."""
-        recallable = ", ".join("'%s'" % item for item in sorted(RETRIEVABLE_STATUSES))
+        recallable = ", ".join("'%s'" % item for item in sorted(retrievable_statuses()))
+        status_clause = "n.status IN [%s]" % recallable
+        if statusless_objects_retrievable():
+            status_clause = "(n.status IS NULL OR %s)" % status_clause
         records, _ = self._execute(
             "MATCH (p:IndexGenerationPointer {knowledgeBaseId:$kb}) "
             "MATCH (n:KnowledgeObject {knowledgeBaseId:$kb, generationId:p.activeGenerationId}) "
             "WHERE (size(coalesce(n.permissionTags, []))=0 OR any(tag IN coalesce(n.permissionTags, []) WHERE tag IN $permissionTags)) "
-            "AND (n.status IS NULL OR n.status IN [%s]) "
+            "AND %s "
             "AND (toLower(coalesce(n.title,'')) CONTAINS toLower($q) OR toLower(coalesce(n.content,'')) CONTAINS toLower($q)) "
             "RETURN n.objectType AS nodeType,n.objectId AS code,n.title AS title,n.content AS content,n.generationId AS generationId "
-            "LIMIT $limit" % recallable,
+            "LIMIT $limit" % status_clause,
             {"kb": knowledge_base_id, "q": query, "limit": int(top_k), "permissionTags": list(permission_tags or [])},
         )
         result = []

@@ -1,1 +1,5 @@
-export { retrieveKnowledge, answerKnowledge, queryKnowledge, getLineage, getGraph, getGraphOverview, getTrace, getAnswerQualification, getAnswerQualificationSummary, getQueryHistory, getKnowledgeObjectDetail, getEvidenceDetail, getContentUnitDetail } from '../knowledge-impl'
+export {
+  retrieveKnowledge, answerKnowledge, queryKnowledge, getLineage, getGraph,
+  getGraphOverview, getTrace, getAnswerQualification, getAnswerQualificationSummary,
+  getQueryHistory, getKnowledgeObjectDetail, getEvidenceDetail, getContentUnitDetail,
+} from '../knowledge-impl'

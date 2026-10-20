@@ -86,13 +86,13 @@ t_document
 
 ## 8. 正式知识检索状态
 
-正式检索只允许：
+召回状态由 `RETRIEVAL_STATUS_POLICY` 配置，并由 Local、Elasticsearch、Milvus、Neo4j 共用同一白名单：
 
-- 无 status 的 ContentUnit；
-- `APPROVED`；
-- `EFFECTIVE`。
+- `permissive`（默认）：`DRAFT / UNCERTAIN / APPROVED / EFFECTIVE`；
+- `standard`：仅 `APPROVED / EFFECTIVE`；
+- `custom`：从 `RETRIEVAL_ALLOWED_STATUSES` 读取逗号分隔的知识状态白名单。
 
-`DRAFT / UNCERTAIN / PENDING_REVIEW / CONFLICTED / REJECTED / SUPERSEDED / EXPIRED / INVALID` 不进入问答候选。该规则已下推到 Local、Elasticsearch、Milvus、Neo4j。
+兼容行为也受策略约束：`permissive` 允许旧数据中缺少 status 的对象；`standard` 和 `custom` 要求对象具有白名单内的明确状态，因此标准模式下只有 `APPROVED / EFFECTIVE` 对象能进入问答召回。新写入的内容块在索引时会标记为 `EFFECTIVE`。`custom` 的值必须是已知知识状态；空值、未知状态或未知策略会报错，不会静默放宽。
 
 ## 9. 运维 API
 

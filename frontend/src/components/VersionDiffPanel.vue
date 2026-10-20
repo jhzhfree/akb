@@ -17,7 +17,11 @@
         <div v-for="field in fields" :key="field.key" class="rounded-lg border border-ink-100">
           <div class="mb-2 flex items-center justify-between"><b class="text-xs text-ink-700">{{ field.label }}</b>
             <span v-if="changed(field.key)" class="kb-badge kb-state-warn">已变更</span></div>
-          <div v-if="changed(field.key)" class="mb-2 rounded bg-[color:var(--danger-bg)] p-2 text-xs leading-5 text-[color:var(--danger)] line-through">{{ value(previous,field.key) || '∅' }}</div>
+          <div
+            v-if="changed(field.key)"
+            class="mb-2 rounded bg-[color:var(--danger-bg)] p-2 text-xs leading-5 text-[color:var(--danger)] line-through">
+            {{ value(previous,field.key) || '∅' }}
+          </div>
           <div class="rounded bg-[color:var(--ok-bg)] p-2 text-xs leading-5 text-[color:var(--ok)]">{{ value(selected,field.key) || '∅' }}</div>
         </div>
       </div>

@@ -1,1 +1,6 @@
-export { getKnowledgeBases, createKnowledgeBase, updateKnowledgeBase, updateKnowledgeBaseAccess, archiveKnowledgeBase, purgeKnowledgeBase, getOverview, getSources, getDocuments, getSourcePreview, sourceFileUrl, getCards, getClaims, getCapabilities, getKbScenario, saveKbScenario, resetKbScenario } from '../knowledge-impl'
+export {
+  getKnowledgeBases, createKnowledgeBase, updateKnowledgeBase, updateKnowledgeBaseAccess,
+  archiveKnowledgeBase, purgeKnowledgeBase, getOverview, getSources, getDocuments,
+  getSourcePreview, sourceFileUrl, getCards, getClaims, getCapabilities,
+  getKbScenario, saveKbScenario, resetKbScenario,
+} from '../knowledge-impl'

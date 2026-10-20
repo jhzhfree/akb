@@ -17,6 +17,7 @@ import com.jh.knowledgeos.domain.KnowledgeBase;
 import com.jh.knowledgeos.service.ChunkPolicyService;
 import com.jh.knowledgeos.service.KnowledgeBaseService;
 
+/** Manages knowledge-base retrieval and segmentation settings. */
 @RestController
 @RequestMapping("/api/knowledge")
 @CrossOrigin

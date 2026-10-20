@@ -14,6 +14,8 @@ required = [
     "INDEX_OUTBOX_ENABLED",
     "INDEX_OUTBOX_BATCH_SIZE",
     "INDEX_OUTBOX_MAX_ATTEMPTS",
+    "RETRIEVAL_STATUS_POLICY",
+    "RETRIEVAL_ALLOWED_STATUSES",
 ]
 missing = [x for x in required if not re.search(r"^" + re.escape(x) + r"=", s, re.M)]
 assert not missing, "missing .env.example keys: " + ",".join(missing)

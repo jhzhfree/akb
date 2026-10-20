@@ -1,15 +1,13 @@
 package com.jh.knowledgeos.service;
-import com.jh.knowledgeos.common.AnswerFormat;
 import com.jh.knowledgeos.domain.Claim;
 import com.jh.knowledgeos.domain.KnowledgeCard;
 import com.jh.knowledgeos.domain.KnowledgeSource;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-@Service
 /** Thin compatibility facade delegating knowledge operations to focused application services. */
+@Service
 public class KnowledgeService {
     private final IngestionOrchestrator ingestionService;
     private final KnowledgeGenerationOrchestrator extractionService;
@@ -100,32 +98,10 @@ public class KnowledgeService {
         return readService.lineage(kb, objectType, objectCode);
     }
     public Map<String, Object> retrieve(Map<String, Object> request) throws Exception {
-        Map<String, Object> response = queryService.query(request);
-        Map<String, Object> result = new LinkedHashMap<String, Object>();
-        result.put("queryId", response.get("queryId"));
-        result.put("rewrittenQueries", response.get("rewrittenQueries"));
-        result.put("router", response.get("router"));
-        result.put("recall", response.get("recall"));
-        result.put("candidates", response.get("candidates"));
-        result.put("reranker", response.get("reranker"));
-        result.put("fusion", response.get("fusion"));
-        result.put("trace", response.get("trace"));
-        return result;
+        return queryService.retrieve(request);
     }
     public Map<String, Object> answer(Map<String, Object> request) throws Exception {
-        Map<String, Object> response = queryService.query(request);
-        Map<String, Object> result = new LinkedHashMap<String, Object>();
-        result.put("queryId", response.get("queryId"));
-        // 实际生效的交付格式要回传：界面上选的是用户点的，这里回的是服务端认下来的那个，
-        // 传了认不出来的取值时二者不一致，前端据此如实显示。
-        result.put("answerFormat", AnswerFormat.normalize(response.get("answerFormat") == null ? null
-            : String.valueOf(response.get("answerFormat"))));
-        result.put("answer", response.get("answer"));
-        result.put("citations", response.get("citations"));
-        result.put("confidence", response.get("confidence"));
-        result.put("model", response.get("model"));
-        result.put("trace", response.get("trace"));
-        return result;
+        return queryService.answer(request);
     }
     public Map<String, Object> sourcePreview(Long kb, Long sourceId, Integer limit, java.util.List<String> permissionTags) {
         return previewService.preview(kb, sourceId, limit, permissionTags);

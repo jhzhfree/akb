@@ -41,8 +41,16 @@ public class KnowledgeReadService {
 
     private final ObjectMapper objectMapper;
 
-    public KnowledgeReadService(KnowledgeMapper mapper, AiClient aiClient, AuthoritativeGraphNeighborhoodService authoritativeGraph, ObjectMapper
-        objectMapper, EvidenceMapper evidenceMapper, GovernanceMapper governanceMapper, DocumentMapper documentMapper, CardClaimMapper cardClaimMapper, TraceMapper traceMapper) {
+    public KnowledgeReadService(
+        KnowledgeMapper mapper,
+        AiClient aiClient,
+        AuthoritativeGraphNeighborhoodService authoritativeGraph,
+        ObjectMapper objectMapper,
+        EvidenceMapper evidenceMapper,
+        GovernanceMapper governanceMapper,
+        DocumentMapper documentMapper,
+        CardClaimMapper cardClaimMapper,
+        TraceMapper traceMapper) {
         this.cardClaimMapper = cardClaimMapper;
         this.traceMapper = traceMapper;
         this.evidenceMapper = evidenceMapper;

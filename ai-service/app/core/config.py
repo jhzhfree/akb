@@ -78,6 +78,8 @@ class Settings:
     retrieval_external_required = _env_bool("RETRIEVAL_EXTERNAL_REQUIRED")
     retrieval_timeout_seconds = float(os.getenv("RETRIEVAL_TIMEOUT_SECONDS", "5"))
     retrieval_batch_size = int(os.getenv("RETRIEVAL_BATCH_SIZE", "200"))
+    retrieval_status_policy = os.getenv("RETRIEVAL_STATUS_POLICY", "permissive").strip().lower()
+    retrieval_allowed_statuses = os.getenv("RETRIEVAL_ALLOWED_STATUSES", "")
 
     # Elasticsearch full-text retrieval
     elasticsearch_enabled = _env_bool("ELASTICSEARCH_ENABLED", True)

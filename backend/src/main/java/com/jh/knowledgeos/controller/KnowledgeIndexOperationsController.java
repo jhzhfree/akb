@@ -62,7 +62,11 @@ public class KnowledgeIndexOperationsController {
     private final IndexSchemaService indexSchemaService;
     private final AclRebuildOrchestrator aclRebuildOrchestrator;
 
-    public KnowledgeIndexOperationsController(IndexOutboxService outboxService, AiClient aiClient, IndexSchemaService indexSchemaService, AclRebuildOrchestrator aclRebuildOrchestrator) {
+    public KnowledgeIndexOperationsController(
+        IndexOutboxService outboxService,
+        AiClient aiClient,
+        IndexSchemaService indexSchemaService,
+        AclRebuildOrchestrator aclRebuildOrchestrator) {
         this.outboxService = outboxService;
         this.aiClient = aiClient;
         this.indexSchemaService = indexSchemaService;

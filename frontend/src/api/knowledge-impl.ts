@@ -261,7 +261,15 @@ export interface QueryFeedbackOperations {
   summary:Record<string,number>
 }
 /** 已登录使用者对一次问答只保留一条可更新反馈，反馈不直接改写权威知识。 */
-export const submitQueryFeedback = (payload:{queryId:string; rating:'HELPFUL'|'UNHELPFUL'; reasonCode?:string; comment?:string; suggestedAnswer?:string}):Promise<ApiResponse<QueryFeedback>> =>
+export const submitQueryFeedback = (
+  payload: {
+    queryId: string
+    rating: 'HELPFUL' | 'UNHELPFUL'
+    reasonCode?: string
+    comment?: string
+    suggestedAnswer?: string
+  },
+): Promise<ApiResponse<QueryFeedback>> =>
   axios.post('/api/knowledge/feedback', payload)
 export const listQueryFeedback = (kb:number, status='', limit=100):Promise<ApiResponse<QueryFeedbackOperations>> =>
   axios.get(`/api/knowledge/feedback/ops/${kb}`, { params:{ status:status || undefined, limit } })

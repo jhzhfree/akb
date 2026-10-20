@@ -21,7 +21,7 @@ from typing import Any
 import httpx
 
 from app.core.config import settings
-from app.core.contracts import RETRIEVABLE_STATUSES
+from app.core.contracts import retrievable_statuses, statusless_objects_retrievable
 
 logger = logging.getLogger(__name__)
 
@@ -44,16 +44,13 @@ SEARCH_METADATA_FIELDS = [
 
 
 def _status_filter() -> dict[str, Any]:
-    """Admit every state that is recallable, plus objects carrying no state at all.
-
-    Chunks have no governance state of their own, hence the "field missing" branch.
-    """
+    """Build the configured status whitelist, preserving legacy rows in permissive mode."""
+    should = [{"terms": {"status": sorted(retrievable_statuses())}}]
+    if statusless_objects_retrievable():
+        should.append({"bool": {"must_not": [{"exists": {"field": "status"}}]}})
     return {
         "bool": {
-            "should": [
-                {"terms": {"status": sorted(RETRIEVABLE_STATUSES)}},
-                {"bool": {"must_not": [{"exists": {"field": "status"}}]}},
-            ],
+            "should": should,
             "minimum_should_match": 1,
         }
     }

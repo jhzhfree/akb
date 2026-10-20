@@ -38,7 +38,9 @@
             <div
               v-for="base in bases" :key="base.id"
               class="rounded-lg border p-3 transition"
-              :class="base.id === activeId ? 'border-[color:var(--accent-text)] bg-[color:var(--accent-bg)]' : 'border-[color:var(--line-d)] bg-[color:var(--bg-raised)] hover:border-[color:var(--line-soft)]'">
+              :class="base.id === activeId
+                ? 'border-[color:var(--accent-text)] bg-[color:var(--accent-bg)]'
+                : 'border-[color:var(--line-d)] bg-[color:var(--bg-raised)] hover:border-[color:var(--line-soft)]'">
               <div class="flex items-start justify-between gap-2">
                 <b class="truncate text-sm">{{ base.name }}</b>
                 <span class="kb-badge shrink-0" :class="visibilityClass(base.visibility)">

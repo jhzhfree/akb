@@ -87,7 +87,7 @@ Elasticsearch / Milvus / Neo4j / Local JSON
   = rebuildable retrieval views
 ```
 
-**Knowledge cannot exist without evidence.** 未审批 Card/Claim 不允许进入正式问答召回。
+**Knowledge cannot exist without evidence.** 召回状态白名单由 `RETRIEVAL_STATUS_POLICY` 控制：默认 `permissive` 包含 `DRAFT`、`UNCERTAIN`、`APPROVED`、`EFFECTIVE`；`standard` 仅包含 `APPROVED`、`EFFECTIVE`；`custom` 可通过 `RETRIEVAL_ALLOWED_STATUSES` 指定知识状态。
 
 ## 开发检查
 

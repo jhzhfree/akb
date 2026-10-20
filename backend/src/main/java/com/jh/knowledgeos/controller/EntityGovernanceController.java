@@ -14,6 +14,7 @@ import java.util.Map;
 import com.jh.knowledgeos.service.AclContextResolver;
 import com.jh.knowledgeos.service.EntityGovernanceService;
 
+/** Handles entity resolution, alias maintenance, and governed entity merges. */
 @RestController
 @RequestMapping("/api/knowledge")
 @CrossOrigin

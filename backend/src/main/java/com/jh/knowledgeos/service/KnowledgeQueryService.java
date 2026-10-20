@@ -1,6 +1,7 @@
 package com.jh.knowledgeos.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.jh.knowledgeos.common.AnswerFormat;
 import com.jh.knowledgeos.common.PlatformEventTypes;
 import com.jh.knowledgeos.domain.QueryTraceRecord;
 import com.jh.knowledgeos.domain.User;
@@ -61,6 +62,42 @@ public class KnowledgeQueryService {
      */
     @Transactional
     public Map<String, Object> query(Map<String, Object> request) throws Exception {
+        return runQuery(request);
+    }
+
+    /** Returns retrieval diagnostics without answer text for the retrieval endpoint. */
+    @Transactional
+    public Map<String, Object> retrieve(Map<String, Object> request) throws Exception {
+        Map<String, Object> response = runQuery(request);
+        Map<String, Object> result = new LinkedHashMap<String, Object>();
+        result.put("queryId", response.get("queryId"));
+        result.put("rewrittenQueries", response.get("rewrittenQueries"));
+        result.put("router", response.get("router"));
+        result.put("recall", response.get("recall"));
+        result.put("candidates", response.get("candidates"));
+        result.put("reranker", response.get("reranker"));
+        result.put("fusion", response.get("fusion"));
+        result.put("trace", response.get("trace"));
+        return result;
+    }
+
+    /** Returns the answer payload with the delivery format normalized by the AI service. */
+    @Transactional
+    public Map<String, Object> answer(Map<String, Object> request) throws Exception {
+        Map<String, Object> response = runQuery(request);
+        Map<String, Object> result = new LinkedHashMap<String, Object>();
+        result.put("queryId", response.get("queryId"));
+        result.put("answerFormat", AnswerFormat.normalize(response.get("answerFormat") == null ? null
+            : String.valueOf(response.get("answerFormat"))));
+        result.put("answer", response.get("answer"));
+        result.put("citations", response.get("citations"));
+        result.put("confidence", response.get("confidence"));
+        result.put("model", response.get("model"));
+        result.put("trace", response.get("trace"));
+        return result;
+    }
+
+    private Map<String, Object> runQuery(Map<String, Object> request) throws Exception {
         Map<String, Object> payload = prepare(request);
         String queryId = String.valueOf(payload.get("queryId"));
         long startedAt = System.currentTimeMillis();

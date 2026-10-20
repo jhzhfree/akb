@@ -12,6 +12,7 @@ for vue in (root / "src").rglob("*.vue"):
         assert '<script setup lang="ts">' in text, str(vue) + " must use TypeScript"
 app = (root / "src/App.vue").read_text()
 assert "KnowledgeBaseDialog" in app and "IngestionLogPanel" not in app
-api = (root / "src/api/knowledge.ts").read_text()
+api_sources = [root / "src/api/knowledge.ts", root / "src/api/knowledge-impl.ts"] + list((root / "src/api/knowledge").rglob("*.ts"))
+api = "\n".join(source.read_text() for source in api_sources)
 assert "getIngestionRuns" in api and "getKnowledgeBases" in api
 print("frontend TypeScript contract passed")

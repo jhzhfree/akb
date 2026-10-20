@@ -53,7 +53,7 @@ echo '[16/44] Configuration contract'
 python scripts/check-config.py
 
 echo '[17/44] Flyway ordering / XML structure'
-python -c 'from pathlib import Path;import re,xml.etree.ElementTree as ET;ET.parse("backend/src/main/resources/mapper/KnowledgeMapper.xml");m=list(sorted(Path("backend/src/main/resources/db/migration").glob("V*__*.sql")));v=[int(re.match(r"V([0-9]+)__",p.name).group(1)) for p in m];assert v==sorted(set(v));print(" migrations=",[p.name for p in m])'
+python -c 'from pathlib import Path;import re,xml.etree.ElementTree as ET;ET.parse("backend/src/main/resources/mapper/KnowledgeMapper.xml");m=list(Path("backend/src/main/resources/db/migration").glob("V*__*.sql"));m.sort(key=lambda p:int(re.match(r"V([0-9]+)__",p.name).group(1)));v=[int(re.match(r"V([0-9]+)__",p.name).group(1)) for p in m];assert v==sorted(set(v));print(" migrations=",[p.name for p in m])'
 
 echo '[18/44] Java 8 forbidden API scan'
 ! grep -R -nE 'Map\.of\(|List\.of\(|Set\.of\(|\bvar\s+[A-Za-z_]' backend/src/main/java backend/src/test/java
@@ -69,7 +69,8 @@ python3 scripts/check-frontend-typescript.py
 true # covered by check-frontend-typescript.py
 
 echo '[22/44] RC API boundary checks'
-grep -q 'QueryRequest' backend/src/main/java/com/jh/knowledgeos/controller/KnowledgeController.java
+grep -q 'QueryRequest' backend/src/main/java/com/jh/knowledgeos/controller/KnowledgeQueryController.java
+grep -q 'ApiResponse<QueryResponse>' backend/src/main/java/com/jh/knowledgeos/controller/KnowledgeQueryController.java
 grep -q 'springdoc-openapi-ui' backend/pom.xml
 grep -q 'StartupDiagnostics' backend/src/main/java/com/jh/knowledgeos/config/StartupDiagnostics.java
 
