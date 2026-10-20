@@ -404,10 +404,10 @@ import PanelState from './PanelState.vue'
 /** focus 由知识集成的 Tab 决定：服务 Tab 看协议与接入示例，凭证 Tab 看 API Key 与调用审计。 */
 const props = defineProps<{ bases:KnowledgeBase[]; focus?:'services'|'credentials' }>()
 const shell = useShell()
-/** 凭证（API Key 的签发、吊销与调用审计）属于管理侧能力：用户视图只看服务怎么接。 */
-const canCredentials = computed(() => shell.adminView())
+/** 凭证（API Key 的签发、吊销与调用审计）是否可用：由该角色的可见菜单决定，不再靠「是否管理视图」。 */
+const canCredentials = computed(() => shell.menuHas('integration.credentials'))
 const section = ref<'services'|'credentials'>(
-  props.focus === 'credentials' && shell.adminView() ? 'credentials' : 'services')
+  props.focus === 'credentials' && canCredentials.value ? 'credentials' : 'services')
 watch(() => props.focus, value => {
   section.value = value === 'credentials' && canCredentials.value ? 'credentials' : 'services'
 })

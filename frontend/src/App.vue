@@ -9,7 +9,6 @@
 <AppHeader :base-name="activeBase?.name" :visibility="visibilityLabel(activeBase?.visibility)"
   v-model:keyword="globalKeyword" :avatar="avatarText" :display-name="me?.user?.displayName||me?.user?.username"
   :role-title="roleTitle" :logged-in="!!me?.user" :role-accent="roleAccent"
-  :view-mode="adminView?'admin':'user'" :can-switch-view="canAdminView" @set-view="setViewMode"
   @switch-base="showBases=true" @search="globalSearch" @logout="doLogout"/>
 <div class="kos-body">
 <!-- 设计 §1 / §2.2：左侧只放业务一级入口，且不挂任何二级菜单；
@@ -22,6 +21,7 @@
   :avatar="avatarText" :role-accent="roleAccent" :can-system="canSystem"
   :actions="roleQuickActions" :logged-in="!!me?.user"
   :system-active="activeSection==='system'" :system-hint="systemHint"
+  :system-leaves="shell.tabs('system')" :system-leaf="active"
   :environment="environmentLabel" :version="APP_VERSION"
   @enter="enterSection" @enter-system="enterSystem" @go="key=>goto(key)" @logout="doLogout"/>
 <main class="kos-main">
@@ -105,7 +105,7 @@
     :acl-subjects="aclSubjects" :acl-roles="aclRoles" :acl-changes="aclChanges" :acl-audits="aclAudits"
     :change-total="changeTotal" :change-page="changePage" :change-size="changeSize"
     :audit-total="auditTotal" :audit-page="auditPage" :audit-size="auditSize"
-    :can-manage-users="!!me?.canManageUsers&&adminView"
+    :can-manage-users="!!me?.canManageUsers"
     @select="selectKey" @acl-change="changeAcl" @acl-log-page="p=>onAclLogPage(p.which,p.page,p.size)"
     @select-base="selectBase" @create-base="showBases=true" @refresh="loadOverview"/>
 
@@ -417,41 +417,26 @@ const can=(code:string)=>hasPermission(me.value?.permissions,code)
  */
 const role=computed(()=>me.value?.user?.role)
 /**
- * 顶栏视图切换：管理员登录即管理视图，可一键切到用户视图核对普通成员看到的界面；
- * 普通账号固定用户视图（顶栏仍显示当前视图，但不可切换）。选择记在本地，刷新后保持。
+ * 角色可见菜单：后端按「系统配置 · 角色菜单」的配置下发，是菜单裁剪的权威来源，
+ * 取代原先的「用户视图 / 管理视图」二值切换——每个角色看到的就是自己被授权的菜单。
+ * 未下发（老会话 / 未登录）时为 null，回落到内置的 adminOnly + 权限码规则，避免白屏。
  */
-type ViewMode='user'|'admin'
-const viewMode=ref<ViewMode>(readViewMode())
-function readViewMode():ViewMode{
-  try{return localStorage.getItem('kos.viewMode')==='user'?'user':'admin'}catch{return 'admin'}
-}
-/** 只有管理员角色才有管理视图可切；普通账号永远停在用户视图。 */
-const canAdminView=computed(()=>isAdminView(role.value))
-const adminView=computed(()=>canAdminView.value&&viewMode.value==='admin')
-/**
- * 导航裁剪用的「有效角色」：管理视图按真实角色渲染完整入口，
- * 用户视图按普通成员渲染（adminOnly 的运维/测评入口全部收起）。
- */
-const navRole=computed(()=>adminView.value?(role.value||'ADMIN'):'KNOWLEDGE_VIEWER')
-function setViewMode(mode:ViewMode){
-  if(!canAdminView.value||viewMode.value===mode)return
-  viewMode.value=mode
-  try{localStorage.setItem('kos.viewMode',mode)}catch{/* 隐私模式记不住，本次会话内仍生效 */}
-  // 切到用户视图后当前页可能是管理员专属入口：回落到当前模块的默认页，避免停在无权页面。
-  const current=locate(active.value)
-  if(current&&!canLeaf(current.leaf))
-    active.value=defaultLeafOf(current.section,can,navRole.value).key
-}
+const menuKeys=computed(()=>{
+  const menu=me.value?.menu
+  return menu&&menu.length?new Set(menu):null
+})
+/** 某个菜单项对当前角色是否可见：页面区块与快捷入口的裁剪都用它。 */
+const menuHas=(key:string)=>!!menuKeys.value?.has(key)
 /**
  * 一级导航：IA 的业务模块，二级入口全部下沉到模块页面内部的 Tab。
  * 左侧按业务域分组展示：工作台（知识概览）/ 知识库（知识生成、知识检索）/ 系统集成（接口服务）。
  * 「系统配置」不再作为业务一级入口，改由侧栏底部的设置图标进入（低频平台配置不占业务导航）。
  */
-const navGroups=computed(()=>visibleGroups(can,role.value))
+const navGroups=computed(()=>visibleGroups(can,role.value,menuKeys.value))
 /** 系统配置模块本身：只在底部工具区使用，是否展示由该模块内是否有可见 Tab 决定。 */
 const systemSection=NAV_SECTIONS.find(section=>section.key==='system')
 /** 无任何系统配置权限时不展示设置入口，避免点进去处处 403。 */
-const canSystem=computed(()=>!!systemSection&&visibleLeaves(systemSection,can,navRole.value).length>0)
+const canSystem=computed(()=>!!systemSection&&visibleLeaves(systemSection,can,role.value,menuKeys.value).length>0)
 const activeLocation=computed(()=>locate(active.value))
 const activeSection=computed(()=>activeLocation.value?.section.key||'workbench')
 /** 一级菜单收起二级后，把该模块内所有待处理计数汇总到一级入口上。 */
@@ -463,18 +448,18 @@ function sectionBadge(section:NavSection):string{
   }
   return total?String(total):''
 }
-/** 模块页内 Tab：按角色与权限裁剪，避免普通账号看到运维入口与无权操作的入口。 */
+/** 模块页内 Tab：按角色的可见菜单裁剪，避免普通账号看到运维入口与无权操作的入口。 */
 function leavesOf(section:NavSection){
-  return visibleLeaves(section,can,navRole.value)
+  return visibleLeaves(section,can,role.value,menuKeys.value)
 }
 /** 进入一级模块：落到该角色可见的第一个 Tab（普通成员进知识生成即到文档导入）。 */
 function enterSection(section:NavSection){
-  active.value=defaultLeafOf(section,can,navRole.value).key
+  active.value=defaultLeafOf(section,can,role.value,menuKeys.value).key
 }
-/** 点击侧栏底部设置图标：进入系统配置的默认页（按权限取第一个可见 Tab）。 */
+/** 点击侧栏底部设置图标：进入系统配置的默认页（按可见菜单取第一个 Tab）。 */
 function enterSystem(){
   if(!systemSection)return
-  goto(defaultLeafOf(systemSection,can,navRole.value).key)
+  goto(defaultLeafOf(systemSection,can,role.value,menuKeys.value).key)
 }
 /** 模块页面回传的视图 key：规划中与无权访问的入口不进入，避免落到未实现页面。 */
 function selectKey(key:string){
@@ -484,8 +469,10 @@ function selectKey(key:string){
   active.value=key
 }
 function canLeaf(leaf:NavLeaf){
-  if(leaf.adminOnly&&!adminView.value)return false
-  return !leaf.permission||can(leaf.permission)
+  // 角色菜单配置优先：菜单里没有的入口一律不可达（原先靠「是否管理视图」判断）。
+  const menu=menuKeys.value
+  if(menu)return menu.has(leaf.key)
+  return (!leaf.adminOnly||isAdminView(role.value))&&(!leaf.permission||can(leaf.permission))
 }
 /** 页面内的快捷跳转（KPI 下钻、治理待办、质量页）先用它裁剪，无权的目标置灰而不是点了才报错。 */
 function canNavigate(key:string){
@@ -519,7 +506,8 @@ const roleQuickActions=computed(()=>{
   /** 检索评测只在管理视图开放，用户视图下换成同域可用的知识检索，不放一个永远点不动的入口。 */
   else if(r==='KNOWLEDGE_AUDITOR'){
     push('create.judgment','知识裁决')
-    push(adminView.value?'search.benchmark':'search.query',adminView.value?'检索评测':'知识检索')
+    push(menuHas('search.benchmark')?'search.benchmark':'search.query',
+      menuHas('search.benchmark')?'检索评测':'知识检索')
   }
   else{push('workbench.assets','资产浏览');push('search.query','知识检索')}
   return Actions
@@ -1033,8 +1021,7 @@ async function doLogout(){
  */
 const shell:KosShell={
   navigate, openAssets, openGraph, openRun, openTrace, openCallTrace, openDetail, openEvidence, openCitation,
-  can, canNavigate, tabs:key=>leavesOfSection(key,can,navRole.value),
-  adminView:()=>adminView.value,
+  can, canNavigate, menuHas, tabs:key=>leavesOfSection(key,can,role.value,menuKeys.value),
   upload, pick, remove,
   uploadFiles:files=>{void uploadFiles(files)},
   cancelBatch:code=>{void cancelBatch(code)},

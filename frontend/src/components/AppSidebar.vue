@@ -14,12 +14,12 @@
   </div>
 
   <!-- 底部工具区：当前用户 + 系统配置入口 + 版本信息。
-       角色名 / 职责说明 / 常用入口原先放在主页面顶部的角色横幅里，
+       角色名 / 职责说明 / 入口菜单原先放在主页面顶部的角色横幅里，
        现在收进这里：点用户名展开面板查看与操作，主页面顶部不再占版面。 -->
   <div class="kos-side-foot">
     <div class="kos-side-user-wrap" :style="{'--role-accent':roleAccent||'#4f8cf7'}">
       <button class="kos-side-user" :class="{active:panel}" :aria-expanded="panel"
-        :title="`${userName||'未登录'} · ${roleName||''}：点击查看角色与常用入口`"
+        :title="`${userName||'未登录'} · ${roleName||''}：点击查看角色与入口菜单`"
         @click.stop="panel=!panel">
         <span class="kos-side-avatar">{{avatar||'K'}}</span>
         <span class="kos-side-user-copy">
@@ -30,7 +30,9 @@
       </button>
 
       <!-- 角色面板：向上展开，宽度与侧栏同宽；点击面板外 / Esc 关闭。
-           系统配置即使无权限也保留入口并置灰，避免普通成员「看不到有这个模块」。 -->
+           菜单是「角色常用入口 + 系统配置各 Tab」合并去重后的一份：
+           点底部用户名（管理员角色显示「系统管理员」）即可直达任一配置项，
+           不必先落配置总览再点一次卡片，也不再分「常用入口」和「系统配置」两处。 -->
       <div v-if="panel" class="kos-user-panel" role="dialog" aria-label="账号与角色" @click.stop>
         <div class="kos-user-panel-head">
           <span class="kos-user-panel-avatar">{{avatar||'K'}}</span>
@@ -40,11 +42,12 @@
           </span>
         </div>
         <p v-if="roleBrief" class="kos-user-panel-brief">{{roleBrief}}</p>
-        <div v-if="actions?.length" class="kos-user-panel-actions">
-          <button v-for="a in actions||[]" :key="a.key" class="kos-user-panel-action"
-            :class="{disabled:a.disabled}" :disabled="a.disabled"
-            :title="a.disabled?`当前角色无权访问「${a.label}」`:a.label" @click="go(a)">
-            <NavIcon class="kos-user-panel-ic" :name="a.icon" :size="14"/>{{a.label}}
+        <div v-if="panelMenu.length" class="kos-user-panel-actions">
+          <button v-for="item in panelMenu" :key="item.key" class="kos-user-panel-action"
+            :class="{disabled:item.disabled,current:item.key===systemLeaf}"
+            :disabled="item.disabled"
+            :title="item.disabled?`当前角色无权访问「${item.label}」`:item.label" @click="go(item)">
+            <NavIcon class="kos-user-panel-ic" :name="item.icon" :size="14"/>{{item.label}}
           </button>
         </div>
         <p v-if="environment||version" class="kos-user-panel-env">
@@ -71,7 +74,7 @@
 </template>
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
-import type {NavGroup, NavSection} from '../navigation'
+import type {NavGroup, NavLeaf, NavSection} from '../navigation'
 import NavIcon from './NavIcon.vue'
 
 const props = defineProps<{
@@ -85,6 +88,10 @@ const props = defineProps<{
   loggedIn?:boolean
   /** 系统配置入口：无权限时置灰并给出原因，不再整块隐藏；当前停留在系统配置页时高亮 */
   canSystem?:boolean;systemActive?:boolean
+  /** 系统配置下的 Tab：与常用入口合并成面板菜单，外壳已按角色与权限裁剪 */
+  systemLeaves?:NavLeaf[]
+  /** 当前停留的系统配置 Tab key：面板菜单里标出当前所在项 */
+  systemLeaf?:string
   /** 无系统配置权限时的悬浮说明（外壳带上角色名，说明为什么点不动） */
   systemHint?:string
   /** 运行环境与版本号：面板里给一条环境信息，便于排查问题 */
@@ -100,6 +107,34 @@ const emit = defineEmits<{
 const panel = ref(false)
 const systemTitle = computed(()=>
   props.canSystem?'系统配置':(props.systemHint||'当前角色无权访问系统配置'))
+/**
+ * 面板菜单：角色常用入口 + 系统配置各 Tab 合并去重后的一份。
+ * 系统配置部分严格按配置页 Tab 的顺序输出（与页面顶部标签栏一一对应，不会各排各的），
+ * 常用入口里属于系统配置的项（如管理员的审计日志、知识 Schema）并入该顺序，不再单独前置；
+ * 只有不属于系统配置的业务快捷入口（如上传文档、知识衍生）排在前面。
+ */
+const panelMenu = computed<{key:string;label:string;icon:string;disabled?:boolean}[]>(()=>{
+  const list:{key:string;label:string;icon:string;disabled?:boolean}[]=[]
+  const seen=new Set<string>()
+  const actions=props.actions||[]
+  const leaves=props.systemLeaves||[]
+  const systemKeys=new Set(leaves.map(leaf=>leaf.key))
+  /** 1. 业务快捷入口：不在系统配置里的先列，保持角色高频操作在手边。 */
+  for(const action of actions){
+    if(systemKeys.has(action.key)||seen.has(action.key))continue
+    seen.add(action.key)
+    list.push({key:action.key,label:action.label,icon:action.icon,disabled:action.disabled})
+  }
+  /** 2. 系统配置：顺序、文案、图标全部跟随配置页 Tab。 */
+  for(const leaf of leaves){
+    if(seen.has(leaf.key))continue
+    seen.add(leaf.key)
+    const shortcut=actions.find(action=>action.key===leaf.key)
+    list.push({key:leaf.key,label:leaf.label,icon:leaf.icon,
+      disabled:leaf.planned||shortcut?.disabled})
+  }
+  return list
+})
 
 function go(action:{key:string;disabled?:boolean}){
   if(action.disabled)return
@@ -129,3 +164,9 @@ onBeforeUnmount(()=>{
 /** 切换一级入口时收起面板：浮层不该跟着页面留在这里。 */
 defineExpose({close:()=>{panel.value=false}})
 </script>
+<style scoped>
+/* 合并后的菜单最多十几项：给浮层一个高度上限，超出滚动而不是把面板顶出侧栏。 */
+.kos-user-panel-actions{max-height:46vh;overflow:auto}
+/* 当前停留的入口在面板里标出来，便于确认自己在哪一项。 */
+.kos-user-panel-action.current{color:var(--accent-text);font-weight:600}
+</style>

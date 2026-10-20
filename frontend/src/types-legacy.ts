@@ -575,6 +575,11 @@ export interface AuthMe extends AuthStatus {
   roleLabel:string
   /** 该角色登录后默认进入的视图 key。 */
   homeView:string
+  /**
+   * 该角色可见的菜单项 key：由「系统配置 · 角色菜单」配置下发，
+   * 是菜单裁剪的权威来源——角色能看到哪些模块功能菜单，以这份清单为准。
+   */
+  menu:string[]
 }
 /** 角色字典：角色码、中文名、职责说明与自带权限码。 */
 export interface RoleCatalogItem {

@@ -43,6 +43,9 @@
     v-else-if="active==='system.space'"
     :bases="bases" :overview="overview" :active-id="knowledgeBaseId"
     @select="$emit('select-base',$event)" @create="$emit('create-base')" />
+
+  <!-- 角色菜单：每个角色可见的模块功能菜单在这里配置（取代原先的用户/管理视图切换）。 -->
+  <RoleMenuPanel v-else-if="active==='system.menu'" />
 </template>
 <script setup lang="ts">
 import { computed } from 'vue'
@@ -56,6 +59,7 @@ import OpsPanel from './OpsPanel.vue'
 import SpacePanel from './SpacePanel.vue'
 import SchemaPanel from './SchemaPanel.vue'
 import TaskAlertPanel from './TaskAlertPanel.vue'
+import RoleMenuPanel from './RoleMenuPanel.vue'
 
 const props = defineProps<{
   active: string

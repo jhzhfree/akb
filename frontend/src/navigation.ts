@@ -188,6 +188,8 @@ export const NAV_SECTIONS: NavSection[] = [
       { key: 'system.tasks', label: '任务与告警', icon: 'checks', permission: PERM.SYSTEM_TASK },
       { key: 'system.audit', label: '审计日志', icon: 'doc', permission: PERM.SYSTEM_AUDIT },
       { key: 'system.space', label: '知识空间', icon: 'folder', permission: PERM.SYSTEM_SPACE },
+      /** 角色菜单：每个角色可见的模块功能菜单在这里配置，取代原先的用户/管理视图切换。 */
+      { key: 'system.menu', label: '角色菜单', icon: 'sliders', permission: PERM.SYSTEM_ACL },
     ],
   },
 ]
@@ -199,7 +201,15 @@ export type PermissionCheck = (code: string) => boolean
  * 模块页内可见的 Tab：先按角色裁剪管理员专属入口，再按登录人权限过滤。
  * 角色缺省（未开启认证 / me 未就绪）时按管理员视图渲染，与 hasPermission 的空权限全放行一致。
  */
-export function visibleLeaves(section: NavSection, can?: PermissionCheck, role?: string | null): NavLeaf[] {
+export function visibleLeaves(section: NavSection, can?: PermissionCheck, role?: string | null,
+  menu?: Set<string> | null): NavLeaf[] {
+  /**
+   * 角色菜单配置优先：后端下发的可见菜单是权威来源（可在「系统配置 · 角色菜单」里改），
+   * 未下发时才回落到内置的 adminOnly + 权限码规则，保证老会话与未登录场景不白屏。
+   */
+  if (menu && menu.size) {
+    return section.tabs.filter(leaf => menu.has(leaf.key))
+  }
   const admin = isAdminView(role)
   return section.tabs.filter(leaf => {
     if (leaf.adminOnly && !admin) return false
@@ -209,16 +219,16 @@ export function visibleLeaves(section: NavSection, can?: PermissionCheck, role?:
 }
 
 /** 一级入口可见：该模块下至少要有一个有权访问的 Tab。 */
-export function visibleSections(can?: PermissionCheck, role?: string | null): NavSection[] {
-  return NAV_SECTIONS.filter(section => visibleLeaves(section, can, role).length > 0)
+export function visibleSections(can?: PermissionCheck, role?: string | null, menu?: Set<string> | null): NavSection[] {
+  return NAV_SECTIONS.filter(section => visibleLeaves(section, can, role, menu).length > 0)
 }
 
 /**
  * 左侧菜单：按业务域分组后的可见入口（工作台 / 知识库 / 系统集成）。
  * 无 group 的模块（系统配置）不进分组；整组都无权访问时整组不展示。
  */
-export function visibleGroups(can?: PermissionCheck, role?: string | null): NavGroup[] {
-  const sections = visibleSections(can, role)
+export function visibleGroups(can?: PermissionCheck, role?: string | null, menu?: Set<string> | null): NavGroup[] {
+  const sections = visibleSections(can, role, menu)
   return NAV_GROUP_ORDER
     .map(group => ({key:group.key, label:group.label, sections:sections.filter(s=>s.group===group.key)}))
     .filter(group => group.sections.length > 0)
@@ -239,15 +249,17 @@ export function locate(key: string): NavLocation | undefined {
  * 一级导航默认进入的页面：跳过规划中、管理员专属与无权访问的入口。
  * 普通成员进入知识生成时，这里落到「文档导入」。
  */
-export function defaultLeafOf(section: NavSection, can?: PermissionCheck, role?: string | null): NavLeaf {
-  const leaves = visibleLeaves(section, can, role)
+export function defaultLeafOf(section: NavSection, can?: PermissionCheck, role?: string | null,
+  menu?: Set<string> | null): NavLeaf {
+  const leaves = visibleLeaves(section, can, role, menu)
   return leaves.find(leaf => !leaf.planned) || leaves[0] || section.tabs[0]
 }
 
 /** 按角色与权限取模块内的 Tab，供模块页面复用外壳的权限判定。 */
-export function leavesOfSection(key: string, can?: PermissionCheck, role?: string | null): NavLeaf[] {
+export function leavesOfSection(key: string, can?: PermissionCheck, role?: string | null,
+  menu?: Set<string> | null): NavLeaf[] {
   const section = NAV_SECTIONS.find(item => item.key === key)
-  return section ? visibleLeaves(section, can, role) : []
+  return section ? visibleLeaves(section, can, role, menu) : []
 }
 
 /**
