@@ -46,6 +46,14 @@ public class ApiKey {
 
     private String scopes;
 
+    /**
+     * 该凭证被授权的资料标签（JSON 数组文本，服务端管理）。
+     *
+     * <p>NULL 表示未配置（兼容模式）；空数组表示只看无标签（公开）资料；非空即授权范围，
+     * 调用方请求里的标签只能在此基础上收窄。标签是服务端授权的结果，不是调用方可声明的输入。</p>
+     */
+    private String permissionTags;
+
     private Integer rateLimitPerMinute;
 
     /**
@@ -178,6 +186,14 @@ public class ApiKey {
 
     public void setScopes(String v) {
         scopes = v;
+    }
+
+    public String getPermissionTags() {
+        return permissionTags;
+    }
+
+    public void setPermissionTags(String v) {
+        permissionTags = v;
     }
 
     public Integer getRateLimitPerMinute() {

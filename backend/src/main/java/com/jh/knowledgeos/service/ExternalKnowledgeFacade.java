@@ -33,11 +33,15 @@ public class ExternalKnowledgeFacade {
 
     private final ObjectMapper objectMapper;
 
+    /** 检索授权：外部请求标签只能收窄服务端授权范围，不能扩大。 */
+    private final RetrievalAuthorizationService authorization;
+
     public ExternalKnowledgeFacade(KnowledgeService knowledgeService, KnowledgeBaseService knowledgeBaseService,
-        ObjectMapper objectMapper) {
+        ObjectMapper objectMapper, RetrievalAuthorizationService authorization) {
         this.knowledgeService = knowledgeService;
         this.knowledgeBaseService = knowledgeBaseService;
         this.objectMapper = objectMapper;
+        this.authorization = authorization;
     }
 
     /**
@@ -84,7 +88,9 @@ public class ExternalKnowledgeFacade {
      */
     public Map<String, Object> query(ApiKey key, Long kb, String question, Integer topK, List<String> permissionTags, String source,
         String answerFormat, Double minScore) throws Exception {
-        Map<String, Object> payload = payload(key, kb, question, topK, permissionTags, source, answerFormat, minScore);
+        // 标签不再是调用方可声明的输入：这里用服务端授权范围与请求标签求交集（请求只能收窄）。
+        List<String> effectiveTags = authorization.effectiveTags(key, permissionTags, source);
+        Map<String, Object> payload = payload(key, kb, question, topK, effectiveTags, source, answerFormat, minScore);
         Map<String, Object> result = knowledgeService.query(payload);
         // 回传实际生效的格式：调用方传了个认不出来的取值时，这里如实说 default，而不是让他以为生效了。
         result.put("answerFormat", AnswerFormat.normalize(result.get("answerFormat") == null ? null
@@ -107,7 +113,9 @@ public class ExternalKnowledgeFacade {
      */
     public void streamQuery(ApiKey key, Long kb, String question, Integer topK, List<String> permissionTags, String source,
         String answerFormat, Double minScore, KnowledgeQueryService.QueryStreamListener listener) throws Exception {
-        knowledgeService.streamQuery(payload(key, kb, question, topK, permissionTags, source, answerFormat, minScore), listener);
+        // 流式与阻塞调用共用同一份授权判定：不存在「流式走一条更宽松的路径」。
+        List<String> effectiveTags = authorization.effectiveTags(key, permissionTags, source);
+        knowledgeService.streamQuery(payload(key, kb, question, topK, effectiveTags, source, answerFormat, minScore), listener);
     }
 
     private static Map<String, Object> payload(ApiKey key, Long kb, String question, Integer topK, List<String> permissionTags,

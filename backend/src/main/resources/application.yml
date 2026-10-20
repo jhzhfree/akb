@@ -74,6 +74,11 @@ knowledge:
   acl:
     identity-db-enabled: ${KNOWLEDGE_ACL_IDENTITY_DB_ENABLED:true}
     trusted-header-enabled: ${KNOWLEDGE_ACL_TRUSTED_HEADER_ENABLED:false}
+    # 外部接口（REST/MCP/SSE）请求里的 permissionTags 如何处置：
+    #   SHADOW  = 仍按旧行为执行，但计算新策略结果并记差异日志，供迁移评估（默认）
+    #   ENFORCE = 按服务端授权执行：effective = 凭证授权标签 ∩ 请求标签，请求只能收窄不能扩大
+    #   CLIENT  = 完全沿用旧行为（仅应急回滚用，不建议长期开启）
+    external-tag-mode: ${KNOWLEDGE_ACL_EXTERNAL_TAG_MODE:SHADOW}
   # 控制台登录认证：关闭后 API 恢复为全开放（仅供脚本/迁移期使用）
   auth:
     enabled: ${AUTH_ENABLED:true}
