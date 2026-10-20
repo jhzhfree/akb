@@ -1,0 +1,70 @@
+{
+  "yaml.schemas": {
+    "file:///c%3A/Users/zhanghe/.vscode/extensions/atlassian.atlascode-4.0.6/resources/schemas/pipelines-schema.json": "bitbucket-pipelines.yml"
+  },
+  "redhat.telemetry.enabled": true,
+  "atlascode.jira.enabled": true,
+  "git.autofetch": true,
+  "remote.SSH.remotePlatform": {
+    "172.16.3.199": "linux",
+    "192.168.22.6": "linux",
+    "172.24.127.95": "linux",
+    "172.16.3.115": "linux"
+  },
+  "terminal.integrated.defaultProfile.windows": "PowerShell",
+  "task.slowProviderWarning": true,
+  "python.formatting.provider": "autopep8",
+  "localaipilot.standalone.ollamaHostName": "172.16.3.115",
+  "localaipilot.container.llmHost": "172.16.3.115",
+  "localaipilot.general.inlineSuggestions": true,
+  "tabnine.experimentalAutoImports": true,
+  "workbench.settings.applyToAllProfiles": [
+    "CodeGPT.apiKey"
+  ],
+  "CodeGPT.apiKey": "Ollama",
+  "atlascode.jira.jqlList": [
+    {
+      "id": "3c500c67-fea5-4a36-beb5-7951fa3e39af",
+      "enabled": true,
+      "name": "My 192.168.27.233 Issues",
+      "query": "assignee = currentUser() AND resolution = Unresolved ORDER BY lastViewed DESC",
+      "siteId": "192.168.27.233",
+      "monitor": true
+    }
+  ],
+  "atlascode.jira.lastCreateSiteAndProject": {
+    "siteId": "192.168.27.233",
+    "projectKey": "JHPMOMG"
+  },
+  "localaipilot.standalone.ollamaCodeModel": "qwen2.5-coder:7b",
+  "localaipilot.standalone.ollamaModel": "qwen2.5:3b",
+  "geminicodeassist.project": "",
+  "fittencode.languagePreference.displayPreference": "zh-cn",
+  "fittencode.languagePreference.commentPreference": "zh-cn",
+  "amazonQ.suppressPrompts": {
+    "codeWhispererConnectionExpired": true
+  },
+  "explorer.fileNesting.patterns": {
+    "*.ts": "${capture}.js",
+    "*.js": "${capture}.js.map, ${capture}.min.js, ${capture}.d.ts",
+    "*.jsx": "${capture}.js",
+    "*.tsx": "${capture}.ts",
+    "tsconfig.json": "tsconfig.*.json",
+    "package.json": "package-lock.json, yarn.lock, pnpm-lock.yaml, bun.lockb, bun.lock",
+    "*.sqlite": "${capture}.${extname}-*",
+    "*.db": "${capture}.${extname}-*",
+    "*.sqlite3": "${capture}.${extname}-*",
+    "*.db3": "${capture}.${extname}-*",
+    "*.sdb": "${capture}.${extname}-*",
+    "*.s3db": "${capture}.${extname}-*"
+  },
+  "explorer.confirmDelete": false,
+  "[sql]": {
+    "editor.defaultFormatter": "adpyke.vscode-sql-formatter"
+  },
+  "files.autoGuessEncoding": true,
+  "chat.disableAIFeatures": false,
+  "aws.cloudformation.telemetry.enabled": true,
+  "AI.toolcall.v2.command.allowList": "[\"ssh\",\"iwr\",\"iex\",\"cd\",\"git\",\"Out-File\",\"Remove-Item\",\"Write-Host\",\"Select-Object\",\"mvn\",\"curl\",\"Invoke-WebRequest\",\"powershell\",\"move\",\"copy\"]",
+  "aws.telemetry": false
+}
