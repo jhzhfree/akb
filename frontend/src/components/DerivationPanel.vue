@@ -7,7 +7,7 @@
   <section class="kb-page">
     <header class="kb-section-head">
       <div>
-        <div class="kb-eyebrow">知识衍生</div>
+        <div class="kb-eyebrow">知识生成</div>
         <h1 class="kb-title mt-1">知识衍生</h1>
         <p class="kb-muted mt-1">
           图谱路径、模板或模型推导出的知识以「候选」落地，保留来源断言与推导路径，人工确认后才成为知识；规则可手动执行或按计划执行。

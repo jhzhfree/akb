@@ -1,8 +1,9 @@
 <template>
-<!-- 登录后的主页面：对齐原型 dashboard.html 的内容结构——
-     数据总览（四张统计卡）→ 最近访问（知识库卡片网格 + 新建卡）。
-     顶部不再放欢迎问候区：页面顶部统一留给「首页 / 工作台 / 资产浏览 / 版本 / 质量」入口条，
-     创建入口则由顶栏的「＋ 新建知识库」与网格末位的虚线新建卡承担。 -->
+<!-- 登录后的主页面（知识仪表盘）：对齐原型 dashboard.html 的内容结构——
+     数据总览（四张统计卡）→ 可访问的知识库（卡片网格 + 新建卡）。
+     这里列的是当前账号有权限看到的全部知识库，不是"最近访问的几个"：
+     统计卡算的本来就是所有可见库，下面只摆 5 个会对不上数，也让人以为还有别的入口能看全。
+     顶部不再放欢迎问候区，也不显示「当前空间」栏——这个页面是跨库视角。 -->
 <div class="hd">
   <section aria-labelledby="hd-stats-title">
     <h2 class="hd-section-title" id="hd-stats-title">数据总览</h2>
@@ -34,8 +35,10 @@
 
   <section aria-labelledby="hd-recent-title">
     <div class="hd-section-head">
-      <h2 class="hd-section-title" id="hd-recent-title">最近访问</h2>
-      <button class="hd-more" @click="$emit('open-bases')">查看全部 →</button>
+      <h2 class="hd-section-title" id="hd-recent-title">
+        可访问的知识库<span class="hd-count">共 {{ bases.length }} 个</span>
+      </h2>
+      <button class="hd-more" @click="$emit('open-bases')">切换 / 管理 →</button>
     </div>
 
     <!-- 加载骨架：首屏统计已就绪时才渲染网格，避免卡片先空后填的跳动 -->
@@ -56,7 +59,7 @@
     </div>
 
     <div v-else class="hd-grid">
-      <button v-for="base in recentBases" :key="base.id" class="hd-tile" @click="$emit('open-base',base.id)">
+      <button v-for="base in visibleBases" :key="base.id" class="hd-tile" @click="$emit('open-base',base.id)">
         <div class="hd-tile-top">
           <span class="hd-tile-icon" :style="iconStyle(base.id)">{{(base.name||'知').trim().slice(0,1)}}</span>
           <span class="hd-tag" :class="tagClass(base.status)">{{statusLabel(base.status)}}</span>
@@ -103,18 +106,22 @@ function iconStyle(id: number) {
   return { background: PALETTE[Number(id) % PALETTE.length] }
 }
 
-/** 最近访问：有记录按记录顺序，没有则按列表顺序取前 5 个（新建卡另占一格）。 */
-const recentBases = computed(() => {
+/**
+ * 可访问的知识库：最近访问的排在前面，其余接在后面，**全部列出**。
+ *
+ * <p>排序仍照顾"最近用过的先看到"，但不再截断到 5 个——上面对外说的是"共 N 个"，
+ * 下面只摆一部分，N 和看到的数量对不上。</p>
+ */
+const visibleBases = computed(() => {
   const list = props.bases
   if (!list.length) return []
   const ordered = props.recentIds
     .map(id => list.find(base => base.id === id))
     .filter((base): base is KnowledgeBase => !!base)
   for (const base of list) {
-    if (ordered.length >= 5) break
     if (!ordered.some(item => item.id === base.id)) ordered.push(base)
   }
-  return ordered.slice(0, 5)
+  return ordered
 })
 
 const total = computed(() => {
@@ -163,6 +170,7 @@ function tagClass(status?: string) {
 .hd-section-title{margin:0;font-size:15px;font-weight:700;color:var(--ink-900)}
 .hd-section-head{display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin-bottom:14px}
 .hd-more{background:none;border:0;padding:0;font:inherit;font-size:12px;font-weight:600;color:var(--accent-text);cursor:pointer}
+.hd-count{margin-left:8px;font-size:12px;font-weight:400;color:var(--ink-400)}
 
 .hd-stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;margin-top:14px}
 .hd-stat{

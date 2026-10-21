@@ -2,8 +2,8 @@
   <section class="kb-page">
     <header class="kb-section-head">
       <div>
-        <div class="kb-eyebrow">知识资产</div>
-        <h1 class="kb-title mt-1">资产浏览</h1>
+        <div class="kb-eyebrow">知识概览</div>
+        <h1 class="kb-title mt-1">知识资产</h1>
         <p class="kb-muted mt-1">
           工作台 KPI 的下钻页面：同一入口按对象类型切换，来源与文档侧重接入，卡片与断言侧重治理，实体与关系侧重图谱。
         </p>

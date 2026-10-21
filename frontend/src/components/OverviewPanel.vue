@@ -3,7 +3,7 @@
     <header class="kb-section-head">
       <div>
         <div class="kb-eyebrow">知识概览</div>
-        <h1 class="kb-title mt-1">知识概览</h1>
+        <h1 class="kb-title mt-1">知识库工作台</h1>
         <p class="kb-muted mt-1">
           看知识：资产规模、生命周期进度与需要人工介入的治理项，一处发现、三处闭环。
         </p>

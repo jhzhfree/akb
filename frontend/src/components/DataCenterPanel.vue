@@ -2,8 +2,8 @@
 <section class="kb-page">
 <div class="kb-section-head">
 <div>
-<div class="kb-eyebrow">DOCUMENT CENTER</div>
-<h2 class="kb-title mt-1">文档中心</h2>
+<div class="kb-eyebrow">知识生成</div>
+<h2 class="kb-title mt-1">文档导入</h2>
 <p class="kb-muted mt-1">文档状态机：解析失败与索引失效可重跑，Chunk 与 revision 全程可追溯。</p>
 </div>
 </div>

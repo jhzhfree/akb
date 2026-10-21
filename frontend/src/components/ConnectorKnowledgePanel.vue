@@ -2,7 +2,7 @@
   <section class="kb-page">
     <header class="kb-section-head">
       <div>
-        <div class="kb-eyebrow">连接器</div>
+        <div class="kb-eyebrow">知识生成</div>
         <h1 class="kb-title mt-1">外部知识</h1>
         <p class="kb-muted mt-1">
           按外部系统自己的类型与属性浏览已同步的知识：左边挑类型与属性，右边看条目，点开看详情。

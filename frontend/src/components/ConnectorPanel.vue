@@ -2,8 +2,8 @@
   <section class="kb-page">
     <header class="kb-section-head">
       <div>
-        <div class="kb-eyebrow">CONNECTOR</div>
-        <h1 class="kb-title mt-1">连接数据源</h1>
+        <div class="kb-eyebrow">知识生成</div>
+        <h1 class="kb-title mt-1">连接器</h1>
         <p class="kb-muted mt-1">
           把 Jira、Confluence 或任意 RESTful 列表接口接进知识库：先连通、先看清读到了什么，再决定哪些进入知识库。
         </p>

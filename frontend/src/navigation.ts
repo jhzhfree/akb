@@ -91,12 +91,13 @@ export const NAV_SECTIONS: NavSection[] = [
     key: 'workbench', label: '知识概览', icon: 'grid', group: 'workbench', scoped: false,
     desc: '一个页面掌握企业知识资产、生命周期、治理状态与待办',
     tabs: [
-      /** 首页：登录后的主页面（原型 dashboard）——数据总览、最近访问的知识库，顶部不再放欢迎区。 */
-      { key: 'home', label: '首页', icon: 'home', permission: PERM.WORKBENCH_VIEW },
-      { key: 'workbench', label: '工作台', icon: 'grid', permission: PERM.WORKBENCH_VIEW },
-      { key: 'workbench.assets', label: '资产浏览', icon: 'layers', permission: PERM.WORKBENCH_ASSET },
-      { key: 'workbench.version', label: '版本', icon: 'history', permission: PERM.WORKBENCH_VIEW },
-      { key: 'workbench.quality', label: '质量', icon: 'shield', permission: PERM.WORKBENCH_VIEW },
+      /** 知识仪表盘：登录后的主页面——数据总览 + 当前账号可访问的全部知识库。
+       *  它是跨知识库的视角（统计的就是所有可见库），所以顶部不再显示「当前空间」那一栏。 */
+      { key: 'home', label: '知识仪表盘', icon: 'home', permission: PERM.WORKBENCH_VIEW },
+      { key: 'workbench', label: '知识库工作台', icon: 'grid', permission: PERM.WORKBENCH_VIEW },
+      { key: 'workbench.assets', label: '知识资产', icon: 'layers', permission: PERM.WORKBENCH_ASSET },
+      { key: 'workbench.version', label: '知识版本', icon: 'history', permission: PERM.WORKBENCH_VIEW },
+      { key: 'workbench.quality', label: '知识质量', icon: 'shield', permission: PERM.WORKBENCH_VIEW },
     ],
   },
   {
@@ -137,12 +138,12 @@ export const NAV_SECTIONS: NavSection[] = [
     key: 'search', label: '知识检索', icon: 'search', group: 'knowledge', scoped: true,
     desc: '统一完成知识搜索、知识图谱探索、检索调试、Trace 与质量评测',
     tabs: [
-      { key: 'search.query', label: '搜索', icon: 'search', permission: PERM.SEARCH_QUERY },
+      { key: 'search.query', label: '智能检索', icon: 'search', permission: PERM.SEARCH_QUERY },
       { key: 'search.test', label: '检索测试', icon: 'beaker', debug: true, permission: PERM.SEARCH_TEST },
       { key: 'search.profile', label: '检索策略', icon: 'sliders', permission: PERM.SEARCH_POLICY },
       /**
        * 检索链路追踪与检索评测属于检索质量的调试 / 测评入口，只在管理视图出现：
-       * 用户视图下的知识检索只保留「搜索 / 检索测试 / 检索策略 / 知识图谱」。
+       * 用户视图下的知识检索只保留「智能检索 / 检索测试 / 检索策略 / 知识图谱」。
        */
       { key: 'search.trace', label: '检索链路追踪', icon: 'rss', debug: true, adminOnly: true, permission: PERM.SEARCH_TEST },
       { key: 'search.graph', label: '知识图谱', icon: 'network', permission: PERM.SEARCH_GRAPH },

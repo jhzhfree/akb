@@ -3,7 +3,7 @@
     <header class="kb-section-head">
       <div>
         <div class="kb-eyebrow">知识概览</div>
-        <h1 class="kb-title mt-1">版本治理</h1>
+        <h1 class="kb-title mt-1">知识版本</h1>
         <p class="kb-muted mt-1">
           每次新建、裁决、复核、冲突检测都会留下不可变快照。这里回答四个问题：现在是什么、以前是什么、为什么变、原文在哪。
         </p>

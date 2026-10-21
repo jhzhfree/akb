@@ -34,21 +34,26 @@
     <button class="text-[12px] text-[color:var(--danger)] hover:text-[color:var(--danger)]" @click="failure=''">✕</button>
   </div>
   <!-- 主页面顶部的当前知识库栏：所有右侧主页面统一在最上方显示「当前知识库 + 环境 + 索引状态」，
-       不再只限于需要知识库上下文的页面——停在哪个页面都能看到、也能一键切换知识库。 -->
+       不再只限于需要知识库上下文的页面——停在哪个页面都能看到、也能一键切换知识库。
+       例外是「知识仪表盘」：它是跨知识库的视角，页面本身就把可见的知识库全列了出来，
+       顶部再挂一个"当前空间"既重复又会让人以为下面的数据只是这一个库的。 -->
   <SpaceContextBar
+    v-if="active!=='home'"
     :base="activeBase" :environment="environmentLabel" :index="indexState" :loading="contextLoading"
     @switch="showBases=true" @refresh="loadSpaceContext"/>
 
   <!-- 角色信息（角色名 / 职责说明 / 常用入口）收在侧栏底部用户块里，点用户名展开查看与操作，
        主页面顶部不再叠加横幅，把首屏留给页面自己的内容。 -->
 
-  <!-- 一级入口条：进入「知识概览」后由页面顶部横向切换首页 / 工作台 / 资产浏览 / 版本 / 质量。
+  <!-- 一级入口条：进入「知识概览」后由页面顶部横向切换
+       知识仪表盘 / 知识库工作台 / 知识资产 / 知识版本 / 知识质量。
        统一放在主内容最上方，页面内部的欢迎区与标题都排在它下面，避免入口条随内容沉到下方。 -->
   <ModuleTabs
     v-if="activeSection==='workbench'" label="知识概览" :leaves="shell.tabs('workbench')" :active="active"
     @select="selectKey"/>
 
-  <!-- 首页：登录后的主页面（原型 dashboard）——数据总览、最近访问的知识库。 -->
+  <!-- 知识仪表盘：登录后的主页面（原型 dashboard）——数据总览 + 可访问的知识库。
+       这一页是跨库视角，不放「当前空间」栏（见上方 SpaceContextBar 的 v-if）。 -->
   <HomeDashboard
     v-if="active==='home'"
     :bases="bases" :base-stats="baseStats" :recent-ids="recentIds"
