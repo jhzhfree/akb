@@ -81,7 +81,7 @@ watch(() => props.knowledgeBaseId, async kb => {
   samples.value = []
   if (!kb) return
   try {
-    samples.value = unwrap(await listSampleQuestions(kb, 6)) || []
+    samples.value = unwrap(await listSampleQuestions(kb, 6), [])
   } catch {
     samples.value = []
   }

@@ -454,6 +454,8 @@ export interface ScoreChannelHit {
 export interface ScoreBreakdown {
   rrfScore?:number; rrfK?:number; channelWeights?:Record<string,number>
   channels?:ScoreChannelHit[]; qualityBoost?:number; qualitySignals?:Record<string,number>
+  /** 原文段落加成：只在原文段落（CONTENT_UNIT）上出现，说明这段为什么会提权。 */
+  chunkBoost?:number; chunkSignals?:Record<string,number>
   preRerankScore?:number; rerankScore?:number; finalScore?:number
   fusionRank?:number; rerankRank?:number; rankDelta?:number
   whyMatched?:string[]; filteredBy?:string[]

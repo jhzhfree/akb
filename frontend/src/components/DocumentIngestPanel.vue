@@ -443,7 +443,8 @@ async function retryDocumentRow(row:KnowledgeDocument){
   retryingId.value = row.id
   try{
     const d = unwrap(await retryDocument(row.id),{})
-    const revision = d.chunkRevision ?? d.revision
+    // 后端重跑只返回 chunkRevision（没有裸 revision 字段）：revision 由服务端递增，旧的转 SUPERSEDED。
+    const revision = d.chunkRevision
     notifySuccess(
       `重跑完成：${Number(d.chunkCount||0)} 个 Chunk`
       + `${revision!==undefined?`，revision ${revision}`:''}`,

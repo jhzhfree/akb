@@ -188,6 +188,7 @@
           </el-tabs>
           <p class="kb-muted mt-2 text-[11px]">{{ answerFormatHint }}</p>
           <p class="kb-muted mt-1 text-[11px]">{{ minScoreHint }}</p>
+          <p class="kb-muted mt-1 text-[11px]">{{ responseModeHint }}</p>
           <p v-if="exampleTab === 'sse'" class="kb-muted mt-1 text-[11px]">{{ contentHint }}</p>
           <div class="mt-3 border-t border-ink-100 pt-3">
             <div class="flex flex-wrap items-center gap-2">
@@ -467,11 +468,13 @@ const probeOk = ref(false)
 const restExample = computed(() => `curl -X POST '${origin()}/api/v1/external/query' \\
   -H 'Content-Type: application/json' \\
   -H 'X-API-Key: <YOUR_API_KEY>' \\
-  -d '{"knowledgeBaseId":1,"question":"报销流程是什么？","topK":10,"answerFormat":"markdown","minScore":0.6}'`)
+  -d '{"knowledgeBaseId":1,"question":"报销流程是什么？","topK":10,"answerFormat":"markdown","minScore":0.6,"responseMode":"full"}'`)
 /** answerFormat 可整个省掉（不传即默认格式）：default / markdown / text / html。 */
 const answerFormatHint = '答案返回格式：default（不传即此项，模型原文）/ markdown（正文 + 引用原文章节）/ text（纯文本）/ html（含引用原文）；响应里的 answerFormat 是实际生效的那个'
 /** minScore 同样可整个省掉：不传即不过滤，与以前完全一致。 */
 const minScoreHint = 'minScore：最低相关度（0~1，含端点），低于该分数的候选不参与答案生成；/search 用它过滤候选，返回的 returned 是过滤后条数'
+/** responseMode 可整个省掉：不传即 full，与以前完全一致。 */
+const responseModeHint = 'responseMode：返回详略，minimal（/query 只给 answer 与数量口径，/search 只给 evidence）/ basic（补回 candidates，/query 另给 selectedContext）/ full（全部字段，默认）'
 /** 只在 SSE 页签下出现：content 是 /stream/query 独有的交付方式开关。 */
 const contentHint = 'content：stream（默认）逐片推 delta；final 只推检索过程（stage / citation），答案在 done.answer 里整体交付——与控制台阻塞式拿到的是同一份加工产物'
 const mcpExample = computed(() => `{

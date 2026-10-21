@@ -10,6 +10,15 @@ export const ANSWER_FORMATS:Array<{ value:AnswerFormat; label:string; hint:strin
   { value:'html', label:'HTML', hint:'渲染后的 HTML 片段，答案里直接带上引用原文' },
 ]
 
+/** 返回详略：极简（只给答案主体）/ 基础（补回检索结果）/ 完整（当前全部字段）。 */
+export type ResponseMode = 'minimal'|'basic'|'full'
+
+export const RESPONSE_MODES:Array<{ value:ResponseMode; label:string; hint:string }> = [
+  { value:'minimal', label:'极简', hint:'query 只给答案与数量口径；search 只给证据' },
+  { value:'basic', label:'基础', hint:'在极简之上补回 candidates，query 另给 selectedContext' },
+  { value:'full', label:'完整', hint:'当前全部字段，默认值——不传即此项' },
+]
+
 export interface RetrievalRequest {
   knowledgeBaseId:number
   query:string
@@ -17,6 +26,8 @@ export interface RetrievalRequest {
   permissionTags?:string[]
   /** 答案返回格式；不传或无法识别的取值都按 default 处理。 */
   answerFormat?:AnswerFormat
+  /** 返回详略；不传或无法识别的取值都按 full 处理（即当前全部字段）。 */
+  responseMode?:ResponseMode
   [key:string]:unknown
 }
 export interface RetrievalResult {
@@ -28,6 +39,8 @@ export interface RetrievalResult {
   reranker?:unknown
   fusion?:unknown
   trace?:Record<string,unknown>
+  /** 检索链路字段随版本增减，这里只声明常用的几个；其余按原样透传。 */
+  [key:string]:unknown
 }
 export interface AnswerResult {
   queryId?:string
@@ -45,6 +58,9 @@ export interface DocumentRetryResult {
   status?:string
   stage?:string
   message?:string
+  /** 重跑生成的切片数量与 revision：新 Chunk 用新 revision，旧的转 SUPERSEDED，已有引用不断。 */
+  chunkCount?:number
+  chunkRevision?:number
 }
 export interface AdjudicationRunResult {
   processed?:number

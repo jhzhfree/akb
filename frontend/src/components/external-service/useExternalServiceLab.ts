@@ -2,7 +2,7 @@ import { computed, onUnmounted, reactive, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import type { ApiEnvelope, KnowledgeBase } from '../../types'
 import { ANSWER_FORMATS } from '../../api/contracts'
-import type { AnswerFormat } from '../../api/contracts'
+import type { AnswerFormat, ResponseMode } from '../../api/contracts'
 import { createExternalKey } from '../../api/external'
 import { unwrap } from '../../api/knowledge'
 // 格式化响应体的三个函数在组件里用（模板渲染），这里只留结构判定用的。
@@ -30,6 +30,8 @@ export function useExternalServiceLab(props: ExternalServiceLabProps) {
     minScore:null as number | null,
     /** 答案交付格式：default / markdown / text / html，服务端回传的 answerFormat 是实际生效的那个。 */
     answerFormat:'default' as AnswerFormat,
+    /** 返回详略：minimal / basic / full，默认 full（当前全部字段，不裁剪）。 */
+    responseMode:'full' as ResponseMode,
     /** 流式答案交付方式：stream 逐片推 delta；final 只推检索过程，答案在 done 里整体交付。 */
     content:'stream' as 'stream' | 'final',
     code:'',
@@ -134,8 +136,10 @@ export function useExternalServiceLab(props: ExternalServiceLabProps) {
     overview:'knowledgeBaseId（可选）',
     query: 'knowledgeBaseId（可选）· question（必填）· topK（1–50，默认 10）· '
       + 'permissionTags[]（可选）· answerFormat（default / markdown / text / html，默认 default）· '
-      + 'minScore（0~1，可选，最低相关度）',
-    search:'同 /query（answerFormat 对返回内容无影响，这里没有答案正文）· minScore（0~1，可选）过滤候选，返回的 returned 是过滤后条数',
+      + 'minScore（0~1，可选，最低相关度）· '
+      + 'responseMode（minimal / basic / full，默认 full：minimal 只给答案与数量口径，basic 补回 candidates 与 selectedContext）',
+    search:'同 /query（answerFormat 与 responseMode 都对返回生效：minimal 只给证据，basic 补回 candidates）· '
+      + 'minScore（0~1，可选）过滤候选，返回的 returned 是过滤后条数',
     cards:'knowledgeBaseId（可选）',
     card:'code（路径，必填）· knowledgeBaseId（可选）',
     claims:'knowledgeBaseId（可选）',
@@ -178,6 +182,8 @@ export function useExternalServiceLab(props: ExternalServiceLabProps) {
       // 只在填了阈值时带上：留空与服务端“未传”是同一回事，不该顺手下发一个 0。
       // Number.isFinite 同时挡住空输入框留下的空串。
       if (Number.isFinite(cfg.minScore)) body.minScore = cfg.minScore
+      // 返回详略显式写进模板：默认 full 与不传等价，但写出来调用方才知道有这个开关。
+      body.responseMode = cfg.responseMode
       return JSON.stringify(body, null, 2)
     }
     if (endpoint.key === 'ingest') {
