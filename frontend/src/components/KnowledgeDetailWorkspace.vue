@@ -198,6 +198,7 @@ import { ElMessage } from 'element-plus'
 import type { DocumentChunk, GraphNode, KnowledgeObjectDetail } from '../types'
 import { statusLabel, visibilityLabel } from '../types'
 import VersionDiffPanel from './VersionDiffPanel.vue'
+import { copyText } from '../utils/clipboard'
 const props=defineProps<{visible:boolean;mode:'CARD'|'CLAIM'|'CHUNK';code:string;detail:KnowledgeObjectDetail|null;loading:boolean}>()
 defineEmits<{close:[];'open-graph':[code:string];'open-evidence':[evidenceCode:string]}>()
 /** 统一详情框架的当前 Tab：概览 / 关联 / Evidence / 版本 / 权限 / 审计。 */
@@ -229,10 +230,9 @@ function estimateTokens(text:string):number{
 }
 async function copy(text:string){
   if(!text){ElMessage.warning('没有可复制的内容');return}
-  try{
-    await navigator.clipboard.writeText(text)
-    ElMessage.success('已复制到剪贴板')
-  }catch{ElMessage.warning('浏览器拒绝了剪贴板访问，请手动选择复制')}
+  const ok=await copyText(text)
+  if(ok)ElMessage.success('已复制到剪贴板')
+  else ElMessage.warning('浏览器拒绝了剪贴板访问，请手动选择复制')
 }
 /** 概览属性：按对象类型取治理或切分关键字段，字段缺失显示 — 而不是渲染 undefined。 */
 const attributes=computed(()=>isChunk.value?[

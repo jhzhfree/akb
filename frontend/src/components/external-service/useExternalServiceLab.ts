@@ -9,6 +9,7 @@ import { unwrap } from '../../api/knowledge'
 import { asArray, asRecord, safeJson } from './lab-utils'
 import { getToken } from '../../api/auth'
 import { errorMessage as message } from '../../utils/feedback'
+import { copyText } from '../../utils/clipboard'
 
 export interface ExternalServiceLabProps { bases: KnowledgeBase[]; protocol?: 'rest' | 'mcp' | 'sse' | 'bus' }
 
@@ -64,10 +65,12 @@ export function useExternalServiceLab(props: ExternalServiceLabProps) {
   function absolute(url:string) {
     return /^https?:\/\//.test(url) ? url : window.location.origin + url
   }
-  function copy(text:string) {
-    navigator.clipboard.writeText(text)
-      .then(() => ElMessage.success('已复制到剪贴板'))
-      .catch(() => ElMessage.warning('浏览器拒绝了剪贴板访问，请手动复制'))
+  async function copy(text:string) {
+    // 非安全上下文（http + 内网 IP）下 navigator.clipboard 不存在，直接调会在取值处
+    // 同步抛错、catch 接不到，表现就是点了没反应；copyText 内部带兜底路径。
+    const ok = await copyText(text)
+    if (ok) ElMessage.success('已复制到剪贴板')
+    else ElMessage.warning('浏览器拒绝了剪贴板访问，请手动复制')
   }
   function curlOf(method:string, url:string, body?:string) {
     const lines = [`curl -X ${method} '${absolute(url)}'`]

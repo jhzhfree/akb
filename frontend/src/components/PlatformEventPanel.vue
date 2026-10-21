@@ -153,7 +153,9 @@ import {
 } from '../api/external'
 import { getToken } from '../api/auth'
 import PanelState from './PanelState.vue'
+import { ElMessage } from 'element-plus'
 import { errorMessage as message } from '../utils/feedback'
+import { copyText } from '../utils/clipboard'
 
 const props = defineProps<{ bases: KnowledgeBase[]; knowledgeBaseId?: number | null }>()
 
@@ -368,8 +370,9 @@ function typeClass(type: string): string {
   return 'kb-state-info'
 }
 
-function copy(text: string) {
-  navigator.clipboard?.writeText(text)
+async function copy(text: string) {
+  const ok = await copyText(text)
+  if (!ok) ElMessage.warning('浏览器拒绝了剪贴板访问，请手动复制')
 }
 
 onMounted(() => {

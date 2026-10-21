@@ -102,6 +102,7 @@ import { unwrap } from '../api/knowledge'
 import { errorMessage } from '../utils/feedback'
 import PanelState from './PanelState.vue'
 import EmbedTokenLifecyclePanel from './EmbedTokenLifecyclePanel.vue'
+import { copyText } from '../utils/clipboard'
 
 const props = defineProps<{ bases: KnowledgeBase[] }>()
 
@@ -185,12 +186,9 @@ async function issue() {
 }
 
 async function copy(text: string) {
-  try {
-    await navigator.clipboard.writeText(text)
-    ElMessage.success('已复制')
-  } catch {
-    ElMessage.warning('浏览器拒绝了剪贴板访问，请手动复制')
-  }
+  const ok = await copyText(text)
+  if (ok) ElMessage.success('已复制')
+  else ElMessage.warning('浏览器拒绝了剪贴板访问，请手动复制')
 }
 
 function openDemo() {

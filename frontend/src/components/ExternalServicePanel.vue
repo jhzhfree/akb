@@ -409,6 +409,7 @@ import { errorMessage as message } from '../utils/feedback'
 import { useShell } from '../shell'
 import MetricCard from './MetricCard.vue'
 import PanelState from './PanelState.vue'
+import { copyText } from '../utils/clipboard'
 
 /** focus 由知识集成的 Tab 决定：服务 Tab 看协议与接入示例，凭证 Tab 看 API Key 与调用审计。 */
 const props = defineProps<{ bases:KnowledgeBase[]; focus?:'services'|'credentials' }>()
@@ -708,12 +709,9 @@ async function revoke(row:ExternalKeyRow) {
 }
 
 async function copySecret() {
-  try {
-    await navigator.clipboard.writeText(issuedSecret.value)
-    ElMessage.success('已复制')
-  } catch {
-    ElMessage.warning('浏览器未授权剪贴板，请手动复制')
-  }
+  const ok = await copyText(issuedSecret.value)
+  if (ok) ElMessage.success('已复制')
+  else ElMessage.warning('浏览器未授权剪贴板，请手动复制')
 }
 
 /** 自检以外部调用方身份发起：凭证、范围、限流都能在真机上一并验证。 */

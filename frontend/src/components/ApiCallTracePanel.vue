@@ -71,6 +71,7 @@
 import { computed } from 'vue'
 import { ElMessage } from 'element-plus'
 import type { IntegrationCallDetail } from '../types'
+import { copyText } from '../utils/clipboard'
 
 const props = defineProps<{ visible:boolean; detail:IntegrationCallDetail|null; loading:boolean }>()
 defineEmits<{ close:[] }>()
@@ -100,11 +101,8 @@ const allProps = computed(() => JSON.stringify(props.detail, null, 2))
 
 async function copy(value?:string|null) {
   if (!value) return
-  try {
-    await navigator.clipboard.writeText(pretty(value))
-    ElMessage.success('已复制')
-  } catch {
-    ElMessage.warning('浏览器拒绝了剪贴板访问，请手动选择复制')
-  }
+  const ok = await copyText(pretty(value))
+  if (ok) ElMessage.success('已复制')
+  else ElMessage.warning('浏览器拒绝了剪贴板访问，请手动选择复制')
 }
 </script>
