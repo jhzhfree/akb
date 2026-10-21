@@ -2,14 +2,14 @@
   <section class="kb-page">
     <header class="kb-section-head">
       <div>
-        <div class="kb-eyebrow">INDEX &amp; RELEASE</div>
-        <h1 class="kb-title mt-1">索引与发布</h1>
+        <div class="kb-eyebrow">系统配置</div>
+        <h1 class="kb-title mt-1">存储与索引</h1>
         <p class="kb-muted mt-1">
           元数据先发布、索引异步构建：索引失败不影响知识版本本身，可重放恢复；发布采用蓝绿切换，任一阶段异常都可回滚到上一 ACTIVE 版本。
         </p>
       </div>
       <div class="flex shrink-0 items-center gap-2">
-        <button class="kb-btn-outline" :disabled="loading" @click="load">刷新</button>
+        <el-button size="small" plain :disabled="loading" @click="load">刷新</el-button>
       </div>
     </header>
 
@@ -72,8 +72,8 @@ v-model="retrievalForm.milvus.token" size="small" type="password" show-password
         </div>
       </div>
       <div class="mt-3 flex flex-wrap items-center gap-2 border-t border-ink-100 pt-3">
-        <button class="kb-btn-primary" :disabled="retrievalBusy" @click="saveRetrieval">保存开关</button>
-        <button class="kb-btn-outline" :disabled="retrievalBusy" @click="probeRetrieval">探测连通性</button>
+        <el-button size="small" type="primary" :disabled="retrievalBusy" @click="saveRetrieval">保存开关</el-button>
+        <el-button size="small" plain :disabled="retrievalBusy" @click="probeRetrieval">探测连通性</el-button>
         <span class="kb-muted text-xs">{{ probeText || '探测会分别报告「已关闭 / 可用 / 不可用」' }}</span>
       </div>
     </article>
@@ -121,7 +121,7 @@ v-model="retrievalForm.milvus.token" size="small" type="password" show-password
           </PanelState>
           <div class="mt-3 flex flex-wrap items-center gap-2 border-t border-ink-100 pt-3">
             <input v-model="schemaVersion" class="kb-input w-40" placeholder="Schema 版本，如 v8" />
-            <button class="kb-btn-primary" :disabled="busy || !schemaVersion.trim()" @click="rebuild">重建索引（蓝绿）</button>
+            <el-button size="small" type="primary" :disabled="busy || !schemaVersion.trim()" @click="rebuild">重建索引（蓝绿）</el-button>
             <span class="kb-muted">重建在后台异步执行，完成后需激活才会对外生效。</span>
           </div>
         </div>
@@ -180,14 +180,14 @@ v-model="retrievalForm.milvus.token" size="small" type="password" show-password
               <select v-model.number="eventsSize" class="kb-input w-20" @change="resetEvents">
                 <option v-for="size in pageSizes" :key="size" :value="size">{{ size }} 条/页</option>
               </select>
-              <button
-                class="kb-btn-outline" :disabled="eventsLoading || eventsPage <= 1"
+              <el-button
+                size="small" plain :disabled="eventsLoading || eventsPage <= 1"
                 @click="changeEventsPage(eventsPage - 1)">上一页
-              </button>
-              <button
-                class="kb-btn-outline" :disabled="eventsLoading || eventsPage >= eventsTotalPages"
+              </el-button>
+              <el-button
+                size="small" plain :disabled="eventsLoading || eventsPage >= eventsTotalPages"
                 @click="changeEventsPage(eventsPage + 1)">下一页
-              </button>
+              </el-button>
             </div>
           </div>
           <p class="kb-muted mt-2">

@@ -1,5 +1,13 @@
 <template>
 <div class="rm-panel">
+  <!-- 页面标题：eyebrow 是所属模块，主标题是菜单名（与其它 Tab 一致）。 -->
+  <header class="kb-section-head">
+    <div>
+      <div class="kb-eyebrow">系统配置</div>
+      <h1 class="kb-title mt-1">角色菜单</h1>
+      <p class="kb-muted mt-1">按角色配置可见的功能入口：勾选即得该入口与其所需权限码。</p>
+    </div>
+  </header>
   <p class="rm-desc">
     每个角色一份可见菜单：勾选后该角色即可看到对应功能入口，同时获得该入口所需的接口权限码。
     未配置时按内置默认渲染（即各角色原本看到的菜单）。
@@ -17,10 +25,11 @@
   <div class="rm-bar">
     <span class="rm-count">已选 {{visibleSet.size}} / {{catalog.length}} 项</span>
     <span class="rm-grow"></span>
-    <button class="rm-btn" @click="selectAll(true)">全选</button>
-    <button class="rm-btn" @click="selectAll(false)">清空</button>
-    <button class="rm-btn primary" :disabled="saving" @click="save">保存</button>
-    <button class="rm-btn" :disabled="saving" @click="reset">恢复默认</button>
+    <!-- 与「存储与索引 · 蓝绿索引版本」一致：size=small + plain，主操作用 primary，危险/中断类用 type 区分 -->
+    <el-button size="small" plain @click="selectAll(true)">全选</el-button>
+    <el-button size="small" plain @click="selectAll(false)">清空</el-button>
+    <el-button size="small" type="primary" :loading="saving" @click="save">保存</el-button>
+    <el-button size="small" plain :disabled="saving" @click="reset">恢复默认</el-button>
   </div>
 
   <div v-if="loading" class="rm-hint">正在加载菜单配置…</div>
@@ -28,7 +37,7 @@
     <div v-for="group in groups" :key="group.key" class="rm-group">
       <div class="rm-group-head">
         <b>{{group.label}}</b>
-        <button class="rm-link" @click="toggleGroup(group)">{{groupAllOn(group)?'取消本组':'选中本组'}}</button>
+        <el-button size="small" plain @click="toggleGroup(group)">{{groupAllOn(group)?'取消本组':'选中本组'}}</el-button>
       </div>
       <div class="rm-grid">
         <label v-for="item in group.items" :key="item.key" class="rm-item"

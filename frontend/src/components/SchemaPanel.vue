@@ -6,17 +6,17 @@
   <section class="kb-page">
     <header class="kb-section-head">
       <div>
-        <div class="kb-eyebrow">知识结构</div>
-        <h1 class="kb-title mt-1">知识结构定义</h1>
+        <div class="kb-eyebrow">系统配置</div>
+        <h1 class="kb-title mt-1">知识 Schema</h1>
         <p class="kb-muted mt-1">
           知识类型、实体类型与关系类型的字典：知识库可继承平台默认并扩展自定义类型，发布前校验，发布后同步给抽取侧。
         </p>
       </div>
       <div class="flex shrink-0 items-center gap-2">
-        <button class="kb-btn-outline" :disabled="loading" @click="load">刷新</button>
-        <button class="kb-btn" :disabled="publishing" @click="publish">
+        <el-button size="small" plain :disabled="loading" @click="load">刷新</el-button>
+        <el-button size="small" type="primary" :loading="publishing" @click="publish">
           {{ publishing ? '发布中...' : '校验并发布' }}
-        </button>
+        </el-button>
       </div>
     </header>
 
@@ -30,27 +30,25 @@
 
     <div v-if="error" class="kb-alert-error mt-3">{{ error }}</div>
 
-    <div class="mt-4 grid gap-3 lg:grid-cols-[1fr_320px]">
+    <!-- 切换样式与「知识资产」保持一致：一排圆角小按钮，选中态用 info 底色，条数跟在名称后。
+         放在表格卡片**上方**独立成行，而不是塞进卡片头里——卡片头留给「当前分类 + 新增类型」，
+         两者挤在一起会让切换看起来像卡片内的一个控件，而不是切换整张表内容的入口。 -->
+    <div class="mt-4 flex flex-wrap gap-2">
+      <button v-for="item in kinds" :key="item.kind" :title="item.hint"
+        class="rounded-lg border px-3 py-1.5 text-[13px] transition"
+        :class="kind===item.kind
+          ? 'border-[color:var(--info-bd)] kb-state-info'
+          : 'border-ink-200 bg-white text-ink-600 hover:border-[color:var(--info-bd)]'"
+        @click="kind=item.kind">
+        {{ item.label }}<em class="ml-1 not-italic tabular-nums opacity-70">{{ kindCount(item.kind) }}</em>
+      </button>
+    </div>
+
+    <div class="mt-3 grid gap-3 lg:grid-cols-[1fr_320px]">
       <article class="kb-card">
         <div class="kb-card-head">
-          <!-- 类型切换做成卡片：名称 + 条数 + 一句说明，比一排 chip 更容易看出"每类有多少" -->
-          <div class="flex flex-wrap gap-2">
-            <button v-for="item in kinds" :key="item.kind"
-              class="flex min-w-[124px] flex-col gap-1 rounded-lg border px-3 py-2 text-left transition-colors"
-              :class="kind===item.kind
-                ? 'border-brand-500/60 bg-brand-500/10'
-                : 'border-ink-200 bg-white hover:border-brand-500/40 hover:bg-brand-500/5'"
-              @click="kind=item.kind">
-              <span class="flex w-full items-center justify-between gap-2">
-                <span class="text-[13px] font-medium"
-                  :class="kind===item.kind?'text-brand-700':'text-ink-700'">{{ item.label }}</span>
-                <b class="kb-badge tabular-nums"
-                  :class="kind===item.kind?'kb-badge-emerald':'kb-badge-ink'">{{ kindCount(item.kind) }}</b>
-              </span>
-              <span class="text-[10px] leading-tight text-ink-500">{{ item.hint }}</span>
-            </button>
-          </div>
-          <button class="kb-btn-outline" @click="openType()">新增类型</button>
+          <b class="text-sm">{{ currentKindLabel }}</b>
+          <el-button size="small" plain @click="openType()">新增类型</el-button>
         </div>
         <div class="p-4">
           <div v-if="loading && !types.length" class="py-6 text-center text-sm text-ink-500">正在读取类型字典...</div>
@@ -159,8 +157,8 @@
         <span class="mb-1 block text-[11px] text-ink-500">端点约束（JSON，可选）：{"fromKinds":["SYSTEM"],"toKinds":["METRIC"]}</span>
         <textarea v-model="constraintsText" rows="3" class="kb-input w-full font-mono text-[11px]" /></label>
       <template #footer>
-        <button class="kb-btn-outline" @click="typeVisible=false">取消</button>
-        <button class="kb-btn ml-2" :disabled="saving" @click="saveType">保存</button>
+        <el-button size="small" plain @click="typeVisible=false">取消</el-button>
+        <el-button size="small" type="primary" :loading="saving" @click="saveType">保存</el-button>
       </template>
     </el-dialog>
   </section>
@@ -200,10 +198,13 @@ const constraintsText = ref('')
 const visibleTypes = computed(() => types.value.filter(type => type.kind === kind.value))
 const customCount = computed(() => types.value.filter(type => !type.builtIn).length)
 
-/** 每个分类的条数：卡片上直接显示，省得点进去数。 */
+/** 每个分类的条数：切换按钮上直接显示，省得点进去数。 */
 function kindCount(target:string) {
   return types.value.filter(type => type.kind === target).length
 }
+
+/** 卡片头的当前分类名：切换在卡片上方，卡片头这里说明"现在看的是哪一类"。 */
+const currentKindLabel = computed(() => kinds.find(item => item.kind === kind.value)?.label || '类型')
 
 function propertyCount(type:SchemaType) {
   if (!type.propertiesJson) return 0

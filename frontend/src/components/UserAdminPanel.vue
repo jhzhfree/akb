@@ -1,5 +1,13 @@
 <template>
 <div class="ua">
+  <!-- 页面标题：eyebrow 是所属模块，主标题是菜单名（与其它 Tab 一致）。 -->
+  <header class="kb-section-head">
+    <div>
+      <div class="kb-eyebrow">系统配置</div>
+      <h1 class="kb-title mt-1">用户与组织</h1>
+      <p class="kb-muted mt-1">登录账号、平台角色与用户组归属：谁能进来、属于哪个组、担什么角色。</p>
+    </div>
+  </header>
   <section class="ua-block">
     <div class="ua-head">
       <div><b>用户管理</b><small>维护登录账号、平台角色与用户组归属</small></div>
@@ -36,9 +44,10 @@
       </el-table-column>
       <el-table-column label="操作" width="230" fixed="right">
         <template #default="{ row }">
-          <el-button link type="primary" size="small" @click="openEditUser(row)">编辑</el-button>
-          <el-button link type="primary" size="small" @click="openResetPassword(row)">重置密码</el-button>
-          <el-button link :type="row.status === 'ACTIVE' ? 'danger' : 'success'" size="small"
+          <!-- 与「存储与索引 · 蓝绿索引版本」一致：size=small + plain，危险动作只靠 type 区分 -->
+          <el-button size="small" plain @click="openEditUser(row)">编辑</el-button>
+          <el-button size="small" plain @click="openResetPassword(row)">重置密码</el-button>
+          <el-button :type="row.status === 'ACTIVE' ? 'danger' : 'success'" size="small" plain
             @click="toggleStatus(row)">
             {{ row.status === 'ACTIVE' ? '停用' : '启用' }}
           </el-button>
@@ -63,9 +72,9 @@
       <el-table-column prop="memberCount" label="成员数" width="90"/>
       <el-table-column label="操作" width="200" fixed="right">
         <template #default="{ row }">
-          <el-button link type="primary" size="small" @click="openGroupMembers(row)">成员</el-button>
-          <el-button link type="primary" size="small" @click="openEditGroup(row)">重命名</el-button>
-          <el-button link type="danger" size="small" @click="archiveGroup(row)">归档</el-button>
+          <el-button size="small" plain @click="openGroupMembers(row)">成员</el-button>
+          <el-button size="small" plain @click="openEditGroup(row)">重命名</el-button>
+          <el-button size="small" type="danger" plain @click="archiveGroup(row)">归档</el-button>
         </template>
       </el-table-column>
     </el-table>

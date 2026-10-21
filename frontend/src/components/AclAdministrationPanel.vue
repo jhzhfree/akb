@@ -1,5 +1,15 @@
 <template>
 <section class="kb-page space-y-4">
+  <!-- 同一面板承接「角色与权限」与「审计日志」两个 Tab，标题跟着 Tab 走。 -->
+  <header class="kb-section-head">
+    <div>
+      <div class="kb-eyebrow">系统配置</div>
+      <h1 class="kb-title mt-1">{{ props.mode === 'audit' ? '审计日志' : '角色与权限' }}</h1>
+      <p class="kb-muted mt-1">
+        资源权限的授予与变更留痕：谁能看什么由标签与角色共同决定，每次变更都可追溯到操作人与原因。
+      </p>
+    </div>
+  </header>
   <div class="grid gap-3 md:grid-cols-4">
     <div class="kb-metric"><span>授权对象</span><b>{{ subjects.length }}</b></div>
     <div class="kb-metric"><span>角色</span><b>{{ roles.length }}</b></div>
@@ -14,7 +24,7 @@
       </select>
       <input v-model="form.resourceCode" class="kb-input" placeholder="资源编码" />
       <input v-model="form.tags" class="kb-input" placeholder="team-a,ops；留空=公开" />
-      <button class="kb-btn kb-btn-primary" :disabled="saving" @click="submit">保存并传播</button>
+      <el-button size="small" type="primary" :loading="saving" @click="submit">保存并传播</el-button>
     </div>
     <input v-model="form.reason" class="kb-input mt-3 w-full" placeholder="变更原因 / 工单号" />
   </section>
@@ -76,11 +86,13 @@
 import { reactive, ref } from 'vue'
 import type { AclAudit, AclChange, AclRole, AclSubject } from '../types'
 
-defineProps<{
+const props=defineProps<{
   subjects:AclSubject[]; roles:AclRole[]; changes:AclChange[]; audits:AclAudit[]
   /** 流水分页：总数与页码由上层持有，本面板只负责回传翻页动作。 */
   changeTotal?:number; changePage?:number; changeSize?:number
   auditTotal?:number; auditPage?:number; auditSize?:number
+  /** 两个 Tab 共用本面板：'acl' 是角色与权限，'audit' 是审计日志。 */
+  mode?:'acl'|'audit'
 }>()
 const emit=defineEmits<{
   change:[payload:{resourceType:string; resourceCode:string; permissionTags:string[]; reason:string}]

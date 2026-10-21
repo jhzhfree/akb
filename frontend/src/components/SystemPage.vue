@@ -4,6 +4,15 @@
     label="系统配置" :leaves="leaves" :active="active"
     @select="$emit('select',$event)" />
 
+  <!-- 配置总览：入口宫格。标题口径与其它 Tab 一致——eyebrow 写所属模块，主标题写菜单名。 -->
+  <header v-if="active==='system'" class="kb-section-head mt-4">
+    <div>
+      <div class="kb-eyebrow">系统配置</div>
+      <h1 class="kb-title mt-1">配置总览</h1>
+      <p class="kb-muted mt-1">低频平台配置集中在这里，点卡片进入各自的配置页。</p>
+    </div>
+  </header>
+
   <div v-if="active==='system'" class="config-grid mt-4">
     <button v-for="module in modules" :key="module.key" class="config-card" :disabled="module.planned"
       @click="$emit('select',module.key)">
@@ -19,6 +28,7 @@
 
   <AclAdministrationPanel
     v-else-if="active==='system.acl'"
+    mode="acl"
     :subjects="aclSubjects" :roles="aclRoles" :changes="aclChanges" :audits="aclAudits"
     :change-total="changeTotal" :change-page="changePage" :change-size="changeSize"
     :audit-total="auditTotal" :audit-page="auditPage" :audit-size="auditSize"
@@ -34,6 +44,7 @@
   <!-- 审计日志与权限同源：同一治理面板的审计区块，不另造一份日志来源。 -->
   <AclAdministrationPanel
     v-else-if="active==='system.audit'"
+    mode="audit"
     :subjects="aclSubjects" :roles="aclRoles" :changes="aclChanges" :audits="aclAudits"
     :change-total="changeTotal" :change-page="changePage" :change-size="changeSize"
     :audit-total="auditTotal" :audit-page="auditPage" :audit-size="auditSize"

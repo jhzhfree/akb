@@ -1,13 +1,21 @@
 <template>
-  <section class="kb-card p-4">
-    <div class="kb-section-head">
-      <div><small>模型配置</small><h3>模型设置</h3></div>
-      <div class="flex items-center gap-2">
+  <!-- 与其它面板同构：页头放标题与操作，内容收进卡片，而不是整页都是一张卡。 -->
+  <section class="kb-page">
+    <header class="kb-section-head">
+      <!-- 标题口径与其它 Tab 一致：eyebrow 写所属模块，主标题写菜单名。 -->
+      <div>
+        <div class="kb-eyebrow">系统配置</div>
+        <h1 class="kb-title mt-1">模型配置</h1>
+        <p class="kb-muted mt-1">对话模型与向量模型的接入参数：改完先「测试连通」，通过再保存。</p>
+      </div>
+      <div class="flex shrink-0 items-center gap-2">
         <span class="kb-badge bg-[color:var(--bg-sub)] text-ink-600">来源：{{ settings?.source==='file'?'配置文件':'环境变量' }}</span>
-        <el-button size="small" @click="load">刷新</el-button>
+        <el-button size="small" plain @click="load">刷新</el-button>
         <el-button size="small" type="primary" :loading="saving" @click="save">保存配置</el-button>
       </div>
-    </div>
+    </header>
+
+    <section class="kb-card p-4">
 
     <div v-if="message" class="mb-3 rounded-lg bg-[color:var(--ok-bg)] px-3 py-2 text-[11px] leading-5 text-[color:var(--ok)]">{{ message }}</div>
     <div v-if="error" class="mb-3 rounded-lg bg-[color:var(--danger-bg)] px-3 py-2 text-[11px] leading-5 text-[color:var(--danger)]">{{ error }}</div>
@@ -16,7 +24,7 @@
       <div class="rounded-lg border border-ink-100 p-4">
         <div class="mb-3 flex items-center justify-between">
           <b class="text-xs text-ink-700">对话模型（LLM）</b>
-          <el-button size="small" :loading="testing==='llm'" @click="test('llm')">测试连通</el-button>
+          <el-button size="small" plain :loading="testing==='llm'" @click="test('llm')">测试连通</el-button>
         </div>
         <div class="grid gap-3 sm:grid-cols-2">
           <label class="field"><span>服务提供方</span>
@@ -51,7 +59,7 @@
       <div class="rounded-lg border border-ink-100 p-4">
         <div class="mb-3 flex items-center justify-between">
           <b class="text-xs text-ink-700">向量模型（Embedding）</b>
-          <el-button size="small" :loading="testing==='embedding'" @click="test('embedding')">测试连通</el-button>
+          <el-button size="small" plain :loading="testing==='embedding'" @click="test('embedding')">测试连通</el-button>
         </div>
         <label class="mb-3 flex items-center gap-2 text-[11px] text-ink-600">
           <el-switch v-model="settings.embedding.enabled" size="small"/>
@@ -90,6 +98,7 @@
       配置持久化到 <b>{{ settings?.settingsFile || 'ai-service/data/settings.json' }}</b>（含密钥、不入版本库、文件权限 600），保存后立即生效，无需重启服务。
       切换向量模型或调整维度后，历史索引维度不一致，需执行索引重建。
     </p>
+    </section>
   </section>
 </template>
 <script setup lang="ts">

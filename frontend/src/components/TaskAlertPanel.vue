@@ -6,7 +6,7 @@
   <section class="kb-page">
     <header class="kb-section-head">
       <div>
-        <div class="kb-eyebrow">TASK &amp; ALERT</div>
+        <div class="kb-eyebrow">系统配置</div>
         <h1 class="kb-title mt-1">任务与告警</h1>
         <p class="kb-muted mt-1">
           解析、抽取、索引、衍生与评测作业统一登记：失败可重试，死信需人工决策；告警规则把指标阈值变成可处理的事件。
@@ -31,10 +31,15 @@
 
     <div v-if="error" class="kb-alert-error mt-3">{{ error }}</div>
 
-    <div class="mt-4 flex flex-wrap gap-2">
-      <button v-for="item in tabs" :key="item.key" class="kb-chip" :class="tab===item.key?'kb-chip-active':''"
+    <!-- 切换样式与「知识资产」保持一致：一排圆角小按钮，选中态用 info 底色。 -->
+    <div class="mb-3 mt-4 flex flex-wrap gap-2">
+      <button v-for="item in tabs" :key="item.key"
+        class="rounded-lg border px-3 py-1.5 text-[13px] transition"
+        :class="tab===item.key
+          ? 'border-[color:var(--info-bd)] kb-state-info'
+          : 'border-ink-200 bg-white text-ink-600 hover:border-[color:var(--info-bd)]'"
         @click="tab=item.key">
-        {{ item.label }}<em v-if="item.count!==undefined"> {{ item.count }}</em>
+        {{ item.label }}<em v-if="item.count!==undefined" class="ml-1 not-italic tabular-nums opacity-70">{{ item.count }}</em>
       </button>
     </div>
 

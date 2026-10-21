@@ -2,14 +2,14 @@
   <section class="kb-page">
     <header class="kb-section-head">
       <div>
-        <div class="kb-eyebrow">知识空间</div>
-        <h1 class="kb-title mt-1">知识库</h1>
+        <div class="kb-eyebrow">系统配置</div>
+        <h1 class="kb-title mt-1">知识空间</h1>
         <p class="kb-muted mt-1">
           知识空间是权限与检索的最小边界：数据源、文档、知识对象与索引都归属于某个知识库。
         </p>
       </div>
       <div class="flex shrink-0 items-center gap-2">
-        <button class="kb-btn-primary" @click="emit('create')">新建知识库</button>
+        <el-button size="small" type="primary" @click="emit('create')">新建知识库</el-button>
       </div>
     </header>
 
@@ -56,11 +56,12 @@
               </div>
               <div class="mt-3 flex items-center justify-between">
                 <span class="kb-muted">状态 {{ base.status || '—' }}</span>
-                <button
-                  class="kb-btn-outline text-[12px]" :disabled="base.id === activeId"
+                <!-- 与「存储与索引 · 蓝绿索引版本」一致：size=small + plain -->
+                <el-button
+                  size="small" plain :disabled="base.id === activeId"
                   @click="emit('select', base.id)">
                   {{ base.id === activeId ? '当前空间' : '进入' }}
-                </button>
+                </el-button>
               </div>
             </div>
           </div>
