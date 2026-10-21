@@ -268,6 +268,7 @@ curl -H 'X-API-Key: kos_ak_xxx' http://<host>:8080/api/v1/external/bases
 | `permissionTags` | String[] | 否 | — | 调用方侧权限标签，平台仍会叠加自身 ACL |
 | `answerFormat` | String | 否 | `default` / `markdown` / `text` / `html`，默认 `default` | 答案交付格式，取值见下 |
 | `minScore` | Double | 否 | `0.0`–`1.0`，含端点 | 最低相关度分数：低于该分数的候选不参与答案生成（也用于 `/search` 过滤返回）。不传即不过滤——与历史完全一致 |
+| `responseMode` | String | 否 | `minimal` / `basic` / `full`，默认 `full` | 返回详略，见下方「返回详略」 |
 
 **`answerFormat` 取值**
 
@@ -373,6 +374,37 @@ curl -H 'X-API-Key: kos_ak_xxx' http://<host>:8080/api/v1/external/bases
 - `objectType` 取值：`CONTENT_UNIT`（原文段落）/ `CARD`（知识卡片）/ `CLAIM`（断言）
 - `evidenceCode` 用于 `GET /evidence/{code}` 取权威原文；`evidenceHash` 是内容指纹
 - `excerpt` 是被引用的原文摘录：`markdown` / `html` 两种交付格式会把它带进答案正文
+
+**返回详略 `responseMode`**
+
+同一份结果可以按三种详略交付。裁剪只发生在出口：检索链路、授权判定、事件与审计看到的
+永远是完整结果，少给字段纯粹是「这次响应带多少」的交付决定，不影响任何内部口径。
+
+| 取值 | `/query` 的 `data` |
+|---|---|
+| `minimal` | `responseMode` / `queryId` / `question` / `topK` / `returned` / `answer` |
+| `basic` | 上面这些（除 `responseMode` 外）+ `candidates[]` + `selectedContext` |
+| `full`（默认） | 当前全部字段，一个不少 |
+
+不传即 `full`；认不出来的取值同样退回 `full` 而不报错。`minimal` / `basic` 会回显实际生效的
+`responseMode`，`full` 时不额外加字段——默认值必须逐字等于改造前。`candidates` 与
+`selectedContext` 的字段与 `full` 完全一致，这里只决定是否带，不另做裁剪。
+
+`minimal` 示例：
+
+```json
+{
+  "success": true, "code": "OK",
+  "data": {
+    "responseMode": "minimal",
+    "queryId": "Q_874eb67fadc143b49cfcf2a4d9cfa270",
+    "question": "星河项目的交付范围？",
+    "topK": 3,
+    "returned": 6,
+    "answer": "星河项目交付范围包含……"
+  }
+}
+```
 
 **示例**
 
@@ -738,6 +770,7 @@ curl -X POST http://<host>:8080/api/v1/external/query \
 | `permissionTags` | String[] | 否 | — | 调用方侧权限标签，平台仍会叠加自身 ACL |
 | `minScore` | Double | 否 | `0.0`–`1.0`，含端点 | 最低相关度分数：低于该分数的候选不返回。不传即不过滤 |
 | `answerFormat` | String | 否 | 同 `/query` | **可传但对返回无影响**（这里没有答案正文），留着是为了让调用方复用同一个请求体 |
+| `responseMode` | String | 否 | `minimal` / `basic` / `full`，默认 `full` | 返回详略，见下方「返回详略」 |
 
 **返回 `data` 字段**
 
@@ -769,6 +802,45 @@ curl -X POST http://<host>:8080/api/v1/external/query \
 - 想自己拼 Prompt：`candidates[].content` 就是原文，`citations[].excerpt` 是可直接引用的摘录，两者按 `citations[].index` ↔ `candidates[].id` 对应。
 
 > `minScore` 在**服务端**生效：`returned` 是过滤后真正给出的条数，小于 `topK` 一般是阈值筛掉的，不是库里没东西。
+
+**返回详略 `responseMode`**
+
+| 取值 | `/search` 的 `data` |
+|---|---|
+| `minimal` | `responseMode` / `queryId` / `question` / `topK` / `evidence[]` |
+| `basic` | 上面这些（除 `responseMode` 外）+ `candidates[]` |
+| `full`（默认） | 当前全部字段，含完整 `citations` |
+
+`evidence[]` 是精简后的引用，只留展示一条引用必需的字段：
+`index / title / excerpt / sourceName / sourceUri / objectType / evidenceCode / score`。
+需要 `evidenceHash` / `generationId` / `contentUnitId` 等定位与审计字段时用 `full` 的 `citations`。
+`candidates[]` 的字段与 `full` 一致，这里只决定是否带。
+
+`minimal` 示例：
+
+```json
+{
+  "success": true, "code": "OK",
+  "data": {
+    "responseMode": "minimal",
+    "queryId": "Q_874eb67fadc143b49cfcf2a4d9cfa270",
+    "question": "星河项目的交付范围？",
+    "topK": 3,
+    "evidence": [
+      {
+        "index": 1,
+        "title": "一、适用范围与核心内容",
+        "excerpt": "本项目交付范围包括……",
+        "sourceName": "02_项目星河交付说明_V1.0.docx",
+        "sourceUri": null,
+        "objectType": "CONTENT_UNIT",
+        "evidenceCode": "EVD_8208b712f0344486b5669013fb896fd8",
+        "score": 12.173548
+      }
+    ]
+  }
+}
+```
 
 ```bash
 curl -X POST http://<host>:8080/api/v1/external/search \

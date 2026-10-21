@@ -71,14 +71,14 @@ public class ExternalApiController {
     @Operation(summary = "可追溯知识问答：返回答案、引用与 queryId")
     public ApiResponse<Object> query(HttpServletRequest request, @Valid @RequestBody ExternalQueryRequest body) throws Exception {
         return call(request, "POST /query", body.getKnowledgeBaseId(), (key, kb) -> facade.query(kb, body.getQuestion(), body.getTopK(),
-            body.getPermissionTags(), body.getAnswerFormat(), body.getMinScore()));
+            body.getPermissionTags(), body.getAnswerFormat(), body.getMinScore(), body.getResponseMode()));
     }
 
     @PostMapping("/search")
     @Operation(summary = "只检索不生成答案：返回候选、重排结果与引用")
     public ApiResponse<Object> search(HttpServletRequest request, @Valid @RequestBody ExternalQueryRequest body) throws Exception {
         return call(request, "POST /search", body.getKnowledgeBaseId(), (key, kb) -> facade.search(kb, body.getQuestion(), body.getTopK(),
-            body.getPermissionTags(), body.getMinScore()));
+            body.getPermissionTags(), body.getMinScore(), body.getResponseMode()));
     }
 
     @GetMapping("/cards")

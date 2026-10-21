@@ -1,6 +1,7 @@
 package com.jh.knowledgeos.dto;
 
 import com.jh.knowledgeos.common.AnswerFormat;
+import com.jh.knowledgeos.common.ResponseMode;
 import javax.validation.constraints.Max;
 import javax.validation.constraints.Min;
 import javax.validation.constraints.NotBlank;
@@ -34,6 +35,15 @@ public class ExternalQueryRequest {
      * {@code answerFormat} 是实际生效的那个，调用方可以据此判断自己的取值有没有被接受。</p>
      */
     private String answerFormat = AnswerFormat.DEFAULT;
+
+    /**
+     * 返回详略：{@code minimal} / {@code basic} / {@code full}，默认 {@code full}（当前返回）。
+     *
+     * <p>{@code minimal} 只给答案主体与数量口径；{@code basic} 补回检索结果；
+     * {@code full} 是全部字段。认不出来的取值退回 {@code full}，不会报错。
+     * 响应里的 {@code responseMode} 是实际生效的那个（{@code full} 时不额外回显）。</p>
+     */
+    private String responseMode = ResponseMode.FULL;
 
     /**
      * 最低相关度分数（0~1）：低于该分数的候选不返回。
@@ -92,5 +102,13 @@ public class ExternalQueryRequest {
 
     public void setAnswerFormat(String answerFormat) {
         this.answerFormat = answerFormat;
+    }
+
+    public String getResponseMode() {
+        return responseMode;
+    }
+
+    public void setResponseMode(String responseMode) {
+        this.responseMode = responseMode;
     }
 }

@@ -2,6 +2,8 @@ package com.jh.knowledgeos.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.jh.knowledgeos.common.AnswerFormat;
+import com.jh.knowledgeos.common.ResponseMode;
+import com.jh.knowledgeos.common.ResponseReducer;
 import com.jh.knowledgeos.domain.ApiKey;
 import com.jh.knowledgeos.domain.Claim;
 import com.jh.knowledgeos.domain.KnowledgeBase;
@@ -88,6 +90,18 @@ public class ExternalKnowledgeFacade {
      */
     public Map<String, Object> query(ApiKey key, Long kb, String question, Integer topK, List<String> permissionTags, String source,
         String answerFormat, Double minScore) throws Exception {
+        return query(key, kb, question, topK, permissionTags, source, answerFormat, minScore, ResponseMode.FULL);
+    }
+
+    /**
+     * 同上，带返回详略：{@code minimal} 只留答案与数量口径，{@code basic} 补回候选与进入
+     * 上下文的候选，{@code full} 全部照给。
+     *
+     * <p>裁剪只在这一层做，且发生在授权判定与事件发布之后：检索链路看到的仍是完整结果，
+     * 少给字段纯粹是"这次响应带多少"的交付决定。</p>
+     */
+    public Map<String, Object> query(ApiKey key, Long kb, String question, Integer topK, List<String> permissionTags, String source,
+        String answerFormat, Double minScore, String responseMode) throws Exception {
         // 标签不再是调用方可声明的输入：这里用服务端授权范围与请求标签求交集（请求只能收窄）。
         List<String> effectiveTags = authorization.effectiveTags(key, permissionTags, source);
         Map<String, Object> payload = payload(key, kb, question, topK, effectiveTags, source, answerFormat, minScore);
@@ -100,7 +114,8 @@ public class ExternalKnowledgeFacade {
         // 条数是 AI 服务返回的 `returned`（融合重排与 minScore 过滤之后的数量，可能大于也可能
         // 小于 topK）。用独立名字并存，两个口径都保留。
         result.put("effectiveTopK", effectiveTopK(topK));
-        return result;
+        // 出口裁剪：full 原样返回，minimal / basic 少给字段。
+        return ResponseReducer.query(result, responseMode);
     }
 
     /**
@@ -176,6 +191,15 @@ public class ExternalKnowledgeFacade {
     }
 
     /**
+     * 同上，带返回详略（外部 REST 接口用这条：它手上没有凭证对象）。
+     */
+    public Map<String, Object> query(Long kb, String question, Integer topK, List<String> permissionTags, String answerFormat,
+        Double minScore, String responseMode) throws Exception {
+        return query(null, kb, question, topK, permissionTags, PlatformEventPublisher.SOURCE_REST, answerFormat, minScore,
+            responseMode);
+    }
+
+    /**
      * Retrieval-only surface: the same pipeline as query minus answer generation detail, so
      * systems that already own their own prompt can assemble context themselves.
      */
@@ -189,6 +213,18 @@ public class ExternalKnowledgeFacade {
      */
     public Map<String, Object> search(ApiKey key, Long kb, String question, Integer topK, List<String> permissionTags, String source,
         Double minScore) throws Exception {
+        return search(key, kb, question, topK, permissionTags, source, minScore, ResponseMode.FULL);
+    }
+
+    /**
+     * 同上，带返回详略：{@code minimal} 只给证据，{@code basic} 额外给候选。
+     *
+     * <p>组装用的是完整结果（内部那条 {@code query} 不裁），裁完再交给调用方——
+     * 否则 {@code evidence} 会拿不到它需要的 {@code citations}。</p>
+     */
+    public Map<String, Object> search(ApiKey key, Long kb, String question, Integer topK, List<String> permissionTags, String source,
+        Double minScore, String responseMode) throws Exception {
+        // 这里要的是完整结果：裁完再组装的话 citations 已经不在了。
         Map<String, Object> result = query(key, kb, question, topK, permissionTags, source, AnswerFormat.DEFAULT, minScore);
         Map<String, Object> search = new LinkedHashMap<String, Object>();
         search.put("queryId", result.get("queryId"));
@@ -206,7 +242,7 @@ public class ExternalKnowledgeFacade {
         search.put("reranker", result.get("reranker"));
         search.put("candidates", result.get("candidates"));
         search.put("citations", result.get("citations"));
-        return search;
+        return ResponseReducer.search(search, responseMode);
     }
 
     /**
@@ -223,6 +259,14 @@ public class ExternalKnowledgeFacade {
     public Map<String, Object> search(Long kb, String question, Integer topK, List<String> permissionTags, Double minScore)
         throws Exception {
         return search(null, kb, question, topK, permissionTags, PlatformEventPublisher.SOURCE_REST, minScore);
+    }
+
+    /**
+     * 同上，带返回详略（外部 REST 接口用这条）。
+     */
+    public Map<String, Object> search(Long kb, String question, Integer topK, List<String> permissionTags, Double minScore,
+        String responseMode) throws Exception {
+        return search(null, kb, question, topK, permissionTags, PlatformEventPublisher.SOURCE_REST, minScore, responseMode);
     }
 
     /**
