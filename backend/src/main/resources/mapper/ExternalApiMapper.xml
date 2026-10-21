@@ -31,8 +31,8 @@
 
 <update id="touchApiKey">UPDATE t_api_key SET last_used_at=CURRENT_TIMESTAMP WHERE id=#{id}</update>
 
-<insert id="insertApiCallAudit" parameterType="com.jh.knowledgeos.domain.ApiCallAudit">INSERT INTO t_api_call_audit(key_id,key_code,caller_name,token_jti,origin,channel,method,knowledge_base_id,request_params,status_code,response_data,duration_ms,trace_id,message)
-  VALUES(#{keyId},#{keyCode},#{callerName},#{tokenJti},#{origin},#{channel},#{method},#{knowledgeBaseId},#{requestParams},#{statusCode},#{responseData},#{durationMs},#{traceId},#{message})</insert>
+<insert id="insertApiCallAudit" parameterType="com.jh.knowledgeos.domain.ApiCallAudit">INSERT INTO t_api_call_audit(key_id,key_code,caller_name,token_jti,origin,caller_ip,channel,method,knowledge_base_id,request_params,status_code,response_data,duration_ms,trace_id,message)
+  VALUES(#{keyId},#{keyCode},#{callerName},#{tokenJti},#{origin},#{callerIp},#{channel},#{method},#{knowledgeBaseId},#{requestParams},#{statusCode},#{responseData},#{durationMs},#{traceId},#{message})</insert>
 
 <select id="listApiCallAudits" resultType="com.jh.knowledgeos.domain.ApiCallAudit">SELECT * FROM t_api_call_audit
   <where>

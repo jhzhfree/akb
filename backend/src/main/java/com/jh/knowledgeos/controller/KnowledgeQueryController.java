@@ -118,7 +118,11 @@ public class KnowledgeQueryController {
 
 
     @GetMapping("/traces/{kb}")
-    @Operation(summary = "查询知识库问答历史")
-    public ApiResponse<Object> queryHistory(@PathVariable Long kb, @RequestParam(value = "limit", required = false) Integer limit) {
-        return ApiResponse.ok(service.queryHistory(kb, limit));
+    @Operation(summary = "查询知识库问答历史（分页）")
+    public ApiResponse<Object> queryHistory(@PathVariable Long kb,
+        @RequestParam(value = "page", required = false) Integer page,
+        @RequestParam(value = "pageSize", required = false) Integer pageSize,
+        // 兼容旧调用：早先只传 limit，现在当作 pageSize，页码默认第一页。
+        @RequestParam(value = "limit", required = false) Integer limit) {
+        return ApiResponse.ok(service.queryHistory(kb, page, pageSize == null ? limit : pageSize));
     }}

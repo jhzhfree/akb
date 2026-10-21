@@ -1,6 +1,7 @@
 package com.jh.knowledgeos.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.jh.knowledgeos.common.ClientIpResolver;
 import com.jh.knowledgeos.config.ExternalCallPayloadFilter;
 import com.jh.knowledgeos.domain.ApiCallAudit;
 import com.jh.knowledgeos.domain.ApiKey;
@@ -62,9 +63,13 @@ public class ExternalAuditService {
 
     private final int payloadLimit;
 
-    public ExternalAuditService(ExternalApiMapper mapper, ObjectMapper json, @Value("${knowledge.external.audit-payload-chars:10000}") int payloadChars) {
+    private final ClientIpResolver clientIps;
+
+    public ExternalAuditService(ExternalApiMapper mapper, ObjectMapper json, ClientIpResolver clientIps,
+        @Value("${knowledge.external.audit-payload-chars:10000}") int payloadChars) {
         this.mapper = mapper;
         this.json = json;
+        this.clientIps = clientIps;
         this.payloadLimit = Math.max(200, payloadChars);
     }
 
@@ -99,6 +104,7 @@ public class ExternalAuditService {
         audit.setCallerName(callerName(key));
         audit.setTokenJti(embedToken == null ? null : embedToken.getJti());
         audit.setOrigin(embedToken == null ? null : embedToken.getOrigin());
+        audit.setCallerIp(clientIps.current());
         audit.setChannel(channel);
         audit.setMethod(method);
         audit.setKnowledgeBaseId(knowledgeBaseId);

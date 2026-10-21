@@ -96,6 +96,7 @@ public class IntegrationInsightService {
             row.put("protocol", audit.getChannel());
             row.put("caller", audit.getCallerName());
             row.put("client", audit.getKeyCode());
+            row.put("callerIp", audit.getCallerIp());
             row.put("method", audit.getMethod());
             row.put("status", audit.getStatusCode());
             row.put("latencyMs", audit.getDurationMs());
@@ -145,6 +146,7 @@ public class IntegrationInsightService {
         row.put("traceId", audit.getTraceId());
         row.put("caller", audit.getCallerName());
         row.put("client", audit.getKeyCode());
+        row.put("callerIp", audit.getCallerIp());
         row.put("protocol", audit.getChannel());
         row.put("method", audit.getMethod());
         row.put("knowledgeBaseId", audit.getKnowledgeBaseId());

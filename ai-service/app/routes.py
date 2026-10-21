@@ -287,7 +287,8 @@ async def query(r: QueryRequest):
     return await engine.query(r.queryId or "", r.knowledgeBaseId, r.query, r.topK, r.permissionTags,
                               generate=r.answerMode != "none",
                               answer_format=r.answerFormat, policy_override=r.policyOverride,
-                              min_score=r.minScore, include_recall_content=r.includeRecallContent)
+                              min_score=r.minScore, include_recall_content=r.includeRecallContent,
+                              memory_context=r.memoryContext)
 
 
 @router.post("/ai/query/stream")
@@ -311,6 +312,7 @@ async def query_stream(r: QueryRequest):
                 generate=r.answerMode != "none",
                 answer_format=r.answerFormat, policy_override=r.policyOverride, progress=progress,
                 min_score=r.minScore, include_recall_content=r.includeRecallContent,
+                memory_context=r.memoryContext,
             )
             await queue.put({"type": "result", "result": result})
         except Exception as exc:  # noqa: BLE001 - the failure has to reach the client as an event

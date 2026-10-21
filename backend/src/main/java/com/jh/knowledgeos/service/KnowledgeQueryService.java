@@ -2,10 +2,13 @@ package com.jh.knowledgeos.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.jh.knowledgeos.common.AnswerFormat;
+import com.jh.knowledgeos.common.ClientIpResolver;
 import com.jh.knowledgeos.common.PlatformEventTypes;
 import com.jh.knowledgeos.domain.QueryTraceRecord;
 import com.jh.knowledgeos.domain.User;
 import com.jh.knowledgeos.mapper.TraceMapper;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -31,14 +34,68 @@ public class KnowledgeQueryService {
 
     private final KbScenarioService scenarios;
 
+    private final AgentMemoryService memories;
+
+    private final AclContextResolver aclContext;
+
+    /** 落 trace 时记下调用方 IP，检索链路追踪页要看"这条链路是谁发起的"。 */
+    private final ClientIpResolver clientIps;
+
+    /** 控制台问答注入记忆的条数上限。 */
+    private static final int MEMORY_CONTEXT_LIMIT = 8;
+
+    private static final Logger log = LoggerFactory.getLogger(KnowledgeQueryService.class);
+
     public KnowledgeQueryService(TraceMapper traceMapper, AiClient aiClient, ObjectMapper objectMapper, IdGenerator idGenerator,
-        PlatformEventPublisher publisher, KbScenarioService scenarios) {
+        PlatformEventPublisher publisher, KbScenarioService scenarios, AgentMemoryService memories,
+        AclContextResolver aclContext, ClientIpResolver clientIps) {
         this.traceMapper = traceMapper;
         this.aiClient = aiClient;
         this.objectMapper = objectMapper;
         this.idGenerator = idGenerator;
         this.publisher = publisher;
         this.scenarios = scenarios;
+        this.memories = memories;
+        this.aclContext = aclContext;
+        this.clientIps = clientIps;
+    }
+
+    /**
+     * 控制台问答的记忆注入：身份取登录态，不取请求里的 userId。
+     *
+     * <p>请求里的 userId 是调用方自己填的（前端历史代码写死成 {@code console-user}），信它等于
+     * 允许登录用户 A 读 B 的记忆。所以这里用 {@link AclContextResolver#currentSubjectCode()}——
+     * 登录态里的账号编码，冒充不了。</p>
+     */
+    private void attachMemory(Map<String, Object> request) {
+        if (!Boolean.TRUE.equals(toBoolean(request.get("includeMemory")))) {
+            return;
+        }
+        String subject = aclContext.currentSubjectCode();
+        if (subject == null || subject.trim().isEmpty()) {
+            return;
+        }
+        try {
+            String question = request.get("query") == null ? "" : String.valueOf(request.get("query"));
+            List<Map<String, Object>> rows = memories.recallByIdentity("user:" + subject.trim(), subject.trim(),
+                question, MEMORY_CONTEXT_LIMIT);
+            String text = memories.renderContext(rows);
+            if (!text.isEmpty()) {
+                request.put("memoryContext", text);
+            }
+        } catch (RuntimeException e) {
+            log.warn("记忆注入失败，本次问答按无记忆处理：{}", e.getMessage());
+        }
+    }
+
+    private static Boolean toBoolean(Object value) {
+        if (value == null) {
+            return null;
+        }
+        if (value instanceof Boolean) {
+            return (Boolean)value;
+        }
+        return Boolean.valueOf(String.valueOf(value).trim());
     }
 
     private static Long toLong(Object value) {
@@ -62,6 +119,7 @@ public class KnowledgeQueryService {
      */
     @Transactional
     public Map<String, Object> query(Map<String, Object> request) throws Exception {
+        attachMemory(request);
         return runQuery(request);
     }
 
@@ -318,6 +376,7 @@ public class KnowledgeQueryService {
         User actor = AuthContext.get();
         trace.setActorUserId(actor == null ? null : actor.getId());
         trace.setTraceId(MDC.get("traceId"));
+        trace.setCallerIp(clientIps.current());
         trace.setOriginalQuery(String.valueOf(request.get("query")));
         trace.setRewrittenQueriesJson(json(response.get("rewrittenQueries")));
         trace.setRouterDecisionJson(json(response.get("router")));

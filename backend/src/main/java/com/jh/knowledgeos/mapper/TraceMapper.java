@@ -38,5 +38,8 @@ public interface TraceMapper {
 
     Map<String, Object> getTrace(@Param("qid") String queryId);
 
-    List<Map<String, Object>> listQueryTraces(@Param("kb") Long kb, @Param("limit") Integer limit);
+    List<Map<String, Object>> listQueryTraces(@Param("kb") Long kb, @Param("limit") Integer limit,
+        @Param("offset") Integer offset);
+
+    int countQueryTraces(@Param("kb") Long kb);
 }

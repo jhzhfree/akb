@@ -23,6 +23,14 @@
                 </option>
               </select>
             </label>
+            <label
+              class="flex items-center gap-1 text-[11px] text-ink-600"
+              title="把当前登录用户的长期记忆并入生成上下文。只影响答案怎么组织，不参与召回——记忆不是知识库证据，不会出现在引用里。">
+              <input
+                type="checkbox" class="accent-ink-700" :checked="useMemory"
+                @change="$emit('update:useMemory',($event.target as HTMLInputElement).checked)" />
+              使用记忆
+            </label>
             <button class="kb-btn-primary" :disabled="asking" @click="$emit('ask')">{{ asking ? '检索中…' : '发送问题' }}</button>
           </div>
         </footer>
@@ -144,6 +152,9 @@
                   v-model="suggestedAnswer" rows="2" maxlength="4000"
                   class="mt-1 w-full rounded border border-ink-200 bg-white px-2 py-1.5 text-xs"
                   placeholder="如果你知道正确答案，可以补充在这里" />
+                <span class="mt-0.5 block text-[11px] text-ink-400">
+                  填了会记入你的记忆：下次提问时勾选「使用记忆」，回答会参考这次纠正。
+                </span>
               </label>
               <div class="flex justify-end gap-2">
                 <button class="kb-btn kb-btn-outline text-xs" @click="showNegativeFeedback=false">取消</button>
@@ -160,13 +171,17 @@
       <div v-else class="mt-16 text-center text-sm text-ink-500">输入问题开始检索</div>
     </div>
     <aside class="kb-card h-fit overflow-hidden">
-      <div class="kb-card-head"><div><b class="text-sm">问答历史</b><div class="text-[10px] text-ink-500">查询历史</div></div>
-        <button class="text-xs text-accent" @click="$emit('refresh-history')">刷新</button></div>
+      <div class="kb-card-head"><div><b class="text-sm">问答历史</b><div class="text-[10px] text-ink-500">最近 5 条</div></div>
+        <div class="flex items-center gap-3">
+          <button class="text-xs text-accent" @click="$emit('refresh-history')">刷新</button>
+          <!-- 只显示最近 5 条，完整的翻页记录在「检索链路追踪」里 -->
+          <button class="text-xs text-accent" title="查看全部历史与检索链路" @click="$emit('open-trace-center')">更多 →</button>
+        </div></div>
       <!-- 列表形态与「知识概览 · 知识治理」一致：卡片内的次级表面块（--bg-sub）+
            语义圆点 + 名称 + 数字胶囊 + hover 才出现的箭头，静态时也有明确层次。 -->
       <div class="p-2">
         <div class="max-h-[560px] min-h-[132px] space-y-1 overflow-y-auto rounded-lg bg-[color:var(--bg-sub)] p-1.5">
-          <button v-for="item in history" :key="item.queryId"
+          <button v-for="item in recentHistory" :key="item.queryId"
             class="group flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left transition-colors hover:bg-brand-500/10"
             :title="`${item.originalQuery}${item.errorCode?`（失败：${item.errorCode}）`:''} · 点击查看完整链路`"
             @click="$emit('open-trace',item.queryId)">
@@ -203,6 +218,8 @@ const props = defineProps<{
   query:string; result:QueryResult|null; asking:boolean; history:QueryHistoryItem[]
   /** 请求与展示共用：服务端回传实际生效的格式，避免未知取值被当成默认。 */
   answerFormat:AnswerFormat
+  /** 是否并入当前登录用户的长期记忆：只影响答案生成，不参与召回。 */
+  useMemory:boolean
   /** 当前知识库的场景测试语句：换库即换示例，点选后直接提问。 */
   samples?:SampleQuestion[]
   /** 知识库预置的默认检索语句：作输入框提示，并排在示例句首位，点选即发起。 */
@@ -210,8 +227,12 @@ const props = defineProps<{
 }>()
 const emit = defineEmits<{
   ask:[]; 'update:query':[value:string]; 'update:answerFormat':[value:AnswerFormat]
+  'update:useMemory':[value:boolean]
   'open-trace':[qid:string]; 'refresh-history':[]; 'open-citation':[citation:QueryCitation]
+  'open-trace-center':[]
 }>()
+/** 面板只摆最新 5 条：历史一多右侧栏就变成日志列表，完整记录交给「检索链路追踪」翻页。 */
+const recentHistory = computed(() => (props.history || []).slice(0, 5))
 
 const showNegativeFeedback = ref(false)
 const feedbackSubmitted = ref(false)
@@ -238,10 +259,14 @@ async function sendFeedback(rating:'HELPFUL'|'UNHELPFUL') {
       reasonCode: rating === 'UNHELPFUL' ? feedbackReason.value : undefined,
       comment: rating === 'UNHELPFUL' ? feedbackComment.value.trim() : undefined,
       suggestedAnswer: rating === 'UNHELPFUL' ? suggestedAnswer.value.trim() : undefined,
+      question: props.result?.question || props.query,
     }), {} as QueryFeedback)
     feedbackSubmitted.value = true
     showNegativeFeedback.value = false
-    notifySuccess('反馈已提交，知识运营人员会据此改进回答')
+    // 写了建议的与只点踩的，结果不同：前者会被记住，要说清楚。
+    notifySuccess(rating === 'UNHELPFUL' && suggestedAnswer.value.trim()
+      ? '反馈已提交，这条纠正已记入你的记忆；下次勾选「使用记忆」时回答会参考它'
+      : '反馈已提交，知识运营人员会据此改进回答')
   } catch (error) {
     notifyError(error, '提交回答反馈失败')
   } finally {

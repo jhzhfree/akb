@@ -27,6 +27,13 @@
             <el-option value="text" label="纯文本（等宽展示，不做渲染）" />
           </el-select>
 
+          <div class="mt-2 flex items-center gap-2 text-[11px] text-ink-600">
+            <input id="embed-use-memory" type="checkbox" v-model="useMemory" class="accent-ink-700" />
+            <label for="embed-use-memory" class="cursor-pointer">
+              使用记忆（把该令牌积累的长期记忆并入生成上下文；只影响答案组织，不参与召回，默认关）
+            </label>
+          </div>
+
           <label>示例问题（用 | 分隔，可留空）</label>
           <el-input v-model="samples" placeholder="这份制度适用于哪些部门？|最近一次变更了什么？" />
 
@@ -111,6 +118,8 @@ const title = ref('知识库助手')
 const primary = ref('#2f6bff')
 const samples = ref('')
 const answerFormat = ref('markdown')
+/** 挂件默认不带记忆：它常嵌在对外页面上，一次普通提问不该悄悄带上历史。 */
+const useMemory = ref(false)
 const apiKey = ref('')
 const origin = ref('')
 const token = ref('')
@@ -148,6 +157,8 @@ const snippet = computed(() => {
     `data-title="${title.value}"`,
     `data-primary="${primary.value}"`,
     `data-answer-format="${answerFormat.value}"`,
+    // 只在开启时写进代码：默认关时那一行是噪音，读代码的人会以为它是必需的。
+    ...(useMemory.value ? ['data-use-memory="true"'] : []),
   ]
   if (samples.value.trim()) {
     attrs.push(`data-samples="${samples.value.trim()}"`)

@@ -355,8 +355,20 @@ public class KnowledgeReadService {
         return result;
     }
 
-    public List<Map<String, Object>> queryHistory(Long kb, Integer limit) {
-        int safeLimit = limit == null ? 30 : Math.max(1, Math.min(limit, 100));
-        return traceMapper.listQueryTraces(kb, safeLimit);
+    /**
+     * 问答历史（检索链路追踪页的数据源）。
+     *
+     * <p>返回 {@code items + total} 而不是裸列表：链路记录只增不减，前端要分页就必须知道
+     * 总条数，否则只能"下一页按钮永远可点"——点到底才发现是空的。</p>
+     */
+    public Map<String, Object> queryHistory(Long kb, Integer page, Integer pageSize) {
+        int safeSize = pageSize == null ? 20 : Math.max(1, Math.min(pageSize, 100));
+        int safePage = page == null || page < 1 ? 1 : page;
+        Map<String, Object> result = new LinkedHashMap<String, Object>();
+        result.put("items", traceMapper.listQueryTraces(kb, safeSize, (safePage - 1) * safeSize));
+        result.put("total", traceMapper.countQueryTraces(kb));
+        result.put("page", safePage);
+        result.put("pageSize", safeSize);
+        return result;
     }
 }

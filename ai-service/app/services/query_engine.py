@@ -76,7 +76,7 @@ class QueryEngine:
 
     async def query(self, qid, kb, q, topk, permission_tags=None, generate=True,
                     answer_format=DEFAULT_ANSWER_FORMAT, policy_override=None, progress=None,
-                    min_score=None, include_recall_content=False):
+                    min_score=None, include_recall_content=False, memory_context=""):
         """Run the pipeline: recall → fusion → rerank, then generation unless `generate` is off.
 
         `generate=False` gives the retrieval-only shape the evaluation center needs — the same
@@ -300,6 +300,11 @@ class QueryEngine:
         # generation: measuring recall latency with an LLM call inside it measures the wrong thing.
         if generate:
             context, citations, evidence_pool = self._context(candidates, policy.answer.contextMaxChars)
+            # 记忆只并入生成用的上下文，不参与召回：它是"这个提问者以前留下过什么"，不是
+            # 知识库里的证据。拿它去检索会把召回带偏，也会让证据链出现库里并不存在的来源。
+            memory_block = self._memory_block(memory_context)
+            if memory_block:
+                context = (memory_block + "\n\n" + context) if context else memory_block
             # 字符预算可能在第一条就超限，那时 _context 一个片段都装不进去，evidence_pool 是空的。
             # 空证据集会让门控把每条 claim 都判成"无证据支持"，答案被整段拦掉——表现出来就是
             # "库里有这条知识却检索不出来"。这时退回 topK 切片：至少保住调用方要的那几条，
@@ -875,6 +880,25 @@ class QueryEngine:
             return list(candidates)
         head_ids = {id(item) for item in chunks}
         return chunks + [c for c in candidates if id(c) not in head_ids]
+
+    # 记忆单独占预算：它不该挤掉证据的额度（那样"开了记忆"反而让答案少引证据），
+    # 但也要有上限——一条超长记忆能把提示词撑爆。
+    MEMORY_CONTEXT_MAX_CHARS = 2000
+
+    def _memory_block(self, text):
+        block = (text or "").strip()
+        if not block:
+            return ""
+        # 注入与否在响应里看不出来（记忆不进引用、不改召回），排查"到底生效没有"只能靠这一行。
+        logger.info("memory context injected: %d chars", len(block))
+        if len(block) > self.MEMORY_CONTEXT_MAX_CHARS:
+            block = block[: self.MEMORY_CONTEXT_MAX_CHARS].rstrip() + "…"
+        # 措辞是刻意的：只说"仅供参考"时，模型会把记忆当成"这次该答点什么"的暗示，
+        # 于是拿上下文里不相干的内容拼出一个有证据编号的答案——实测就是这样把漏洞条目
+        # 答成了项目交付范围。必须明确"无关就忽略"，否则开了记忆等于关掉拒答。
+        return ("以下是该提问者此前留下的记忆。它只是背景偏好，不是知识库证据：不得为它标注证据编号；"
+                "若它与下面的知识上下文无关，就完全忽略它，也不要因为有了它就把上下文里不相干的内容"
+                "当成问题的答案——知识不足时照常说明缺什么。\n" + block)
 
     def _context(self, candidates, limit=None):
         blocks = []

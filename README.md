@@ -54,6 +54,12 @@ make up
 4. [调试与测试手册](docs/development/DEBUGGING-TESTING-GUIDE.md)
 5. [常见改动 Playbook](docs/development/CHANGE-PLAYBOOK.md)
 
+发版与部署：
+
+- [开发与部署方案](docs/operations/BUILD-AND-DEPLOY.md)（改了什么重做什么、数据库迁移、制作与推送镜像、目标机拉取与部署、回滚）
+- [Docker 部署手册](docs/operations/DEPLOYMENT-DOCKER.md)（Ubuntu 24.04 全新裸机、`.env` 全量说明、验收与运维）
+- [裸金属部署手册](docs/operations/DEPLOYMENT-BAREMETAL.md)
+
 发版与交付说明（版本 1.1.0）：
 
 - [V1.1 功能发布说明](docs/release/V1.1-RELEASE-NOTES.md)（做什么、验收标准、约束、下个版本方向）

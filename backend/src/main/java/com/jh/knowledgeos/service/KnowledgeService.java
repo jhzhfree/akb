@@ -127,7 +127,7 @@ public class KnowledgeService {
     public Map<String, Object> trace(String queryId) {
         return readService.trace(queryId);
     }
-    public List<Map<String, Object>> queryHistory(Long kb, Integer limit) {
-        return readService.queryHistory(kb, limit);
+    public Map<String, Object> queryHistory(Long kb, Integer page, Integer pageSize) {
+        return readService.queryHistory(kb, page, pageSize);
     }
 }

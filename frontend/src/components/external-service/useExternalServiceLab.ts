@@ -114,12 +114,13 @@ export function useExternalServiceLab(props: ExternalServiceLabProps) {
 
   /* ---------------- RESTful ---------------- */
 
-  interface RestEndpoint { key:string; method:'GET' | 'POST'; path:string; summary:string }
+  interface RestEndpoint { key:string; method:'GET' | 'POST' | 'DELETE'; path:string; summary:string }
   const REST_ENDPOINTS:RestEndpoint[] = [
     { key:'bases', method:'GET', path:'/v1/external/bases', summary:'可见知识库列表' },
     { key:'overview', method:'GET', path:'/v1/external/overview', summary:'知识库概览计数' },
     { key:'query', method:'POST', path:'/v1/external/query', summary:'可追溯问答' },
     { key:'search', method:'POST', path:'/v1/external/search', summary:'检索（不生成答案）' },
+    { key:'retrievals', method:'POST', path:'/v1/external/kb/retrievals', summary:'第三方检索协议（chunks[] + 可选 answer）' },
     { key:'cards', method:'GET', path:'/v1/external/cards', summary:'知识卡片清单' },
     { key:'card', method:'GET', path:'/v1/external/cards/{code}', summary:'知识卡片详情' },
     { key:'claims', method:'GET', path:'/v1/external/claims', summary:'断言清单' },
@@ -128,6 +129,9 @@ export function useExternalServiceLab(props: ExternalServiceLabProps) {
     { key:'graph', method:'GET', path:'/v1/external/graph/{code}', summary:'图谱邻域' },
     { key:'trace', method:'GET', path:'/v1/external/queries/{queryId}', summary:'问答链路回放' },
     { key:'ingest', method:'POST', path:'/v1/external/documents/text', summary:'文本接入（INGEST）' },
+    { key:'memoryCapture', method:'POST', path:'/v1/external/memories/capture', summary:'写入 Agent 记忆（MEMORY_WRITE）' },
+    { key:'memoryRecall', method:'POST', path:'/v1/external/memories/recall', summary:'召回 Agent 记忆（MEMORY_READ）' },
+    { key:'memoryForget', method:'DELETE', path:'/v1/external/memories/{code}', summary:'删除一条记忆（MEMORY_WRITE）' },
   ]
 
   /**
@@ -143,6 +147,11 @@ export function useExternalServiceLab(props: ExternalServiceLabProps) {
       + 'responseMode（minimal / basic / full，默认 full：minimal 只给答案与数量口径，basic 补回 candidates 与 selectedContext）',
     search:'同 /query（answerFormat 与 responseMode 都对返回生效：minimal 只给证据，basic 补回 candidates）· '
       + 'minScore（0~1，可选）过滤候选，返回的 returned 是过滤后条数',
+    // 协议的库标识是请求头 X-Knowledge-Base-Id（数字 id 或库编码）；联调台不带自定义头，
+    // 所以模板里用 body 的 knowledgeBaseId——服务端两个入口都认，效果一样。
+    retrievals:'X-Knowledge-Base-Id 头（必填，数字 id 或库编码；联调台可用 body 的 knowledgeBaseId）· '
+      + 'question（必填）· topK（1–50，默认 10）· '
+      + 'includeAnswer（默认 false：只召回，约 0.4s；true 时额外返回 answer，约 6s）',
     cards:'knowledgeBaseId（可选）',
     card:'code（路径，必填）· knowledgeBaseId（可选）',
     claims:'knowledgeBaseId（可选）',
@@ -151,6 +160,14 @@ export function useExternalServiceLab(props: ExternalServiceLabProps) {
     graph:'code（路径，必填）· knowledgeBaseId（可选）· depth（默认 2）· limit（默认 50）',
     trace:'queryId（路径，必填）',
     ingest:'knowledgeBaseId（可选）· title（可选）· text（必填）· permissionTags[]（可选）',
+    // 记忆接口只认服务端 API Key：嵌入令牌会被明确拒绝（它不该能读写记忆库）。
+    memoryCapture:'memoryLevel（L0 / L1 / L2 / L3，必填）· scopeType（AGENT / TEAM / PROJECT / TASK / WORKFLOW / SESSION，必填）· '
+      + 'content（必填，≤4000 字符）· tags[] · sourceType · sourceRef · idempotencyKey（重试用，避免重复写入）· '
+      + 'confidence（0~1，默认 0.7）· importance（1~5，默认 3）· expiresInDays（1~3650，默认按级别）· '
+      + 'scopeCode（非 AGENT 作用域必填，且该 Key 需先获准访问）',
+    memoryRecall:'query（必填，≤300 字符）· scopeType（默认 AGENT）· scopeCode · limit（默认 10，最多 50）。'
+      + '召回是子串匹配：查不到时试试更短的词',
+    memoryForget:'code（路径，必填）：填入上方「对象编码」，留空会打到列表端点上',
   }
 
   const restKey = ref('query')
@@ -188,6 +205,32 @@ export function useExternalServiceLab(props: ExternalServiceLabProps) {
       // 返回详略显式写进模板：默认 full 与不传等价，但写出来调用方才知道有这个开关。
       body.responseMode = cfg.responseMode
       return JSON.stringify(body, null, 2)
+    }
+    if (endpoint.key === 'retrievals') {
+      return JSON.stringify({
+        knowledgeBaseId:cfg.knowledgeBaseId,
+        question:cfg.question,
+        topK:cfg.topK,
+        // 显式写 false 而不是省略：默认值写出来调用方才知道有这个开关，
+        // 而"默认只召回"正是这个接口能在 5s 内返回的原因。
+        includeAnswer:false,
+      }, null, 2)
+    }
+    if (endpoint.key === 'memoryCapture') {
+      return JSON.stringify({
+        memoryLevel:'L1',
+        scopeType:'AGENT',
+        content:'用户偏好：报销说明必须给出金额上限与审批层级',
+        tags:['偏好', '报销'],
+        sourceType:'MANUAL',
+        // 幂等键每次生成新的：联调台是手工点的，同一份模板连点两次应当写入两条，
+        // 而不是被幂等挡掉一条让人以为没生效。
+        idempotencyKey:'lab-' + Date.now(),
+        importance:3,
+      }, null, 2)
+    }
+    if (endpoint.key === 'memoryRecall') {
+      return JSON.stringify({ query:cfg.question, scopeType:'AGENT', limit:5 }, null, 2)
     }
     if (endpoint.key === 'ingest') {
       return JSON.stringify({
@@ -261,6 +304,12 @@ export function useExternalServiceLab(props: ExternalServiceLabProps) {
       // 说清楚是哪一种，省得拿一枚只读凭证反复重试写入接口。
       const hint = call.status === 403 ? ' — 凭证缺少该接口所需的权限范围（接入文本需要 INGEST）' : ''
       return { verdict:'FAIL' as const, note:`HTTP ${call.status}：${asRecord(call.json).message || call.text.slice(0, 120)}${hint}` }
+    }
+    // 协议接口的响应不包 ApiResponse：成功就是一个裸的 {chunks:[...]}，
+    // 判据是"有没有 chunks 数组"，不是 success 标志。
+    if (endpoint.key === 'retrievals') {
+      const chunks = asArray(asRecord(call.json).chunks)
+      return { verdict:'PASS' as const, note:`chunks ${chunks.length} 条` }
     }
     const envelope = asRecord(call.json)
     if (envelope.success !== true) {
@@ -448,6 +497,8 @@ export function useExternalServiceLab(props: ExternalServiceLabProps) {
       knowledgeBaseId:cfg.knowledgeBaseId, question:cfg.question, topK:cfg.topK, ...extra })
     await step('search', body(Number.isFinite(cfg.minScore) ? { minScore:cfg.minScore } : {}))
     await step('query', body(Number.isFinite(cfg.minScore) ? { minScore:cfg.minScore } : {}))
+    // 协议接口一并纳入冒烟：它是给第三方 Agent 平台用的，联调台里不跑就只有对接那天才被发现。
+    await step('retrievals', body({}))
     const cards = await step('cards')
     const firstCard = asRecord(asArray(asRecord(cards).data)[0])
     // 列表里的编码字段过去随对象类型而变（knowledgeCode / claimCode / evidenceCode），

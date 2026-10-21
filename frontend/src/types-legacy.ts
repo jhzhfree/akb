@@ -784,6 +784,8 @@ export interface IntegrationCallRow {
   status?:number|null; latencyMs?:number|null; traceId?:string|null; message?:string|null
   /** 调用方名称：凭证自命名的接入方，便于人工辨认。 */
   caller?:string|null
+  /** 调用方 IP：凭证只说到哪个 Key，IP 才说到从哪台机器来——同一枚 Key 被复制到多处时靠它区分。 */
+  callerIp?:string|null
   /** 明文传入参数（查询串 + 路径变量 + 请求体）；仅密钥、token 等凭证字段替换为 ***。 */
   requestParams?:string|null
   /** 明文返回数据；SSE 只记录握手结果，不记录流式正文。列表接口超过长度时会截断并标注。 */

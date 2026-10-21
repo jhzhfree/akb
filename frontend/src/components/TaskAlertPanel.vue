@@ -74,9 +74,10 @@
               <td>{{ task.retryCount || 0 }} / {{ task.maxAttempts || 3 }}</td>
               <td class="kb-muted text-[11px]">{{ task.createdTime || '-' }}</td>
               <td class="whitespace-nowrap text-right">
-                <button class="kb-link" @click="openDetail(task)">详情</button>
-                <button class="kb-link ml-2" :disabled="!retryable(task)" @click="retry(task)">重试</button>
-                <button class="kb-link ml-2" :disabled="!cancelable(task)" @click="cancel(task)">取消</button>
+                <!-- 与「存储与索引 · 蓝绿索引版本」一致：size=small + plain，危险/中断类动作用 type 区分 -->
+                <el-button size="small" plain @click="openDetail(task)">详情</el-button>
+                <el-button size="small" plain :disabled="!retryable(task)" @click="retry(task)">重试</el-button>
+                <el-button size="small" type="warning" plain :disabled="!cancelable(task)" @click="cancel(task)">取消</el-button>
               </td>
             </tr>
           </tbody>
@@ -117,9 +118,9 @@
               <td class="kb-muted text-[11px]">{{ alert.firstSeen || '-' }} / {{ alert.lastSeen || '-' }}</td>
               <td><span class="kb-badge" :class="badgeClass(alert.status)">{{ alertLabel(alert.status) }}</span></td>
               <td class="whitespace-nowrap text-right">
-                <button class="kb-link" v-if="alert.status==='OPEN'" @click="ack(alert)">认领</button>
-                <button class="kb-link ml-2" v-if="alert.status!=='RESOLVED'" @click="resolve(alert)">关闭</button>
-                <button class="kb-link ml-2" v-if="alert.status==='RESOLVED'" @click="reopen(alert)">重开</button>
+                <el-button v-if="alert.status==='OPEN'" size="small" plain @click="ack(alert)">认领</el-button>
+                <el-button v-if="alert.status!=='RESOLVED'" size="small" plain @click="resolve(alert)">关闭</el-button>
+                <el-button v-if="alert.status==='RESOLVED'" size="small" type="warning" plain @click="reopen(alert)">重开</el-button>
               </td>
             </tr>
           </tbody>
@@ -159,9 +160,9 @@
                 </span>
               </td>
               <td class="whitespace-nowrap text-right">
-                <button class="kb-link" @click="openRule(rule)">编辑</button>
-                <button class="kb-link ml-2" @click="toggleRule(rule)">{{ rule.enabled ? '停用' : '启用' }}</button>
-                <button class="kb-link ml-2 text-[color:var(--danger)]" @click="removeRule(rule)">删除</button>
+                <el-button size="small" plain @click="openRule(rule)">编辑</el-button>
+                <el-button size="small" type="warning" plain @click="toggleRule(rule)">{{ rule.enabled ? '停用' : '启用' }}</el-button>
+                <el-button size="small" type="danger" plain @click="removeRule(rule)">删除</el-button>
               </td>
             </tr>
           </tbody>

@@ -34,6 +34,15 @@ public class ApiCallAudit {
      */
     private String origin;
 
+    /**
+     * 调用方 IP。凭证只说到"哪个 Key 在调用"，IP 才说到"从哪台机器来"——同一枚 Key 被
+     * 复制到多处、或被非预期环境使用时，这是唯一能把两者区分开的字段。
+     *
+     * <p>取自 {@code X-Forwarded-For} / {@code X-Real-IP}，都没有才用 socket 地址。前者可被
+     * 伪造，所以这个值只在"请求确实经过了可信网关/反向代理"时才等同于真实来源。</p>
+     */
+    private String callerIp;
+
     private String channel;
 
     private String method;
@@ -106,6 +115,14 @@ public class ApiCallAudit {
 
     public void setOrigin(String origin) {
         this.origin = origin;
+    }
+
+    public String getCallerIp() {
+        return callerIp;
+    }
+
+    public void setCallerIp(String callerIp) {
+        this.callerIp = callerIp;
     }
 
     public String getChannel() {

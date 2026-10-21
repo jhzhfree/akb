@@ -24,6 +24,10 @@
       <div class="mb-4 grid gap-3 md:grid-cols-4">
         <div class="kb-metric"><span>调用方</span><b class="truncate text-sm">{{ detail.caller || detail.client || '—' }}</b></div>
         <div class="kb-metric"><span>凭证 Key</span><b class="truncate text-sm">{{ detail.client || '—' }}</b></div>
+        <div class="kb-metric">
+          <span>调用方 IP</span>
+          <b class="truncate text-sm" :title="detail.callerIp||''">{{ detail.callerIp || '—' }}</b>
+        </div>
         <div class="kb-metric"><span>协议 / 通道</span><b class="text-sm">{{ detail.protocol || '—' }}</b></div>
         <div class="kb-metric"><span>调用方法</span><b class="truncate text-sm" :title="detail.method||''">{{ detail.method || '—' }}</b></div>
       </div>

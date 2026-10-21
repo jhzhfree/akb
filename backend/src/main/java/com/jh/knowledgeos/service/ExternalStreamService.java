@@ -71,7 +71,9 @@ public class ExternalStreamService {
      * A client that renders the finished answer that way never shows an unformatted half of it.</p>
      */
     public void streamQuery(ApiKey key, Long knowledgeBaseId, String question, Integer topK, String answerFormat, boolean wholeAnswer,
-        Double minScore, SseEmitter emitter) {
+        Double minScore, boolean includeMemory, SseEmitter emitter) {
+        // 记忆在入口取一次：流式与降级是同一问答的两条路，各读一次就会出现"降级前后依据不同"。
+        final String memoryContext = includeMemory ? facade.memoryContext(key, question) : "";
         executor.execute(() -> {
             try {
                 // The plan is announced up front so a UI can draw the whole pipeline and then
@@ -81,7 +83,7 @@ public class ExternalStreamService {
                     emitter.send(SseEmitter.event().name("stage").data(stagePayload(knowledgeBaseId, stage[0], stage[1], "running", null)));
                 }
                 try {
-                    streamLive(key, knowledgeBaseId, question, topK, answerFormat, wholeAnswer, minScore, emitter);
+                    streamLive(key, knowledgeBaseId, question, topK, answerFormat, wholeAnswer, minScore, memoryContext, emitter);
                 } catch (Exception streamingFailed) {
                     // Without this line a fallback is invisible: the client still gets an answer,
                     // and nothing anywhere says the events were replayed instead of streamed.
@@ -89,7 +91,7 @@ public class ExternalStreamService {
                     // A stream that cannot be opened still has to answer. The blocking call runs
                     // the same pipeline, so the fallback loses event freshness — the answer comes
                     // in slices at the end — but never correctness.
-                    replay(key, knowledgeBaseId, question, topK, answerFormat, wholeAnswer, minScore, emitter);
+                    replay(key, knowledgeBaseId, question, topK, answerFormat, wholeAnswer, minScore, memoryContext, emitter);
                 }
                 emitter.complete();
             } catch (Exception e) {
@@ -104,9 +106,9 @@ public class ExternalStreamService {
      * execution being watched, not a finished answer being replayed.
      */
     private void streamLive(ApiKey key, Long knowledgeBaseId, String question, Integer topK, String answerFormat, boolean wholeAnswer,
-        Double minScore, SseEmitter emitter) throws Exception {
+        Double minScore, String memoryContext, SseEmitter emitter) throws Exception {
         facade.streamQuery(key, knowledgeBaseId, question, topK, null, PlatformEventPublisher.SOURCE_SSE, answerFormat, minScore,
-            new KnowledgeQueryService.QueryStreamListener() {
+            memoryContext, new KnowledgeQueryService.QueryStreamListener() {
                 @Override
                 public void stage(Map<String, Object> stage) {
                     send(emitter, "stage", stagePayload(knowledgeBaseId, stage));
@@ -170,9 +172,12 @@ public class ExternalStreamService {
      * the moment at which they arrive.
      */
     private void replay(ApiKey key, Long knowledgeBaseId, String question, Integer topK, String answerFormat, boolean wholeAnswer,
-        Double minScore, SseEmitter emitter) throws Exception {
+        Double minScore, String memoryContext, SseEmitter emitter) throws Exception {
         long started = System.currentTimeMillis();
-        Map<String, Object> result = facade.query(key, knowledgeBaseId, question, topK, null, PlatformEventPublisher.SOURCE_SSE, answerFormat, minScore);
+        Map<String, Object> result = memoryContext == null || memoryContext.isEmpty()
+            ? facade.query(key, knowledgeBaseId, question, topK, null, PlatformEventPublisher.SOURCE_SSE, answerFormat, minScore)
+            : facade.queryWithContext(key, knowledgeBaseId, question, topK, null, PlatformEventPublisher.SOURCE_SSE,
+                answerFormat, minScore, memoryContext);
         List<Map<String, Object>> stages = pipelineStages(result);
         for (String[] stage : PIPELINE_STAGES) {
             Map<String, Object> reported = findStage(stages, stage[0]);

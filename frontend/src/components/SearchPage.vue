@@ -8,7 +8,9 @@
     :result="result" :asking="asking" :history="history" :answer-format="answerFormat"
     :samples="samples" :default-query="defaultQuery"
     @update:answer-format="$emit('update:answerFormat',$event)"
+    :use-memory="useMemory" @update:use-memory="$emit('update:useMemory',$event)"
     @ask="$emit('ask')" @open-trace="shell.openTrace" @refresh-history="$emit('refresh-history')"
+    @open-trace-center="$emit('open-trace-center')"
     @open-citation="shell.openCitation" />
 
   <RetrievalTestPanel
@@ -19,8 +21,8 @@
 
   <TraceCenterPanel
     v-else-if="active==='search.trace'"
-    :history="history" :loading="historyLoading"
-    @open-trace="shell.openTrace" @refresh="$emit('refresh-history')" />
+    :knowledge-base-id="knowledgeBaseId"
+    @open-trace="shell.openTrace" />
 
   <!-- 设计 §5.x：图谱是检索内部的高级能力，探索结果与 Trace 同源可回溯。 -->
   <GraphPanel
@@ -53,8 +55,10 @@ defineEmits<{
   'update:query': [value: string]
   'update:graphCode': [value: string]
   'update:answerFormat': [value: AnswerFormat]
+  'update:useMemory': [value: boolean]
   ask: []
   'refresh-history': []
+  'open-trace-center': []
 }>()
 
 const shell = useShell()
@@ -73,6 +77,8 @@ const props = defineProps<{
   graphCode: string
   /** 答案返回格式：跟随问答面板的选择，由 ask 带上一起提交。 */
   answerFormat: AnswerFormat
+  /** 是否并入当前登录用户的长期记忆：与问答面板共用一个开关，两处勾选状态一致。 */
+  useMemory: boolean
 }>()
 
 /** 示例问题随知识库切换：每个场景有自己的测试语句。 */

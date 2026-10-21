@@ -8,6 +8,8 @@ import com.jh.knowledgeos.domain.ApiKey;
 import com.jh.knowledgeos.domain.Claim;
 import com.jh.knowledgeos.domain.KnowledgeBase;
 import com.jh.knowledgeos.domain.KnowledgeCard;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 import java.io.ByteArrayInputStream;
@@ -38,12 +40,20 @@ public class ExternalKnowledgeFacade {
     /** 检索授权：外部请求标签只能收窄服务端授权范围，不能扩大。 */
     private final RetrievalAuthorizationService authorization;
 
+    private final AgentMemoryService memories;
+
+    /** 注入答案的记忆条数上限：够覆盖长期偏好，又不至于把提示词撑满。 */
+    private static final int MEMORY_CONTEXT_LIMIT = 8;
+
+    private static final Logger log = LoggerFactory.getLogger(ExternalKnowledgeFacade.class);
+
     public ExternalKnowledgeFacade(KnowledgeService knowledgeService, KnowledgeBaseService knowledgeBaseService,
-        ObjectMapper objectMapper, RetrievalAuthorizationService authorization) {
+        ObjectMapper objectMapper, RetrievalAuthorizationService authorization, AgentMemoryService memories) {
         this.knowledgeService = knowledgeService;
         this.knowledgeBaseService = knowledgeBaseService;
         this.objectMapper = objectMapper;
         this.authorization = authorization;
+        this.memories = memories;
     }
 
     /**
@@ -102,9 +112,23 @@ public class ExternalKnowledgeFacade {
      */
     public Map<String, Object> query(ApiKey key, Long kb, String question, Integer topK, List<String> permissionTags, String source,
         String answerFormat, Double minScore, String responseMode) throws Exception {
+        return query(key, kb, question, topK, permissionTags, source, answerFormat, minScore, responseMode, false);
+    }
+
+    /**
+     * 同上，带记忆注入：把该凭证身份下的长期记忆并入生成上下文。
+     *
+     * <p>默认不开。记忆会改变答案的措辞与侧重，而调用方未必预期一次检索会带上历史——
+     * 这个效果必须是要了才有。</p>
+     */
+    public Map<String, Object> query(ApiKey key, Long kb, String question, Integer topK, List<String> permissionTags, String source,
+        String answerFormat, Double minScore, String responseMode, boolean includeMemory) throws Exception {
         // 标签不再是调用方可声明的输入：这里用服务端授权范围与请求标签求交集（请求只能收窄）。
         List<String> effectiveTags = authorization.effectiveTags(key, permissionTags, source);
         Map<String, Object> payload = payload(key, kb, question, topK, effectiveTags, source, answerFormat, minScore);
+        if (includeMemory) {
+            attachMemory(payload, key, question);
+        }
         Map<String, Object> result = knowledgeService.query(payload);
         // 回传实际生效的格式：调用方传了个认不出来的取值时，这里如实说 default，而不是让他以为生效了。
         result.put("answerFormat", AnswerFormat.normalize(result.get("answerFormat") == null ? null
@@ -130,14 +154,65 @@ public class ExternalKnowledgeFacade {
      * {@code KbRetrievalService} 负责，这里保持"一次检索一个结果"的职责。</p>
      */
     public Map<String, Object> retrieval(ApiKey key, Long kb, String question, Integer topK,
-        List<String> permissionTags, String source, Double minScore, boolean withAnswer) throws Exception {
+        List<String> permissionTags, String source, Double minScore, boolean withAnswer, boolean includeMemory)
+        throws Exception {
         List<String> effectiveTags = authorization.effectiveTags(key, permissionTags, source);
         Map<String, Object> request = payload(key, kb, question, topK, effectiveTags, source,
             AnswerFormat.DEFAULT, minScore);
         if (!withAnswer) {
             request.put("answerMode", "none");
         }
+        if (includeMemory) {
+            attachMemory(request, key, question);
+        }
         return knowledgeService.query(request);
+    }
+
+    /**
+     * 无 source 的带凭证入口：控制器手里有 {@code ApiKey}，而记忆身份正是从它来的——
+     * 走不带凭证的那组重载会丢掉身份，记忆注入就无从谈起。
+     */
+    public Map<String, Object> queryWithMemory(ApiKey key, Long kb, String question, Integer topK,
+        List<String> permissionTags, String answerFormat, Double minScore, String responseMode) throws Exception {
+        return query(key, kb, question, topK, permissionTags, PlatformEventPublisher.SOURCE_REST,
+            answerFormat, minScore, responseMode, true);
+    }
+
+    /**
+     * 把该凭证身份下的长期记忆并入生成上下文。
+     *
+     * <p>记忆只进 {@code memoryContext}（AI 服务在装配提示词时并入），不参与召回：它是"这个
+     * 调用方以前留下过什么"，不是知识库里的证据。拿它去检索会把召回带偏，也会让证据链出现
+     * 库里并不存在的来源。</p>
+     *
+     * <p>失败就当没有记忆。记忆是增强而不是主链路：一次记忆读取出错不该让整次问答失败，
+     * 调用方拿到的是"没有记忆的答案"，而不是一个 500。</p>
+     */
+    private void attachMemory(Map<String, Object> request, ApiKey key, String question) {
+        String text = memoryContext(key, question);
+        if (!text.isEmpty()) {
+            request.put("memoryContext", text);
+        }
+    }
+
+    /**
+     * 该凭证身份下的记忆，渲染成可直接并入生成上下文的文本；拿不到就是空串。
+     *
+     * <p>失败不抛：记忆是增强而不是主链路，一次记忆读取出错不该让整次问答失败，调用方拿到
+     * 的是"没有记忆的答案"，而不是一个 500。</p>
+     */
+    public String memoryContext(ApiKey key, String question) {
+        if (key == null) {
+            return "";
+        }
+        try {
+            List<Map<String, Object>> rows = memories.recallByIdentity(memories.namespace(key),
+                memories.agentCode(key), question, MEMORY_CONTEXT_LIMIT);
+            return memories.renderContext(rows);
+        } catch (RuntimeException e) {
+            log.warn("记忆注入失败，本次问答按无记忆处理：{}", e.getMessage());
+            return "";
+        }
     }
 
     /**
@@ -150,9 +225,41 @@ public class ExternalKnowledgeFacade {
      */
     public void streamQuery(ApiKey key, Long kb, String question, Integer topK, List<String> permissionTags, String source,
         String answerFormat, Double minScore, KnowledgeQueryService.QueryStreamListener listener) throws Exception {
+        streamQuery(key, kb, question, topK, permissionTags, source, answerFormat, minScore, null, listener);
+    }
+
+    /**
+     * 同上，带已渲染好的记忆上下文。
+     *
+     * <p>流式链路的记忆在入口处取一次再传进来，而不是在这里召回：一次问答只该有一次记忆
+     * 读取，而流式与降级（{@code replay}）是同一问答的两条路，各读一次就会出现
+     * "降级前后答案依据不同"。</p>
+     */
+    public void streamQuery(ApiKey key, Long kb, String question, Integer topK, List<String> permissionTags, String source,
+        String answerFormat, Double minScore, String memoryContext, KnowledgeQueryService.QueryStreamListener listener)
+        throws Exception {
         // 流式与阻塞调用共用同一份授权判定：不存在「流式走一条更宽松的路径」。
         List<String> effectiveTags = authorization.effectiveTags(key, permissionTags, source);
-        knowledgeService.streamQuery(payload(key, kb, question, topK, effectiveTags, source, answerFormat, minScore), listener);
+        Map<String, Object> payload = payload(key, kb, question, topK, effectiveTags, source, answerFormat, minScore);
+        if (memoryContext != null && !memoryContext.isEmpty()) {
+            payload.put("memoryContext", memoryContext);
+        }
+        knowledgeService.streamQuery(payload, listener);
+    }
+
+    /**
+     * 带已渲染记忆上下文的阻塞式问答：流式降级（{@code replay}）走这条路，
+     * 用的必须是入口处取到的同一份记忆——重新召回一次就可能给出不同的依据。
+     */
+    public Map<String, Object> queryWithContext(ApiKey key, Long kb, String question, Integer topK,
+        List<String> permissionTags, String source, String answerFormat, Double minScore, String memoryContext)
+        throws Exception {
+        List<String> effectiveTags = authorization.effectiveTags(key, permissionTags, source);
+        Map<String, Object> payload = payload(key, kb, question, topK, effectiveTags, source, answerFormat, minScore);
+        if (memoryContext != null && !memoryContext.isEmpty()) {
+            payload.put("memoryContext", memoryContext);
+        }
+        return knowledgeService.query(payload);
     }
 
     private static Map<String, Object> payload(ApiKey key, Long kb, String question, Integer topK, List<String> permissionTags,

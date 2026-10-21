@@ -64,6 +64,23 @@ public class ExternalQueryRequest {
         this.minScore = minScore;
     }
 
+    /**
+     * 是否把该凭证身份下的长期记忆并入生成上下文，默认 {@code false}。
+     *
+     * <p>记忆只参与生成答案，不参与召回：它是"这个调用方以前留下过什么"，不是知识库里的
+     * 证据，拿它去检索会把召回带偏。开了之后答案的措辞与侧重会受历史记忆影响，
+     * 所以必须要了才生效——一次普通的检索不该悄悄带上历史。</p>
+     */
+    private Boolean includeMemory = Boolean.FALSE;
+
+    public Boolean getIncludeMemory() {
+        return includeMemory;
+    }
+
+    public void setIncludeMemory(Boolean includeMemory) {
+        this.includeMemory = includeMemory;
+    }
+
     public Long getKnowledgeBaseId() {
         return knowledgeBaseId;
     }

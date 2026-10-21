@@ -35,6 +35,10 @@ class QueryRequest(BaseModel):
     # 的调用方用——它们有超时预算，不该为用不上的答案付一次模型调用。
     # 未知取值退回 full：与 answerFormat 同款容错，一个拼错的取值不该变成 422。
     answerMode: str = "full"
+    # 调用方召回的长期记忆（已经渲染成文本）。它只在装配生成上下文时并入，不参与召回——
+    # 记忆是"这个提问者以前留下过什么"，不是知识库里的证据；拿它去检索会把召回带偏，
+    # 也会让证据链出现库里并不存在的来源。留空即不注入，行为与改动前完全一致。
+    memoryContext: str = ""
 
 
 class ExtractRequest(BaseModel):

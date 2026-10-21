@@ -33,9 +33,22 @@
     <div class="mt-4 grid gap-3 lg:grid-cols-[1fr_320px]">
       <article class="kb-card">
         <div class="kb-card-head">
+          <!-- 类型切换做成卡片：名称 + 条数 + 一句说明，比一排 chip 更容易看出"每类有多少" -->
           <div class="flex flex-wrap gap-2">
-            <button v-for="item in kinds" :key="item.kind" class="kb-chip" :class="kind===item.kind?'kb-chip-active':''"
-              @click="kind=item.kind">{{ item.label }}</button>
+            <button v-for="item in kinds" :key="item.kind"
+              class="flex min-w-[124px] flex-col gap-1 rounded-lg border px-3 py-2 text-left transition-colors"
+              :class="kind===item.kind
+                ? 'border-brand-500/60 bg-brand-500/10'
+                : 'border-ink-200 bg-white hover:border-brand-500/40 hover:bg-brand-500/5'"
+              @click="kind=item.kind">
+              <span class="flex w-full items-center justify-between gap-2">
+                <span class="text-[13px] font-medium"
+                  :class="kind===item.kind?'text-brand-700':'text-ink-700'">{{ item.label }}</span>
+                <b class="kb-badge tabular-nums"
+                  :class="kind===item.kind?'kb-badge-emerald':'kb-badge-ink'">{{ kindCount(item.kind) }}</b>
+              </span>
+              <span class="text-[10px] leading-tight text-ink-500">{{ item.hint }}</span>
+            </button>
           </div>
           <button class="kb-btn-outline" @click="openType()">新增类型</button>
         </div>
@@ -58,10 +71,11 @@
                     {{ type.status==='ACTIVE' ? '启用' : '已弃用' }}
                   </span>
                 </td>
+                <!-- 按钮与「存储与索引 · 蓝绿索引版本」一致：size=small + plain，危险动作只靠 type 区分颜色 -->
                 <td class="whitespace-nowrap text-right">
-                  <button class="kb-link" @click="openType(type)">编辑</button>
-                  <button class="kb-link ml-2" v-if="type.status==='ACTIVE'" @click="deprecate(type)">弃用</button>
-                  <button class="kb-link ml-2 text-[color:var(--danger)]" v-if="!type.builtIn" @click="remove(type)">删除</button>
+                  <el-button size="small" plain @click="openType(type)">编辑</el-button>
+                  <el-button v-if="type.status==='ACTIVE'" size="small" type="warning" plain @click="deprecate(type)">弃用</el-button>
+                  <el-button v-if="!type.builtIn" size="small" type="danger" plain @click="remove(type)">删除</el-button>
                 </td>
               </tr>
             </tbody>
@@ -163,9 +177,9 @@ import { errorMessage } from '../utils/feedback'
 const props = defineProps<{ knowledgeBaseId:number }>()
 
 const kinds = [
-  { kind:'KNOWLEDGE_TYPE', label:'知识类型' },
-  { kind:'ENTITY_TYPE', label:'实体类型' },
-  { kind:'RELATION_TYPE', label:'关系类型' },
+  { kind:'KNOWLEDGE_TYPE', label:'知识类型', hint:'系统、指标、流程等知识对象' },
+  { kind:'ENTITY_TYPE', label:'实体类型', hint:'抽取与图谱使用的实体' },
+  { kind:'RELATION_TYPE', label:'关系类型', hint:'实体之间的关系与端点约束' },
 ]
 
 const loading = ref(false)
@@ -185,6 +199,11 @@ const constraintsText = ref('')
 
 const visibleTypes = computed(() => types.value.filter(type => type.kind === kind.value))
 const customCount = computed(() => types.value.filter(type => !type.builtIn).length)
+
+/** 每个分类的条数：卡片上直接显示，省得点进去数。 */
+function kindCount(target:string) {
+  return types.value.filter(type => type.kind === target).length
+}
 
 function propertyCount(type:SchemaType) {
   if (!type.propertiesJson) return 0

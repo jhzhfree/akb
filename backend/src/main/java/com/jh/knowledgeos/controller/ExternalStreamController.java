@@ -71,7 +71,8 @@ public class ExternalStreamController {
         @RequestParam("question") String question, @RequestParam(value = "topK", required = false) Integer topK,
         @RequestParam(value = "answerFormat", required = false) String answerFormat,
         @RequestParam(value = "content", required = false) String content,
-        @RequestParam(value = "minScore", required = false) Double minScore) {
+        @RequestParam(value = "minScore", required = false) Double minScore,
+        @RequestParam(value = "useMemory", required = false) Boolean useMemory) {
         boolean wholeAnswer = CONTENT_FINAL.equalsIgnoreCase(content);
         Map<String, Object> resolved = new LinkedHashMap<String, Object>();
         resolved.put("question", question);
@@ -90,7 +91,8 @@ public class ExternalStreamController {
         Long kb = accessService.resolveKnowledgeBase(key, knowledgeBaseId);
         accessService.assertScope(key, ApiKey.SCOPE_READ);
         SseEmitter emitter = new SseEmitter(0L);
-        streamService.streamQuery(key, kb, question, topK, answerFormat, wholeAnswer, minScore, emitter);
+        streamService.streamQuery(key, kb, question, topK, answerFormat, wholeAnswer, minScore,
+            Boolean.TRUE.equals(useMemory), emitter);
         return emitter;
     }
 

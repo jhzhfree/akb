@@ -4,6 +4,9 @@
 > 文档中所有命令均以 root 或有 sudo 权限的账号执行，若用普通账号请自行加 `sudo`。
 >
 > 组件清单、端口、镜像版本均取自本仓库现有编排文件（`docker-compose.yml`、`docker-compose.dev.yml`、`deploy/docker-compose.release.yml`），保持一致。
+>
+> **改完代码怎么变成运行中的服务**（改哪部分重做什么、数据库迁移、制作与推送镜像、目标机拉取与回滚），
+> 见 [开发与部署方案](BUILD-AND-DEPLOY.md)。本文只讲部署侧的细节：系统参数、获取资产、`.env`、启动、验收、运维。
 
 ---
 
@@ -455,6 +458,17 @@ IMAGE_PREFIX=192.168.22.6:5000/knowledge-os VERSION=1.1.0 \
 
 若某次必须重新构建（改了源码），回到 6.1 的 `make up`；内网仓库方式只负责"拿来即用"。
 
+> **升级时最容易漏的一步**：内部发布默认**不换版本号**（`1.1.0` 标签被新镜像覆盖）。
+> tag 没变时 Docker 不会主动去拉新镜像，直接 `up -d` 会继续用本地旧的那份——表现为"明明推了，服务还是老的"。
+> 必须先显式拉取再重建：
+>
+> ```bash
+> docker compose pull ai-service backend frontend
+> docker compose --env-file .env up -d --no-build
+> ```
+>
+> 推送侧怎么做（含旧镜像备份、digest 校验）见 [开发与部署方案](BUILD-AND-DEPLOY.md) 的「五、六节」。
+
 ### 6.5 等待就绪
 
 根编排端口与宿主一致，可直接用仓库自带脚本：
@@ -601,7 +615,26 @@ docker load -i images/<新>(镜像包)
 ./stop.sh && ./start.sh
 ```
 
-Flyway 会自动执行 `backend/src/main/resources/db/migration` 下的 V1~V32 迁移。升级前先备份 MySQL。
+### 8.4.1 数据库结构：由 Flyway 自动更新
+
+升级**不需要手工执行 SQL**：backend 每次启动会自动执行 `backend/src/main/resources/db/migration/`
+下尚未应用过的迁移（当前最新版本为 `V59`，以目录内实际最大版本号为准），执行记录落在
+`knowledge_os.flyway_schema_history`。
+
+```bash
+# 确认迁移已应用
+docker compose exec mysql mysql -u<用户> -p<密码> knowledge_os \
+  -e "SELECT version, description, success FROM flyway_schema_history ORDER BY installed_rank DESC LIMIT 5"
+```
+
+要点：
+
+- **升级前先备份 MySQL**（`mysqldump`），Flyway 不会自动回滚 DDL；
+- 迁移失败 = backend 启动失败，看 `docker compose logs backend` 修 SQL 后重新发镜像，
+  不要手工改表绕过（会让历史表与真实结构不一致，下次校验仍过不去）；
+- 新增迁移的版本号必须是"当前最大版本 +1"，重复版本号会直接让 backend 起不来。
+
+完整说明见 [开发与部署方案](BUILD-AND-DEPLOY.md) 的「三、数据库更新（Flyway 迁移）」。
 
 ### 8.5 监控（可选但推荐）
 

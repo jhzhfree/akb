@@ -82,6 +82,9 @@
               <template #default="{ row }">{{ row.caller || '—' }}</template>
             </el-table-column>
             <el-table-column prop="client" label="凭证" width="140" show-overflow-tooltip />
+            <el-table-column label="调用方 IP" width="130" show-overflow-tooltip>
+              <template #default="{ row }">{{ row.callerIp || '—' }}</template>
+            </el-table-column>
             <el-table-column prop="method" label="方法" width="160" show-overflow-tooltip />
             <el-table-column label="HTTP" width="90">
               <template #default="{ row }">

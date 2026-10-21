@@ -504,6 +504,10 @@ curl -N -H "X-Embed-Token: $TOKEN" -H 'Origin: http://localhost:5173' \
 ### 数据模型
 
 - `t_api_call_audit.token_jti / origin` —— 补两个字段后，审计行能定位到具体令牌与站点。
+- `t_api_call_audit.caller_ip` —— 调用方 IP，可空。凭证只说到哪个 Key，IP 才说到从哪台机器来：
+  同一枚 Key 被复制到多处、或被非预期环境使用时，这是唯一能把两者区分开的字段。
+  取值依次尝试 `X-Forwarded-For` 的第一个地址、`X-Real-IP`、socket 地址；
+  `X-Forwarded-For` 可被伪造，故该值仅在请求确实经过可信反向代理时才等于真实来源。
 - `t_embed_token_revocation` —— 吊销名单，`jti` 唯一索引。吊销不删旧调用，只影响后续请求。
 
 ### 校验顺序（`ExternalAccessService.authenticateEmbedToken`）

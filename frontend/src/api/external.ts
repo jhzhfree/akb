@@ -117,6 +117,8 @@ export interface EmbedTokenCall {
   keyId: number | null
   keyCode: string | null
   callerName: string | null
+  /** 调用方 IP：与凭证并列，用来区分同一枚 Key 的不同来源。 */
+  callerIp: string | null
   origin: string | null
   channel: string
   method: string

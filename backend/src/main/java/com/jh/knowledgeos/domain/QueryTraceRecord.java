@@ -47,6 +47,12 @@ public class QueryTraceRecord {
 
     private String answer;
 
+    /**
+     * 调用方 IP。检索链路追踪页要能回答"这条链路是谁发起的"——账号只说人，
+     * IP 才说到从哪台机器/哪个出口来（外部系统用同一枚 Key 多实例调用时靠它区分）。
+     */
+    private String callerIp;
+
     public String getQueryId() {
         return queryId;
     }
@@ -193,6 +199,14 @@ public class QueryTraceRecord {
 
     public String getAnswer() {
         return answer;
+    }
+
+    public String getCallerIp() {
+        return callerIp;
+    }
+
+    public void setCallerIp(String v) {
+        this.callerIp = v;
     }
 
     public void setAnswer(String v) {

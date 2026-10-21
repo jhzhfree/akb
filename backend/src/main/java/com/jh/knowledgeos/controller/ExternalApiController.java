@@ -79,8 +79,12 @@ public class ExternalApiController {
     @PostMapping("/query")
     @Operation(summary = "可追溯知识问答：返回答案、引用与 queryId")
     public ApiResponse<Object> query(HttpServletRequest request, @Valid @RequestBody ExternalQueryRequest body) throws Exception {
-        return call(request, "POST /query", body.getKnowledgeBaseId(), (key, kb) -> facade.query(kb, body.getQuestion(), body.getTopK(),
-            body.getPermissionTags(), body.getAnswerFormat(), body.getMinScore(), body.getResponseMode()));
+        // 记忆身份来自凭证，所以要了记忆就走带凭证的入口：不带凭证那组会在记忆注入时丢掉身份。
+        return call(request, "POST /query", body.getKnowledgeBaseId(), (key, kb) -> Boolean.TRUE.equals(body.getIncludeMemory())
+            ? facade.queryWithMemory(key, kb, body.getQuestion(), body.getTopK(), body.getPermissionTags(),
+                body.getAnswerFormat(), body.getMinScore(), body.getResponseMode())
+            : facade.query(kb, body.getQuestion(), body.getTopK(), body.getPermissionTags(),
+                body.getAnswerFormat(), body.getMinScore(), body.getResponseMode()));
     }
 
     @PostMapping("/search")
@@ -211,11 +215,12 @@ public class ExternalApiController {
                 throw KbRetrievalException.invalidArgument("question 不能为空");
             }
             Integer topK = topKParam(body);
-            boolean withAnswer = withAnswerParam(body);
+            boolean withAnswer = flagParam(body, "includeAnswer");
+            boolean includeMemory = flagParam(body, "includeMemory");
             kb = retrievals.resolveKnowledgeBase(key, request.getHeader(KB_ID_HEADER),
                 body == null ? null : body.get("knowledgeBaseId"));
             Long resolved = accessService.resolveKnowledgeBase(key, kb);
-            Map<String, Object> data = retrievals.retrieve(key, resolved, question, topK, withAnswer);
+            Map<String, Object> data = retrievals.retrieve(key, resolved, question, topK, withAnswer, includeMemory);
             auditService.record(key, ApiCallAudit.CHANNEL_REST, "POST /kb/retrievals", resolved, 200,
                 System.currentTimeMillis() - start, null, params, data, ExternalAccessService.embedTokenOf(request));
             return ResponseEntity.ok(data);
@@ -275,8 +280,8 @@ public class ExternalApiController {
      * 默认只要片段：多一次生成就多几秒，而这类调用方是拿着片段自己去生成的。
      * 撞上它的超时不是"答案慢一点"，而是协议侧整库降级为空结果——比少给答案严重得多。
      */
-    private static boolean withAnswerParam(Map<String, Object> body) {
-        Object raw = body == null ? null : body.get("includeAnswer");
+    private static boolean flagParam(Map<String, Object> body, String name) {
+        Object raw = body == null ? null : body.get(name);
         if (raw == null) {
             return false;
         }

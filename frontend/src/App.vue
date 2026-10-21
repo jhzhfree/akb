@@ -91,7 +91,9 @@
     :history="queryHistory" :history-loading="historyLoading"
     :graph-code="graphCode" @update:graph-code="graphCode=$event"
     :answer-format="answerFormat" @update:answer-format="answerFormat=$event"
-    @select="selectKey" @ask="ask" @refresh-history="loadQueryHistory"/>
+    :use-memory="useMemory" @update:use-memory="useMemory=$event"
+    @select="selectKey" @ask="ask" @refresh-history="loadQueryHistory"
+    @open-trace-center="openTraceCenter"/>
 
   <IntegrationPage
     v-else-if="activeSection==='integration'"
@@ -255,6 +257,8 @@ const capabilities=ref<Capabilities|null>(null),
     的默认 answerFormat 保持一致 —— 两边取不同格式时，同一个问题会拿到两份不同的文本，
     排版再怎么对齐也还是「不一样」。 */
 const answerFormat=ref<AnswerFormat>('markdown')
+/** 是否把当前登录用户的记忆并入生成上下文。默认关：记忆会改变答案的侧重，不该悄悄生效。 */
+const useMemory=ref(false)
 const runs=ref<IngestionRun[]>([]),
     runDetail=ref<IngestionRunDetail|null>(null),
     selectedRunId=ref<number|null>(null)
@@ -832,7 +836,7 @@ async function retryBatch(code:string){
 }
 async function ask(){if(!q.value.trim())return;
 asking.value=true;
-try{result.value=unwrap(await queryKnowledge(knowledgeBaseId.value,q.value,[],answerFormat.value),null);await loadQueryHistory()}catch(e){err(e)}finally{asking.value=false}}
+try{result.value=unwrap(await queryKnowledge(knowledgeBaseId.value,q.value,[],answerFormat.value,useMemory.value),null);await loadQueryHistory()}catch(e){err(e)}finally{asking.value=false}}
 async function openEvidence(evidenceCode:string){
 evidenceVisible.value=true;evidenceLoading.value=true
 try{evidenceDetail.value=unwrap(await getEvidenceDetail(knowledgeBaseId.value,evidenceCode),null)}
@@ -852,8 +856,19 @@ ElMessage.info('该引用暂未返回证据/对象定位标识')
 }
 async function loadQueryHistory(){
 historyLoading.value=true
-try{queryHistory.value=unwrap(await getQueryHistory(knowledgeBaseId.value),[])}catch(e){err(e)}
+try{
+  // 问答面板只摆最近 5 条，完整记录去「检索链路追踪」翻页看
+  const page=unwrap(await getQueryHistory(knowledgeBaseId.value,1,5),{items:[],total:0,page:1,pageSize:5})
+  queryHistory.value=page.items||[]
+}catch(e){err(e)}
 finally{historyLoading.value=false}}
+/** 历史面板的「更多」：切到检索链路追踪。没有该页权限时给一句明确提示，
+ *  而不是静默不跳——点了没反应比说清楚更让人困惑。 */
+function openTraceCenter(){
+  const leaf=locate('search.trace')?.leaf
+  if(!leaf||!canLeaf(leaf)){ElMessage.info('检索链路追踪需要管理员权限');return}
+  active.value='search.trace'
+}
 async function openTrace(qid:string){traceVisible.value=true;traceLoading.value=true;try{
 queryTrace.value=unwrap(await getTrace(qid),null)}catch(e){err(e)}finally{traceLoading.value=false}}
 /** 调用日志的 traceId 由网关下发，落在调用审计里；它和问答链路的 queryId 是两套 id，

@@ -11,6 +11,9 @@ public class QueryFeedbackRequest {
     @Size(max = 64)
     private String queryId;
 
+    /** 问题原文，可选：带上它记忆才好在下次相似提问时被召回。 */
+    private String question;
+
     @NotBlank
     @Pattern(regexp = "HELPFUL|UNHELPFUL")
     private String rating;
@@ -26,6 +29,8 @@ public class QueryFeedbackRequest {
 
     public String getQueryId() { return queryId; }
     public void setQueryId(String value) { queryId = value; }
+    public String getQuestion() { return question; }
+    public void setQuestion(String value) { question = value; }
     public String getRating() { return rating; }
     public void setRating(String value) { rating = value; }
     public String getReasonCode() { return reasonCode; }

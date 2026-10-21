@@ -133,6 +133,8 @@
       position: attrOf('data-position', 'right'),
       topK: toNumber(attrOf('data-top-k', ''), 10),
       answerFormat: attrOf('data-answer-format', 'markdown'),
+      // 记忆默认关：挂件常嵌在对外页面上，一次普通提问不该悄悄带上这个令牌积累的记忆。
+      useMemory: attrOf('data-use-memory', '') === 'true',
       /* content 决定答案正文如何从 SSE 里取：
          final   = 检索过程用 SSE，答案在 done 里整体拿到（与控制台阻塞式 /api/knowledge/query 同源）
          stream  = 逐字推 delta（边收边渲染的是模型原文，没有引用上标与「引用原文」小节） */
@@ -1923,7 +1925,9 @@
       /* 只有显式配了才带：不传即不过滤，与历史一致 */
       (this.options.minScore !== '' && this.options.minScore !== null && this.options.minScore !== undefined
         ? '&minScore=' + encodeURIComponent(this.options.minScore) : '') +
-      (this.options.knowledgeBaseId ? '&knowledgeBaseId=' + encodeURIComponent(this.options.knowledgeBaseId) : '');
+      (this.options.knowledgeBaseId ? '&knowledgeBaseId=' + encodeURIComponent(this.options.knowledgeBaseId) : '') +
+      /* 只有显式开了才带：不传即不注入记忆，与历史一致 */
+      (this.options.useMemory ? '&useMemory=true' : '');
 
     this.controller = typeof AbortController === 'function' ? new AbortController() : null;
 

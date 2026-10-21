@@ -9,6 +9,7 @@ import com.jh.knowledgeos.dto.MemoryRecallRequest;
 import com.jh.knowledgeos.mapper.AgentMemoryMapper;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -60,13 +61,33 @@ public class AgentMemoryService {
         String scopeType = normalize(request.getScopeType());
         validateScopeType(scopeType);
         String scopeCode = resolveScopeCode(scopeType, request.getScopeCode(), agent);
+        return insert(namespace, agent, scopeType, scopeCode, request, key);
+    }
+
+    /**
+     * 按身份写入记忆，不经过 API Key：控制台用户对自己答案的纠正，本来就属于他自己的记忆，
+     * 不需要"某个 Key 有没有 MEMORY_WRITE"这道检查——那是给外部调用方准备的。
+     *
+     * <p>只写 AGENT 作用域：用户反馈是个人的，不该被存进共享空间（那需要额外授权，
+     * 而"提交个反馈"里没有给用户选择共享空间的余地）。</p>
+     */
+    public Map<String, Object> captureForIdentity(String namespace, String agent, MemoryCaptureRequest request) {
+        assertEnabled();
+        // 传 null 凭证：没有 Key 就没有"共享作用域授权"这回事，而这里只允许 AGENT，本来就不需要。
+        return insert(namespace, agent, "AGENT", agent, request, null);
+    }
+
+    private Map<String, Object> insert(String namespace, String agent, String scopeType, String scopeCode,
+        MemoryCaptureRequest request, ApiKey key) {
         String level = normalize(request.getMemoryLevel());
         validateLevel(level, scopeType);
         String content = request.getContent() == null ? "" : request.getContent().trim();
         if (content.isEmpty() || content.length() > 4000) {
             throw new IllegalArgumentException("记忆内容不能为空且最多 4000 字符");
         }
-        if (!"AGENT".equals(scopeType)) {
+        // 顺序不能动：作用域与级别本身不合法时（比如 L3 写进 PROJECT），要先报参数错，
+        // 而不是等走到共享授权那里报"未获准访问"——后者会把真正的参数问题盖掉。
+        if (key != null && !"AGENT".equals(scopeType)) {
             requireSharedScopeAccess(key, namespace, scopeType, scopeCode, "WRITE");
         }
         List<String> tags = normalizeTags(request.getTags());
@@ -111,7 +132,8 @@ public class AgentMemoryService {
         String memoryCode = UUID.randomUUID().toString();
         try {
             mapper.insert(memoryCode, namespace, agent, scopeType, scopeCode, level, content,
-                objectMapper.writeValueAsString(tags), sourceType, sourceRef, confidence, importance, expiresAt, key.getId(), idempotencyKey);
+                objectMapper.writeValueAsString(tags), sourceType, sourceRef, confidence, importance, expiresAt,
+                key == null ? null : key.getId(), idempotencyKey);
         } catch (JsonProcessingException e) {
             throw new IllegalStateException("记忆标签序列化失败", e);
         }
@@ -164,6 +186,60 @@ public class AgentMemoryService {
         result.put("items", memories);
         result.put("count", memories == null ? 0 : memories.size());
         return result;
+    }
+
+    /**
+     * 按身份直接召回，供问答链路注入记忆用（控制台与嵌入挂件都没有 API Key）。
+     *
+     * <p>{@link #recall(ApiKey, MemoryRecallRequest)} 那些校验回答的是"这个 Key 能不能读"，
+     * 这里没有 Key：授权已由调用方保证——控制台有登录态，嵌入令牌在网关处已换成它背后的 Key。
+     * 只取 AGENT 作用域，也就是这个身份自己的记忆。</p>
+     *
+     * <p>召回是 SQL 的 {@code LIKE} 匹配，整句问题几乎命中不了任何记忆，所以分两步：
+     * 先拿问题去匹配（命中说明记忆里确实有这段上下文），一个都没命中就退回"最近的若干条"。
+     * 后者是有意的——宁可让模型看到几条可能相关的记忆自己判断，也不要因为措辞不同就
+     * 一条都不给，那样"开了记忆"和没开看起来一样。</p>
+     */
+    public List<Map<String, Object>> recallByIdentity(String namespace, String agent, String query, int limit) {
+        assertEnabled();
+        String keyword = query == null ? "" : query.trim();
+        if (keyword.length() > 300) {
+            keyword = keyword.substring(0, 300);
+        }
+        int capped = Math.max(1, Math.min(limit, 50));
+        List<Map<String, Object>> rows = mapper.recall(namespace, agent, "AGENT", agent, keyword,
+            Integer.valueOf(capped));
+        if ((rows == null || rows.isEmpty()) && !keyword.isEmpty()) {
+            rows = mapper.recall(namespace, agent, "AGENT", agent, "", Integer.valueOf(capped));
+        }
+        return rows == null ? Collections.<Map<String, Object>>emptyList() : rows;
+    }
+
+    /**
+     * 把记忆渲染成喂给模型的文本。
+     *
+     * <p>单条截断：一条写坏的巨长记忆不该把整个上下文预算吃掉，那样答案反而丢了证据。</p>
+     */
+    public String renderContext(List<Map<String, Object>> memories) {
+        if (memories == null || memories.isEmpty()) {
+            return "";
+        }
+        StringBuilder text = new StringBuilder();
+        for (Map<String, Object> memory : memories) {
+            Object raw = memory == null ? null : memory.get("content");
+            String content = raw == null ? "" : String.valueOf(raw).trim();
+            if (content.isEmpty()) {
+                continue;
+            }
+            if (content.length() > 500) {
+                content = content.substring(0, 500) + "…";
+            }
+            if (text.length() > 0) {
+                text.append('\n');
+            }
+            text.append("- ").append(content);
+        }
+        return text.toString();
     }
 
     @Transactional

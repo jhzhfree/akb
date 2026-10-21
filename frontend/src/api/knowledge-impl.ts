@@ -177,10 +177,12 @@ export const retryBatch = (batchCode:string):Promise<ApiResponse<Record<string,u
 
 export const queryKnowledge = (
   kb:number, query:string, permissionTags:string[]=[], answerFormat:AnswerFormat='default',
+  includeMemory=false,
 ):Promise<ApiResponse<QueryResult>> =>
   axios.post(
     '/api/knowledge/query',
-    { knowledgeBaseId:kb, query, topK:10, userId:'console-user', permissionTags, answerFormat },
+    // includeMemory 只影响答案生成，不参与召回；用户身份由服务端从登录态解析，这里传什么都不作数。
+    { knowledgeBaseId:kb, query, topK:10, userId:'console-user', permissionTags, answerFormat, includeMemory },
     { timeout:LONG_TIMEOUT_MS },
   )
 
@@ -247,8 +249,15 @@ export const getAnswerQualification = (qid:string):Promise<ApiResponse<AnswerQua
   axios.get(`/api/knowledge/answer-qualification/${encodeURIComponent(qid)}`)
 export const getAnswerQualificationSummary = (kb:number, hours=24):Promise<ApiResponse<AnswerQualificationSummary>> =>
   axios.get(`/api/knowledge/answer-qualifications/${kb}/summary?hours=${hours}`)
-export const getQueryHistory = (kb:number, limit=30):Promise<ApiResponse<QueryHistoryItem[]>> =>
-  axios.get(`/api/knowledge/traces/${kb}?limit=${limit}`)
+/** 问答历史一页：链路记录只增不减，分页要带总数，否则"下一页"永远可点、点到底才发现是空的。 */
+export interface QueryHistoryPage {
+  items: QueryHistoryItem[]
+  total: number
+  page: number
+  pageSize: number
+}
+export const getQueryHistory = (kb:number, page=1, pageSize=5):Promise<ApiResponse<QueryHistoryPage>> =>
+  axios.get(`/api/knowledge/traces/${kb}`, { params:{ page, pageSize } })
 
 export interface QueryFeedback {
   id:number; feedbackCode:string; queryId:string; knowledgeBaseId:number; actorUserId?:number
@@ -268,6 +277,8 @@ export const submitQueryFeedback = (
     reasonCode?: string
     comment?: string
     suggestedAnswer?: string
+    /** 问题原文：带上它，改进建议存成记忆后才能在下次相似提问时被召回。 */
+    question?: string
   },
 ): Promise<ApiResponse<QueryFeedback>> =>
   axios.post('/api/knowledge/feedback', payload)

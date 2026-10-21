@@ -78,10 +78,10 @@ public class KbRetrievalService {
      *
      * @param withAnswer 是否连答案一起给：false 时告诉引擎跳过生成，只做召回
      */
-    public Map<String, Object> retrieve(ApiKey key, Long kb, String question, Integer topK, boolean withAnswer)
-        throws Exception {
+    public Map<String, Object> retrieve(ApiKey key, Long kb, String question, Integer topK, boolean withAnswer,
+        boolean includeMemory) throws Exception {
         Map<String, Object> result = facade.retrieval(key, kb, question, topK, null,
-            PlatformEventPublisher.SOURCE_REST, null, withAnswer);
+            PlatformEventPublisher.SOURCE_REST, null, withAnswer, includeMemory);
         Map<String, Object> out = new LinkedHashMap<String, Object>();
         out.put("chunks", chunks(result.get("candidates"), topK));
         if (withAnswer) {
