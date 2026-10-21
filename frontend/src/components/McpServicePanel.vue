@@ -2,8 +2,8 @@
   <section class="kb-page">
     <header class="kb-section-head">
       <div>
-        <div class="kb-eyebrow">MCP 服务</div>
-        <h1 class="kb-title mt-1">MCP 服务</h1>
+        <div class="kb-eyebrow">接口服务</div>
+        <h1 class="kb-title mt-1">MCP</h1>
         <p class="kb-muted mt-1">
           把知识能力以 Tools / Resources 的形式交给外部智能体：一个 URL 加一个 API Key 即可接入。
           工具清单直接来自协议注册表，页面不会另抄一份，免得对外宣传的工具和实际能调的对不上。

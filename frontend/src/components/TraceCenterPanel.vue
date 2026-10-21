@@ -2,7 +2,7 @@
   <section class="kb-page">
     <header class="kb-section-head">
       <div>
-        <div class="kb-eyebrow">查询链路观测</div>
+        <div class="kb-eyebrow">知识检索</div>
         <h1 class="kb-title mt-1">检索链路追踪</h1>
         <p class="kb-muted mt-1">
           每次问答都会落一条 trace：查询改写、路由决策、多路召回、RRF 融合、Rerank 与上下文装配逐段可回放。

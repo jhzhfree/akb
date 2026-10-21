@@ -1,7 +1,7 @@
 <template>
   <section class="kb-page max-w-[1180px]">
     <header class="kb-section-head">
-      <div><div class="kb-eyebrow">回答质量运营</div><h2 class="kb-title mt-1">回答反馈</h2>
+      <div><div class="kb-eyebrow">知识检索</div><h2 class="kb-title mt-1">回答反馈</h2>
         <p class="kb-muted mt-1">收集真实问答中的问题与修正建议，经人工确认后再进入知识治理流程。</p></div>
       <button class="kb-btn kb-btn-outline" :disabled="loading" @click="load">{{ loading ? '刷新中…' : '刷新' }}</button>
     </header>

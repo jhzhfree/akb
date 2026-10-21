@@ -1,7 +1,8 @@
 <template>
 <section class="kb-page max-w-[1180px]">
-  <header class="kb-section-head"><div><div class="kb-eyebrow">混合检索与图谱增强</div>
-    <h2 class="kb-title mt-1">智能问答</h2><p class="kb-muted mt-1">查询理解 → 多路召回 → 融合排序 → 重排 → 证据上下文 → 可追溯回答。</p></div></header>
+  <!-- 页面标题统一为「父模块 + 当前 Tab」：eyebrow 是所属模块，主标题是菜单名。 -->
+  <header class="kb-section-head"><div><div class="kb-eyebrow">知识检索</div>
+    <h2 class="kb-title mt-1">智能检索</h2><p class="kb-muted mt-1">查询理解 → 多路召回 → 融合排序 → 重排 → 证据上下文 → 可追溯回答。</p></div></header>
   <!-- 检索模块各入口统一由页面顶部的模块 Tab 承载，这里不再重复一排同样的菜单 -->
   <!-- 历史列比原来宽一些：单行要放下「问题 + 时间 + 耗时」，280px 会把问题截得只剩两三个字。 -->
   <div class="grid gap-4 lg:grid-cols-[1fr_340px]">

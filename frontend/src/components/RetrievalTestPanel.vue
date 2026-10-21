@@ -1,6 +1,6 @@
 <template>
   <DebugLayout
-    eyebrow="RETRIEVAL TEST"
+    eyebrow="知识检索"
     title="检索测试"
     hint="只跑检索链不生成答案：查询改写 → 路由 → 多路召回 → RRF 融合 → Rerank，结果逐条可比，链路可回放。"
     config-hint="查询改写 / Hybrid / RRF / Rerank"

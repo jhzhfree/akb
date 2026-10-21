@@ -1,5 +1,13 @@
 <template>
   <section class="kbl-panel">
+    <!-- 页面标题：eyebrow 是所属模块，主标题是菜单名（与其它 Tab 一致）。 -->
+    <header class="kb-section-head">
+      <div>
+        <div class="kb-eyebrow">知识生成</div>
+        <h1 class="kb-title mt-1">知识台账</h1>
+        <p class="kb-muted mt-1">把每条来源挂上责任人、有效期与适用范围：谁负责、什么时候过期、能用在哪些场景。</p>
+      </div>
+    </header>
     <header class="kbl-toolbar">
       <div class="kbl-filter">
         <span class="kbl-filter-label">筛选</span>

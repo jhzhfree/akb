@@ -3,7 +3,8 @@
     <header class="kb-section-head">
       <div>
         <div class="kb-eyebrow">接口服务</div>
-        <h1 class="kb-title mt-1">接口联调台</h1>
+        <!-- 同一组件承接 API / SSE 两个 Tab，标题跟着协议走，而不是笼统叫「联调台」。 -->
+        <h1 class="kb-title mt-1">{{ props.protocol === 'sse' ? 'SSE' : 'API' }}</h1>
         <p class="kb-muted mt-1">
           用真实的 API Key 直接调用 RESTful / MCP / SSE 三个通道，逐条比对返回结构并给出判定：
           凭证是否有效、知识库范围是否生效、协议字段是否规范、流式事件顺序是否正确。

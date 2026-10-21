@@ -2,7 +2,7 @@
   <div class="kb-page">
     <div class="hero">
       <div>
-        <div class="eyebrow">知识图谱</div>
+        <div class="eyebrow">知识检索</div>
         <h1>知识图谱</h1>
         <p>从卡片、断言、实体或证据出发做有界图遍历，追溯「卡片 → 证据 → 断言 → 实体」的可解释链路。</p>
       </div>

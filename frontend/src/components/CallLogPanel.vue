@@ -2,7 +2,7 @@
   <section class="kb-page">
     <header class="kb-section-head">
       <div>
-        <div class="kb-eyebrow">调用日志</div>
+        <div class="kb-eyebrow">接口服务</div>
         <h1 class="kb-title mt-1">调用日志</h1>
         <p class="kb-muted mt-1">
           外部系统调用集成服务的全量记录：按协议与结果过滤，展开任一行可见调用方名称、明文传入参数与返回数据；

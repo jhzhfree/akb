@@ -1,7 +1,7 @@
 <template>
   <DebugLayout
-    eyebrow="EVALUATION CENTER"
-    title="评测中心"
+    eyebrow="知识检索"
+    title="检索评测"
     hint="回放标注问题集，逐题计算 Hit@K / Recall / MRR / NDCG 与延迟分位；平均值看趋势，逐用例证据定位坏题，基线对比判定回归。"
     config-hint="数据集与运行参数"
     result-hint="运行指标与逐用例结果">

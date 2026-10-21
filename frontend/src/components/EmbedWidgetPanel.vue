@@ -1,5 +1,13 @@
 <template>
   <div class="embed-panel">
+    <!-- 页面标题：eyebrow 是所属模块，主标题是菜单名（与其它 Tab 一致）。 -->
+    <header class="kb-section-head mb-3">
+      <div>
+        <div class="kb-eyebrow">接口服务</div>
+        <h1 class="kb-title mt-1">嵌入组件</h1>
+        <p class="kb-muted mt-1">生成一段可直接粘贴到业务页面的问答组件：选定知识库与外观，复制代码即可上线。</p>
+      </div>
+    </header>
     <PanelState v-if="!bases.length" title="暂无可用知识库" description="请先创建知识库，再生成嵌入组件代码。" />
 
     <template v-else>

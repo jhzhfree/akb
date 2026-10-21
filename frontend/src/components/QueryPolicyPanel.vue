@@ -1,7 +1,8 @@
 <template>
   <section class="kb-card p-4">
     <div class="kb-section-head">
-      <div><small>策略</small><h3>问答策略配置</h3></div>
+      <!-- 标题口径与其它 Tab 一致：eyebrow 写所属模块，主标题写菜单名。 -->
+      <div><div class="kb-eyebrow">知识检索</div><h1 class="kb-title mt-1">检索策略</h1></div>
       <div class="flex flex-wrap items-center gap-2">
         <span class="kb-badge bg-[color:var(--bg-sub)] text-ink-600">来源：{{ policy?.source==='file'?'配置文件':'内置默认' }}</span>
         <span class="kb-badge bg-[color:var(--bg-sub)] text-ink-600">{{ policy?.version || '-' }}</span>

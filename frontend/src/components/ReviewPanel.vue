@@ -1,5 +1,13 @@
 <template>
   <section class="review-stack">
+    <!-- 页面标题：eyebrow 是所属模块，主标题是菜单名（与其它 Tab 一致）。 -->
+    <header class="kb-section-head mb-3">
+      <div>
+        <div class="kb-eyebrow">知识生成</div>
+        <h1 class="kb-title mt-1">知识裁决</h1>
+        <p class="kb-muted mt-1">冲突与待审核知识集中在这里裁：按证据打分给建议，高风险对象必须人工复核。</p>
+      </div>
+    </header>
     <div class="section-header">
       <h2>{{ titleText }}</h2>
       <el-button type="primary" :loading="adjudicating" @click="emit('adjudicate')">运行智能裁决</el-button>
@@ -229,7 +237,8 @@ const emit=defineEmits<{
 
 const comment=ref('')
 const focus=computed(()=>props.focus||'judgment')
-const TITLES:Record<string,string>={review:'待审核知识',conflict:'知识冲突',judgment:'知识裁决工作台'}
+// 页面标题已经写了「知识裁决」，这里的工作区名不再重复"知识"，避免连着两个同样的词。
+const TITLES:Record<string,string>={review:'待审核知识',conflict:'知识冲突',judgment:'裁决工作台'}
 const titleText=computed(()=>TITLES[focus.value]||TITLES.judgment)
 const openConflicts=computed(()=>props.conflicts.filter(item=>String(item.status||'OPEN').toUpperCase()==='OPEN'))
 const humanReviewCount=computed(()=>props.assessments.filter(item=>item.requiresHumanReview).length)
