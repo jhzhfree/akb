@@ -21,24 +21,30 @@ class ResponseReducerTest {
 
     // ------------------------------------------------------------------ /query
 
+    /** 极简档只有问题与答案：模式回显、上下文、引用、候选都不给。 */
     @Test
-    void queryMinimalKeepsAnswerAndCountsOnly() {
-        Map<String, Object> reduced = ResponseReducer.query(fullQuery(), ResponseMode.MINIMAL);
-        assertEquals(set("responseMode", "queryId", "question", "topK", "returned", "answer"), reduced.keySet());
-        assertEquals("minimal", reduced.get("responseMode"));
+    void queryMinimalKeepsOnlyAnswer() {
+        Map<String, Object> full = fullQuery();
+        Map<String, Object> reduced = ResponseReducer.query(full, ResponseMode.MINIMAL);
+        assertEquals(set("queryId", "question", "topK", "answer"), reduced.keySet());
         assertEquals("答案正文", reduced.get("answer"));
-        assertEquals(6, reduced.get("returned"));
+        assertFalse(reduced.containsKey("responseMode"));
+        assertFalse(reduced.containsKey("selectedContext"));
+        assertFalse(reduced.containsKey("returned"));
     }
 
     @Test
-    void queryBasicAddsCandidatesAndSelectedContext() {
+    void queryBasicAddsCitations() {
         Map<String, Object> full = fullQuery();
         Map<String, Object> reduced = ResponseReducer.query(full, ResponseMode.BASIC);
-        assertEquals(set("responseMode", "queryId", "question", "topK", "returned", "answer",
-            "candidates", "selectedContext"), reduced.keySet());
-        assertEquals("basic", reduced.get("responseMode"));
-        // 候选是同一份对象：裁剪只决定带不带，不该复制内容
-        assertSame(full.get("candidates"), reduced.get("candidates"));
+        assertEquals(set("queryId", "question", "topK", "answer", "citations"), reduced.keySet());
+        assertFalse(reduced.containsKey("candidates"));
+        // 裁剪档的引用带归一化分数：原始分可能是重排分也可能是融合分，调用方没法直接卡阈值。
+        List<?> rows = (List<?>)reduced.get("citations");
+        assertEquals(1, rows.size());
+        Map<?, ?> first = (Map<?, ?>)rows.get(0);
+        assertTrue(first.containsKey("normalizedScore"));
+        assertTrue(first.containsKey("scoreOrigin"));
     }
 
     /**
@@ -65,18 +71,20 @@ class ResponseReducerTest {
     @Test
     void searchMinimalKeepsEvidenceOnly() {
         Map<String, Object> reduced = ResponseReducer.search(fullSearch(), ResponseMode.MINIMAL);
-        assertEquals(set("responseMode", "queryId", "question", "topK", "evidence"), reduced.keySet());
-        assertEquals("minimal", reduced.get("responseMode"));
+        assertEquals(set("queryId", "question", "topK", "evidence"), reduced.keySet());
         assertFalse(reduced.containsKey("candidates"));
         assertFalse(reduced.containsKey("citations"));
     }
 
     @Test
-    void searchBasicAddsCandidates() {
+    void searchBasicAddsCitations() {
         Map<String, Object> full = fullSearch();
         Map<String, Object> reduced = ResponseReducer.search(full, ResponseMode.BASIC);
-        assertEquals(set("responseMode", "queryId", "question", "topK", "evidence", "candidates"), reduced.keySet());
-        assertSame(full.get("candidates"), reduced.get("candidates"));
+        assertEquals(set("queryId", "question", "topK", "evidence", "citations"), reduced.keySet());
+        List<?> rows = (List<?>)reduced.get("citations");
+        assertEquals(1, rows.size());
+        assertTrue(((Map<?, ?>)rows.get(0)).containsKey("normalizedScore"));
+        assertFalse(reduced.containsKey("candidates"));
     }
 
     @Test
@@ -89,16 +97,23 @@ class ResponseReducerTest {
 
     // ------------------------------------------------------------------ evidence
 
-    /** 证据项只留"展示一条引用"必需的字段，定位与审计字段留给 full。 */
+    /**
+     * 证据项只留"展示一条引用"必需的字段，定位与审计字段留给 full。
+     *
+     * <p>唯独多带归一化分数：这一档已经把原始分给出来了，而原始分可能是融合分（没有上界），
+     * 调用方拿着它没法卡阈值。</p>
+     */
     @Test
     void evidenceKeepsOnlyDisplayFields() {
         List<Map<String, Object>> rows = ResponseReducer.evidence(fullSearch().get("citations"));
         assertEquals(1, rows.size());
         assertEquals(set("index", "title", "excerpt", "sourceName", "sourceUri", "objectType",
-            "evidenceCode", "score"), rows.get(0).keySet());
+            "evidenceCode", "score", "normalizedScore", "scoreOrigin"), rows.get(0).keySet());
         assertEquals(1, rows.get(0).get("index"));
         assertEquals("被引用原文摘录", rows.get(0).get("excerpt"));
         assertEquals("EVD_1", rows.get(0).get("evidenceCode"));
+        // 样例里没有 rerankScore，所以走压缩路径
+        assertEquals(ScoreNormalizer.ORIGIN_COMPRESSED, rows.get(0).get("scoreOrigin"));
     }
 
     @Test
