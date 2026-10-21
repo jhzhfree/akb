@@ -119,6 +119,28 @@ public class ExternalKnowledgeFacade {
     }
 
     /**
+     * 第三方检索协议（NovaWork standard）的召回入口：与 {@link #query} 走同一套授权判定、
+     * 同一份审计与事件，差别只在是否生成答案。
+     *
+     * <p>{@code withAnswer=false} 时给 AI 服务带上 {@code answerMode=none}，引擎跳过生成。
+     * 这类调用方拿到片段后自己生成答案，它们有端到端超时预算，不该为一次用不上的模型调用
+     * 付延迟——撞上超时在协议侧是"整库降级为空结果"，比少给答案严重得多。</p>
+     *
+     * <p>返回的是完整结果，不做裁剪：协议形状的转换（chunks / score 归一）由
+     * {@code KbRetrievalService} 负责，这里保持"一次检索一个结果"的职责。</p>
+     */
+    public Map<String, Object> retrieval(ApiKey key, Long kb, String question, Integer topK,
+        List<String> permissionTags, String source, Double minScore, boolean withAnswer) throws Exception {
+        List<String> effectiveTags = authorization.effectiveTags(key, permissionTags, source);
+        Map<String, Object> request = payload(key, kb, question, topK, effectiveTags, source,
+            AnswerFormat.DEFAULT, minScore);
+        if (!withAnswer) {
+            request.put("answerMode", "none");
+        }
+        return knowledgeService.query(request);
+    }
+
+    /**
      * Streaming counterpart of {@link #query}: stages and answer chunks are handed to the
      * listener as the pipeline produces them.
      *

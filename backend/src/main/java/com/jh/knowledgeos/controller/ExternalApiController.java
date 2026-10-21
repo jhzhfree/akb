@@ -1,6 +1,7 @@
 package com.jh.knowledgeos.controller;
 
 import com.jh.knowledgeos.common.ApiResponse;
+import com.jh.knowledgeos.common.KbRetrievalException;
 import com.jh.knowledgeos.config.KnowledgeProperties;
 import com.jh.knowledgeos.domain.ApiCallAudit;
 import com.jh.knowledgeos.domain.ApiKey;
@@ -14,6 +15,7 @@ import com.jh.knowledgeos.service.ExternalAccessService;
 import com.jh.knowledgeos.service.ExternalAuditService;
 import com.jh.knowledgeos.service.ExternalKnowledgeFacade;
 import com.jh.knowledgeos.service.AgentMemoryService;
+import com.jh.knowledgeos.service.KbRetrievalService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -23,6 +25,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.RestController;
 import javax.servlet.http.HttpServletRequest;
 import javax.validation.Valid;
@@ -50,14 +53,20 @@ public class ExternalApiController {
 
     private final AgentMemoryService memoryService;
 
+    private final KbRetrievalService retrievals;
+
     private final KnowledgeProperties.External properties;
 
+    /** 第三方检索协议用请求头指库（NovaWork standard）：数字 id 或库编码。 */
+    private static final String KB_ID_HEADER = "X-Knowledge-Base-Id";
+
     public ExternalApiController(ExternalAccessService accessService, ExternalKnowledgeFacade facade, ExternalAuditService auditService,
-        AgentMemoryService memoryService, KnowledgeProperties properties) {
+        AgentMemoryService memoryService, KbRetrievalService retrievals, KnowledgeProperties properties) {
         this.accessService = accessService;
         this.facade = facade;
         this.auditService = auditService;
         this.memoryService = memoryService;
+        this.retrievals = retrievals;
         this.properties = properties.external();
     }
 
@@ -172,6 +181,109 @@ public class ExternalApiController {
                 requireDirectMemoryCredential(request);
                 return memoryService.forget(key, memoryCode);
             });
+    }
+
+    /**
+     * 第三方检索协议（NovaWork standard）：一次召回，返回协议要的 {@code chunks[]}，
+     * 调用方显式要求时再附带本系统生成的答案。
+     *
+     * <p>这个端点不走 {@link #call}，因为错误形状不同：协议要 {@code {code,message}} + 状态码，
+     * 不是控制台那套 {@code {success,status,message}}。但门是同一道——鉴权、配额、库可见性、
+     * 审计调用的都是同一批服务，不存在"第三方协议走一条更宽松的路"。</p>
+     */
+    @PostMapping("/kb/retrievals")
+    @Operation(summary = "第三方检索协议：召回片段，可选附带答案",
+        description = "请求头 X-Knowledge-Base-Id 指定知识库（数字 id 或库编码）；"
+            + "请求体 includeAnswer=true 时额外返回 answer（会走答案生成，耗时更长）")
+    public ResponseEntity<Object> retrievals(HttpServletRequest request,
+        @RequestBody(required = false) Map<String, Object> body) {
+        long start = System.currentTimeMillis();
+        ApiKey key = null;
+        Long kb = null;
+        Object params = body == null ? new LinkedHashMap<String, Object>() : body;
+        try {
+            if (!properties.isEnabled()) {
+                throw new SecurityException("对外接口服务已关闭");
+            }
+            key = accessService.authenticateEmbed(request);
+            String question = textParam(body, "question");
+            if (question == null) {
+                throw KbRetrievalException.invalidArgument("question 不能为空");
+            }
+            Integer topK = topKParam(body);
+            boolean withAnswer = withAnswerParam(body);
+            kb = retrievals.resolveKnowledgeBase(key, request.getHeader(KB_ID_HEADER),
+                body == null ? null : body.get("knowledgeBaseId"));
+            Long resolved = accessService.resolveKnowledgeBase(key, kb);
+            Map<String, Object> data = retrievals.retrieve(key, resolved, question, topK, withAnswer);
+            auditService.record(key, ApiCallAudit.CHANNEL_REST, "POST /kb/retrievals", resolved, 200,
+                System.currentTimeMillis() - start, null, params, data, ExternalAccessService.embedTokenOf(request));
+            return ResponseEntity.ok(data);
+        } catch (UnauthorizedException e) {
+            return fail(401, "UNAUTHORIZED", e, key, kb, start, params, request);
+        } catch (SecurityException e) {
+            return fail(403, "FORBIDDEN", e, key, kb, start, params, request);
+        } catch (RateLimitException e) {
+            return fail(429, "RESOURCE_EXHAUSTED", e, key, kb, start, params, request);
+        } catch (KbRetrievalException e) {
+            return fail(e.getStatus(), e.getCode(), e, key, kb, start, params, request);
+        } catch (IllegalArgumentException e) {
+            return fail(400, "INVALID_ARGUMENT", e, key, kb, start, params, request);
+        } catch (Exception e) {
+            return fail(500, "INTERNAL", e, key, kb, start, params, request);
+        }
+    }
+
+    /** 协议形状的错误：code 给机器、message 给人，审计里记的是同一份。 */
+    private ResponseEntity<Object> fail(int status, String code, Exception e, ApiKey key, Long kb, long start,
+        Object params, HttpServletRequest request) {
+        Map<String, Object> payload = new LinkedHashMap<String, Object>();
+        payload.put("code", code);
+        payload.put("message", e.getMessage());
+        auditService.record(key, ApiCallAudit.CHANNEL_REST, "POST /kb/retrievals", kb, status,
+            System.currentTimeMillis() - start, e.getMessage(), params, payload,
+            ExternalAccessService.embedTokenOf(request));
+        return ResponseEntity.status(status).body(payload);
+    }
+
+    private static String textParam(Map<String, Object> body, String name) {
+        Object raw = body == null ? null : body.get(name);
+        if (raw == null) {
+            return null;
+        }
+        String value = String.valueOf(raw).trim();
+        return value.isEmpty() ? null : value;
+    }
+
+    /** topK 超出内部上限取上限（协议说不视为错误），小于等于 0 才是调用方的参数问题。 */
+    private static Integer topKParam(Map<String, Object> body) {
+        Object raw = body == null ? null : body.get("topK");
+        if (raw == null) {
+            return null;
+        }
+        if (!(raw instanceof Number)) {
+            throw KbRetrievalException.invalidArgument("topK 必须是数字");
+        }
+        int value = ((Number)raw).intValue();
+        if (value < 1) {
+            throw KbRetrievalException.invalidArgument("topK 必须大于 0");
+        }
+        return Integer.valueOf(Math.min(value, 50));
+    }
+
+    /**
+     * 默认只要片段：多一次生成就多几秒，而这类调用方是拿着片段自己去生成的。
+     * 撞上它的超时不是"答案慢一点"，而是协议侧整库降级为空结果——比少给答案严重得多。
+     */
+    private static boolean withAnswerParam(Map<String, Object> body) {
+        Object raw = body == null ? null : body.get("includeAnswer");
+        if (raw == null) {
+            return false;
+        }
+        if (raw instanceof Boolean) {
+            return ((Boolean)raw).booleanValue();
+        }
+        return Boolean.parseBoolean(String.valueOf(raw).trim());
     }
 
     /**

@@ -285,6 +285,7 @@ async def retrieval_capabilities():
 async def query(r: QueryRequest):
     """Execute query routing, hybrid retrieval, reranking, context assembly, and answer generation."""
     return await engine.query(r.queryId or "", r.knowledgeBaseId, r.query, r.topK, r.permissionTags,
+                              generate=r.answerMode != "none",
                               answer_format=r.answerFormat, policy_override=r.policyOverride,
                               min_score=r.minScore, include_recall_content=r.includeRecallContent)
 
@@ -307,6 +308,7 @@ async def query_stream(r: QueryRequest):
         try:
             result = await engine.query(
                 r.queryId or "", r.knowledgeBaseId, r.query, r.topK, r.permissionTags,
+                generate=r.answerMode != "none",
                 answer_format=r.answerFormat, policy_override=r.policyOverride, progress=progress,
                 min_score=r.minScore, include_recall_content=r.includeRecallContent,
             )

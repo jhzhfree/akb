@@ -29,6 +29,12 @@ class QueryRequest(BaseModel):
     # 而所有已知消费方（检索测试页、溯源面板、对外检索接口）都只用它的元数据。
     # 默认只给元数据 + 原文长度；确实要看原文（排查召回质量）时显式打开。
     includeRecallContent: bool = False
+    # 是否生成答案。full（默认）：走完整链路，产出 answer 与 citations；
+    # none：只做召回，跳过 LLM 与答案门控（answer 为空串、门控标为 NOT_RUN），响应体积和
+    # 延迟都只取决于检索本身。给第三方检索协议（NovaWork standard）这类"自己拿片段生成答案"
+    # 的调用方用——它们有超时预算，不该为用不上的答案付一次模型调用。
+    # 未知取值退回 full：与 answerFormat 同款容错，一个拼错的取值不该变成 422。
+    answerMode: str = "full"
 
 
 class ExtractRequest(BaseModel):

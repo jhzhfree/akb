@@ -382,13 +382,17 @@ curl -H 'X-API-Key: kos_ak_xxx' http://<host>:8080/api/v1/external/bases
 
 | 取值 | `/query` 的 `data` |
 |---|---|
-| `minimal` | `responseMode` / `queryId` / `question` / `topK` / `returned` / `answer` |
-| `basic` | 上面这些（除 `responseMode` 外）+ `candidates[]` + `selectedContext` |
+| `minimal` | `queryId` / `question` / `topK` / `answer` |
+| `basic` | 上面这些 + `citations[]` |
 | `full`（默认） | 当前全部字段，一个不少 |
 
-不传即 `full`；认不出来的取值同样退回 `full` 而不报错。`minimal` / `basic` 会回显实际生效的
-`responseMode`，`full` 时不额外加字段——默认值必须逐字等于改造前。`candidates` 与
-`selectedContext` 的字段与 `full` 完全一致，这里只决定是否带，不另做裁剪。
+不传即 `full`；认不出来的取值同样退回 `full` 而不报错。两档都不额外回显 `responseMode`
+——调用方知道自己传了什么，多一个字段对"只要答案"的场景反而碍事；`full` 更是必须逐字
+等于改造前。`citations[]` 的字段与 `full` 完全一致，这里只决定是否带，不另做裁剪。
+
+两档的 `citations[]` 每项会多带 `normalizedScore` 与 `scoreOrigin`：原始 `score` 可能是重排分
+（0~1）也可能是上界不明的融合分，调用方拿着它没法直接卡阈值，所以额外给一个恒定在 [0,1]
+的值，并说明它是怎么来的。`full` 档保持原样，一个字段都不多加。
 
 `minimal` 示例：
 
@@ -396,11 +400,9 @@ curl -H 'X-API-Key: kos_ak_xxx' http://<host>:8080/api/v1/external/bases
 {
   "success": true, "code": "OK",
   "data": {
-    "responseMode": "minimal",
     "queryId": "Q_874eb67fadc143b49cfcf2a4d9cfa270",
     "question": "星河项目的交付范围？",
     "topK": 3,
-    "returned": 6,
     "answer": "星河项目交付范围包含……"
   }
 }
@@ -807,14 +809,15 @@ curl -X POST http://<host>:8080/api/v1/external/query \
 
 | 取值 | `/search` 的 `data` |
 |---|---|
-| `minimal` | `responseMode` / `queryId` / `question` / `topK` / `evidence[]` |
-| `basic` | 上面这些（除 `responseMode` 外）+ `candidates[]` |
-| `full`（默认） | 当前全部字段，含完整 `citations` |
+| `minimal` | `queryId` / `question` / `topK` / `evidence[]` |
+| `basic` | 上面这些 + `citations[]` |
+| `full`（默认） | 当前全部字段，含完整 `citations` 与 `candidates` |
 
 `evidence[]` 是精简后的引用，只留展示一条引用必需的字段：
 `index / title / excerpt / sourceName / sourceUri / objectType / evidenceCode / score`。
-需要 `evidenceHash` / `generationId` / `contentUnitId` 等定位与审计字段时用 `full` 的 `citations`。
-`candidates[]` 的字段与 `full` 一致，这里只决定是否带。
+`basic` 直接给完整 `citations[]`（含 `evidenceHash` / `generationId` / `contentUnitId`
+等定位与审计字段），字段与 `full` 一致；`minimal` 那份精简版适合直接展示。
+候选原文 `candidates[]` 只在 `full` 档给出。
 
 `minimal` 示例：
 
@@ -822,7 +825,6 @@ curl -X POST http://<host>:8080/api/v1/external/query \
 {
   "success": true, "code": "OK",
   "data": {
-    "responseMode": "minimal",
     "queryId": "Q_874eb67fadc143b49cfcf2a4d9cfa270",
     "question": "星河项目的交付范围？",
     "topK": 3,
@@ -1610,3 +1612,71 @@ knowledge:
 | 答案出现「证据不足」 | 命中答案闸门，属预期行为 | 补充知识或调整问题 |
 
 排障时请提供响应中的 `traceId`，平台方可据此在调用审计与日志中定位单次请求。
+
+---
+
+## 11. 第三方检索协议接口：`POST /kb/retrievals`
+
+给「外部 Agent 平台按标准协议来检索」的场景（NovaWork standard，协议原文见
+[external_kb_search_protocol.md](./external_kb_search_protocol.md)）。它不是 `/query` 的变体，
+而是**按对方的协议形状返回**：成功就是 `{chunks:[...]}`，失败就是 `{code,message}` + 状态码，
+外面不包 `ApiResponse`。
+
+**请求**
+
+```http
+POST /api/v1/external/kb/retrievals
+Authorization: Bearer {apiKey}
+X-Knowledge-Base-Id: 10
+Content-Type: application/json
+
+{ "question": "年假政策是什么？", "topK": 5, "includeAnswer": false }
+```
+
+| 字段 | 必填 | 说明 |
+|---|---|---|
+| `question` | 是 | 问题原文，UTF-8 透传 |
+| `topK` | 否 | 期望条数上限；超出 50 取 50（不算错误），不传取 10 |
+| `includeAnswer` | 否 | 默认 `false`：只召回、跳过答案生成。`true` 时连本系统生成的答案一起给，耗时更长 |
+
+知识库由 `X-Knowledge-Base-Id` 指定：纯数字按知识库 id，其余按库编码 `base_code`；
+查不到返回 404 `KB_NOT_FOUND`。
+
+**响应**
+
+```json
+{
+  "chunks": [
+    {
+      "id": "EVD_cc91a0be181b4bf9bc3c9a5dde328ac8",
+      "content": "本项目交付范围包括……（原文）",
+      "score": 0.87,
+      "source": "02_项目星河交付说明_V1.0.docx",
+      "metadata": {
+        "docName": "一、适用范围与核心内容",
+        "page": 3,
+        "objectType": "CONTENT_UNIT",
+        "contentUnitId": "605",
+        "evidenceCode": "EVD_cc91a0be181b4bf9bc3c9a5dde328ac8",
+        "channel": "bm25",
+        "scoreOrigin": "rerank",
+        "rawScore": 0.87
+      }
+    }
+  ],
+  "answer": {
+    "status": "ok",
+    "queryId": "Q_874eb67fadc143b49cfcf2a4d9cfa270",
+    "text": "星河项目交付范围包含……",
+    "format": "markdown",
+    "confidence": 0.82,
+    "conclusionSource": "RETRIEVED_KNOWLEDGE",
+    "citations": []
+  }
+}
+```
+
+`answer` 仅在 `includeAnswer=true` 时出现。`chunks[].id` 取证据码，同一片段跨请求恒定。
+
+**与 `/query` 的关系**：授权、配额、知识库可见性、调用审计走的是同一套服务，没有第二条更宽松
+的路径；差别只在响应形状与是否生成答案。
