@@ -24,3 +24,10 @@
 - 后端代码维持 Java 8 语言兼容；开发环境可使用更高版本 JDK。
 - GitHub 工程提交使用已连接的 GitHub 账号/连接方式，目标仓库 `jhzhfree/akb`、分支 `feature/octop-mcp-integration`。
 - `backend/demo-seed/mysql/.knowledge_os.sql.4dryTx` 与 `deploy/seed/enterprise-kb-demo/.knowledge_data.sql.IEyso8` 是本地未跟踪演示数据，保留但不得纳入提交。
+
+## 外部委托身份约定
+
+- OIDC 委托身份功能默认关闭；开启后调用必须同时携带 Agent `X-API-Key` 与员工 `Authorization: Bearer <JWT>`。
+- JWT 由配置的 JWKS 验签，并校验配置 issuer、audience、`exp`、`nbf` 和非空 `sub`；不得信任 `X-User-Id` 之类的自报身份头。
+- 外部 IdP `(issuer, subject)` 必须由管理员显式映射至 ACTIVE `USER` Principal。Agent 和员工均需有目标知识库 grant，标签范围在 Key、Agent grant、员工 grant 之间取交集。
+- 委托模式拒绝独立 Embed Token。启用前必须验证 IdP 的 issuer/JWKS/audience 配置以及 Octop/MCP 客户端是否能并行发送两种凭证。

@@ -200,6 +200,28 @@ public class KnowledgeProperties {
 
         private boolean enabled = true;
 
+        /** When enabled, external calls require an API Key plus a verified employee OIDC JWT. */
+        private DelegatedIdentity delegatedIdentity = new DelegatedIdentity();
+
+        public DelegatedIdentity getDelegatedIdentity() { return delegatedIdentity; }
+        public void setDelegatedIdentity(DelegatedIdentity value) { delegatedIdentity = value == null ? new DelegatedIdentity() : value; }
+
+        public static class DelegatedIdentity {
+            private boolean enabled = false;
+            private String issuer = "";
+            private String jwkSetUri = "";
+            private String audience = "";
+
+            public boolean isEnabled() { return enabled; }
+            public void setEnabled(boolean value) { enabled = value; }
+            public String getIssuer() { return issuer; }
+            public void setIssuer(String value) { issuer = value == null ? "" : value.trim(); }
+            public String getJwkSetUri() { return jwkSetUri; }
+            public void setJwkSetUri(String value) { jwkSetUri = value == null ? "" : value.trim(); }
+            public String getAudience() { return audience; }
+            public void setAudience(String value) { audience = value == null ? "" : value.trim(); }
+        }
+
         private boolean mcpEnabled = true;
 
         private boolean sseEnabled = true;

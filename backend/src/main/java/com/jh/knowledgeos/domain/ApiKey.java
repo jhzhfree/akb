@@ -59,6 +59,11 @@ public class ApiKey {
 
     private String principalName;
 
+    private String principalType;
+
+    /** Delegated employee principal resolved from a verified OIDC token; request-scoped only. */
+    private Long delegatedPrincipalId;
+
     private String knowledgeBaseName;
 
     private String scopes;
@@ -220,6 +225,14 @@ public class ApiKey {
     public void setPrincipalName(String v) {
         principalName = v;
     }
+
+    public String getPrincipalType() { return principalType; }
+
+    public void setPrincipalType(String v) { principalType = v; }
+
+    public Long getDelegatedPrincipalId() { return delegatedPrincipalId; }
+
+    public void setDelegatedPrincipalId(Long v) { delegatedPrincipalId = v; }
 
     public String getKnowledgeBaseName() {
         return knowledgeBaseName;

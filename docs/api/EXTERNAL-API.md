@@ -174,6 +174,46 @@ Content-Type: application/json
 ]
 ```
 
+### OIDC 员工委托身份（可选）
+
+默认关闭。启用 `knowledge.external.delegated-identity.enabled=true` 后，每次 REST、MCP 或 SSE 请求都必须同时携带 Agent 的 `X-API-Key` 和员工 IdP 的 `Authorization: Bearer <JWT>`。此模式不接受把 JWT 当作 API Key，也不接受 `X-User-Id` 等调用方自报身份；独立 Embed Token 会被拒绝。
+
+服务端需要配置以下 IdP 参数，并通过 JWKS 验签：
+
+```properties
+knowledge.external.delegated-identity.enabled=true
+knowledge.external.delegated-identity.issuer=https://idp.example.com/
+knowledge.external.delegated-identity.jwk-set-uri=https://idp.example.com/.well-known/jwks.json
+knowledge.external.delegated-identity.audience=akb-external-api
+```
+
+JWT 必须包含并通过验证：`iss`、配置的 `aud`、`exp`、`nbf`、非空 `sub`。管理端需先创建 USER 主体，再将 IdP `issuer + subject` 显式映射到该主体；不会按 token 自动创建用户。示例：
+
+```http
+POST /api/external/admin/principals/users
+Content-Type: application/json
+
+{ "principalCode": "EMP_1008", "name": "员工 1008" }
+```
+
+用返回的 `id` 绑定身份并设置该员工自己的知识库权限：
+
+```http
+POST /api/external/admin/principals/{id}/identities
+Content-Type: application/json
+
+{ "issuer": "https://idp.example.com/", "subject": "00u123456", "reason": "企业账号映射" }
+```
+
+```http
+PUT /api/external/admin/principals/{id}/knowledge-base-grants/config
+Content-Type: application/json
+
+[{ "knowledgeBaseId": 12, "permissionTags": ["team-a"], "reason": "员工业务范围" }]
+```
+
+实际知识库范围取 API Key 所属 Agent 主体与 JWT 映射员工主体的有效 grant 交集；任一方无授权都拒绝访问，PUBLIC 库也不能绕过交集。检索标签继续与 Key 全局范围、Agent grant 标签和员工 grant 标签取交集。管理员可用 `GET /api/external/admin/principals/{id}/identities` 查看绑定，并用 `POST /api/external/admin/principal-identities/{identityId}/revoke` 即时吊销。此版本的业务操作 Scope 仍由 Agent API Key 控制，员工动作级 Scope 与资料级 ACL 仍在后续 P2。
+
 | Key 形态 | 行为 |
 |---|---|
 | V61 前的单库 Key | 迁移为主体 grant，行为保持原知识库范围；管理员可替换授权 |

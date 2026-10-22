@@ -109,6 +109,10 @@ public class RetrievalAuthorizationService {
             String grantJson = externalApiMapper.getPrincipalKnowledgeBaseGrantPermissionTags(key.getPrincipalId(), kb);
             kbTags = parseTags(grantJson);
         }
+        if (key != null && key.getDelegatedPrincipalId() != null && kb != null && externalApiMapper != null) {
+            String employeeGrantJson = externalApiMapper.getPrincipalKnowledgeBaseGrantPermissionTags(key.getDelegatedPrincipalId(), kb);
+            kbTags = intersectPolicies(kbTags, parseTags(employeeGrantJson));
+        }
         List<String> granted = intersectPolicies(keyTags, kbTags);
         if (granted == null) {
             // 未配置标签授权：强制模式下按默认拒绝处理，其余模式不约束。

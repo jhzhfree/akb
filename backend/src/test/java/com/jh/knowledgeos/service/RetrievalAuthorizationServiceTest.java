@@ -145,4 +145,17 @@ class RetrievalAuthorizationServiceTest {
 
         assertTrue(service("ENFORCE", mapper).effectiveTags(key, 12L, Collections.singletonList("team-a"), SOURCE).isEmpty());
     }
+
+    @Test
+    void delegatedEmployeeTagGrantFurtherNarrowsAgentGrant() {
+        ExternalApiMapper mapper = mock(ExternalApiMapper.class);
+        when(mapper.getPrincipalKnowledgeBaseGrantPermissionTags(71L, 12L)).thenReturn("[\"team-a\",\"finance\"]");
+        when(mapper.getPrincipalKnowledgeBaseGrantPermissionTags(83L, 12L)).thenReturn("[\"team-a\"]");
+        ApiKey key = keyWith("[\"team-a\",\"finance\"]");
+        key.setPrincipalId(71L);
+        key.setDelegatedPrincipalId(83L);
+
+        assertEquals(Collections.singletonList("team-a"), service("ENFORCE", mapper).effectiveTags(key, 12L,
+            Arrays.asList("team-a", "finance"), SOURCE));
+    }
 }

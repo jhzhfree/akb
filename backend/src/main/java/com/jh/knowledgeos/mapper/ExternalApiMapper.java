@@ -4,6 +4,7 @@ import com.jh.knowledgeos.domain.ApiCallAudit;
 import com.jh.knowledgeos.domain.ApiKey;
 import com.jh.knowledgeos.domain.EmbedTokenRevocation;
 import com.jh.knowledgeos.domain.ExternalPrincipal;
+import com.jh.knowledgeos.domain.ExternalIdentityLink;
 import org.apache.ibatis.annotations.Param;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -27,6 +28,17 @@ public interface ExternalApiMapper {
     ExternalPrincipal getPrincipal(@Param("id") Long id);
 
     List<Map<String, Object>> listPrincipals();
+
+    ExternalPrincipal findActiveUserPrincipalByIdentity(@Param("issuer") String issuer, @Param("subject") String subject);
+
+    int insertPrincipalIdentityLink(ExternalIdentityLink link);
+
+    List<Map<String, Object>> listPrincipalIdentityLinks(@Param("principalId") Long principalId);
+
+    int revokePrincipalIdentityLink(@Param("id") Long id, @Param("operatorId") Long operatorId);
+
+    int insertPrincipalIdentityAudit(@Param("identityLinkId") Long identityLinkId, @Param("principalId") Long principalId,
+        @Param("action") String action, @Param("operatorId") Long operatorId, @Param("reason") String reason);
 
     int updateApiKeyPrincipal(@Param("keyId") Long keyId, @Param("principalId") Long principalId);
 

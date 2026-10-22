@@ -4,6 +4,7 @@ import com.jh.knowledgeos.config.KnowledgeProperties;
 import com.jh.knowledgeos.domain.ApiKey;
 import com.jh.knowledgeos.exception.UnauthorizedException;
 import org.springframework.stereotype.Service;
+import org.springframework.beans.factory.annotation.Autowired;
 import javax.servlet.http.HttpServletRequest;
 import java.net.URI;
 import java.util.List;
@@ -44,20 +45,36 @@ public class ExternalAccessService {
 
     private final KnowledgeProperties.External properties;
 
+    private final DelegatedIdentityService delegatedIdentityService;
+
     public ExternalAccessService(ApiKeyService apiKeyService, ExternalRateLimiter rateLimiter, KnowledgeBaseAccessService accessService,
         EmbedTokenService embedTokens, EmbedTokenLifecycleService tokenLifecycle, KnowledgeProperties properties) {
+        this(apiKeyService, rateLimiter, accessService, embedTokens, tokenLifecycle, properties, null);
+    }
+
+    @Autowired
+    public ExternalAccessService(ApiKeyService apiKeyService, ExternalRateLimiter rateLimiter, KnowledgeBaseAccessService accessService,
+        EmbedTokenService embedTokens, EmbedTokenLifecycleService tokenLifecycle, KnowledgeProperties properties,
+        DelegatedIdentityService delegatedIdentityService) {
         this.apiKeyService = apiKeyService;
         this.rateLimiter = rateLimiter;
         this.accessService = accessService;
         this.embedTokens = embedTokens;
         this.tokenLifecycle = tokenLifecycle;
         this.properties = properties.external();
+        this.delegatedIdentityService = delegatedIdentityService;
     }
 
     /**
      * Resolves the presented credential, enforcing status, expiry and the per-minute quota.
      */
     public ApiKey authenticate(HttpServletRequest request) {
+        if (delegatedIdentityEnabled()) {
+            String apiKeyHeader = request.getHeader(HEADER);
+            if (apiKeyHeader == null || apiKeyHeader.trim().isEmpty()) {
+                throw new UnauthorizedException("委托身份模式要求通过 X-API-Key 单独提供 Agent 凭证");
+            }
+        }
         String secret = extractSecret(request);
         if (secret == null) {
             throw new UnauthorizedException("缺少 API Key：请通过 " + HEADER + " 或 Authorization: Bearer 提供");
@@ -65,6 +82,13 @@ public class ExternalAccessService {
         ApiKey key = apiKeyService.authenticate(secret);
         if (key == null) {
             throw new UnauthorizedException("API Key 无效、已吊销或已过期");
+        }
+        if (delegatedIdentityEnabled()) {
+            if (key.getPrincipalId() == null || "USER".equalsIgnoreCase(key.getPrincipalType())) {
+                throw new UnauthorizedException("API Key 必须归属 APPLICATION 或 AGENT 主体");
+            }
+            Long employeePrincipalId = delegatedIdentityService.authenticateBearer(request.getHeader("Authorization"));
+            key.setDelegatedPrincipalId(employeePrincipalId);
         }
         rateLimiter.check(key);
         return key;
@@ -77,7 +101,13 @@ public class ExternalAccessService {
     }
 
     public List<Long> grantedKnowledgeBases(ApiKey key) {
-        return apiKeyService.grantedKnowledgeBases(key);
+        List<Long> agentGrants = apiKeyService.grantedKnowledgeBases(key);
+        if (key == null || key.getDelegatedPrincipalId() == null) {
+            return agentGrants;
+        }
+        List<Long> employeeGrants = apiKeyService.grantedKnowledgeBases(key.getDelegatedPrincipalId());
+        agentGrants.retainAll(employeeGrants);
+        return agentGrants;
     }
 
     /**
@@ -89,7 +119,7 @@ public class ExternalAccessService {
      */
     public Long resolveKnowledgeBase(ApiKey key, Long requested) {
         Long bound = key.getKnowledgeBaseId();
-        List<Long> grants = apiKeyService.grantedKnowledgeBases(key);
+        List<Long> grants = grantedKnowledgeBases(key);
         Long kb = requested;
         if (kb == null) {
             kb = bound;
@@ -99,6 +129,12 @@ public class ExternalAccessService {
         }
         if (kb == null) {
             throw new IllegalArgumentException("缺少 knowledgeBaseId 参数");
+        }
+        if (key.getDelegatedPrincipalId() != null) {
+            if (grants.contains(kb)) {
+                return kb;
+            }
+            throw new SecurityException("Agent 与员工主体均须获准访问此知识库");
         }
         if (grants.contains(kb)) {
             return kb;
@@ -114,6 +150,10 @@ public class ExternalAccessService {
         }
         accessService.assertExternalAccess(kb, false);
         return kb;
+    }
+
+    private boolean delegatedIdentityEnabled() {
+        return delegatedIdentityService != null && delegatedIdentityService.isEnabled();
     }
 
     /**
@@ -138,6 +178,9 @@ public class ExternalAccessService {
      * Validates a self-contained embed token, or returns null when it must be refused.
      */
     public ApiKey authenticateEmbedToken(String token, HttpServletRequest request) {
+        if (delegatedIdentityEnabled()) {
+            throw new UnauthorizedException("委托身份模式不接受独立 Embed Token；请使用 X-API-Key 与员工 OIDC Bearer Token");
+        }
         EmbedTokenService.EmbedToken parsed = embedTokens.parse(token);
         if (parsed == null) {
             return null;

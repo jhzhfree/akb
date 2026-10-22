@@ -5,6 +5,7 @@ public class ExternalPrincipal {
 
     private Long id;
     private String principalCode;
+    private String principalType;
     private String name;
     private String status;
     private Long createdBy;
@@ -13,6 +14,8 @@ public class ExternalPrincipal {
     public void setId(Long id) { this.id = id; }
     public String getPrincipalCode() { return principalCode; }
     public void setPrincipalCode(String principalCode) { this.principalCode = principalCode; }
+    public String getPrincipalType() { return principalType; }
+    public void setPrincipalType(String principalType) { this.principalType = principalType; }
     public String getName() { return name; }
     public void setName(String name) { this.name = name; }
     public String getStatus() { return status; }

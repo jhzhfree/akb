@@ -20,6 +20,8 @@ import com.jh.knowledgeos.service.AuthContext;
 import com.jh.knowledgeos.service.EmbedTokenLifecycleService;
 import com.jh.knowledgeos.service.ExternalAuditService;
 import com.jh.knowledgeos.service.McpServerService;
+import com.jh.knowledgeos.service.DelegatedIdentityService;
+import com.jh.knowledgeos.service.IdGenerator;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -60,17 +62,24 @@ public class ExternalServiceAdminController {
     private final AgentMemoryScopeAccessService memoryScopeAccessService;
     private final AgentMemoryGovernanceService memoryGovernanceService;
 
+    private final DelegatedIdentityService delegatedIdentityService;
+
+    private final IdGenerator ids;
+
     private final KnowledgeProperties.External properties;
 
     public ExternalServiceAdminController(ApiKeyService apiKeyService, ExternalAuditService auditService, McpServerService mcpServerService,
         EmbedTokenLifecycleService tokenLifecycle, AgentMemoryScopeAccessService memoryScopeAccessService,
-        AgentMemoryGovernanceService memoryGovernanceService, KnowledgeProperties properties) {
+        AgentMemoryGovernanceService memoryGovernanceService, KnowledgeProperties properties,
+        DelegatedIdentityService delegatedIdentityService, IdGenerator ids) {
         this.apiKeyService = apiKeyService;
         this.auditService = auditService;
         this.mcpServerService = mcpServerService;
         this.tokenLifecycle = tokenLifecycle;
         this.memoryScopeAccessService = memoryScopeAccessService;
         this.memoryGovernanceService = memoryGovernanceService;
+        this.delegatedIdentityService = delegatedIdentityService;
+        this.ids = ids;
         this.properties = properties.external();
     }
 
@@ -85,6 +94,7 @@ public class ExternalServiceAdminController {
         rest.put("enabled", properties.isEnabled());
         rest.put("basePath", "/api/v1/external");
         rest.put("auth", "X-API-Key 或 Authorization: Bearer");
+        rest.put("delegatedIdentityRequired", properties.getDelegatedIdentity().isEnabled());
         rest.put("agentMemoryEnabled", properties.isAgentMemoryEnabled());
         rest.put("endpoints", Arrays.asList(endpoint("GET", "/bases", "可见知识库列表"), endpoint("POST", "/query", "可追溯问答"), endpoint("POST", "/search",
             "检索（不生成答案）"), endpoint("POST", "/kb/retrievals", "第三方检索协议：chunks[] + 可选 answer"), endpoint("GET", "/cards", "知识卡片清单"), endpoint("GET", "/cards/{code}", "知识卡片详情"), endpoint("GET", "/claims", "断言清单"),
@@ -129,6 +139,61 @@ public class ExternalServiceAdminController {
     public ApiResponse<Object> listPrincipals() {
         requireManager();
         return ApiResponse.ok(apiKeyService.listPrincipals());
+    }
+
+    @PostMapping("/principals/users")
+    @Operation(summary = "创建供 OIDC 委托身份绑定的 USER 主体")
+    public ApiResponse<Object> createUserPrincipal(@RequestBody(required = false) Map<String, Object> body) {
+        User operator = requireManager();
+        Map<String, Object> request = body == null ? Collections.<String, Object>emptyMap() : body;
+        Object code = request.get("principalCode");
+        Object name = request.get("name");
+        return ApiResponse.ok(delegatedIdentityService.createUserPrincipal(code == null ? null : String.valueOf(code),
+            name == null ? null : String.valueOf(name), operator.getId(), ids));
+    }
+
+    @GetMapping("/principals/{id}/identities")
+    @Operation(summary = "查看 USER 主体的 OIDC 身份映射")
+    public ApiResponse<Object> identityLinks(@PathVariable Long id) {
+        requireManager();
+        return ApiResponse.ok(delegatedIdentityService.listIdentityLinks(id));
+    }
+
+    @PostMapping("/principals/{id}/identities")
+    @Operation(summary = "绑定受信 OIDC issuer 的 subject 到 USER 主体")
+    public ApiResponse<Object> linkIdentity(@PathVariable Long id, @RequestBody(required = false) Map<String, Object> body) {
+        User operator = requireManager();
+        Map<String, Object> request = body == null ? Collections.<String, Object>emptyMap() : body;
+        Object issuer = request.get("issuer");
+        Object subject = request.get("subject");
+        Object reason = request.get("reason");
+        return ApiResponse.ok(delegatedIdentityService.linkIdentity(id, issuer == null ? null : String.valueOf(issuer),
+            subject == null ? null : String.valueOf(subject), operator.getId(), reason == null ? null : String.valueOf(reason)));
+    }
+
+    @PostMapping("/principal-identities/{id}/revoke")
+    @Operation(summary = "吊销 OIDC 身份映射，立即阻止委托调用")
+    public ApiResponse<Object> revokeIdentity(@PathVariable Long id, @RequestBody(required = false) Map<String, Object> body) {
+        User operator = requireManager();
+        Object reason = body == null ? null : body.get("reason");
+        delegatedIdentityService.revokeIdentity(id, operator.getId(), reason == null ? null : String.valueOf(reason));
+        return ApiResponse.ok(Collections.singletonMap("revoked", Boolean.TRUE));
+    }
+
+    @GetMapping("/principals/{id}/knowledge-base-grants/config")
+    @Operation(summary = "查看任意 Principal 的知识库授权配置")
+    public ApiResponse<Object> principalKnowledgeBaseGrantConfig(@PathVariable Long id) {
+        requireManager();
+        return ApiResponse.ok(apiKeyService.knowledgeBaseGrantDetails(id));
+    }
+
+    @PutMapping("/principals/{id}/knowledge-base-grants/config")
+    @Operation(summary = "配置员工 USER 主体的知识库授权、标签和期限")
+    public ApiResponse<Object> replacePrincipalKnowledgeBaseGrantConfig(@PathVariable Long id,
+        @RequestBody(required = false) List<ExternalKnowledgeBaseGrantRequest> grants) {
+        User operator = requireManager();
+        return ApiResponse.ok(apiKeyService.replacePrincipalKnowledgeBaseGrantDetails(id,
+            grants == null ? Collections.<ExternalKnowledgeBaseGrantRequest>emptyList() : grants, operator.getId()));
     }
 
     @PostMapping("/keys/{id}/principal")

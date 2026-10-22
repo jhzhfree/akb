@@ -267,15 +267,29 @@ public class ApiKeyService {
         if (key == null || key.getPrincipalId() == null) {
             return new ArrayList<Long>();
         }
-        return mapper.listPrincipalKnowledgeBaseGrants(key.getPrincipalId());
+        return grantedKnowledgeBases(key.getPrincipalId());
+    }
+
+    public List<Long> grantedKnowledgeBases(Long principalId) {
+        if (principalId == null) {
+            return new ArrayList<Long>();
+        }
+        return mapper.listPrincipalKnowledgeBaseGrants(principalId);
     }
 
     public List<Map<String, Object>> knowledgeBaseGrantDetails(ApiKey key) {
         if (key == null || key.getPrincipalId() == null) {
             return new ArrayList<Map<String, Object>>();
         }
+        return knowledgeBaseGrantDetails(key.getPrincipalId());
+    }
+
+    public List<Map<String, Object>> knowledgeBaseGrantDetails(Long principalId) {
+        if (principalId == null) {
+            return new ArrayList<Map<String, Object>>();
+        }
         List<Map<String, Object>> result = new ArrayList<Map<String, Object>>();
-        for (Map<String, Object> detail : mapper.listPrincipalKnowledgeBaseGrantDetails(key.getPrincipalId())) {
+        for (Map<String, Object> detail : mapper.listPrincipalKnowledgeBaseGrantDetails(principalId)) {
             Map<String, Object> row = new LinkedHashMap<String, Object>(detail);
             Object rawTags = row.remove("permissionTagsJson");
             row.put("permissionTags", parsePermissionTags(rawTags));
@@ -312,6 +326,16 @@ public class ApiKeyService {
         }
         if (key.getPrincipalId() == null) {
             throw new IllegalStateException("API Key 缺少主体，需先执行 V61 数据迁移");
+        }
+        return replacePrincipalKnowledgeBaseGrantDetails(key.getPrincipalId(), grants, operatorId);
+    }
+
+    @Transactional
+    public List<Map<String, Object>> replacePrincipalKnowledgeBaseGrantDetails(Long principalId, List<ExternalKnowledgeBaseGrantRequest> grants,
+        Long operatorId) {
+        ExternalPrincipal principal = mapper.getPrincipal(principalId);
+        if (principal == null || !"ACTIVE".equalsIgnoreCase(principal.getStatus())) {
+            throw new IllegalArgumentException("主体不存在或不可用");
         }
         Map<Long, LocalDateTime> expirations = new LinkedHashMap<Long, LocalDateTime>();
         Map<Long, String> reasons = new LinkedHashMap<Long, String>();
@@ -352,25 +376,25 @@ public class ApiKeyService {
                 permissionTagsByKnowledgeBase.put(knowledgeBaseId, serializePermissionTags(grant.getPermissionTags()));
             }
         }
-        for (Map<String, Object> oldGrant : mapper.listPrincipalKnowledgeBaseGrantDetails(key.getPrincipalId())) {
+        for (Map<String, Object> oldGrant : mapper.listPrincipalKnowledgeBaseGrantDetails(principalId)) {
             Long oldKnowledgeBaseId = numberValue(oldGrant.get("knowledgeBaseId"));
             if (oldKnowledgeBaseId != null) {
-                mapper.insertPrincipalKnowledgeBaseGrantAudit(key.getPrincipalId(), oldKnowledgeBaseId, "REVOKE", operatorId,
+                mapper.insertPrincipalKnowledgeBaseGrantAudit(principalId, oldKnowledgeBaseId, "REVOKE", operatorId,
                     "控制台替换授权配置", nullableString(oldGrant.get("permissionTagsJson")));
             }
         }
-        mapper.deletePrincipalKnowledgeBaseGrants(key.getPrincipalId());
+        mapper.deletePrincipalKnowledgeBaseGrants(principalId);
         for (Map.Entry<Long, LocalDateTime> entry : expirations.entrySet()) {
             Long knowledgeBaseId = entry.getKey();
             String reason = reasons.get(knowledgeBaseId);
             String permissionTagsJson = permissionTagsByKnowledgeBase.get(knowledgeBaseId);
-            mapper.insertPrincipalKnowledgeBaseGrantWithExpiry(key.getPrincipalId(), knowledgeBaseId, operatorId, reason,
+            mapper.insertPrincipalKnowledgeBaseGrantWithExpiry(principalId, knowledgeBaseId, operatorId, reason,
                 entry.getValue(), permissionTagsJson);
-            mapper.insertPrincipalKnowledgeBaseGrantAudit(key.getPrincipalId(), knowledgeBaseId, "GRANT", operatorId, reason,
+            mapper.insertPrincipalKnowledgeBaseGrantAudit(principalId, knowledgeBaseId, "GRANT", operatorId, reason,
                 permissionTagsJson);
         }
         List<Map<String, Object>> result = new ArrayList<Map<String, Object>>();
-        for (Long id : grantedKnowledgeBases(key)) {
+        for (Long id : grantedKnowledgeBases(principalId)) {
             Map<String, Object> grant = new LinkedHashMap<String, Object>();
             grant.put("knowledgeBaseId", id);
             result.add(grant);

@@ -56,6 +56,9 @@ public class DatabaseMigrationIT {
             assertTrue(tableExists(st, "t_agent_memory_scope_access"));
             assertTrue(tableExists(st, "t_agent_memory_governance_event"));
             assertTrue(tableExists(st, "t_api_key_principal_audit"));
+            assertTrue(tableExists(st, "t_principal_identity_link"));
+            assertTrue(tableExists(st, "t_principal_identity_audit"));
+            assertTrue(columnExists(st, "t_principal", "principal_type"));
             assertTrue(columnExists(st, "t_api_key", "principal_id"));
             assertTrue(columnExists(st, "t_principal_kb_grant", "permission_tags"));
             assertTrue(columnExists(st, "t_principal_kb_grant_audit", "permission_tags"));

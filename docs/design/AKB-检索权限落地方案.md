@@ -22,7 +22,7 @@
 | **资料 ACL 字段** | ✅ 已有基础 | `t_source` / `t_knowledge_card` / `t_claim` 均有 `permission_tags` JSON 列；已有 `t_acl_access_audit`、`t_acl_change` |
 | **知识库可见性** | ✅ 已有 | `KnowledgeBaseVisibility`：`PUBLIC` / `PRIVATE` / `GROUP` |
 | **查询缓存** | — 不适用 | 无 `@Cacheable`、无 Redis 查询缓存。设计 §11 的缓存键要求暂不涉及，但将来引入时必须带上授权上下文 |
-| **委托身份** | ❌ 不存在 | 无 OIDC / OAuth 校验 |
+| **委托身份** | 🟡 本轮补齐身份验证与知识库/标签交集 | `DelegatedIdentityService` 校验 OIDC JWT，用户映射必须是显式 ACTIVE USER Principal |
 
 ### 1.1 漏洞链路（唯一确认的高危项）
 
@@ -87,12 +87,24 @@ effectiveTags = 凭证授权标签 ∩ 请求标签
 7. ✅ V63 为知识库 grant 增加独立标签范围；有效标签为 API Key 全局授权与知识库 grant 授权的交集，再与请求标签相交。`null` 继承全局配置，空数组只允许公开资料；变更审计保留标签快照。
 8. ⏳ 后续按 P2 顺序完成 OIDC/OAuth 委托身份、员工与 Agent 权限交集、资料级 ACL 和撤权传播。数据库迁移验收需在 Docker 可用环境执行。
 
-### P2：委托身份与细粒度 ACL（未开始）
+### P2：委托身份与细粒度 ACL（身份委托 MVP 已实现）
 
-1. OIDC / OAuth 校验（`iss` / `aud` / `exp` / `nbf` / `sub`），拒绝 `X-User-Id` 类裸头
-2. Agent 权限 ∩ 员工权限（用例 5 / 6）
-3. `t_resource_acl` + 资料 `visibility`，DENY 优先
-4. 撤权传播：索引属性 + 缓存失效（用例 9）
+1. ✅ 可选双凭证校验：`X-API-Key` 代表 Agent，`Authorization: Bearer <JWT>` 代表员工；功能默认关闭。开启后缺任一凭证即拒绝，并拒绝独立 Embed Token。JWT 验签并校验 `iss` / `aud` / `exp` / `nbf` / `sub`。
+2. ✅ 新增 `principal_type` 与 `t_principal_identity_link`。管理员创建 USER Principal 并显式绑定配置 issuer 下的 `(issuer, subject)`；不自动开户，不读取 `X-User-Id`。绑定及撤销写入审计表。
+3. ✅ 查询授权取 Agent Principal 与员工 USER Principal 的知识库 grant 交集；同库资料标签再取两主体授权范围交集。两方缺任一有效 grant 均拒绝，公共库不会绕过委托交集。
+4. ✅ 管理端可配置 USER Principal 的逐库标签、期限与原因，和查看/吊销身份绑定。
+5. ⏳ 资料级 `t_resource_acl`、`visibility` / `classification`、DENY 优先以及索引侧撤权传播尚未实现；这是下一段 P2。
+
+配置项（环境变量形式）：
+
+```properties
+knowledge.external.delegated-identity.enabled=false
+knowledge.external.delegated-identity.issuer=https://idp.example.com/
+knowledge.external.delegated-identity.jwk-set-uri=https://idp.example.com/.well-known/jwks.json
+knowledge.external.delegated-identity.audience=akb-external-api
+```
+
+启用后外部调用必须同时携带 `X-API-Key` 和 IdP 签发的员工 Bearer JWT。每个 JWT `sub` 需预先由管理员映射到 USER Principal。对于一个目标知识库，Agent grant ∩ 员工 grant 必须包含该库；资料标签按 Key 全局范围 ∩ Agent grant 标签 ∩ 员工 grant 标签进一步收窄。该 MVP 只对知识库 membership 和检索标签做主体交集，API 操作 Scope 仍由 API Key 控制；细粒度员工动作权限归入后续改造。
 
 ### P3：外接知识库治理（未开始）
 
