@@ -2,6 +2,7 @@ package com.jh.knowledgeos.service;
 
 import com.jh.knowledgeos.domain.ApiKey;
 import com.jh.knowledgeos.domain.ExternalPrincipal;
+import com.jh.knowledgeos.dto.ExternalKnowledgeBaseGrantRequest;
 import com.jh.knowledgeos.mapper.ExternalApiMapper;
 import org.springframework.stereotype.Service;
 import java.nio.charset.StandardCharsets;
@@ -9,14 +10,13 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
 import java.time.LocalDateTime;
+import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.LinkedHashSet;
-import java.util.Set;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
@@ -189,12 +189,35 @@ public class ApiKeyService {
         return mapper.listPrincipalKnowledgeBaseGrants(key.getPrincipalId());
     }
 
+    public List<Map<String, Object>> knowledgeBaseGrantDetails(ApiKey key) {
+        if (key == null || key.getPrincipalId() == null) {
+            return new ArrayList<Map<String, Object>>();
+        }
+        return mapper.listPrincipalKnowledgeBaseGrantDetails(key.getPrincipalId());
+    }
+
     public boolean hasKnowledgeBaseGrant(ApiKey key, Long knowledgeBaseId) {
         return knowledgeBaseId != null && grantedKnowledgeBases(key).contains(knowledgeBaseId);
     }
 
     @Transactional
     public List<Map<String, Object>> replaceKnowledgeBaseGrants(Long keyId, List<Long> knowledgeBaseIds, Long operatorId) {
+        Map<Long, ExternalKnowledgeBaseGrantRequest> uniqueGrants = new LinkedHashMap<Long, ExternalKnowledgeBaseGrantRequest>();
+        if (knowledgeBaseIds != null) {
+            for (Long knowledgeBaseId : knowledgeBaseIds) {
+                if (uniqueGrants.containsKey(knowledgeBaseId)) {
+                    continue;
+                }
+                ExternalKnowledgeBaseGrantRequest grant = new ExternalKnowledgeBaseGrantRequest();
+                grant.setKnowledgeBaseId(knowledgeBaseId);
+                uniqueGrants.put(knowledgeBaseId, grant);
+            }
+        }
+        return replaceKnowledgeBaseGrantDetails(keyId, new ArrayList<ExternalKnowledgeBaseGrantRequest>(uniqueGrants.values()), operatorId);
+    }
+
+    @Transactional
+    public List<Map<String, Object>> replaceKnowledgeBaseGrantDetails(Long keyId, List<ExternalKnowledgeBaseGrantRequest> grants, Long operatorId) {
         ApiKey key = mapper.getApiKey(keyId);
         if (key == null) {
             throw new IllegalArgumentException("API Key 不存在");
@@ -202,28 +225,52 @@ public class ApiKeyService {
         if (key.getPrincipalId() == null) {
             throw new IllegalStateException("API Key 缺少主体，需先执行 V61 数据迁移");
         }
-        Set<Long> uniqueIds = new LinkedHashSet<Long>();
-        if (knowledgeBaseIds != null) {
-            if (knowledgeBaseIds.size() > 100) {
+        Map<Long, LocalDateTime> expirations = new LinkedHashMap<Long, LocalDateTime>();
+        Map<Long, String> reasons = new LinkedHashMap<Long, String>();
+        if (grants != null) {
+            if (grants.size() > 100) {
                 throw new IllegalArgumentException("单个主体最多授权 100 个知识库");
             }
-            for (Long knowledgeBaseId : knowledgeBaseIds) {
+            for (ExternalKnowledgeBaseGrantRequest grant : grants) {
+                Long knowledgeBaseId = grant == null ? null : grant.getKnowledgeBaseId();
                 if (knowledgeBaseId == null || knowledgeBaseId.longValue() <= 0) {
                     throw new IllegalArgumentException("knowledgeBaseIds 只接受正整数");
+                }
+                if (expirations.containsKey(knowledgeBaseId)) {
+                    throw new IllegalArgumentException("知识库授权不能重复：" + knowledgeBaseId);
                 }
                 if (mapper.countKnowledgeBase(knowledgeBaseId) == 0) {
                     throw new IllegalArgumentException("知识库不存在：" + knowledgeBaseId);
                 }
-                uniqueIds.add(knowledgeBaseId);
+                String expiresAtText = grant.getExpiresAt();
+                LocalDateTime expiresAt = null;
+                if (expiresAtText != null && !expiresAtText.trim().isEmpty()) {
+                    try {
+                        expiresAt = LocalDateTime.parse(expiresAtText.trim());
+                    } catch (DateTimeParseException e) {
+                        throw new IllegalArgumentException("expiresAt 需为 ISO 时间，如 2026-12-31T23:59:59");
+                    }
+                    if (!expiresAt.isAfter(LocalDateTime.now())) {
+                        throw new IllegalArgumentException("知识库授权到期时间必须晚于当前时间");
+                    }
+                }
+                String reason = grant.getReason() == null ? "" : grant.getReason().trim();
+                if (reason.length() > 500) {
+                    throw new IllegalArgumentException("授权原因最多 500 个字符");
+                }
+                expirations.put(knowledgeBaseId, expiresAt);
+                reasons.put(knowledgeBaseId, reason.isEmpty() ? "控制台配置授权" : reason);
             }
         }
         for (Long oldGrant : mapper.listPrincipalKnowledgeBaseGrants(key.getPrincipalId())) {
-            mapper.insertPrincipalKnowledgeBaseGrantAudit(key.getPrincipalId(), oldGrant, "REVOKE", operatorId, "控制台替换授权");
+            mapper.insertPrincipalKnowledgeBaseGrantAudit(key.getPrincipalId(), oldGrant, "REVOKE", operatorId, "控制台替换授权配置");
         }
         mapper.deletePrincipalKnowledgeBaseGrants(key.getPrincipalId());
-        for (Long knowledgeBaseId : uniqueIds) {
-            mapper.insertPrincipalKnowledgeBaseGrant(key.getPrincipalId(), knowledgeBaseId, operatorId, "控制台授权");
-            mapper.insertPrincipalKnowledgeBaseGrantAudit(key.getPrincipalId(), knowledgeBaseId, "GRANT", operatorId, "控制台授权");
+        for (Map.Entry<Long, LocalDateTime> entry : expirations.entrySet()) {
+            Long knowledgeBaseId = entry.getKey();
+            String reason = reasons.get(knowledgeBaseId);
+            mapper.insertPrincipalKnowledgeBaseGrantWithExpiry(key.getPrincipalId(), knowledgeBaseId, operatorId, reason, entry.getValue());
+            mapper.insertPrincipalKnowledgeBaseGrantAudit(key.getPrincipalId(), knowledgeBaseId, "GRANT", operatorId, reason);
         }
         List<Map<String, Object>> result = new ArrayList<Map<String, Object>>();
         for (Long id : grantedKnowledgeBases(key)) {

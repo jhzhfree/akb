@@ -7,6 +7,7 @@ import com.jh.knowledgeos.domain.ApiCallAudit;
 import com.jh.knowledgeos.domain.User;
 import com.jh.knowledgeos.dto.EmbedTokenRevokeRequest;
 import com.jh.knowledgeos.dto.ExternalKeyRequest;
+import com.jh.knowledgeos.dto.ExternalKnowledgeBaseGrantRequest;
 import com.jh.knowledgeos.dto.AgentMemoryScopeGrantRequest;
 import com.jh.knowledgeos.dto.AgentMemoryGovernanceRequest;
 import com.jh.knowledgeos.dto.AgentMemoryKeyPolicyRequest;
@@ -170,6 +171,26 @@ public class ExternalServiceAdminController {
         User operator = requireManager();
         return ApiResponse.ok(apiKeyService.replaceKnowledgeBaseGrants(id,
             knowledgeBaseIds == null ? Collections.<Long>emptyList() : knowledgeBaseIds, operator.getId()));
+    }
+
+    @GetMapping("/keys/{id}/knowledge-base-grants/config")
+    @Operation(summary = "查看知识库授权期限与授权原因")
+    public ApiResponse<Object> knowledgeBaseGrantConfig(@PathVariable Long id) {
+        requireManager();
+        com.jh.knowledgeos.domain.ApiKey key = apiKeyService.get(id);
+        if (key == null) {
+            throw new IllegalArgumentException("API Key 不存在");
+        }
+        return ApiResponse.ok(apiKeyService.knowledgeBaseGrantDetails(key));
+    }
+
+    @PutMapping("/keys/{id}/knowledge-base-grants/config")
+    @Operation(summary = "原子替换知识库授权并设置逐库有效期与授权原因")
+    public ApiResponse<Object> replaceKnowledgeBaseGrantConfig(@PathVariable Long id,
+        @RequestBody(required = false) List<ExternalKnowledgeBaseGrantRequest> grants) {
+        User operator = requireManager();
+        return ApiResponse.ok(apiKeyService.replaceKnowledgeBaseGrantDetails(id,
+            grants == null ? Collections.<ExternalKnowledgeBaseGrantRequest>emptyList() : grants, operator.getId()));
     }
 
     @PutMapping("/keys/{id}/memory-policy")

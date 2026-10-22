@@ -142,12 +142,23 @@ API Key 通过主体获得知识库授权。管理员可读取或原子替换一
 ```http
 GET /api/external/admin/keys/{id}/knowledge-base-grants
 PUT /api/external/admin/keys/{id}/knowledge-base-grants
+GET /api/external/admin/keys/{id}/knowledge-base-grants/config
+PUT /api/external/admin/keys/{id}/knowledge-base-grants/config
 Content-Type: application/json
 
 [12, 18]
 ```
 
 `PUT` 请求体是知识库 ID 数组；空数组 `[]` 表示撤销全部。授权变更写入授予/撤销审计。API 请求中的知识库 ID 必须匹配有效 grant；V61 会把既有单库绑定迁移为等价 grant，撤销后不会通过遗留 `knowledge_base_id` 回退访问。
+
+需要管理每个授权的期限时，使用 `/config` 路由，逐条提交 `knowledgeBaseId`、`expiresAt` 和可选的 `reason`。`expiresAt` 使用本地 ISO 时间（如 `2026-12-31T23:59:59`），留空表示长期有效；已到期时间会被拒绝，重复知识库 ID 也会被拒绝。该路由同样采用整体替换语义：提交的清单之外的授权将被撤销。
+
+```json
+[
+  { "knowledgeBaseId": 12, "expiresAt": "2026-12-31T23:59:59", "reason": "项目验收期临时授权" },
+  { "knowledgeBaseId": 18, "expiresAt": null, "reason": "长期业务接入" }
+]
+```
 
 | Key 形态 | 行为 |
 |---|---|
@@ -1398,6 +1409,8 @@ curl -N -H 'X-API-Key: kos_ak_xxx' \
 | POST | `/keys/{id}/revoke` | 吊销 Key，立即失效 |
 | GET | `/keys/{id}/knowledge-base-grants` | 查询主体当前有效的知识库授权 |
 | PUT | `/keys/{id}/knowledge-base-grants` | 原子替换知识库授权；请求体为 ID 数组，`[]` 撤销全部 |
+| GET | `/keys/{id}/knowledge-base-grants/config` | 查询授权期限、原因和状态 |
+| PUT | `/keys/{id}/knowledge-base-grants/config` | 原子替换授权并按知识库设置期限与原因 |
 | GET | `/audits?keyId=&limit=` | 调用审计（REST/MCP/SSE 合并），字段含 `channel / method / knowledgeBaseId / statusCode / durationMs / traceId / message / createdTime` |
 | GET | `/mcp/manifest` | MCP 服务清单：协议版本、工具定义（含入参 schema） |
 | GET | `/mcp/calls?limit=` | MCP 通道最近调用 |

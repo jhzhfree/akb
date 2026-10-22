@@ -35,8 +35,14 @@
 <insert id="insertPrincipalKnowledgeBaseGrant">INSERT INTO t_principal_kb_grant(principal_id,knowledge_base_id,status,reason,created_by)
   VALUES(#{principalId},#{knowledgeBaseId},'ACTIVE',#{reason},#{createdBy})</insert>
 
+<insert id="insertPrincipalKnowledgeBaseGrantWithExpiry">INSERT INTO t_principal_kb_grant(principal_id,knowledge_base_id,status,reason,created_by,expires_at)
+  VALUES(#{principalId},#{knowledgeBaseId},'ACTIVE',#{reason},#{createdBy},#{expiresAt})</insert>
+
 <select id="listPrincipalKnowledgeBaseGrants" resultType="long">SELECT knowledge_base_id FROM t_principal_kb_grant
   WHERE principal_id=#{principalId} AND status='ACTIVE' AND (expires_at IS NULL OR expires_at&gt;CURRENT_TIMESTAMP) ORDER BY knowledge_base_id</select>
+
+<select id="listPrincipalKnowledgeBaseGrantDetails" resultType="map">SELECT knowledge_base_id AS knowledgeBaseId,expires_at AS expiresAt,
+  reason,status,created_time AS createdTime FROM t_principal_kb_grant WHERE principal_id=#{principalId} ORDER BY knowledge_base_id</select>
 
 <delete id="deletePrincipalKnowledgeBaseGrants">DELETE FROM t_principal_kb_grant WHERE principal_id=#{principalId}</delete>
 

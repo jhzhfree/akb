@@ -29,7 +29,12 @@ public interface ExternalApiMapper {
     int insertPrincipalKnowledgeBaseGrant(@Param("principalId") Long principalId, @Param("knowledgeBaseId") Long knowledgeBaseId,
         @Param("createdBy") Long createdBy, @Param("reason") String reason);
 
+    int insertPrincipalKnowledgeBaseGrantWithExpiry(@Param("principalId") Long principalId, @Param("knowledgeBaseId") Long knowledgeBaseId,
+        @Param("createdBy") Long createdBy, @Param("reason") String reason, @Param("expiresAt") LocalDateTime expiresAt);
+
     List<Long> listPrincipalKnowledgeBaseGrants(@Param("principalId") Long principalId);
+
+    List<Map<String, Object>> listPrincipalKnowledgeBaseGrantDetails(@Param("principalId") Long principalId);
 
     int deletePrincipalKnowledgeBaseGrants(@Param("principalId") Long principalId);
 

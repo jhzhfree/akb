@@ -297,8 +297,17 @@
           collapse-tags collapse-tags-tooltip placeholder="选择一个或多个知识库">
           <el-option v-for="base in bases" :key="base.id" :value="base.id" :label="base.name" />
         </el-select>
+        <div v-if="selectedGrantBases.length" class="space-y-2">
+          <div v-for="base in selectedGrantBases" :key="base.id" class="grid grid-cols-12 items-center gap-2 rounded border border-ink-100 p-2">
+            <span class="col-span-5 truncate text-xs" :title="base.name">{{ base.name }}</span>
+            <span class="col-span-2 text-[11px] text-ink-500">授权到期</span>
+            <el-date-picker v-model="grantExpiryByKnowledgeBase[base.id]" class="col-span-5 w-full" type="datetime"
+              value-format="YYYY-MM-DDTHH:mm:ss" format="YYYY-MM-DD HH:mm:ss" clearable placeholder="不设置=长期有效" />
+          </div>
+        </div>
+        <el-input v-model="knowledgeBaseGrantReason" maxlength="500" show-word-limit placeholder="授权变更原因（可选，会写入审计记录）" />
         <p class="kb-muted">
-          留空会撤销显式授权；未绑定知识库的凭证仍可访问系统公开库，绑定过的私有库则会失去访问权限。
+          每个知识库可单独设定到期时间，过期后访问会自动拒绝。留空会撤销显式授权；未绑定知识库的凭证仍可访问系统公开库，绑定过的私有库则会失去访问权限。
           知识库自身的访问策略仍会继续生效。
         </p>
       </div>
@@ -430,10 +439,10 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import type { ExternalAuditRow, ExternalKeyRow, ExternalServiceOverview, KnowledgeBase } from '../types'
 import {
   createExternalKey, getExternalServices, getMemoryScopeGrants, listExternalAudits, listExternalKeys,
-  getKnowledgeBaseGrants, replaceKnowledgeBaseGrants,
+  getKnowledgeBaseGrantConfig, replaceKnowledgeBaseGrantConfig,
   forgetManagedMemory, listManagedMemories, replaceMemoryScopeGrants, setManagedMemoryStatus, updateExternalMemoryPolicy,
   listMemoryGovernanceEvents, type ManagedMemoryItem, type MemoryGovernanceEvent, type MemoryScopeGrant,
-  probeExternal, revokeExternalKey, type KnowledgeBaseGrant,
+  probeExternal, revokeExternalKey,
 } from '../api/external'
 import { unwrap } from '../api/knowledge'
 import { errorMessage as message } from '../utils/feedback'
@@ -468,6 +477,9 @@ const knowledgeBaseGrantVisible = ref(false)
 const knowledgeBaseGrantSaving = ref(false)
 const knowledgeBaseGrantKey = ref<ExternalKeyRow | null>(null)
 const selectedKnowledgeBaseIds = ref<number[]>([])
+const grantExpiryByKnowledgeBase = ref<Record<number, string>>({})
+const knowledgeBaseGrantReason = ref('')
+const selectedGrantBases = computed(() => props.bases.filter(base => selectedKnowledgeBaseIds.value.includes(base.id)))
 const memoryAccessVisible = ref(false)
 const memoryAccessSaving = ref(false)
 const memoryAccessKey = ref<ExternalKeyRow | null>(null)
@@ -583,8 +595,11 @@ async function loadAll() {
 async function openKnowledgeBaseGrants(row:ExternalKeyRow) {
   knowledgeBaseGrantKey.value = row
   try {
-    const grants = unwrap(await getKnowledgeBaseGrants(row.id), [] as KnowledgeBaseGrant[])
-    selectedKnowledgeBaseIds.value = grants.map(grant => grant.knowledgeBaseId)
+    const grants = unwrap(await getKnowledgeBaseGrantConfig(row.id), [])
+    selectedKnowledgeBaseIds.value = grants.filter(grant => grant.status === 'ACTIVE' && (!grant.expiresAt || Date.parse(grant.expiresAt) > Date.now()))
+      .map(grant => grant.knowledgeBaseId)
+    grantExpiryByKnowledgeBase.value = Object.fromEntries(grants.map(grant => [grant.knowledgeBaseId, grant.expiresAt || '']))
+    knowledgeBaseGrantReason.value = ''
     knowledgeBaseGrantVisible.value = true
   } catch (e) { ElMessage.error(message(e)) }
 }
@@ -593,7 +608,11 @@ async function saveKnowledgeBaseGrants() {
   if (!key) return
   knowledgeBaseGrantSaving.value = true
   try {
-    unwrap(await replaceKnowledgeBaseGrants(key.id, selectedKnowledgeBaseIds.value), [] as KnowledgeBaseGrant[])
+    unwrap(await replaceKnowledgeBaseGrantConfig(key.id, selectedKnowledgeBaseIds.value.map(knowledgeBaseId => ({
+      knowledgeBaseId,
+      expiresAt:grantExpiryByKnowledgeBase.value[knowledgeBaseId] || null,
+      reason:knowledgeBaseGrantReason.value.trim() || null,
+    }))), [])
     knowledgeBaseGrantVisible.value = false
     ElMessage.success('知识库授权已更新')
     await loadAll()

@@ -14,6 +14,7 @@ import com.jh.knowledgeos.domain.ApiKey;
 import com.jh.knowledgeos.mapper.ExternalApiMapper;
 import java.util.Arrays;
 import java.util.Map;
+import java.time.LocalDateTime;
 import org.mockito.ArgumentCaptor;
 import org.junit.jupiter.api.Test;
 
@@ -106,12 +107,47 @@ class ApiKeyServiceTest {
         Map<String, Object> result = service.replaceKnowledgeBaseGrants(9L, Arrays.asList(7L, 7L, 8L), 2L).get(0);
 
         verify(mapper).deletePrincipalKnowledgeBaseGrants(71L);
-        verify(mapper).insertPrincipalKnowledgeBaseGrant(71L, 7L, 2L, "控制台授权");
-        verify(mapper).insertPrincipalKnowledgeBaseGrant(71L, 8L, 2L, "控制台授权");
-        verify(mapper).insertPrincipalKnowledgeBaseGrantAudit(71L, 3L, "REVOKE", 2L, "控制台替换授权");
-        verify(mapper).insertPrincipalKnowledgeBaseGrantAudit(71L, 4L, "REVOKE", 2L, "控制台替换授权");
+        verify(mapper).insertPrincipalKnowledgeBaseGrantWithExpiry(71L, 7L, 2L, "控制台配置授权", null);
+        verify(mapper).insertPrincipalKnowledgeBaseGrantWithExpiry(71L, 8L, 2L, "控制台配置授权", null);
+        verify(mapper).insertPrincipalKnowledgeBaseGrantAudit(71L, 3L, "REVOKE", 2L, "控制台替换授权配置");
+        verify(mapper).insertPrincipalKnowledgeBaseGrantAudit(71L, 4L, "REVOKE", 2L, "控制台替换授权配置");
         verify(mapper).insertPrincipalKnowledgeBaseGrantAudit(71L, 7L, "GRANT", 2L, "控制台授权");
         assertEquals(7L, result.get("knowledgeBaseId"));
+    }
+
+    @Test
+    void grantConfigurationPersistsPerKnowledgeBaseExpiryAndReason() {
+        ApiKey key = key("QUERY");
+        key.setPrincipalId(71L);
+        LocalDateTime expiresAt = LocalDateTime.now().plusDays(10).withNano(0);
+        when(mapper.getApiKey(9L)).thenReturn(key);
+        when(mapper.countKnowledgeBase(7L)).thenReturn(1);
+        when(mapper.listPrincipalKnowledgeBaseGrants(71L)).thenReturn(Arrays.asList(7L), Arrays.asList(7L));
+
+        com.jh.knowledgeos.dto.ExternalKnowledgeBaseGrantRequest grant = new com.jh.knowledgeos.dto.ExternalKnowledgeBaseGrantRequest();
+        grant.setKnowledgeBaseId(7L);
+        grant.setExpiresAt(expiresAt.toString());
+        grant.setReason("项目验收期临时授权");
+        service.replaceKnowledgeBaseGrantDetails(9L, Arrays.asList(grant), 2L);
+
+        verify(mapper).insertPrincipalKnowledgeBaseGrantWithExpiry(71L, 7L, 2L, "项目验收期临时授权", expiresAt);
+        verify(mapper).insertPrincipalKnowledgeBaseGrantAudit(71L, 7L, "GRANT", 2L, "项目验收期临时授权");
+    }
+
+    @Test
+    void expiredGrantConfigurationIsRejectedBeforeReplacingPermissions() {
+        ApiKey key = key("QUERY");
+        key.setPrincipalId(71L);
+        when(mapper.getApiKey(9L)).thenReturn(key);
+        when(mapper.countKnowledgeBase(7L)).thenReturn(1);
+        com.jh.knowledgeos.dto.ExternalKnowledgeBaseGrantRequest grant = new com.jh.knowledgeos.dto.ExternalKnowledgeBaseGrantRequest();
+        grant.setKnowledgeBaseId(7L);
+        grant.setExpiresAt(LocalDateTime.now().minusMinutes(1).toString());
+
+        assertThrows(IllegalArgumentException.class,
+            () -> service.replaceKnowledgeBaseGrantDetails(9L, Arrays.asList(grant), 2L));
+
+        verify(mapper, never()).deletePrincipalKnowledgeBaseGrants(71L);
     }
 
     @Test
