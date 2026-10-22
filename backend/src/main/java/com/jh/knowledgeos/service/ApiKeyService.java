@@ -154,6 +154,70 @@ public class ApiKeyService {
         return mapper.countActiveApiKeys();
     }
 
+    public List<Map<String, Object>> listPrincipals() {
+        return mapper.listPrincipals();
+    }
+
+    @Transactional
+    public Map<String, Object> assignPrincipal(Long keyId, Long principalId, String newPrincipalName, Long operatorId, String reason) {
+        ApiKey key = mapper.getApiKey(keyId);
+        if (key == null) {
+            throw new IllegalArgumentException("API Key 不存在");
+        }
+        String cleanName = newPrincipalName == null ? "" : newPrincipalName.trim();
+        if ((principalId == null) == cleanName.isEmpty()) {
+            throw new IllegalArgumentException("请指定现有 principalId，或填写新主体名称（二选一）");
+        }
+        String cleanReason = reason == null ? "" : reason.trim();
+        if (cleanReason.isEmpty()) {
+            throw new IllegalArgumentException("主体变更原因不能为空");
+        }
+        if (cleanReason.length() > 500) {
+            throw new IllegalArgumentException("主体变更原因最多 500 个字符");
+        }
+
+        Long targetPrincipalId = principalId;
+        if (targetPrincipalId != null) {
+            ExternalPrincipal target = mapper.getPrincipal(targetPrincipalId);
+            if (target == null || !"ACTIVE".equalsIgnoreCase(target.getStatus())) {
+                throw new IllegalArgumentException("目标 principal 不存在或不可用");
+            }
+            if (targetPrincipalId.equals(key.getPrincipalId())) {
+                return profile(key);
+            }
+        } else {
+            if (cleanName.length() > 128) {
+                throw new IllegalArgumentException("主体名称最多 128 个字符");
+            }
+            ExternalPrincipal created = new ExternalPrincipal();
+            created.setPrincipalCode(ids.next("PR_"));
+            created.setName(cleanName);
+            created.setCreatedBy(operatorId);
+            mapper.insertPrincipal(created);
+            targetPrincipalId = created.getId();
+            if (targetPrincipalId == null) {
+                throw new IllegalStateException("创建 principal 后未返回主体 ID");
+            }
+            if (key.getPrincipalId() != null) {
+                mapper.copyActivePrincipalKnowledgeBaseGrants(key.getPrincipalId(), targetPrincipalId, operatorId);
+                for (Long knowledgeBaseId : mapper.listPrincipalKnowledgeBaseGrants(targetPrincipalId)) {
+                    mapper.insertPrincipalKnowledgeBaseGrantAudit(targetPrincipalId, knowledgeBaseId, "GRANT", operatorId, "主体拆分复制授权");
+                }
+            } else if (key.getKnowledgeBaseId() != null) {
+                Long knowledgeBaseId = key.getKnowledgeBaseId();
+                if (mapper.countKnowledgeBase(knowledgeBaseId) == 0) {
+                    throw new IllegalArgumentException("知识库不存在：" + knowledgeBaseId);
+                }
+                mapper.insertPrincipalKnowledgeBaseGrant(targetPrincipalId, knowledgeBaseId, operatorId, "主体拆分保留原绑定");
+                mapper.insertPrincipalKnowledgeBaseGrantAudit(targetPrincipalId, knowledgeBaseId, "GRANT", operatorId, "主体拆分保留原绑定");
+            }
+        }
+
+        mapper.updateApiKeyPrincipal(keyId, targetPrincipalId);
+        mapper.insertApiKeyPrincipalAudit(keyId, key.getKeyCode(), key.getPrincipalId(), targetPrincipalId, operatorId, cleanReason);
+        return profile(mapper.getApiKey(keyId));
+    }
+
     public Map<String, Object> profile(ApiKey key) {
         Map<String, Object> row = new LinkedHashMap<String, Object>();
         if (key == null) {
@@ -166,6 +230,7 @@ public class ApiKeyService {
         row.put("knowledgeBaseId", key.getKnowledgeBaseId());
         row.put("knowledgeBaseName", key.getKnowledgeBaseName());
         row.put("principalId", key.getPrincipalId());
+        row.put("principalName", key.getPrincipalName());
         row.put("grantedKnowledgeBaseCount", key.getGrantedKnowledgeBaseCount() == null ? Integer.valueOf(0) : key.getGrantedKnowledgeBaseCount());
         row.put("scopes", key.getScopes());
         row.put("rateLimitPerMinute", key.getRateLimitPerMinute());

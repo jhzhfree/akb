@@ -137,6 +137,12 @@
                 <div class="text-[10px] text-ink-500">{{ row.memoryNamespace || '密钥隔离' }}</div>
               </template>
             </el-table-column>
+            <el-table-column label="共享主体" min-width="170">
+              <template #default="{ row }">
+                <div class="text-xs">{{ row.principalName || '未配置主体' }}</div>
+                <div class="text-[10px] text-ink-500">{{ row.principalId ? `主体 #${row.principalId}` : '—' }}</div>
+              </template>
+            </el-table-column>
             <el-table-column label="权限" width="180">
               <template #default="{ row }">
                 <el-tag v-for="scope in scopeList(row)" :key="scope" size="small" effect="plain" class="mr-1">
@@ -160,9 +166,10 @@
             <el-table-column label="最近调用" width="170">
               <template #default="{ row }">{{ row.lastUsedAt || '—' }}</template>
             </el-table-column>
-            <el-table-column label="操作" width="390" fixed="right">
+            <el-table-column label="操作" width="470" fixed="right">
               <template #default="{ row }">
                 <el-button link type="primary" size="small" @click="openKnowledgeBaseGrants(row)">知识库授权</el-button>
+                <el-button link type="primary" size="small" @click="openPrincipalDialog(row)">共享主体</el-button>
                 <el-button v-if="hasMemoryCapability(row)" link type="primary" size="small" @click="openMemoryPolicy(row)">记忆开关</el-button>
                 <el-button v-if="hasMemoryScope(row)" link type="primary" size="small" @click="openMemoryAccess(row)">记忆授权</el-button>
                 <el-button v-if="hasMemoryScope(row)" link type="primary" size="small" @click="openMemoryManager(row)">记忆管理</el-button>
@@ -317,6 +324,35 @@
       </template>
     </el-dialog>
 
+    <el-dialog v-model="principalDialogVisible" title="API Key 共享主体" width="620px">
+      <div v-if="principalKey" class="space-y-3">
+        <div class="kb-muted">{{ principalKey.name }} · {{ principalKey.keyPrefix }}</div>
+        <el-alert type="warning" :closable="false" show-icon>
+          <template #title>共享主体会共享知识库授权</template>
+          加入现有主体后，此 Key 会立即继承该主体的有效知识库授权。新建主体会复制当前 Key 的有效授权，其他 Key 需再加入该主体。
+        </el-alert>
+        <el-form label-width="100px" size="small">
+          <el-form-item label="现有主体">
+            <el-select v-model="selectedPrincipalId" class="w-full" clearable filterable placeholder="选择现有主体" @change="newPrincipalName = ''">
+              <el-option v-for="principal in principalOptions" :key="principal.id" :value="principal.id"
+                :label="`${principal.name} · ${principal.keyCount} Key / ${principal.activeGrantCount} 授权`" />
+            </el-select>
+          </el-form-item>
+          <el-form-item label="新建主体">
+            <el-input v-model="newPrincipalName" maxlength="128" placeholder="填写名称则创建新主体，并复制当前有效授权" @input="selectedPrincipalId = null" />
+          </el-form-item>
+          <el-form-item label="变更原因">
+            <el-input v-model="principalChangeReason" type="textarea" maxlength="500" show-word-limit :rows="2" placeholder="必填，记录主体变更的业务依据" />
+          </el-form-item>
+        </el-form>
+        <p class="kb-muted">当前主体：{{ principalKey.principalName || '—' }}。主体关联变更会写入审计；主体本身不提供删除操作，以保留授权和变更历史。</p>
+      </div>
+      <template #footer>
+        <el-button size="small" @click="principalDialogVisible = false">取消</el-button>
+        <el-button size="small" type="primary" :loading="principalSaving" @click="savePrincipalAssignment">保存主体绑定</el-button>
+      </template>
+    </el-dialog>
+
     <el-dialog v-model="memoryPolicyVisible" title="API Key 记忆开关" width="460px">
       <div v-if="memoryPolicyKey" class="space-y-3">
         <div class="kb-muted">{{ memoryPolicyKey.name }} · {{ memoryPolicyKey.keyPrefix }}</div>
@@ -439,10 +475,11 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import type { ExternalAuditRow, ExternalKeyRow, ExternalServiceOverview, KnowledgeBase } from '../types'
 import {
   createExternalKey, getExternalServices, getMemoryScopeGrants, listExternalAudits, listExternalKeys,
+  listExternalPrincipals, assignExternalPrincipal,
   getKnowledgeBaseGrantConfig, replaceKnowledgeBaseGrantConfig,
   forgetManagedMemory, listManagedMemories, replaceMemoryScopeGrants, setManagedMemoryStatus, updateExternalMemoryPolicy,
   listMemoryGovernanceEvents, type ManagedMemoryItem, type MemoryGovernanceEvent, type MemoryScopeGrant,
-  probeExternal, revokeExternalKey,
+  probeExternal, revokeExternalKey, type ExternalPrincipalSummary,
 } from '../api/external'
 import { unwrap } from '../api/knowledge'
 import { errorMessage as message } from '../utils/feedback'
@@ -473,6 +510,13 @@ const error = ref('')
 const auditLimit = ref(5)
 
 const createVisible = ref(false)
+const principalDialogVisible = ref(false)
+const principalSaving = ref(false)
+const principalKey = ref<ExternalKeyRow | null>(null)
+const principalOptions = ref<ExternalPrincipalSummary[]>([])
+const selectedPrincipalId = ref<number | null>(null)
+const newPrincipalName = ref('')
+const principalChangeReason = ref('')
 const knowledgeBaseGrantVisible = ref(false)
 const knowledgeBaseGrantSaving = ref(false)
 const knowledgeBaseGrantKey = ref<ExternalKeyRow | null>(null)
@@ -618,6 +662,43 @@ async function saveKnowledgeBaseGrants() {
     await loadAll()
   } catch (e) { ElMessage.error(message(e)) }
   finally { knowledgeBaseGrantSaving.value = false }
+}
+
+async function openPrincipalDialog(row:ExternalKeyRow) {
+  principalKey.value = row
+  selectedPrincipalId.value = null
+  newPrincipalName.value = ''
+  principalChangeReason.value = ''
+  try {
+    principalOptions.value = unwrap(await listExternalPrincipals(), [])
+    principalDialogVisible.value = true
+  } catch (e) { ElMessage.error(message(e)) }
+}
+async function savePrincipalAssignment() {
+  const key = principalKey.value
+  const reason = principalChangeReason.value.trim()
+  const name = newPrincipalName.value.trim()
+  if (!key) return
+  if (!reason) { ElMessage.warning('请填写主体变更原因'); return }
+  if (!selectedPrincipalId.value && !name) { ElMessage.warning('请选择现有主体或填写新主体名称'); return }
+  try {
+    const target = name || principalOptions.value.find(item => item.id === selectedPrincipalId.value)?.name || '目标主体'
+    await ElMessageBox.confirm(`更新后，该 Key 将使用「${target}」主体的知识库授权策略，是否继续？`, '确认切换共享主体', {
+      type:'warning', confirmButtonText:'确认切换', cancelButtonText:'返回修改',
+    })
+  } catch { return }
+  principalSaving.value = true
+  try {
+    await assignExternalPrincipal(key.id, {
+      principalId:selectedPrincipalId.value || undefined,
+      name:name || undefined,
+      reason,
+    })
+    principalDialogVisible.value = false
+    ElMessage.success('共享主体已更新')
+    await loadAll()
+  } catch (e) { ElMessage.error(message(e)) }
+  finally { principalSaving.value = false }
 }
 
 async function loadAudits() {

@@ -11,7 +11,10 @@ import static org.mockito.Mockito.when;
 import static org.mockito.ArgumentMatchers.any;
 
 import com.jh.knowledgeos.domain.ApiKey;
+import com.jh.knowledgeos.domain.ExternalPrincipal;
 import com.jh.knowledgeos.mapper.ExternalApiMapper;
+import org.mockito.Mockito;
+import static org.mockito.Mockito.doAnswer;
 import java.util.Arrays;
 import java.util.Map;
 import java.time.LocalDateTime;
@@ -21,7 +24,8 @@ import org.junit.jupiter.api.Test;
 class ApiKeyServiceTest {
 
     private final ExternalApiMapper mapper = mock(ExternalApiMapper.class);
-    private final ApiKeyService service = new ApiKeyService(mapper, mock(IdGenerator.class));
+    private final IdGenerator ids = mock(IdGenerator.class);
+    private final ApiKeyService service = new ApiKeyService(mapper, ids);
 
     @Test
     void memoryPolicyCanDisableAndRestoreOnlyPreviouslyGrantedScopes() {
@@ -111,7 +115,7 @@ class ApiKeyServiceTest {
         verify(mapper).insertPrincipalKnowledgeBaseGrantWithExpiry(71L, 8L, 2L, "控制台配置授权", null);
         verify(mapper).insertPrincipalKnowledgeBaseGrantAudit(71L, 3L, "REVOKE", 2L, "控制台替换授权配置");
         verify(mapper).insertPrincipalKnowledgeBaseGrantAudit(71L, 4L, "REVOKE", 2L, "控制台替换授权配置");
-        verify(mapper).insertPrincipalKnowledgeBaseGrantAudit(71L, 7L, "GRANT", 2L, "控制台授权");
+        verify(mapper).insertPrincipalKnowledgeBaseGrantAudit(71L, 7L, "GRANT", 2L, "控制台配置授权");
         assertEquals(7L, result.get("knowledgeBaseId"));
     }
 
@@ -148,6 +152,44 @@ class ApiKeyServiceTest {
             () -> service.replaceKnowledgeBaseGrantDetails(9L, Arrays.asList(grant), 2L));
 
         verify(mapper, never()).deletePrincipalKnowledgeBaseGrants(71L);
+    }
+
+    @Test
+    void assigningKeyToExistingPrincipalAuditsAndClearsLegacyBinding() {
+        ApiKey key = key("QUERY");
+        key.setPrincipalId(71L);
+        key.setKnowledgeBaseId(7L);
+        ExternalPrincipal target = new ExternalPrincipal();
+        target.setId(88L);
+        target.setName("Octop Agent 集群");
+        target.setStatus("ACTIVE");
+        when(mapper.getApiKey(9L)).thenReturn(key, key);
+        when(mapper.getPrincipal(88L)).thenReturn(target);
+
+        service.assignPrincipal(9L, 88L, null, 2L, "共享给 Octop 的受控 Agent Key");
+
+        verify(mapper).updateApiKeyPrincipal(9L, 88L);
+        verify(mapper).insertApiKeyPrincipalAudit(9L, "AK_TEST", 71L, 88L, 2L, "共享给 Octop 的受控 Agent Key");
+    }
+
+    @Test
+    void creatingNewPrincipalCopiesCurrentGrantsBeforeReassignment() {
+        ApiKey key = key("QUERY");
+        key.setPrincipalId(71L);
+        doAnswer(invocation -> {
+            ExternalPrincipal principal = invocation.getArgument(0);
+            principal.setId(99L);
+            return 1;
+        }).when(mapper).insertPrincipal(Mockito.any(ExternalPrincipal.class));
+        when(ids.next("PR_")).thenReturn("PR_NEW");
+        when(mapper.getApiKey(9L)).thenReturn(key, key);
+        when(mapper.listPrincipalKnowledgeBaseGrants(99L)).thenReturn(Arrays.asList(4L));
+
+        service.assignPrincipal(9L, null, "隔离后的 Octop 应用", 2L, "拆分主体，保留原授权");
+
+        verify(mapper).copyActivePrincipalKnowledgeBaseGrants(71L, 99L, 2L);
+        verify(mapper).insertPrincipalKnowledgeBaseGrantAudit(99L, 4L, "GRANT", 2L, "主体拆分复制授权");
+        verify(mapper).updateApiKeyPrincipal(9L, 99L);
     }
 
     @Test

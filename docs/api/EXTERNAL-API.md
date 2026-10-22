@@ -151,6 +151,18 @@ Content-Type: application/json
 
 `PUT` 请求体是知识库 ID 数组；空数组 `[]` 表示撤销全部。授权变更写入授予/撤销审计。API 请求中的知识库 ID 必须匹配有效 grant；V61 会把既有单库绑定迁移为等价 grant，撤销后不会通过遗留 `knowledge_base_id` 回退访问。
 
+多个 API Key 可通过共享 Principal 共用同一份授权。管理员可查询主体清单并将 Key 加入现有主体，或为 Key 创建独立主体：
+
+```http
+GET /api/external/admin/principals
+POST /api/external/admin/keys/{id}/principal
+Content-Type: application/json
+
+{ "principalId": 42, "reason": "同一 Octop Agent 服务接入" }
+```
+
+`principalId` 与 `name` 二选一。指定 `principalId` 后，该 Key 会立即继承目标主体当前有效的知识库授权；指定 `name` 时会创建主体、复制当前 Key 的有效授权，再绑定 Key。主体变更原因必填，写入 V62 的主体关联审计。主体不会物理删除，以保留审计引用。
+
 需要管理每个授权的期限时，使用 `/config` 路由，逐条提交 `knowledgeBaseId`、`expiresAt` 和可选的 `reason`。`expiresAt` 使用本地 ISO 时间（如 `2026-12-31T23:59:59`），留空表示长期有效；已到期时间会被拒绝，重复知识库 ID 也会被拒绝。该路由同样采用整体替换语义：提交的清单之外的授权将被撤销。
 
 ```json
@@ -1407,6 +1419,8 @@ curl -N -H 'X-API-Key: kos_ak_xxx' \
 | GET | `/keys` | Key 列表（不含明文） |
 | POST | `/keys` | 签发 Key（明文仅此一次返回） |
 | POST | `/keys/{id}/revoke` | 吊销 Key，立即失效 |
+| GET | `/principals` | 查询共享主体及其 Key、有效授权数量 |
+| POST | `/keys/{id}/principal` | 加入现有主体或创建并绑定新主体；操作写审计 |
 | GET | `/keys/{id}/knowledge-base-grants` | 查询主体当前有效的知识库授权 |
 | PUT | `/keys/{id}/knowledge-base-grants` | 原子替换知识库授权；请求体为 ID 数组，`[]` 撤销全部 |
 | GET | `/keys/{id}/knowledge-base-grants/config` | 查询授权期限、原因和状态 |

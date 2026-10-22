@@ -70,7 +70,7 @@ class ExternalApiRetrievalTest {
     }
 
     @Test
-    void includeAnswerRequiresQueryInAdditionToSearch() {
+    void includeAnswerRequiresQueryInAdditionToSearch() throws Exception {
         MockHttpServletRequest request = new MockHttpServletRequest();
         when(access.authenticateEmbed(request)).thenReturn(key);
         when(retrievals.resolveKnowledgeBase(eq(key), isNull(), isNull())).thenReturn(41L);

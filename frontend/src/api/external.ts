@@ -11,6 +11,13 @@ export const getExternalServices = ():Promise<ApiResponse<ExternalServiceOvervie
   axios.get('/api/external/admin/services')
 export const listExternalKeys = ():Promise<ApiResponse<ExternalKeyRow[]>> =>
   axios.get('/api/external/admin/keys')
+export interface ExternalPrincipalSummary {
+  id:number; principalCode:string; name:string; status:string; keyCount:number; activeGrantCount:number; createdTime:string
+}
+export const listExternalPrincipals = ():Promise<ApiResponse<ExternalPrincipalSummary[]>> =>
+  axios.get('/api/external/admin/principals')
+export const assignExternalPrincipal = (keyId:number, body:{principalId?:number|null;name?:string|null;reason:string}):Promise<ApiResponse<ExternalKeyRow>> =>
+  axios.post(`/api/external/admin/keys/${keyId}/principal`, body)
 export const createExternalKey = (payload:{
   name?:string; knowledgeBaseId?:number|null; scopes?:string[]; rateLimitPerMinute?:number
   expiresAt?:string|null; memoryNamespace?:string|null; memoryAgentCode?:string|null

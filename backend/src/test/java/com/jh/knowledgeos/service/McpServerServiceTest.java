@@ -118,7 +118,9 @@ class McpServerServiceTest {
         ExternalKnowledgeFacade facade = mock(ExternalKnowledgeFacade.class);
         ApiKey key = mock(ApiKey.class);
         when(key.getKnowledgeBaseId()).thenReturn(23L);
-        when(facade.bases(23L)).thenReturn(Arrays.asList(knowledgeBaseMetadata()));
+        List<Long> grantedIds = Collections.singletonList(23L);
+        when(access.grantedKnowledgeBases(key)).thenReturn(grantedIds);
+        when(facade.basesFor(key, grantedIds)).thenReturn(Arrays.asList(knowledgeBaseMetadata()));
         when(access.resolveKnowledgeBase(key, 23L)).thenReturn(23L);
         when(facade.search(eq(key), eq(23L), eq("leave policy"), eq((Integer) null), eq(Collections.emptyList()), eq(PlatformEventPublisher.SOURCE_MCP),
             eq((Double) null))).thenReturn(Collections.<String, Object>singletonMap("queryId", "q-code"));

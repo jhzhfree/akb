@@ -8,6 +8,7 @@ import com.jh.knowledgeos.domain.User;
 import com.jh.knowledgeos.dto.EmbedTokenRevokeRequest;
 import com.jh.knowledgeos.dto.ExternalKeyRequest;
 import com.jh.knowledgeos.dto.ExternalKnowledgeBaseGrantRequest;
+import com.jh.knowledgeos.dto.ExternalPrincipalAssignmentRequest;
 import com.jh.knowledgeos.dto.AgentMemoryScopeGrantRequest;
 import com.jh.knowledgeos.dto.AgentMemoryGovernanceRequest;
 import com.jh.knowledgeos.dto.AgentMemoryKeyPolicyRequest;
@@ -121,6 +122,22 @@ public class ExternalServiceAdminController {
     public ApiResponse<Object> listKeys() {
         requireManager();
         return ApiResponse.ok(apiKeyService.list());
+    }
+
+    @GetMapping("/principals")
+    @Operation(summary = "共享调用主体列表及其 API Key 数量、有效知识库授权数")
+    public ApiResponse<Object> listPrincipals() {
+        requireManager();
+        return ApiResponse.ok(apiKeyService.listPrincipals());
+    }
+
+    @PostMapping("/keys/{id}/principal")
+    @Operation(summary = "将 API Key 加入现有共享主体，或创建新主体并保留当前有效知识库授权")
+    public ApiResponse<Object> assignPrincipal(@PathVariable Long id,
+        @RequestBody(required = false) ExternalPrincipalAssignmentRequest body) {
+        User operator = requireManager();
+        ExternalPrincipalAssignmentRequest request = body == null ? new ExternalPrincipalAssignmentRequest() : body;
+        return ApiResponse.ok(apiKeyService.assignPrincipal(id, request.getPrincipalId(), request.getName(), operator.getId(), request.getReason()));
     }
 
     @PostMapping("/keys")

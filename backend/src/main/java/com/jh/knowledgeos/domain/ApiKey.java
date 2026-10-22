@@ -57,6 +57,8 @@ public class ApiKey {
 
     private Integer grantedKnowledgeBaseCount;
 
+    private String principalName;
+
     private String knowledgeBaseName;
 
     private String scopes;
@@ -209,6 +211,14 @@ public class ApiKey {
 
     public void setGrantedKnowledgeBaseCount(Integer v) {
         grantedKnowledgeBaseCount = v;
+    }
+
+    public String getPrincipalName() {
+        return principalName;
+    }
+
+    public void setPrincipalName(String v) {
+        principalName = v;
     }
 
     public String getKnowledgeBaseName() {

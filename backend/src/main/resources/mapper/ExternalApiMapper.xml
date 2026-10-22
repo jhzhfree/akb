@@ -4,6 +4,7 @@
   (SELECT COUNT(1) FROM t_principal_kb_grant g WHERE g.principal_id=k.principal_id AND g.status='ACTIVE'
     AND (g.expires_at IS NULL OR g.expires_at&gt;CURRENT_TIMESTAMP)) AS grantedKnowledgeBaseCount,
   b.name AS knowledge_base_name,k.scopes,k.rate_limit_per_minute,k.status,k.expires_at,k.last_used_at,
+  p.name AS principalName,
   k.created_by,u.display_name AS created_by_name,k.created_time,k.updated_time,k.allowed_origins,
   k.memory_namespace AS memoryNamespace,k.memory_agent_code AS memoryAgentCode,
   k.memory_read_enabled AS memoryReadEnabled,k.memory_write_enabled AS memoryWriteEnabled,
@@ -11,16 +12,19 @@
 
 <select id="listApiKeys" resultType="com.jh.knowledgeos.domain.ApiKey">SELECT <include refid="apiKeyColumns"/> FROM t_api_key k
   LEFT JOIN t_knowledge_base b ON b.id=k.knowledge_base_id
+  LEFT JOIN t_principal p ON p.id=k.principal_id
   LEFT JOIN t_user u ON u.id=k.created_by
   ORDER BY k.created_time DESC</select>
 
 <select id="getApiKey" resultType="com.jh.knowledgeos.domain.ApiKey">SELECT <include refid="apiKeyColumns"/> FROM t_api_key k
   LEFT JOIN t_knowledge_base b ON b.id=k.knowledge_base_id
+  LEFT JOIN t_principal p ON p.id=k.principal_id
   LEFT JOIN t_user u ON u.id=k.created_by
   WHERE k.id=#{id} LIMIT 1</select>
 
 <select id="getApiKeyByHash" resultType="com.jh.knowledgeos.domain.ApiKey">SELECT <include refid="apiKeyColumns"/> FROM t_api_key k
   LEFT JOIN t_knowledge_base b ON b.id=k.knowledge_base_id
+  LEFT JOIN t_principal p ON p.id=k.principal_id
   LEFT JOIN t_user u ON u.id=k.created_by
   WHERE k.secret_hash=#{secretHash} LIMIT 1</select>
 
@@ -29,6 +33,25 @@
 
 <insert id="insertPrincipal" parameterType="com.jh.knowledgeos.domain.ExternalPrincipal" useGeneratedKeys="true" keyProperty="id">INSERT INTO t_principal(principal_code,name,status,created_by)
   VALUES(#{principalCode},#{name},'ACTIVE',#{createdBy})</insert>
+
+<select id="getPrincipal" resultType="com.jh.knowledgeos.domain.ExternalPrincipal">SELECT * FROM t_principal WHERE id=#{id} LIMIT 1</select>
+
+<select id="listPrincipals" resultType="map">SELECT p.id,p.principal_code AS principalCode,p.name,p.status,
+  COUNT(DISTINCT k.id) AS keyCount,
+  COUNT(DISTINCT CASE WHEN g.status='ACTIVE' AND (g.expires_at IS NULL OR g.expires_at&gt;CURRENT_TIMESTAMP) THEN g.id END) AS activeGrantCount,
+  p.created_time AS createdTime FROM t_principal p
+  LEFT JOIN t_api_key k ON k.principal_id=p.id
+  LEFT JOIN t_principal_kb_grant g ON g.principal_id=p.id
+  GROUP BY p.id,p.principal_code,p.name,p.status,p.created_time ORDER BY p.created_time DESC,p.id DESC</select>
+
+<update id="updateApiKeyPrincipal">UPDATE t_api_key SET principal_id=#{principalId},knowledge_base_id=NULL WHERE id=#{keyId}</update>
+
+<insert id="insertApiKeyPrincipalAudit">INSERT INTO t_api_key_principal_audit(api_key_id,key_code,old_principal_id,new_principal_id,operator_id,reason)
+  VALUES(#{keyId},#{keyCode},#{oldPrincipalId},#{newPrincipalId},#{operatorId},#{reason})</insert>
+
+<insert id="copyActivePrincipalKnowledgeBaseGrants">INSERT INTO t_principal_kb_grant(principal_id,knowledge_base_id,status,reason,created_by,expires_at)
+  SELECT #{targetPrincipalId},knowledge_base_id,'ACTIVE',reason,#{createdBy},expires_at FROM t_principal_kb_grant
+  WHERE principal_id=#{sourcePrincipalId} AND status='ACTIVE' AND (expires_at IS NULL OR expires_at&gt;CURRENT_TIMESTAMP)</insert>
 
 <select id="countKnowledgeBase" resultType="int">SELECT COUNT(1) FROM t_knowledge_base WHERE id=#{knowledgeBaseId}</select>
 

@@ -24,6 +24,19 @@ public interface ExternalApiMapper {
 
     int insertPrincipal(ExternalPrincipal principal);
 
+    ExternalPrincipal getPrincipal(@Param("id") Long id);
+
+    List<Map<String, Object>> listPrincipals();
+
+    int updateApiKeyPrincipal(@Param("keyId") Long keyId, @Param("principalId") Long principalId);
+
+    int insertApiKeyPrincipalAudit(@Param("keyId") Long keyId, @Param("keyCode") String keyCode,
+        @Param("oldPrincipalId") Long oldPrincipalId, @Param("newPrincipalId") Long newPrincipalId,
+        @Param("operatorId") Long operatorId, @Param("reason") String reason);
+
+    int copyActivePrincipalKnowledgeBaseGrants(@Param("sourcePrincipalId") Long sourcePrincipalId,
+        @Param("targetPrincipalId") Long targetPrincipalId, @Param("createdBy") Long createdBy);
+
     int countKnowledgeBase(@Param("knowledgeBaseId") Long knowledgeBaseId);
 
     int insertPrincipalKnowledgeBaseGrant(@Param("principalId") Long principalId, @Param("knowledgeBaseId") Long knowledgeBaseId,
