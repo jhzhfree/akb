@@ -1,9 +1,12 @@
 package com.jh.knowledgeos.service;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.jh.knowledgeos.domain.ApiKey;
 import com.jh.knowledgeos.domain.ExternalPrincipal;
 import com.jh.knowledgeos.dto.ExternalKnowledgeBaseGrantRequest;
 import com.jh.knowledgeos.mapper.ExternalApiMapper;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -38,9 +41,17 @@ public class ApiKeyService {
 
     private final IdGenerator ids;
 
+    private final ObjectMapper objectMapper;
+
     public ApiKeyService(ExternalApiMapper mapper, IdGenerator ids) {
+        this(mapper, ids, new ObjectMapper());
+    }
+
+    @Autowired
+    public ApiKeyService(ExternalApiMapper mapper, IdGenerator ids, ObjectMapper objectMapper) {
         this.mapper = mapper;
         this.ids = ids;
+        this.objectMapper = objectMapper;
     }
 
     public List<Map<String, Object>> list() {
@@ -200,8 +211,12 @@ public class ApiKeyService {
             }
             if (key.getPrincipalId() != null) {
                 mapper.copyActivePrincipalKnowledgeBaseGrants(key.getPrincipalId(), targetPrincipalId, operatorId);
-                for (Long knowledgeBaseId : mapper.listPrincipalKnowledgeBaseGrants(targetPrincipalId)) {
-                    mapper.insertPrincipalKnowledgeBaseGrantAudit(targetPrincipalId, knowledgeBaseId, "GRANT", operatorId, "主体拆分复制授权");
+                for (Map<String, Object> grant : mapper.listPrincipalKnowledgeBaseGrantDetails(targetPrincipalId)) {
+                    Long knowledgeBaseId = numberValue(grant.get("knowledgeBaseId"));
+                    if (knowledgeBaseId != null) {
+                        mapper.insertPrincipalKnowledgeBaseGrantAudit(targetPrincipalId, knowledgeBaseId, "GRANT", operatorId,
+                            "主体拆分复制授权", nullableString(grant.get("permissionTagsJson")));
+                    }
                 }
             } else if (key.getKnowledgeBaseId() != null) {
                 Long knowledgeBaseId = key.getKnowledgeBaseId();
@@ -209,7 +224,8 @@ public class ApiKeyService {
                     throw new IllegalArgumentException("知识库不存在：" + knowledgeBaseId);
                 }
                 mapper.insertPrincipalKnowledgeBaseGrant(targetPrincipalId, knowledgeBaseId, operatorId, "主体拆分保留原绑定");
-                mapper.insertPrincipalKnowledgeBaseGrantAudit(targetPrincipalId, knowledgeBaseId, "GRANT", operatorId, "主体拆分保留原绑定");
+                mapper.insertPrincipalKnowledgeBaseGrantAudit(targetPrincipalId, knowledgeBaseId, "GRANT", operatorId,
+                    "主体拆分保留原绑定", null);
             }
         }
 
@@ -258,7 +274,14 @@ public class ApiKeyService {
         if (key == null || key.getPrincipalId() == null) {
             return new ArrayList<Map<String, Object>>();
         }
-        return mapper.listPrincipalKnowledgeBaseGrantDetails(key.getPrincipalId());
+        List<Map<String, Object>> result = new ArrayList<Map<String, Object>>();
+        for (Map<String, Object> detail : mapper.listPrincipalKnowledgeBaseGrantDetails(key.getPrincipalId())) {
+            Map<String, Object> row = new LinkedHashMap<String, Object>(detail);
+            Object rawTags = row.remove("permissionTagsJson");
+            row.put("permissionTags", parsePermissionTags(rawTags));
+            result.add(row);
+        }
+        return result;
     }
 
     public boolean hasKnowledgeBaseGrant(ApiKey key, Long knowledgeBaseId) {
@@ -292,6 +315,7 @@ public class ApiKeyService {
         }
         Map<Long, LocalDateTime> expirations = new LinkedHashMap<Long, LocalDateTime>();
         Map<Long, String> reasons = new LinkedHashMap<Long, String>();
+        Map<Long, String> permissionTagsByKnowledgeBase = new LinkedHashMap<Long, String>();
         if (grants != null) {
             if (grants.size() > 100) {
                 throw new IllegalArgumentException("单个主体最多授权 100 个知识库");
@@ -325,17 +349,25 @@ public class ApiKeyService {
                 }
                 expirations.put(knowledgeBaseId, expiresAt);
                 reasons.put(knowledgeBaseId, reason.isEmpty() ? "控制台配置授权" : reason);
+                permissionTagsByKnowledgeBase.put(knowledgeBaseId, serializePermissionTags(grant.getPermissionTags()));
             }
         }
-        for (Long oldGrant : mapper.listPrincipalKnowledgeBaseGrants(key.getPrincipalId())) {
-            mapper.insertPrincipalKnowledgeBaseGrantAudit(key.getPrincipalId(), oldGrant, "REVOKE", operatorId, "控制台替换授权配置");
+        for (Map<String, Object> oldGrant : mapper.listPrincipalKnowledgeBaseGrantDetails(key.getPrincipalId())) {
+            Long oldKnowledgeBaseId = numberValue(oldGrant.get("knowledgeBaseId"));
+            if (oldKnowledgeBaseId != null) {
+                mapper.insertPrincipalKnowledgeBaseGrantAudit(key.getPrincipalId(), oldKnowledgeBaseId, "REVOKE", operatorId,
+                    "控制台替换授权配置", nullableString(oldGrant.get("permissionTagsJson")));
+            }
         }
         mapper.deletePrincipalKnowledgeBaseGrants(key.getPrincipalId());
         for (Map.Entry<Long, LocalDateTime> entry : expirations.entrySet()) {
             Long knowledgeBaseId = entry.getKey();
             String reason = reasons.get(knowledgeBaseId);
-            mapper.insertPrincipalKnowledgeBaseGrantWithExpiry(key.getPrincipalId(), knowledgeBaseId, operatorId, reason, entry.getValue());
-            mapper.insertPrincipalKnowledgeBaseGrantAudit(key.getPrincipalId(), knowledgeBaseId, "GRANT", operatorId, reason);
+            String permissionTagsJson = permissionTagsByKnowledgeBase.get(knowledgeBaseId);
+            mapper.insertPrincipalKnowledgeBaseGrantWithExpiry(key.getPrincipalId(), knowledgeBaseId, operatorId, reason,
+                entry.getValue(), permissionTagsJson);
+            mapper.insertPrincipalKnowledgeBaseGrantAudit(key.getPrincipalId(), knowledgeBaseId, "GRANT", operatorId, reason,
+                permissionTagsJson);
         }
         List<Map<String, Object>> result = new ArrayList<Map<String, Object>>();
         for (Long id : grantedKnowledgeBases(key)) {
@@ -344,6 +376,76 @@ public class ApiKeyService {
             result.add(grant);
         }
         return result;
+    }
+
+    private String serializePermissionTags(List<String> tags) {
+        if (tags == null) {
+            return null;
+        }
+        if (tags.size() > 100) {
+            throw new IllegalArgumentException("单个知识库最多配置 100 个资料标签");
+        }
+        List<String> normalized = new ArrayList<String>();
+        for (String value : tags) {
+            if (value == null || value.trim().isEmpty()) {
+                continue;
+            }
+            String tag = value.trim();
+            if (tag.length() > 128) {
+                throw new IllegalArgumentException("资料标签最多 128 个字符");
+            }
+            if (!normalized.contains(tag)) {
+                normalized.add(tag);
+            }
+        }
+        try {
+            return objectMapper.writeValueAsString(normalized);
+        } catch (JsonProcessingException e) {
+            throw new IllegalArgumentException("资料标签无法编码", e);
+        }
+    }
+
+    private List<String> parsePermissionTags(Object value) {
+        String json = nullableString(value);
+        if (json == null || json.trim().isEmpty()) {
+            return null;
+        }
+        try {
+            Object parsed = objectMapper.readValue(json, List.class);
+            if (!(parsed instanceof List)) {
+                throw new IllegalStateException("知识库授权标签必须为数组");
+            }
+            List<String> tags = new ArrayList<String>();
+            for (Object item : (List<?>) parsed) {
+                if (item != null) {
+                    String tag = String.valueOf(item).trim();
+                    if (!tag.isEmpty()) {
+                        tags.add(tag);
+                    }
+                }
+            }
+            return tags;
+        } catch (Exception e) {
+            throw new IllegalStateException("知识库授权标签配置损坏", e);
+        }
+    }
+
+    private static Long numberValue(Object value) {
+        if (value instanceof Number) {
+            return Long.valueOf(((Number) value).longValue());
+        }
+        if (value == null) {
+            return null;
+        }
+        try {
+            return Long.valueOf(String.valueOf(value));
+        } catch (NumberFormatException e) {
+            return null;
+        }
+    }
+
+    private static String nullableString(Object value) {
+        return value == null ? null : String.valueOf(value);
     }
 
     private String newSecret() {

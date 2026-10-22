@@ -37,13 +37,17 @@ public interface ExternalApiMapper {
     int copyActivePrincipalKnowledgeBaseGrants(@Param("sourcePrincipalId") Long sourcePrincipalId,
         @Param("targetPrincipalId") Long targetPrincipalId, @Param("createdBy") Long createdBy);
 
+    String getPrincipalKnowledgeBaseGrantPermissionTags(@Param("principalId") Long principalId,
+        @Param("knowledgeBaseId") Long knowledgeBaseId);
+
     int countKnowledgeBase(@Param("knowledgeBaseId") Long knowledgeBaseId);
 
     int insertPrincipalKnowledgeBaseGrant(@Param("principalId") Long principalId, @Param("knowledgeBaseId") Long knowledgeBaseId,
         @Param("createdBy") Long createdBy, @Param("reason") String reason);
 
     int insertPrincipalKnowledgeBaseGrantWithExpiry(@Param("principalId") Long principalId, @Param("knowledgeBaseId") Long knowledgeBaseId,
-        @Param("createdBy") Long createdBy, @Param("reason") String reason, @Param("expiresAt") LocalDateTime expiresAt);
+        @Param("createdBy") Long createdBy, @Param("reason") String reason, @Param("expiresAt") LocalDateTime expiresAt,
+        @Param("permissionTagsJson") String permissionTagsJson);
 
     List<Long> listPrincipalKnowledgeBaseGrants(@Param("principalId") Long principalId);
 
@@ -52,7 +56,8 @@ public interface ExternalApiMapper {
     int deletePrincipalKnowledgeBaseGrants(@Param("principalId") Long principalId);
 
     int insertPrincipalKnowledgeBaseGrantAudit(@Param("principalId") Long principalId, @Param("knowledgeBaseId") Long knowledgeBaseId,
-        @Param("action") String action, @Param("operatorId") Long operatorId, @Param("reason") String reason);
+        @Param("action") String action, @Param("operatorId") Long operatorId, @Param("reason") String reason,
+        @Param("permissionTagsJson") String permissionTagsJson);
 
     int updateApiKeyStatus(@Param("id") Long id, @Param("status") String status);
 

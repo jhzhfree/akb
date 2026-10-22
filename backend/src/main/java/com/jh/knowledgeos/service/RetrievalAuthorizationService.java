@@ -3,8 +3,10 @@ package com.jh.knowledgeos.service;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.jh.knowledgeos.common.RetrievalAuthorizationContext;
 import com.jh.knowledgeos.domain.ApiKey;
+import com.jh.knowledgeos.mapper.ExternalApiMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
@@ -38,10 +40,19 @@ public class RetrievalAuthorizationService {
 
     private final Mode mode;
 
+    private final ExternalApiMapper externalApiMapper;
+
     public RetrievalAuthorizationService(ObjectMapper objectMapper,
         @Value("${knowledge.acl.external-tag-mode:SHADOW}") String mode) {
+        this(objectMapper, mode, null);
+    }
+
+    @Autowired
+    public RetrievalAuthorizationService(ObjectMapper objectMapper,
+        @Value("${knowledge.acl.external-tag-mode:SHADOW}") String mode, ExternalApiMapper externalApiMapper) {
         this.objectMapper = objectMapper;
         this.mode = parseMode(mode);
+        this.externalApiMapper = externalApiMapper;
     }
 
     public Mode mode() {
@@ -56,10 +67,15 @@ public class RetrievalAuthorizationService {
      * @param source    调用渠道（REST / MCP / SSE），仅用于日志
      */
     public List<String> effectiveTags(ApiKey key, List<String> requested, String source) {
+        return effectiveTags(key, key == null ? null : key.getKnowledgeBaseId(), requested, source);
+    }
+
+    /** Resolve the API Key ceiling together with an optional knowledge-base grant ceiling. */
+    public List<String> effectiveTags(ApiKey key, Long knowledgeBaseId, List<String> requested, String source) {
         if (key == null) {
             return requested;
         }
-        RetrievalAuthorizationContext context = forCredential(key);
+        RetrievalAuthorizationContext context = forCredential(key, knowledgeBaseId);
         List<String> removed = context.removedTags(requested);
         if (mode == Mode.CLIENT) {
             return requested;
@@ -79,11 +95,21 @@ public class RetrievalAuthorizationService {
         return context.effectiveTags(requested);
     }
 
-    /** 按凭证的标签授权配置构造上下文；未配置时按当前模式决定是放行还是默认拒绝。 */
+    /** 按凭证标签与知识库 grant 标签构造上下文；知识库范围只会进一步收窄凭证授权。 */
     public RetrievalAuthorizationContext forCredential(ApiKey key) {
+        return forCredential(key, key == null ? null : key.getKnowledgeBaseId());
+    }
+
+    public RetrievalAuthorizationContext forCredential(ApiKey key, Long knowledgeBaseId) {
         String code = key == null ? null : key.getKeyCode();
-        Long kb = key == null ? null : key.getKnowledgeBaseId();
-        List<String> granted = parseTags(key == null ? null : key.getPermissionTags());
+        Long kb = knowledgeBaseId;
+        List<String> keyTags = parseTags(key == null ? null : key.getPermissionTags());
+        List<String> kbTags = null;
+        if (key != null && key.getPrincipalId() != null && kb != null && externalApiMapper != null) {
+            String grantJson = externalApiMapper.getPrincipalKnowledgeBaseGrantPermissionTags(key.getPrincipalId(), kb);
+            kbTags = parseTags(grantJson);
+        }
+        List<String> granted = intersectPolicies(keyTags, kbTags);
         if (granted == null) {
             // 未配置标签授权：强制模式下按默认拒绝处理，其余模式不约束。
             return mode == Mode.ENFORCE
@@ -91,6 +117,22 @@ public class RetrievalAuthorizationService {
                 : RetrievalAuthorizationContext.unconstrained(code, kb);
         }
         return RetrievalAuthorizationContext.granted(code, kb, granted);
+    }
+
+    private List<String> intersectPolicies(List<String> keyTags, List<String> kbTags) {
+        if (keyTags == null) {
+            return kbTags;
+        }
+        if (kbTags == null) {
+            return keyTags;
+        }
+        List<String> intersection = new ArrayList<String>();
+        for (String tag : keyTags) {
+            if (kbTags.contains(tag) && !intersection.contains(tag)) {
+                intersection.add(tag);
+            }
+        }
+        return intersection;
     }
 
     /** JSON 数组文本 → 标签列表；null / 空串 / 解析失败都视为「未配置」。 */

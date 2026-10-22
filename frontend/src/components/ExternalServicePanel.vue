@@ -297,25 +297,34 @@
       <div v-if="knowledgeBaseGrantKey" class="space-y-3">
         <div class="kb-muted">{{ knowledgeBaseGrantKey.name }} · {{ knowledgeBaseGrantKey.keyPrefix }}</div>
         <el-alert type="info" :closable="false" show-icon>
-          <template #title>选择该凭证可访问的知识库</template>
-          保存会整体替换授权。已绑定的私有库也必须保留在列表中才可继续访问。
+          <template #title>配置共享主体可访问的知识库</template>
+          当前主体：{{ knowledgeBaseGrantKey.principalName || '未关联主体' }}。授权由共享主体持有，修改会影响绑定该主体的所有 API Key；保存会整体替换授权。
         </el-alert>
         <el-select v-model="selectedKnowledgeBaseIds" class="w-full" multiple filterable clearable
           collapse-tags collapse-tags-tooltip placeholder="选择一个或多个知识库">
           <el-option v-for="base in bases" :key="base.id" :value="base.id" :label="base.name" />
         </el-select>
         <div v-if="selectedGrantBases.length" class="space-y-2">
-          <div v-for="base in selectedGrantBases" :key="base.id" class="grid grid-cols-12 items-center gap-2 rounded border border-ink-100 p-2">
-            <span class="col-span-5 truncate text-xs" :title="base.name">{{ base.name }}</span>
-            <span class="col-span-2 text-[11px] text-ink-500">授权到期</span>
-            <el-date-picker v-model="grantExpiryByKnowledgeBase[base.id]" class="col-span-5 w-full" type="datetime"
-              value-format="YYYY-MM-DDTHH:mm:ss" format="YYYY-MM-DD HH:mm:ss" clearable placeholder="不设置=长期有效" />
+          <div v-for="base in selectedGrantBases" :key="base.id" class="space-y-2 rounded border border-ink-100 p-2">
+            <div class="grid grid-cols-12 items-center gap-2">
+              <span class="col-span-4 truncate text-xs" :title="base.name">{{ base.name }}</span>
+              <span class="col-span-2 text-[11px] text-ink-500">授权到期</span>
+              <el-date-picker v-model="grantExpiryByKnowledgeBase[base.id]" class="col-span-6 w-full" type="datetime"
+                value-format="YYYY-MM-DDTHH:mm:ss" format="YYYY-MM-DD HH:mm:ss" clearable placeholder="不设置=长期有效" />
+            </div>
+            <div class="flex items-center gap-2">
+              <el-checkbox v-model="grantPublicOnlyByKnowledgeBase[base.id]" @change="onGrantPublicOnlyChange(base.id, $event)">仅公开资料</el-checkbox>
+              <el-select v-if="!grantPublicOnlyByKnowledgeBase[base.id]" v-model="grantTagsByKnowledgeBase[base.id]"
+                class="flex-1" multiple filterable allow-create default-first-option placeholder="资料标签授权；留空继承 API Key 标签范围">
+                <el-option v-for="tag in grantTagsByKnowledgeBase[base.id] || []" :key="tag" :value="tag" :label="tag" />
+              </el-select>
+            </div>
           </div>
         </div>
         <el-input v-model="knowledgeBaseGrantReason" maxlength="500" show-word-limit placeholder="授权变更原因（可选，会写入审计记录）" />
         <p class="kb-muted">
-          每个知识库可单独设定到期时间，过期后访问会自动拒绝。留空会撤销显式授权；未绑定知识库的凭证仍可访问系统公开库，绑定过的私有库则会失去访问权限。
-          知识库自身的访问策略仍会继续生效。
+          每个知识库可单独设定到期时间，过期后访问会自动拒绝。未选中的知识库会撤销显式授权；没有显式授权的公开库访问仍受系统公开策略控制。
+          标签授权与 API Key 的全局标签范围取交集；未单独配置时继承 Key 标签范围，选择“仅公开资料”表示显式空授权。知识库自身的访问策略仍会继续生效。
         </p>
       </div>
       <template #footer>
@@ -335,7 +344,8 @@
           <el-form-item label="现有主体">
             <el-select v-model="selectedPrincipalId" class="w-full" clearable filterable placeholder="选择现有主体" @change="newPrincipalName = ''">
               <el-option v-for="principal in principalOptions" :key="principal.id" :value="principal.id"
-                :label="`${principal.name} · ${principal.keyCount} Key / ${principal.activeGrantCount} 授权`" />
+                :label="`${principal.name} · ${principal.keyCount} Key / ${principal.activeGrantCount} 授权`"
+                :disabled="principal.status !== 'ACTIVE'" />
             </el-select>
           </el-form-item>
           <el-form-item label="新建主体">
@@ -522,6 +532,8 @@ const knowledgeBaseGrantSaving = ref(false)
 const knowledgeBaseGrantKey = ref<ExternalKeyRow | null>(null)
 const selectedKnowledgeBaseIds = ref<number[]>([])
 const grantExpiryByKnowledgeBase = ref<Record<number, string>>({})
+const grantTagsByKnowledgeBase = ref<Record<number, string[]>>({})
+const grantPublicOnlyByKnowledgeBase = ref<Record<number, boolean>>({})
 const knowledgeBaseGrantReason = ref('')
 const selectedGrantBases = computed(() => props.bases.filter(base => selectedKnowledgeBaseIds.value.includes(base.id)))
 const memoryAccessVisible = ref(false)
@@ -643,6 +655,9 @@ async function openKnowledgeBaseGrants(row:ExternalKeyRow) {
     selectedKnowledgeBaseIds.value = grants.filter(grant => grant.status === 'ACTIVE' && (!grant.expiresAt || Date.parse(grant.expiresAt) > Date.now()))
       .map(grant => grant.knowledgeBaseId)
     grantExpiryByKnowledgeBase.value = Object.fromEntries(grants.map(grant => [grant.knowledgeBaseId, grant.expiresAt || '']))
+    grantTagsByKnowledgeBase.value = Object.fromEntries(grants.map(grant => [grant.knowledgeBaseId, grant.permissionTags || []]))
+    grantPublicOnlyByKnowledgeBase.value = Object.fromEntries(grants.map(grant => [grant.knowledgeBaseId,
+      grant.permissionTags !== null && grant.permissionTags.length === 0]))
     knowledgeBaseGrantReason.value = ''
     knowledgeBaseGrantVisible.value = true
   } catch (e) { ElMessage.error(message(e)) }
@@ -650,18 +665,29 @@ async function openKnowledgeBaseGrants(row:ExternalKeyRow) {
 async function saveKnowledgeBaseGrants() {
   const key = knowledgeBaseGrantKey.value
   if (!key) return
+  try {
+    await ElMessageBox.confirm(
+      `此操作会整体替换共享主体「${key.principalName || '当前主体'}」的知识库授权，并影响绑定该主体的所有 API Key。是否继续？`,
+      '确认替换主体授权', { type:'warning', confirmButtonText:'确认替换', cancelButtonText:'返回修改' },
+    )
+  } catch { return }
   knowledgeBaseGrantSaving.value = true
   try {
     unwrap(await replaceKnowledgeBaseGrantConfig(key.id, selectedKnowledgeBaseIds.value.map(knowledgeBaseId => ({
       knowledgeBaseId,
       expiresAt:grantExpiryByKnowledgeBase.value[knowledgeBaseId] || null,
       reason:knowledgeBaseGrantReason.value.trim() || null,
+      permissionTags:grantPublicOnlyByKnowledgeBase.value[knowledgeBaseId] ? []
+        : (grantTagsByKnowledgeBase.value[knowledgeBaseId]?.length ? grantTagsByKnowledgeBase.value[knowledgeBaseId] : null),
     }))), [])
     knowledgeBaseGrantVisible.value = false
     ElMessage.success('知识库授权已更新')
     await loadAll()
   } catch (e) { ElMessage.error(message(e)) }
   finally { knowledgeBaseGrantSaving.value = false }
+}
+function onGrantPublicOnlyChange(knowledgeBaseId:number, enabled:boolean|string|number) {
+  if (enabled) grantTagsByKnowledgeBase.value[knowledgeBaseId] = []
 }
 
 async function openPrincipalDialog(row:ExternalKeyRow) {

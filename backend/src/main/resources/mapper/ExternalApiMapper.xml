@@ -49,28 +49,33 @@
 <insert id="insertApiKeyPrincipalAudit">INSERT INTO t_api_key_principal_audit(api_key_id,key_code,old_principal_id,new_principal_id,operator_id,reason)
   VALUES(#{keyId},#{keyCode},#{oldPrincipalId},#{newPrincipalId},#{operatorId},#{reason})</insert>
 
-<insert id="copyActivePrincipalKnowledgeBaseGrants">INSERT INTO t_principal_kb_grant(principal_id,knowledge_base_id,status,reason,created_by,expires_at)
-  SELECT #{targetPrincipalId},knowledge_base_id,'ACTIVE',reason,#{createdBy},expires_at FROM t_principal_kb_grant
+<insert id="copyActivePrincipalKnowledgeBaseGrants">INSERT INTO t_principal_kb_grant(principal_id,knowledge_base_id,status,reason,created_by,expires_at,permission_tags)
+  SELECT #{targetPrincipalId},knowledge_base_id,'ACTIVE',reason,#{createdBy},expires_at,permission_tags FROM t_principal_kb_grant
   WHERE principal_id=#{sourcePrincipalId} AND status='ACTIVE' AND (expires_at IS NULL OR expires_at&gt;CURRENT_TIMESTAMP)</insert>
+
+<select id="getPrincipalKnowledgeBaseGrantPermissionTags" resultType="string">SELECT CAST(permission_tags AS CHAR) FROM t_principal_kb_grant
+  WHERE principal_id=#{principalId} AND knowledge_base_id=#{knowledgeBaseId} AND status='ACTIVE'
+  AND (expires_at IS NULL OR expires_at&gt;CURRENT_TIMESTAMP) LIMIT 1</select>
 
 <select id="countKnowledgeBase" resultType="int">SELECT COUNT(1) FROM t_knowledge_base WHERE id=#{knowledgeBaseId}</select>
 
 <insert id="insertPrincipalKnowledgeBaseGrant">INSERT INTO t_principal_kb_grant(principal_id,knowledge_base_id,status,reason,created_by)
   VALUES(#{principalId},#{knowledgeBaseId},'ACTIVE',#{reason},#{createdBy})</insert>
 
-<insert id="insertPrincipalKnowledgeBaseGrantWithExpiry">INSERT INTO t_principal_kb_grant(principal_id,knowledge_base_id,status,reason,created_by,expires_at)
-  VALUES(#{principalId},#{knowledgeBaseId},'ACTIVE',#{reason},#{createdBy},#{expiresAt})</insert>
+<insert id="insertPrincipalKnowledgeBaseGrantWithExpiry">INSERT INTO t_principal_kb_grant(principal_id,knowledge_base_id,status,reason,created_by,expires_at,permission_tags)
+  VALUES(#{principalId},#{knowledgeBaseId},'ACTIVE',#{reason},#{createdBy},#{expiresAt},#{permissionTagsJson})</insert>
 
 <select id="listPrincipalKnowledgeBaseGrants" resultType="long">SELECT knowledge_base_id FROM t_principal_kb_grant
   WHERE principal_id=#{principalId} AND status='ACTIVE' AND (expires_at IS NULL OR expires_at&gt;CURRENT_TIMESTAMP) ORDER BY knowledge_base_id</select>
 
 <select id="listPrincipalKnowledgeBaseGrantDetails" resultType="map">SELECT knowledge_base_id AS knowledgeBaseId,expires_at AS expiresAt,
-  reason,status,created_time AS createdTime FROM t_principal_kb_grant WHERE principal_id=#{principalId} ORDER BY knowledge_base_id</select>
+  reason,status,created_time AS createdTime,CAST(permission_tags AS CHAR) AS permissionTagsJson
+  FROM t_principal_kb_grant WHERE principal_id=#{principalId} ORDER BY knowledge_base_id</select>
 
 <delete id="deletePrincipalKnowledgeBaseGrants">DELETE FROM t_principal_kb_grant WHERE principal_id=#{principalId}</delete>
 
-<insert id="insertPrincipalKnowledgeBaseGrantAudit">INSERT INTO t_principal_kb_grant_audit(principal_id,knowledge_base_id,action,reason,operator_id)
-  VALUES(#{principalId},#{knowledgeBaseId},#{action},#{reason},#{operatorId})</insert>
+<insert id="insertPrincipalKnowledgeBaseGrantAudit">INSERT INTO t_principal_kb_grant_audit(principal_id,knowledge_base_id,action,reason,permission_tags,operator_id)
+  VALUES(#{principalId},#{knowledgeBaseId},#{action},#{reason},#{permissionTagsJson},#{operatorId})</insert>
 
 <update id="updateApiKeyStatus">UPDATE t_api_key SET status=#{status} WHERE id=#{id}</update>
 

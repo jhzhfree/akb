@@ -7,10 +7,13 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.jh.knowledgeos.common.RetrievalAuthorizationContext;
 import com.jh.knowledgeos.domain.ApiKey;
+import com.jh.knowledgeos.mapper.ExternalApiMapper;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import org.junit.jupiter.api.Test;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 /**
  * 外部检索标签授权（对应《AKB 知识库检索权限设计》验收用例 3、4 与 §4.1 默认拒绝）。
@@ -28,6 +31,10 @@ class RetrievalAuthorizationServiceTest {
 
     private static RetrievalAuthorizationService service(String mode) {
         return new RetrievalAuthorizationService(new ObjectMapper(), mode);
+    }
+
+    private static RetrievalAuthorizationService service(String mode, ExternalApiMapper mapper) {
+        return new RetrievalAuthorizationService(new ObjectMapper(), mode, mapper);
     }
 
     /** 用例 3：调用方伪造受限标签，不能召回对应资料——超出授权的部分被丢弃。 */
@@ -111,5 +118,31 @@ class RetrievalAuthorizationServiceTest {
         assertEquals("<未配置>", unconfigured.grantedTagsForLog());
         assertFalse(unconfigured.configured());
         assertTrue(shadow.forCredential(keyWith("[]")).configured());
+    }
+
+    @Test
+    void knowledgeBaseGrantCanOnlyNarrowGlobalKeyTags() {
+        ExternalApiMapper mapper = mock(ExternalApiMapper.class);
+        when(mapper.getPrincipalKnowledgeBaseGrantPermissionTags(71L, 12L)).thenReturn("[\"team-a\",\"finance\"]");
+        when(mapper.getPrincipalKnowledgeBaseGrantPermissionTags(71L, 13L)).thenReturn("[\"engineering\"]");
+        ApiKey key = keyWith("[\"team-a\",\"engineering\"]");
+        key.setPrincipalId(71L);
+
+        List<String> effective = service("ENFORCE", mapper).effectiveTags(key, 12L,
+            Arrays.asList("team-a", "engineering", "finance"), SOURCE);
+
+        assertEquals(Collections.singletonList("team-a"), effective);
+        assertEquals(Collections.singletonList("engineering"), service("ENFORCE", mapper).effectiveTags(key, 13L,
+            Arrays.asList("team-a", "engineering", "finance"), SOURCE));
+    }
+
+    @Test
+    void knowledgeBaseEmptyTagGrantMeansPublicResourcesOnly() {
+        ExternalApiMapper mapper = mock(ExternalApiMapper.class);
+        when(mapper.getPrincipalKnowledgeBaseGrantPermissionTags(71L, 12L)).thenReturn("[]");
+        ApiKey key = keyWith(null);
+        key.setPrincipalId(71L);
+
+        assertTrue(service("ENFORCE", mapper).effectiveTags(key, 12L, Collections.singletonList("team-a"), SOURCE).isEmpty());
     }
 }

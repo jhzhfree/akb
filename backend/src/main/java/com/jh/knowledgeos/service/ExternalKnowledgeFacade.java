@@ -151,7 +151,7 @@ public class ExternalKnowledgeFacade {
     public Map<String, Object> query(ApiKey key, Long kb, String question, Integer topK, List<String> permissionTags, String source,
         String answerFormat, Double minScore, String responseMode, boolean includeMemory) throws Exception {
         // 标签不再是调用方可声明的输入：这里用服务端授权范围与请求标签求交集（请求只能收窄）。
-        List<String> effectiveTags = authorization.effectiveTags(key, permissionTags, source);
+        List<String> effectiveTags = authorization.effectiveTags(key, kb, permissionTags, source);
         Map<String, Object> payload = payload(key, kb, question, topK, effectiveTags, source, answerFormat, minScore);
         if (includeMemory) {
             attachMemory(payload, key, question);
@@ -183,7 +183,7 @@ public class ExternalKnowledgeFacade {
     public Map<String, Object> retrieval(ApiKey key, Long kb, String question, Integer topK,
         List<String> permissionTags, String source, Double minScore, boolean withAnswer, boolean includeMemory)
         throws Exception {
-        List<String> effectiveTags = authorization.effectiveTags(key, permissionTags, source);
+        List<String> effectiveTags = authorization.effectiveTags(key, kb, permissionTags, source);
         Map<String, Object> request = payload(key, kb, question, topK, effectiveTags, source,
             AnswerFormat.DEFAULT, minScore);
         if (!withAnswer) {
@@ -266,7 +266,7 @@ public class ExternalKnowledgeFacade {
         String answerFormat, Double minScore, String memoryContext, KnowledgeQueryService.QueryStreamListener listener)
         throws Exception {
         // 流式与阻塞调用共用同一份授权判定：不存在「流式走一条更宽松的路径」。
-        List<String> effectiveTags = authorization.effectiveTags(key, permissionTags, source);
+        List<String> effectiveTags = authorization.effectiveTags(key, kb, permissionTags, source);
         Map<String, Object> payload = payload(key, kb, question, topK, effectiveTags, source, answerFormat, minScore);
         if (memoryContext != null && !memoryContext.isEmpty()) {
             payload.put("memoryContext", memoryContext);
@@ -281,7 +281,7 @@ public class ExternalKnowledgeFacade {
     public Map<String, Object> queryWithContext(ApiKey key, Long kb, String question, Integer topK,
         List<String> permissionTags, String source, String answerFormat, Double minScore, String memoryContext)
         throws Exception {
-        List<String> effectiveTags = authorization.effectiveTags(key, permissionTags, source);
+        List<String> effectiveTags = authorization.effectiveTags(key, kb, permissionTags, source);
         Map<String, Object> payload = payload(key, kb, question, topK, effectiveTags, source, answerFormat, minScore);
         if (memoryContext != null && !memoryContext.isEmpty()) {
             payload.put("memoryContext", memoryContext);

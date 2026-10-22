@@ -57,6 +57,8 @@ public class DatabaseMigrationIT {
             assertTrue(tableExists(st, "t_agent_memory_governance_event"));
             assertTrue(tableExists(st, "t_api_key_principal_audit"));
             assertTrue(columnExists(st, "t_api_key", "principal_id"));
+            assertTrue(columnExists(st, "t_principal_kb_grant", "permission_tags"));
+            assertTrue(columnExists(st, "t_principal_kb_grant_audit", "permission_tags"));
             assertTrue(tableExists(st, "t_index_outbox"));
             assertTrue(tableExists(st, "t_index_aggregate_version"));
             assertTrue(tableExists(st, "t_index_delivery_attempt"));

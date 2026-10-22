@@ -2,6 +2,7 @@ package com.jh.knowledgeos.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
@@ -16,6 +17,9 @@ import com.jh.knowledgeos.mapper.ExternalApiMapper;
 import org.mockito.Mockito;
 import static org.mockito.Mockito.doAnswer;
 import java.util.Arrays;
+import java.util.Collections;
+import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.time.LocalDateTime;
 import org.mockito.ArgumentCaptor;
@@ -106,16 +110,18 @@ class ApiKeyServiceTest {
         when(mapper.getApiKey(9L)).thenReturn(key);
         when(mapper.countKnowledgeBase(7L)).thenReturn(1);
         when(mapper.countKnowledgeBase(8L)).thenReturn(1);
-        when(mapper.listPrincipalKnowledgeBaseGrants(71L)).thenReturn(Arrays.asList(3L, 4L), Arrays.asList(7L, 8L));
+        when(mapper.listPrincipalKnowledgeBaseGrants(71L)).thenReturn(Arrays.asList(7L, 8L));
+        when(mapper.listPrincipalKnowledgeBaseGrantDetails(71L)).thenReturn(Arrays.asList(
+            grantRow(3L, "[\"team-a\"]"), grantRow(4L, null)));
 
         Map<String, Object> result = service.replaceKnowledgeBaseGrants(9L, Arrays.asList(7L, 7L, 8L), 2L).get(0);
 
         verify(mapper).deletePrincipalKnowledgeBaseGrants(71L);
-        verify(mapper).insertPrincipalKnowledgeBaseGrantWithExpiry(71L, 7L, 2L, "控制台配置授权", null);
-        verify(mapper).insertPrincipalKnowledgeBaseGrantWithExpiry(71L, 8L, 2L, "控制台配置授权", null);
-        verify(mapper).insertPrincipalKnowledgeBaseGrantAudit(71L, 3L, "REVOKE", 2L, "控制台替换授权配置");
-        verify(mapper).insertPrincipalKnowledgeBaseGrantAudit(71L, 4L, "REVOKE", 2L, "控制台替换授权配置");
-        verify(mapper).insertPrincipalKnowledgeBaseGrantAudit(71L, 7L, "GRANT", 2L, "控制台配置授权");
+        verify(mapper).insertPrincipalKnowledgeBaseGrantWithExpiry(71L, 7L, 2L, "控制台配置授权", null, null);
+        verify(mapper).insertPrincipalKnowledgeBaseGrantWithExpiry(71L, 8L, 2L, "控制台配置授权", null, null);
+        verify(mapper).insertPrincipalKnowledgeBaseGrantAudit(71L, 3L, "REVOKE", 2L, "控制台替换授权配置", "[\"team-a\"]");
+        verify(mapper).insertPrincipalKnowledgeBaseGrantAudit(71L, 4L, "REVOKE", 2L, "控制台替换授权配置", null);
+        verify(mapper).insertPrincipalKnowledgeBaseGrantAudit(71L, 7L, "GRANT", 2L, "控制台配置授权", null);
         assertEquals(7L, result.get("knowledgeBaseId"));
     }
 
@@ -126,7 +132,8 @@ class ApiKeyServiceTest {
         LocalDateTime expiresAt = LocalDateTime.now().plusDays(10).withNano(0);
         when(mapper.getApiKey(9L)).thenReturn(key);
         when(mapper.countKnowledgeBase(7L)).thenReturn(1);
-        when(mapper.listPrincipalKnowledgeBaseGrants(71L)).thenReturn(Arrays.asList(7L), Arrays.asList(7L));
+        when(mapper.listPrincipalKnowledgeBaseGrants(71L)).thenReturn(Arrays.asList(7L));
+        when(mapper.listPrincipalKnowledgeBaseGrantDetails(71L)).thenReturn(Collections.emptyList());
 
         com.jh.knowledgeos.dto.ExternalKnowledgeBaseGrantRequest grant = new com.jh.knowledgeos.dto.ExternalKnowledgeBaseGrantRequest();
         grant.setKnowledgeBaseId(7L);
@@ -134,8 +141,39 @@ class ApiKeyServiceTest {
         grant.setReason("项目验收期临时授权");
         service.replaceKnowledgeBaseGrantDetails(9L, Arrays.asList(grant), 2L);
 
-        verify(mapper).insertPrincipalKnowledgeBaseGrantWithExpiry(71L, 7L, 2L, "项目验收期临时授权", expiresAt);
-        verify(mapper).insertPrincipalKnowledgeBaseGrantAudit(71L, 7L, "GRANT", 2L, "项目验收期临时授权");
+        verify(mapper).insertPrincipalKnowledgeBaseGrantWithExpiry(71L, 7L, 2L, "项目验收期临时授权", expiresAt, null);
+        verify(mapper).insertPrincipalKnowledgeBaseGrantAudit(71L, 7L, "GRANT", 2L, "项目验收期临时授权", null);
+    }
+
+    @Test
+    void grantConfigurationPersistsAndAuditsPerKnowledgeBaseTags() {
+        ApiKey key = key("QUERY");
+        key.setPrincipalId(71L);
+        when(mapper.getApiKey(9L)).thenReturn(key);
+        when(mapper.countKnowledgeBase(7L)).thenReturn(1);
+        when(mapper.listPrincipalKnowledgeBaseGrantDetails(71L)).thenReturn(Collections.emptyList());
+        com.jh.knowledgeos.dto.ExternalKnowledgeBaseGrantRequest grant = new com.jh.knowledgeos.dto.ExternalKnowledgeBaseGrantRequest();
+        grant.setKnowledgeBaseId(7L);
+        grant.setPermissionTags(Arrays.asList("team-a", " team-b ", "team-a"));
+
+        service.replaceKnowledgeBaseGrantDetails(9L, Arrays.asList(grant), 2L);
+
+        verify(mapper).insertPrincipalKnowledgeBaseGrantWithExpiry(71L, 7L, 2L, "控制台配置授权", null, "[\"team-a\",\"team-b\"]");
+        verify(mapper).insertPrincipalKnowledgeBaseGrantAudit(71L, 7L, "GRANT", 2L, "控制台配置授权", "[\"team-a\",\"team-b\"]");
+    }
+
+    @Test
+    void grantDetailsExposeTagPolicyAsAListAndPreserveInheritanceNull() {
+        ApiKey key = key("QUERY");
+        key.setPrincipalId(71L);
+        when(mapper.listPrincipalKnowledgeBaseGrantDetails(71L)).thenReturn(Arrays.asList(
+            grantRow(7L, "[\"team-a\"]"), grantRow(8L, null)));
+
+        List<Map<String, Object>> details = service.knowledgeBaseGrantDetails(key);
+
+        assertEquals(Arrays.asList("team-a"), details.get(0).get("permissionTags"));
+        assertNull(details.get(1).get("permissionTags"));
+        assertFalse(details.get(0).containsKey("permissionTagsJson"));
     }
 
     @Test
@@ -183,12 +221,12 @@ class ApiKeyServiceTest {
         }).when(mapper).insertPrincipal(Mockito.any(ExternalPrincipal.class));
         when(ids.next("PR_")).thenReturn("PR_NEW");
         when(mapper.getApiKey(9L)).thenReturn(key, key);
-        when(mapper.listPrincipalKnowledgeBaseGrants(99L)).thenReturn(Arrays.asList(4L));
+        when(mapper.listPrincipalKnowledgeBaseGrantDetails(99L)).thenReturn(Arrays.asList(grantRow(4L, "[\"team-a\"]")));
 
         service.assignPrincipal(9L, null, "隔离后的 Octop 应用", 2L, "拆分主体，保留原授权");
 
         verify(mapper).copyActivePrincipalKnowledgeBaseGrants(71L, 99L, 2L);
-        verify(mapper).insertPrincipalKnowledgeBaseGrantAudit(99L, 4L, "GRANT", 2L, "主体拆分复制授权");
+        verify(mapper).insertPrincipalKnowledgeBaseGrantAudit(99L, 4L, "GRANT", 2L, "主体拆分复制授权", "[\"team-a\"]");
         verify(mapper).updateApiKeyPrincipal(9L, 99L);
     }
 
@@ -211,5 +249,12 @@ class ApiKeyServiceTest {
         key.setScopes(scopes);
         key.setStatus(ApiKey.STATUS_ACTIVE);
         return key;
+    }
+
+    private static Map<String, Object> grantRow(Long knowledgeBaseId, String permissionTagsJson) {
+        Map<String, Object> row = new LinkedHashMap<String, Object>();
+        row.put("knowledgeBaseId", knowledgeBaseId);
+        row.put("permissionTagsJson", permissionTagsJson);
+        return row;
     }
 }

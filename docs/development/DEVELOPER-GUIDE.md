@@ -15,6 +15,8 @@
 
 ## 2. 环境要求
 
+构建与数据库迁移验证约定见 [工程记忆](PROJECT-MEMORY.md)。尤其注意：数据库迁移集成测试使用 Testcontainers，需要 Docker daemon；普通 `mvn test` 不执行 `*IT`。
+
 目标开发环境：
 
 ```text
