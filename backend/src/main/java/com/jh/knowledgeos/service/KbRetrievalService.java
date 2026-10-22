@@ -128,18 +128,15 @@ public class KbRetrievalService {
             chunk.put("source", source != null ? source : text(candidate.get("title")));
             chunk.put("metadata", metadata(candidate, nested, rerank, score));
             rows.add(chunk);
-            if (rows.size() >= limit) {
-                break;
-            }
         }
-        // 归一化是单调的，顺序本不会变；但重排分与压缩分混用时仍排一次，免得依赖上游顺序。
+        // 重排分与压缩分可能来自不同值域，先对全部候选按协议分排序，再截取 topK。
         Collections.sort(rows, new Comparator<Map<String, Object>>() {
             @Override
             public int compare(Map<String, Object> left, Map<String, Object> right) {
                 return Double.compare(number(right.get("score")), number(left.get("score")));
             }
         });
-        return rows;
+        return new ArrayList<Map<String, Object>>(rows.subList(0, Math.min(rows.size(), limit)));
     }
 
     private Map<String, Object> metadata(Map<?, ?> candidate, Map<?, ?> nested, Double rerank, Double score) {
