@@ -1,369 +1,11 @@
-<template>
-  <section class="kb-page">
-    <header class="kb-section-head">
-      <div>
-        <div class="kb-eyebrow">æŽ¥å£æœåŠ¡</div>
-        <h1 class="kb-title mt-1">{{ section === 'credentials' ? 'å‡­è¯' : 'æœåŠ¡' }}</h1>
-        <p class="kb-muted mt-1">
-          <template v-if="section==='credentials'">
-            API å¯†é’¥å†³å®šè°ƒç”¨æ–¹å¯è§çš„çŸ¥è¯†åº“èŒƒå›´ä¸Žå¯ç”¨åŠ¨ä½œï¼šæ˜Žæ–‡åªåœ¨ç­¾å‘æ—¶å±•ç¤ºä¸€æ¬¡ï¼ŒåŠé”€å³è®©å¤–éƒ¨ç³»ç»Ÿç«‹å³å¤±åŽ»è®¿é—®èƒ½åŠ›ã€‚
-          </template>
-          <template v-else>
-            å¯¹å¤–ä»¥ RESTfulã€MCP æœåŠ¡ã€SSE ä¸‰ç§å½¢æ€å¼€æ”¾åŒä¸€å¥—çŸ¥è¯†èƒ½åŠ›ï¼šä¸€ä¸ª API å¯†é’¥ å†³å®šå¯è§çš„çŸ¥è¯†åº“èŒƒå›´ä¸Žå¯ç”¨åŠ¨ä½œï¼Œ
-            ä¸‰ä¸ªé€šé“å…±ç”¨ä¸€å¥—é™æµä¸Žè°ƒç”¨å®¡è®¡ã€‚
-          </template>
-        </p>
-      </div>
-      <div class="flex shrink-0 items-center gap-2">
-        <!-- V2.2ï¼šæœåŠ¡ä¸Žå‡­è¯æ˜¯ã€ŒæŽ¥å£æœåŠ¡ã€ä¸‹çš„ä¸¤ä¸ª Tabï¼ŒåŒºå—ç”± Tab çš„ focus å†³å®šï¼Œé¢æ¿å†…ä¸å†é‡å¤å¼€å…³ã€‚ -->
-        <button class="kb-btn-outline" :disabled="loading" @click="loadAll">åˆ·æ–°</button>
-      </div>
-    </header>
-
-    <div v-if="section==='services'" class="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-      <MetricCard label="RESTful" :value="overview?.rest?.endpoints?.length ?? 0" hint="å¯¹å¤–æŽ¥å£æ•°" />
-      <MetricCard label="MCP å·¥å…·" :value="overview?.mcp?.tools?.length ?? 0" hint="æ™ºèƒ½ä½“å¯ç”¨å·¥å…·" />
-      <MetricCard label="SSE" :value="overview?.sse?.endpoints?.length ?? 0" hint="æŽ¨é€é€šé“" />
-      <MetricCard label="åœ¨ç”¨å‡­è¯" :value="overview?.activeKeys ?? 0" hint="æœ‰æ•ˆçŠ¶æ€çš„ API å¯†é’¥" />
-    </div>
-
-    <div v-if="error" class="mt-3 rounded-lg border border-[color:var(--warn-bd)] bg-[color:var(--warn-bg)] px-4 py-2.5 text-xs text-[color:var(--warn)]">
-      {{ error }}
-    </div>
-
-    <div v-if="section==='services'" class="mt-4 grid grid-cols-1 gap-4 xl:grid-cols-3">
-      <!-- åè®®ä¸‰å¡å±žäºŽã€ŒæœåŠ¡ã€è§†è§’ï¼šå‡­è¯ Tab åªç•™å‡­è¯è¡¨ï¼Œå…å¾—ç„¦ç‚¹è¢«åè®®ä¿¡æ¯å¸¦åã€‚ -->
-      <template v-if="section==='services'">
-      <article class="kb-card">
-        <div class="kb-card-head">
-          <b class="text-sm">REST æŽ¥å£</b>
-          <el-tag :type="overview?.rest?.enabled ? 'success' : 'info'" size="small" effect="plain">
-            {{ overview?.rest?.enabled ? 'å·²å¼€æ”¾' : 'å·²å…³é—­' }}
-          </el-tag>
-        </div>
-        <div class="p-3">
-          <div class="kb-muted">åŸºç¡€è·¯å¾„ <b class="text-ink-700">{{ overview?.rest?.basePath || 'â€”' }}</b></div>
-          <div class="kb-muted mt-1">é‰´æƒ {{ overview?.rest?.auth || 'â€”' }}</div>
-          <div class="mt-2 flex items-center gap-2 text-xs">
-            <span class="kb-muted">å¹³å°è®°å¿†æœåŠ¡</span>
-            <el-tag :type="overview?.rest?.agentMemoryEnabled ? 'success' : 'info'" size="small" effect="plain">
-              {{ overview?.rest?.agentMemoryEnabled ? 'å·²å¯ç”¨' : 'å·²å…³é—­' }}
-            </el-tag>
-            <span class="kb-muted">ç”±éƒ¨ç½²é…ç½®æŽ§åˆ¶</span>
-          </div>
-          <div class="mt-3 max-h-64 overflow-auto">
-            <div v-for="item in overview?.rest?.endpoints || []" :key="item.method + item.path"
-              class="flex items-start gap-2 border-b border-ink-100 py-1.5 last:border-0">
-              <span class="w-12 shrink-0 text-[11px] font-semibold text-accent">{{ item.method }}</span>
-              <span class="min-w-0 flex-1">
-                <span class="block truncate text-[11px] text-ink-700">{{ item.path }}</span>
-                <span class="block text-[11px] text-ink-500">{{ item.summary }}</span>
-              </span>
-            </div>
-          </div>
-        </div>
-      </article>
-
-      <article class="kb-card">
-        <div class="kb-card-head">
-          <b class="text-sm">MCP æœåŠ¡</b>
-          <el-tag :type="overview?.mcp?.enabled ? 'success' : 'info'" size="small" effect="plain">
-            {{ overview?.mcp?.enabled ? 'å·²å¼€æ”¾' : 'å·²å…³é—­' }}
-          </el-tag>
-        </div>
-        <div class="p-3">
-          <div class="kb-muted">ç«¯ç‚¹ <b class="text-ink-700">{{ overview?.mcp?.endpoint || 'â€”' }}</b></div>
-          <div class="kb-muted mt-1">åè®®ç‰ˆæœ¬ {{ overview?.mcp?.protocolVersion || 'â€”' }}</div>
-          <div class="mt-2 flex flex-wrap gap-1">
-            <span v-for="method in overview?.mcp?.methods || []" :key="method"
-              class="rounded border border-ink-200 bg-ink-50 px-2 py-0.5 text-[11px] text-ink-600">{{ method }}</span>
-          </div>
-          <div class="mt-3 kb-muted">å¯ç”¨å·¥å…·</div>
-          <div class="mt-1 flex flex-wrap gap-1">
-            <span v-for="tool in overview?.mcp?.tools || []" :key="tool"
-              class="rounded border border-[color:var(--info-bd)] bg-[color:var(--info-bg)] px-2 py-0.5 text-[11px] text-accent">{{ tool }}</span>
-          </div>
-        </div>
-      </article>
-
-      <article class="kb-card">
-        <div class="kb-card-head">
-          <b class="text-sm">SSE æŽ¨é€</b>
-          <el-tag :type="overview?.sse?.enabled ? 'success' : 'info'" size="small" effect="plain">
-            {{ overview?.sse?.enabled ? 'å·²å¼€æ”¾' : 'å·²å…³é—­' }}
-          </el-tag>
-        </div>
-        <div class="p-3">
-          <div class="kb-muted">å¿ƒè·³ {{ overview?.sse?.heartbeatSeconds ?? 'â€”' }} ç§’ Â· å•æ¬¡æœ€é•¿ {{ overview?.sse?.maxMinutes ?? 'â€”' }} åˆ†é’Ÿ</div>
-          <div class="mt-3">
-            <div v-for="item in overview?.sse?.endpoints || []" :key="item.path"
-              class="border-b border-ink-100 py-1.5 last:border-0">
-              <span class="block truncate text-[11px] text-ink-700">{{ item.path }}</span>
-              <span class="block text-[11px] text-ink-500">{{ item.summary }}</span>
-            </div>
-          </div>
-        </div>
-      </article>
-      </template>
-    </div>
-
-    <article v-if="section==='credentials'" class="kb-card mt-4">
-      <div class="kb-card-head">
-        <b class="text-sm">API å¯†é’¥å‡­è¯</b>
-        <div class="flex items-center gap-2">
-          <span class="kb-muted">æ˜Žæ–‡åªåœ¨ç­¾å‘æ—¶å±•ç¤ºä¸€æ¬¡</span>
-          <button class="kb-btn-primary" @click="openCreate">ç­¾å‘å‡­è¯</button>
-        </div>
-      </div>
-      <div class="p-3">
-        <PanelState :loading="loading" :empty="!keys.length" empty-text="å°šæœªç­¾å‘ä»»ä½• API Key"
-          empty-hint="ç­¾å‘åŽå¤–éƒ¨ç³»ç»Ÿå³å¯æŒ‰èŒƒå›´è°ƒç”¨çŸ¥è¯†æœåŠ¡" retryable @retry="loadAll">
-          <el-table :data="keys" border size="small">
-            <el-table-column prop="name" label="è°ƒç”¨æ–¹" min-width="150" show-overflow-tooltip />
-            <el-table-column label="å¯†é’¥å‰ç¼€" width="180">
-              <template #default="{ row }"><span class="text-[11px]">{{ row.keyPrefix || 'â€”' }}</span></template>
-            </el-table-column>
-            <el-table-column label="çŸ¥è¯†åº“èŒƒå›´" min-width="150">
-              <template #default="{ row }">
-                {{ row.knowledgeBaseName || (row.knowledgeBaseId ? `çŸ¥è¯†åº“ #${row.knowledgeBaseId}` : 'å…¨éƒ¨å¯è§åº“') }}
-              </template>
-            </el-table-column>
-            <el-table-column label="è®°å¿†èº«ä»½" min-width="190">
-              <template #default="{ row }">
-                <div class="text-xs">{{ row.memoryAgentCode || row.keyCode }}</div>
-                <div class="text-[10px] text-ink-500">{{ row.memoryNamespace || 'å¯†é’¥éš”ç¦»' }}</div>
-              </template>
-            </el-table-column>
-            <el-table-column label="æƒé™" width="180">
-              <template #default="{ row }">
-                <el-tag v-for="scope in scopeList(row)" :key="scope" size="small" effect="plain" class="mr-1">
-                  {{ scopeLabel(scope) }}
-                </el-tag>
-              </template>
-            </el-table-column>
-            <el-table-column label="é™æµ" width="120">
-              <template #default="{ row }">{{ row.rateLimitPerMinute ?? 'â€”' }} æ¬¡/åˆ†</template>
-            </el-table-column>
-            <el-table-column label="çŠ¶æ€" width="110">
-              <template #default="{ row }">
-                <el-tag :type="row.status === 'ACTIVE' ? 'success' : 'info'" size="small" effect="plain">
-                  {{ row.status === 'ACTIVE' ? 'æœ‰æ•ˆ' : 'å·²åŠé”€' }}
-                </el-tag>
-              </template>
-            </el-table-column>
-            <el-table-column label="æœ‰æ•ˆæœŸ" width="170">
-              <template #default="{ row }">{{ row.expiresAt || 'é•¿æœŸæœ‰æ•ˆ' }}</template>
-            </el-table-column>
-            <el-table-column label="æœ€è¿‘è°ƒç”¨" width="170">
-              <template #default="{ row }">{{ row.lastUsedAt || 'â€”' }}</template>
-            </el-table-column>
-            <el-table-column label="æ“ä½œ" width="330" fixed="right">
-              <template #default="{ row }">
-                <el-button v-if="hasMemoryCapability(row)" link type="primary" size="small" @click="openMemoryPolicy(row)">è®°å¿†å¼€å…³</el-button>
-                <el-button v-if="hasMemoryScope(row)" link type="primary" size="small" @click="openMemoryAccess(row)">è®°å¿†æŽˆæƒ</el-button>
-                <el-button v-if="hasMemoryScope(row)" link type="primary" size="small" @click="openMemoryManager(row)">è®°å¿†ç®¡ç†</el-button>
-                <el-button v-if="row.status === 'ACTIVE'" link type="danger" size="small" @click="revoke(row)">åŠé”€</el-button>
-                <span v-else class="text-[11px] text-ink-500">å·²å¤±æ•ˆ</span>
-              </template>
-            </el-table-column>
-          </el-table>
-        </PanelState>
-      </div>
-    </article>
-
-    <div v-if="section==='services'" class="mt-4 grid grid-cols-1 gap-4 xl:grid-cols-2">
-      <article class="kb-card">
-        <div class="kb-card-head"><b class="text-sm">æŽ¥å…¥ç¤ºä¾‹</b><span class="kb-muted">å¤åˆ¶å³å¯è”è°ƒ</span></div>
-        <div class="p-3">
-          <el-tabs v-model="exampleTab">
-            <el-tab-pane label="RESTful" name="rest">
-              <pre class="code-block">{{ restExample }}</pre>
-            </el-tab-pane>
-            <el-tab-pane label="MCP" name="mcp">
-              <pre class="code-block">{{ mcpExample }}</pre>
-            </el-tab-pane>
-            <el-tab-pane label="SSE" name="sse">
-              <pre class="code-block">{{ sseExample }}</pre>
-            </el-tab-pane>
-          </el-tabs>
-          <p class="kb-muted mt-2 text-[11px]">{{ answerFormatHint }}</p>
-          <p class="kb-muted mt-1 text-[11px]">{{ minScoreHint }}</p>
-          <p class="kb-muted mt-1 text-[11px]">{{ responseModeHint }}</p>
-          <p v-if="exampleTab === 'sse'" class="kb-muted mt-1 text-[11px]">{{ contentHint }}</p>
-          <div class="mt-3 border-t border-ink-100 pt-3">
-            <div class="flex flex-wrap items-center gap-2">
-              <input v-model="probeSecret" class="kb-input flex-1" placeholder="ç²˜è´´æ˜Žæ–‡ API å¯†é’¥åšè¿žé€šæ€§è‡ªæ£€" />
-              <button class="kb-btn-outline" :disabled="probing || !probeSecret.trim()" @click="probe">REST è‡ªæ£€</button>
-              <button class="kb-btn-outline" :disabled="probing || !probeSecret.trim()" @click="probeSse">SSE è‡ªæ£€</button>
-            </div>
-            <p v-if="probeResult" class="mt-2 text-[11px]" :class="probeOk ? 'text-[color:var(--ok)]' : 'text-[color:var(--danger)]'">
-              {{ probeResult }}
-            </p>
-            <p class="kb-muted mt-2">
-              è‡ªæ£€è¯·æ±‚ä¸å¸¦æŽ§åˆ¶å°ä¼šè¯ï¼Œä¸Žå¤–éƒ¨è°ƒç”¨æ–¹å®Œå…¨ä¸€è‡´ï¼šå¯éªŒè¯å‡­è¯æ˜¯å¦æœ‰æ•ˆã€çŸ¥è¯†åº“èŒƒå›´æ˜¯å¦ç”Ÿæ•ˆã€é…é¢æ˜¯å¦è¢«é™æµã€‚
-            </p>
-          </div>
-        </div>
-      </article>
-
-      <!-- å¯¹å¤–è°ƒç”¨åªåœ¨è¿™é‡Œéœ²æœ€è¿‘å‡ æ¡åšå¥åº·ä½è¯ï¼šå…¨é‡æ˜Žç»†ç»Ÿä¸€åŽ»ã€Œè°ƒç”¨æ—¥å¿—ã€çœ‹ï¼Œ
-           åŒä¸€æ‰¹å®¡è®¡æ•°æ®ä¸åœ¨ä¸¤ä¸ª Tab å„æ‘†ä¸€å¼ å£å¾„ä¸åŒçš„è¡¨ã€‚ -->
-      <article class="kb-card">
-        <div class="kb-card-head">
-          <b class="text-sm">æœ€è¿‘è°ƒç”¨</b>
-          <button class="text-xs font-medium text-accent hover:text-accent" @click="shell.navigate('integration.logs')">
-            è°ƒç”¨æ—¥å¿— â†’
-          </button>
-        </div>
-        <div class="divide-y divide-ink-100 px-4">
-          <div v-for="(row,i) in audits" :key="i" class="flex items-center gap-2 py-2 text-[12px]">
-            <el-tag size="small" effect="plain" :type="channelType(row.channel)">{{ row.channel }}</el-tag>
-            <span class="min-w-0 flex-1 truncate text-ink-700">{{ row.method || 'â€”' }}</span>
-            <span class="shrink-0 text-[11px] text-ink-500">{{ row.durationMs }} ms</span>
-            <span
-              class="shrink-0 text-[11px]"
-              :class="row.statusCode >= 400 ? 'text-[color:var(--danger)]' : 'text-[color:var(--ok)]'">
-              {{ row.statusCode ?? 'â€”' }}
-            </span>
-          </div>
-          <div v-if="auditLoading" class="py-6 text-center text-[12px] text-ink-500">åŠ è½½ä¸­â€¦</div>
-          <div v-else-if="!audits.length" class="py-6 text-center text-[12px] text-ink-500">
-            æš‚æ— å¯¹å¤–è°ƒç”¨è®°å½•ï¼Œå¤–éƒ¨ç³»ç»Ÿå‘èµ·è°ƒç”¨åŽä¼šåœ¨æ­¤ç•™ç—•
-          </div>
-        </div>
-      </article>
-    </div>
-
-    <el-dialog v-model="createVisible" title="ç­¾å‘ API å¯†é’¥" width="560px">
-      <el-form label-width="96px" size="small">
-        <el-form-item label="è°ƒç”¨æ–¹åç§°">
-          <el-input v-model="form.name" placeholder="å¦‚ï¼šERP é—®ç­”åŠ©æ‰‹" />
-        </el-form-item>
-        <el-form-item label="çŸ¥è¯†åº“èŒƒå›´">
-          <el-select v-model="form.knowledgeBaseId" clearable class="w-full" placeholder="ä¸ç»‘å®š=ä»…å¯è§å…¬å¼€åº“">
-            <el-option v-for="base in bases" :key="base.id" :value="base.id" :label="base.name" />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="æƒé™">
-          <el-select v-model="form.scopes" multiple class="w-full">
-            <el-option value="READ" label="è¯»å–ï¼ˆæ£€ç´¢ / é—®ç­”ï¼‰" />
-            <el-option value="WRITE" label="å†™å…¥ï¼ˆçŸ¥è¯†æ²»ç†ï¼‰" />
-            <el-option value="INGEST" label="æŽ¥å…¥ï¼ˆæ–‡æœ¬æ‘„å…¥ï¼‰" />
-            <el-option value="MEMORY_READ" label="è¯»å–è®°å¿†ï¼ˆAgent Recallï¼‰" />
-            <el-option value="MEMORY_WRITE" label="å†™å…¥è®°å¿†ï¼ˆCapture / Forgetï¼‰" />
-          </el-select>
-        </el-form-item>
-        <template v-if="form.scopes.includes('MEMORY_READ') || form.scopes.includes('MEMORY_WRITE')">
-          <el-form-item label="è®°å¿†å‘½åç©ºé—´">
-            <el-input v-model="form.memoryNamespace" placeholder="ç©ºå€¼æ—¶ä»…æœ¬å¯†é’¥å¯è§ï¼›åŒå€¼ç”¨äºŽæ˜¾å¼å…±äº«é¡¹ç›® / ä»»åŠ¡è®°å¿†" />
-          </el-form-item>
-          <el-form-item label="Agent ç¼–ç ">
-            <el-input v-model="form.memoryAgentCode" placeholder="ç©ºå€¼æ—¶ä½¿ç”¨æœ¬å¯†é’¥ç¼–ç ï¼›ç”¨äºŽ Agent ç§æœ‰è®°å¿†éš”ç¦»" />
-          </el-form-item>
-        </template>
-        <el-form-item label="é™æµ">
-          <el-input-number v-model="form.rateLimitPerMinute" :min="1" :max="6000" />
-          <span class="ml-2 text-[11px] text-ink-500">æ¬¡ / åˆ†é’Ÿ</span>
-        </el-form-item>
-        <el-form-item label="æœ‰æ•ˆæœŸ">
-          <el-input v-model="form.expiresAt" placeholder="ç•™ç©ºé•¿æœŸæœ‰æ•ˆï¼Œå¦‚ 2026-12-31T23:59:59" />
-        </el-form-item>
-      </el-form>
-      <p class="kb-muted">
-        ç»‘å®šçŸ¥è¯†åº“åŽï¼Œå‡­è¯åªèƒ½è®¿é—®è¯¥åº“ï¼›ä¸ç»‘å®šæ—¶ä»…èƒ½çœ‹åˆ°å…¬å¼€çŸ¥è¯†åº“ã€‚è®°å¿†å‘½åç©ºé—´é»˜è®¤æŒ‰å¯†é’¥éš”ç¦»ï¼ŒåŒä¸€å‘½åç©ºé—´éœ€ç”±ç®¡ç†å‘˜æ˜Žç¡®é…ç½®åŽæ‰å…±äº«é¡¹ç›® / ä»»åŠ¡è®°å¿†ã€‚
-      </p>
-      <template #footer>
-        <el-button size="small" @click="createVisible = false">å–æ¶ˆ</el-button>
-        <el-button size="small" type="primary" :loading="saving" @click="saveKey">ç­¾å‘</el-button>
-      </template>
-    </el-dialog>
-
-    <el-dialog v-model="memoryPolicyVisible" title="API Key è®°å¿†å¼€å…³" width="460px">
-      <div v-if="memoryPolicyKey" class="space-y-3">
-        <div class="kb-muted">{{ memoryPolicyKey.name }} Â· {{ memoryPolicyKey.keyPrefix }}</div>
-        <el-alert v-if="!overview?.rest?.agentMemoryEnabled" type="warning" :closable="false"
-          title="å¹³å°çº§è®°å¿†æœåŠ¡å½“å‰å·²å…³é—­ï¼›æ‰“å¼€æ­¤å‡­è¯æƒé™ä¹Ÿä¸ä¼šå¯ç”¨è®°å¿†æŽ¥å£ã€‚" />
-        <el-form label-width="110px" size="small">
-          <el-form-item label="å…è®¸å¬å›ž">
-            <el-switch v-model="memoryPolicy.readEnabled" :disabled="!hasDeclaredScope(memoryPolicyKey, 'MEMORY_READ')" />
-            <span v-if="!hasDeclaredScope(memoryPolicyKey, 'MEMORY_READ')" class="ml-2 kb-muted">ç­¾å‘æ—¶æœªæŽˆäºˆ MEMORY_READ</span>
-          </el-form-item>
-          <el-form-item label="å…è®¸å†™å…¥ / åˆ é™¤">
-            <el-switch v-model="memoryPolicy.writeEnabled" :disabled="!hasDeclaredScope(memoryPolicyKey, 'MEMORY_WRITE')" />
-            <span v-if="!hasDeclaredScope(memoryPolicyKey, 'MEMORY_WRITE')" class="ml-2 kb-muted">ç­¾å‘æ—¶æœªæŽˆäºˆ MEMORY_WRITE</span>
-          </el-form-item>
-        </el-form>
-        <p class="kb-muted">æ­¤ç­–ç•¥åªèƒ½å…³é—­æˆ–æ¢å¤ç­¾å‘æ—¶å·²æŽˆäºˆçš„æƒé™ï¼Œä¸èƒ½å¢žåŠ æ–°çš„ scopeã€‚å…³é—­åŽ REST è°ƒç”¨ä¼šè¢«æ‹’ç»ï¼ŒMCP ä¸å†å…¬å¸ƒå¯¹åº”å·¥å…·ã€‚</p>
-      </div>
-      <template #footer>
-        <el-button size="small" @click="memoryPolicyVisible=false">å–æ¶ˆ</el-button>
-        <el-button size="small" type="primary" :loading="memoryPolicySaving" @click="saveMemoryPolicy">ä¿å­˜</el-button>
-      </template>
-    </el-dialog>
-
-    <el-dialog v-model="memoryAccessVisible" title="å…±äº«è®°å¿†æŽˆæƒ" width="740px">
-      <p class="kb-muted mb-3">ç§æœ‰ AGENT è®°å¿†ä»æŒ‰å¯†é’¥èº«ä»½éš”ç¦»ã€‚å…±äº«è®°å¿†å¿…é¡»é€é¡¹æŽˆæƒï¼›scope code ç›¸åŒä¸ä»£è¡¨æœ‰è®¿é—®æƒé™ã€‚</p>
-      <div v-for="(grant, index) in memoryGrants" :key="index" class="mb-2 grid grid-cols-12 items-center gap-2">
-        <el-select v-model="grant.scopeType" class="col-span-3" size="small">
-          <el-option value="TEAM" label="å›¢é˜Ÿ"/><el-option value="PROJECT" label="é¡¹ç›®"/>
-          <el-option value="TASK" label="ä»»åŠ¡"/><el-option value="WORKFLOW" label="å·¥ä½œæµ"/>
-          <el-option value="SESSION" label="ä¼šè¯"/>
-        </el-select>
-        <el-input v-model="grant.scopeCode" class="col-span-4" size="small" placeholder="ä½œç”¨åŸŸç¼–ç "/>
-        <el-checkbox v-model="grant.canRead" class="col-span-2">è¯»å–</el-checkbox>
-        <el-checkbox v-model="grant.canWrite" class="col-span-2">å†™å…¥</el-checkbox>
-        <el-button class="col-span-1" link type="danger" @click="memoryGrants.splice(index, 1)">ç§»é™¤</el-button>
-      </div>
-      <el-button size="small" @click="addMemoryGrant">æ·»åŠ ä½œç”¨åŸŸ</el-button>
-      <template #footer>
-        <el-button size="small" @click="memoryAccessVisible = false">å–æ¶ˆ</el-button>
-        <el-button size="small" type="primary" :loading="memoryAccessSaving" @click="saveMemoryAccess">ä¿å­˜</el-button>
-      </template>
-    </el-dialog>
-
-    <el-dialog v-model="memoryManagerVisible" :title="`è®°å¿†èµ„äº§ Â· ${memoryManagerKey?.name || ''}`" width="1000px">
-      <div class="mb-3 flex flex-wrap items-center gap-2">
-        <el-button size="small" @click="openMemoryEvents">æ²»ç†è®°å½•</el-button>
-        <el-select v-model="memoryStatusFilter" clearable size="small" class="w-36" placeholder="å…¨éƒ¨çŠ¶æ€" @change="loadManagedMemories()">
-          <el-option value="ACTIVE" label="å¯å¬å›ž"/><el-option value="SUSPENDED" label="å·²æš‚åœ"/>
-        </el-select>
-        <el-select v-model="memoryTypeFilter" clearable size="small" class="w-36" placeholder="å…¨éƒ¨ä½œç”¨åŸŸ" @change="loadManagedMemories()">
-          <el-option value="AGENT" label="Agent"/><el-option value="TEAM" label="å›¢é˜Ÿ"/><el-option value="PROJECT" label="é¡¹ç›®"/>
-          <el-option value="TASK" label="ä»»åŠ¡"/><el-option value="WORKFLOW" label="å·¥ä½œæµ"/><el-option value="SESSION" label="ä¼šè¯"/>
-        </el-select>
-        <el-input v-model="memoryCodeFilter" size="small" class="w-48" placeholder="ä½œç”¨åŸŸç¼–ç " @keyup.enter="loadManagedMemories()"/>
-        <el-button size="small" @click="loadManagedMemories()">æŸ¥è¯¢</el-button>
-      </div>
-      <el-table :data="managedMemories" v-loading="memoryManagerLoading" max-height="480" size="small" border>
-        <el-table-column prop="scopeType" label="ç±»åž‹" width="100"/>
-        <el-table-column prop="scopeCode" label="ä½œç”¨åŸŸ" width="150" show-overflow-tooltip/>
-        <el-table-column prop="memoryLevel" label="å±‚çº§" width="70"/>
-        <el-table-column label="è®°å¿†å†…å®¹" min-width="260" show-overflow-tooltip>
-          <template #default="{ row }">{{ row.content }}</template>
-        </el-table-column>
-        <el-table-column label="æ¥æº" width="140" show-overflow-tooltip>
-          <template #default="{ row }">{{ row.sourceType || 'â€”' }} Â· {{ row.sourceRef || 'æ— å¼•ç”¨' }}</template>
-        </el-table-column>
-        <el-table-column label="çŠ¶æ€" width="100">
-          <template #default="{ row }">
-            <el-tag :type="row.status === 'ACTIVE' ? 'success' : 'warning'" size="small">
-              {{ row.status === 'ACTIVE' ? 'å¯å¬å›ž' : 'å·²æš‚åœ' }}
-            </el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column label="æ“ä½œ" width="170" fixed="right">
-          <template #default="{ row }">
-            <el-button
-              link size="small" :type="row.status === 'ACTIVE' ? 'warning' : 'success'"
-              @click="changeManagedStatus(row)">
-              {{ row.status === 'ACTIVE' ? 'æš‚åœ' : 'æ¢å¤' }}
-            </el-button>
-            <el-button link type="danger" size="small" @click="forgetManaged(row)">åˆ é™¤</el-button>
-          </template>
-        </el-table-column>
-      </el-table>
-      <div class="mt-2 flex items-center justify-between text-xs text-ink-500">
-        <span>æš‚åœè®°å½•ä¸ä¼šè¿›å…¥ Agent Recallã€‚</span>
+YªçŠx-®éÜj×¢ëiºÚ+Š§j[h‘éÜ¢éí×}üá:-jZ.¶›­–)Þ³SÇFV×ÆFSà¢Ç6V7F–öâ6Æ73Ò&¶"×vR#à¢Æ†VFW"6Æ73Ò&¶"×6V7F–öâÖ†VB#à¢ÆF—cà¢ÆF—b6Æ73Ò&¶"ÖW–V'&÷r#îhê^Xú>iÈÞXªÂöF—cà¢Æƒ6Æ73Ò&¶"×F—FÆR×BÓ#ç·²6V7F–öâÓÓÒv7&VFVçF–Ç2rò~XzÞŠør¢~iÈÞXªr×ÓÂöƒà¢Ç6Æ73Ò&¶"Ö×WFVB×BÓ#à¢ÇFV×ÆFRbÖ–cÒ'6V7F–öãÓÓÒv7&VFVçF–Ç2r#à¢’Zøn™*^Xk>Zé®‹>yJŽikžXúþŠxy¨Nyú^Šøn[©>ˆÈ>Y»NKˆîXúþyJŽXªŽKÙÎûÉ®iˆîih~Xú®YÊŽzÛîXùi{n[^zK®KˆjÊûÈÎY®™HXÛ>ŠêžZIn˜:Ž{;¾{¹þz¸¾XÛ>ZKXë¾Šëþ™zîˆ;ÞX©¾8 ¢Â÷FV×ÆFSà¢ÇFV×ÆFRbÖVÇ6Sà¢ZûžZInKºR$U5FgVÎ8Ô5iÈÞXª854RKˆžzxÞ[Ú.h[ÈiKîYÎKˆZY~yú^Šønˆ;ÞX©¾ûÉ®KˆKŠ¢’Zøn™*RXk>Zé®XúþŠxy¨Nyú^Šøn[©>ˆÈ>Y»NKˆîXúþyJŽXªŽKÙÎûÈÀ¢KˆžKŠ®˜	®˜>X[yJŽKˆZY~™™kXKˆî‹>yJŽZêŠê8 ¢Â÷FV×ÆFSà¢Â÷à¢ÂöF—cà¢ÆF—b6Æ73Ò&fÆW‚6‡&–æ²Ó—FV×2Ö6VçFW"vÓ"#à¢ÂÒÒc"ã.ûÉ®iÈÞXªKˆîXzÞŠøiŠþ8Îhê^Xú>iÈÞXª8ÞKˆ¾y¨NKŠNKŠ¢F.ûÈÎXË®YÙ~yKF"y¨Bfö7W2Xk>Zé®ûÈÎ™Ú.iÛþXh^KˆÞXhÞ˜xÞZHÞ[ÈX[>8"ÒÓà¢Æ'WGFöâ6Æ73Ò&¶"Ö'FâÖ÷WFÆ–æR"¦F—6&ÆVCÒ&ÆöF–ær"6Æ–6³Ò&ÆöDÆÂ#îX‹~ikÂö'WGFöãà¢ÂöF—cà¢Âö†VFW#à ¢ÆF—bbÖ–cÒ'6V7F–öãÓÓÒw6W'f–6W2r"6Æ73Ò&w&–Bw&–BÖ6öÇ2ÓvÓ26Ó¦w&–BÖ6öÇ2Ó"†Ã¦w&–BÖ6öÇ2ÓB#à¢ÄÖWG&–46&BÆ&VÃÒ%$U5FgVÂ"§fÇVSÒ&÷fW'f–Wsòç&W7CòæVæGö–çG3òæÆVæwF‚óò"†–çCÒ.ZûžZInhê^Xú>i["óà¢ÄÖWG&–46&BÆ&VÃÒ$Ô5[z^X[r"§fÇVSÒ&÷fW'f–WsòæÖ7òçFööÇ3òæÆVæwF‚óò"†–çCÒ.i›®ˆ;ÞKÙ>XúþyJŽ[z^X[r"óà¢ÄÖWG&–46&BÆ&VÃÒ%54R"§fÇVSÒ&÷fW'f–Wsòç76SòæVæGö–çG3òæÆVæwF‚óò"†–çCÒ.hêŽ˜˜	®˜2"óà¢ÄÖWG&–46&BÆ&VÃÒ.YÊŽyJŽXzÞŠø"§fÇVSÒ&÷fW'f–Wsòæ7F—fT¶W—2óò"†–çCÒ.iÈžiXŽx«nhy¨B’Zøn™*R"óà¢ÂöF—cà ¢ÆF—bbÖ–cÒ&W'&÷""6Æ73Ò&×BÓ2&÷VæFVBÖÆr&÷&FW"&÷&FW"Õ¶6öÆ÷#§f"‚Ò×v&âÖ&B•Ò&rÕ¶6öÆ÷#§f"‚Ò×v&âÖ&r•Ò‚ÓB’Ó"ãRFW‡B×‡2FW‡BÕ¶6öÆ÷#§f"‚Ò×v&â•Ò#à¢·²W'&÷"×Ð¢ÂöF—cà ¢ÆF—bbÖ–cÒ'6V7F–öãÓÓÒw6W'f–6W2r"6Æ73Ò&×BÓBw&–Bw&–BÖ6öÇ2ÓvÓB†Ã¦w&–BÖ6öÇ2Ó2#à¢ÂÒÒXØþŠêîKˆžXÚ[îK¨î8ÎiÈÞXª8ÞŠxnŠy.ûÉ®XzÞŠøF"Xú®yYžXzÞŠøŠŽûÈÎXXÞ[é~xJnx+žŠ*¾XØþŠêîKúhþ[ŠnXþ8"ÒÓà¢ÇFV×ÆFRbÖ–cÒ'6V7F–öãÓÓÒw6W'f–6W2r#à¢Æ'F–6ÆR6Æ73Ò&¶"Ö6&B#à¢ÆF—b6Æ73Ò&¶"Ö6&BÖ†VB#à¢Æ"6Æ73Ò'FW‡B×6Ò#å$U5Bhê^Xú3Âö#à¢ÆVÂ×Fr§G—SÒ&÷fW'f–Wsòç&W7CòæVæ&ÆVBòw7V66W72r¢v–æfòr"6—¦SÒ'6ÖÆÂ"VffV7CÒ'Æ–â#à¢·²÷fW'f–Wsòç&W7CòæVæ&ÆVBò~[{.[ÈiKâr¢~[{.X[>™zÒr×Ð¢ÂöVÂ×Fsà¢ÂöF—cà¢ÆF—b6Æ73Ò'Ó2#à¢ÆF—b6Æ73Ò&¶"Ö×WFVB#îYû®z‹zþ[èBÆ"6Æ73Ò'FW‡BÖ–æ²Ós#ç·²÷fW'f–Wsòç&W7Còæ&6UF‚ÇÂ~(	Br×ÓÂö#ãÂöF—cà¢ÆF—b6Æ73Ò&¶"Ö×WFVB×BÓ#î˜›NiØ2·²÷fW'f–Wsòç&W7CòæWF‚ÇÂ~(	Br×ÓÂöF—cà¢ÆF—b6Æ73Ò&×BÓ"fÆW‚—FV×2Ö6VçFW"vÓ"FW‡B×‡2#à¢Ç7â6Æ73Ò&¶"Ö×WFVB#î[›>XûŠë[øniÈÞXªÂ÷7ãà¢ÆVÂ×Fr§G—SÒ&÷fW'f–Wsòç&W7CòævVçDÖVÖ÷'”Væ&ÆVBòw7V66W72r¢v–æfòr"6—¦SÒ'6ÖÆÂ"VffV7CÒ'Æ–â#à¢·²÷fW'f–Wsòç&W7CòævVçDÖVÖ÷'”Væ&ÆVBò~[{.Y
+þyJ‚r¢~[{.X[>™zÒr×Ð¢ÂöVÂ×Fsà¢Ç7â6Æ73Ò&¶"Ö×WFVB#îyK˜:Ž{Û.˜XÞ{Úîhê~X‹cÂ÷7ãà¢ÂöF—cà¢ÆF—b6Æ73Ò&×BÓ2Ö‚Ö‚ÓcB÷fW&fÆ÷rÖWFò#à¢ÆF—bbÖf÷#Ò&—FVÒ–â÷fW'f–Wsòç&W7CòæVæGö–çG2ÇÂµÒ"¦¶W“Ò&—FVÒæÖWF†öB²—FVÒçF‚ ¢6Æ73Ò&fÆW‚—FV×2×7F'BvÓ"&÷&FW"Ö"&÷&FW"Ö–æ²Ó’ÓãRÆ7C¦&÷&FW"Ó#à¢Ç7â6Æ73Ò'rÓ"6‡&–æ²ÓFW‡BÕ³…ÒföçB×6VÖ–&öÆBFW‡BÖ66VçB#ç·²—FVÒæÖWF†öB×ÓÂ÷7ãà¢Ç7â6Æ73Ò&Ö–â×rÓfÆW‚Ó#à¢Ç7â6Æ73Ò&&Æö6²G'Væ6FRFW‡BÕ³…ÒFW‡BÖ–æ²Ós#ç·²—FVÒçF‚×ÓÂ÷7ãà¢Ç7â6Æ73Ò&&Æö6²FW‡BÕ³…ÒFW‡BÖ–æ²ÓS#ç·²—FVÒç7VÖÖ'’×ÓÂ÷7ãà¢Â÷7ãà¢ÂöF—cà¢ÂöF—cà¢ÂöF—cà¢Âö'F–6ÆSà ¢Æ'F–6ÆR6Æ73Ò&¶"Ö6&B#à¢ÆF—b6Æ73Ò&¶"Ö6&BÖ†VB#à¢Æ"6Æ73Ò'FW‡B×6Ò#äÔ5iÈÞXªÂö#à¢ÆVÂ×Fr§G—SÒ&÷fW'f–WsòæÖ7òæVæ&ÆVBòw7V66W72r¢v–æfòr"6—¦SÒ'6ÖÆÂ"VffV7CÒ'Æ–â#à¢·²÷fW'f–WsòæÖ7òæVæ&ÆVBò~[{.[ÈiKâr¢~[{.X[>™zÒr×Ð¢ÂöVÂ×Fsà¢ÂöF—cà¢ÆF—b6Æ73Ò'Ó2#à¢ÆF—b6Æ73Ò&¶"Ö×WFVB#îzºþx+’Æ"6Æ73Ò'FW‡BÖ–æ²Ós#ç·²÷fW'f–WsòæÖ7òæVæGö–çBÇÂ~(	Br×ÓÂö#ãÂöF—cà¢ÆF—b6Æ73Ò&¶"Ö×WFVB×BÓ#îXØþŠêîx˜ŽiÊÂ·²÷fW'f–WsòæÖ7òç&÷Fö6öÅfW'6–öâÇÂ~(	Br×ÓÂöF—cà¢ÆF—b6Æ73Ò&×BÓ"fÆW‚fÆW‚×w&vÓ#à¢Ç7âbÖf÷#Ò&ÖWF†öB–â÷fW'f–WsòæÖ7òæÖWF†öG2ÇÂµÒ"¦¶W“Ò&ÖWF†öB ¢6Æ73Ò'&÷VæFVB&÷&FW"&÷&FW"Ö–æ²Ó#&rÖ–æ²ÓS‚Ó"’ÓãRFW‡BÕ³…ÒFW‡BÖ–æ²Óc#ç·²ÖWF†öB×ÓÂ÷7ãà¢ÂöF—cà¢ÆF—b6Æ73Ò&×BÓ2¶"Ö×WFVB#îXúþyJŽ[z^X[sÂöF—cà¢ÆF—b6Æ73Ò&×BÓfÆW‚fÆW‚×w&vÓ#à¢Ç7âbÖf÷#Ò'FööÂ–â÷fW'f–WsòæÖ7òçFööÇ2ÇÂµÒ"¦¶W“Ò'FööÂ ¢6Æ73Ò'&÷VæFVB&÷&FW"&÷&FW"Õ¶6öÆ÷#§f"‚ÒÖ–æfòÖ&B•Ò&rÕ¶6öÆ÷#§f"‚ÒÖ–æfòÖ&r•Ò‚Ó"’ÓãRFW‡BÕ³…ÒFW‡BÖ66VçB#ç·²FööÂ×ÓÂ÷7ãà¢ÂöF—cà¢ÂöF—cà¢Âö'F–6ÆSà ¢Æ'F–6ÆR6Æ73Ò&¶"Ö6&B#à¢ÆF—b6Æ73Ò&¶"Ö6&BÖ†VB#à¢Æ"6Æ73Ò'FW‡B×6Ò#å54RhêŽ˜Âö#à¢ÆVÂ×Fr§G—SÒ&÷fW'f–Wsòç76SòæVæ&ÆVBòw7V66W72r¢v–æfòr"6—¦SÒ'6ÖÆÂ"VffV7CÒ'Æ–â#à¢·²÷fW'f–Wsòç76SòæVæ&ÆVBò~[{.[ÈiKâr¢~[{.X[>™zÒr×Ð¢ÂöVÂ×Fsà¢ÂöF—cà¢ÆF—b6Æ73Ò'Ó2#à¢ÆF—b6Æ73Ò&¶"Ö×WFVB#î[ø>‹{2·²÷fW'f–Wsòç76Sòæ†V'F&VE6V6öæG2óò~(	Br×Òzy"+rXÙ^jÊiÈ™[ò·²÷fW'f–Wsòç76SòæÖ„Ö–çWFW2óò~(	Br×ÒXˆn™)óÂöF—cà¢ÆF—b6Æ73Ò&×BÓ2#à¢ÆF—bbÖf÷#Ò&—FVÒ–â÷fW'f–Wsòç76SòæVæGö–çG2ÇÂµÒ"¦¶W“Ò&—FVÒçF‚ ¢6Æ73Ò&&÷&FW"Ö"&÷&FW"Ö–æ²Ó’ÓãRÆ7C¦&÷&FW"Ó#à¢Ç7â6Æ73Ò&&Æö6²G'Væ6FRFW‡BÕ³…ÒFW‡BÖ–æ²Ós#ç·²—FVÒçF‚×ÓÂ÷7ãà¢Ç7â6Æ73Ò&&Æö6²FW‡BÕ³…ÒFW‡BÖ–æ²ÓS#ç·²—FVÒç7VÖÖ'’×ÓÂ÷7ãà¢ÂöF—cà¢ÂöF—cà¢ÂöF—cà¢Âö'F–6ÆSà¢Â÷FV×ÆFSà¢ÂöF—cà ¢Æ'F–6ÆRbÖ–cÒ'6V7F–öãÓÓÒv7&VFVçF–Ç2r"6Æ73Ò&¶"Ö6&B×BÓB#à¢ÆF—b6Æ73Ò&¶"Ö6&BÖ†VB#à¢Æ"6Æ73Ò'FW‡B×6Ò#ä’Zøn™*^XzÞŠøÂö#à¢ÆF—b6Æ73Ò&fÆW‚—FV×2Ö6VçFW"vÓ"#à¢Ç7â6Æ73Ò&¶"Ö×WFVB#îiˆîih~Xú®YÊŽzÛîXùi{n[^zK®KˆjÊÂ÷7ãà¢Æ'WGFöâ6Æ73Ò&¶"Ö'Fâ×&–Ö'’"6Æ–6³Ò&÷Vä7&VFR#îzÛîXùXzÞŠøÂö'WGFöãà¢ÂöF—cà¢ÂöF—cà¢ÆF—b6Æ73Ò'Ó2#à¢ÅæVÅ7FFR¦ÆöF–æsÒ&ÆöF–ær"¦V×G“Ò"¶W—2æÆVæwF‚"V×G’×FW‡CÒ.[	®iÊ®zÛîXùK»¾KÙR’¶W’ ¢V×G’Ö†–çCÒ.zÛîXùYîZIn˜:Ž{;¾{¹þXÛ>XúþhÈžˆÈ>Y»N‹>yJŽyú^ŠøniÈÞXª"&WG'–&ÆR&WG'“Ò&ÆöDÆÂ#à¢ÆVÂ×F&ÆR¦FFÒ&¶W—2"&÷&FW"6—¦SÒ'6ÖÆÂ#à¢ÆVÂ×F&ÆRÖ6öÇVÖâ&÷Ò&æÖR"Æ&VÃÒ.‹>yJŽik’"Ö–â×v–GFƒÒ#S"6†÷rÖ÷fW&fÆ÷r×FööÇF—óà¢ÆVÂ×F&ÆRÖ6öÇVÖâÆ&VÃÒ.Zøn™*^X˜Þ{È"v–GFƒÒ#ƒ#à¢ÇFV×ÆFR6FVfVÇCÒ'²&÷rÒ#ãÇ7â6Æ73Ò'FW‡BÕ³…Ò#ç·²&÷ræ¶W•&Vf—‚ÇÂ~(	Br×ÓÂ÷7ããÂ÷FV×ÆFSà¢ÂöVÂ×F&ÆRÖ6öÇVÖãà¢ÆVÂ×F&ÆRÖ6öÇVÖâÆ&VÃÒ.yú^Šøn[©>ˆÈ>Y»B"Ö–â×v–GFƒÒ#S#à¢ÇFV×ÆFR6FVfVÇCÒ'²&÷rÒ#à¢·²&÷ræ¶æ÷vÆVFvT&6TæÖRÇÂ‡&÷ræ¶æ÷vÆVFvT&6T–Bòyú^Šøn[©22G·&÷ræ¶æ÷vÆVFvT&6T–GÖ¢~XZŽ˜:ŽXúþŠx[©2r’×Ð¢Â÷FV×ÆFSà¢ÂöVÂ×F&ÆRÖ6öÇVÖãà¢ÆVÂ×F&ÆRÖ6öÇVÖâÆ&VÃÒ.Šë[øn‹ª¾K»Ò"Ö–â×v–GFƒÒ#“#à¢ÇFV×ÆFR6FVfVÇCÒ'²&÷rÒ#à¢ÆF—b6Æ73Ò'FW‡B×‡2#ç·²&÷ræÖVÖ÷'”vVçD6öFRÇÂ&÷ræ¶W”6öFR×ÓÂöF—cà¢ÆF—b6Æ73Ò'FW‡BÕ³…ÒFW‡BÖ–æ²ÓS#ç·²&÷ræÖVÖ÷'”æÖW76RÇÂ~Zøn™*^™©Nzk²r×ÓÂöF—cà¢Â÷FV×ÆFSà¢ÂöVÂ×F&ÆRÖ6öÇVÖãà¢ÆVÂ×F&ÆRÖ6öÇVÖâÆ&VÃÒ.iØ>™™"v–GFƒÒ#ƒ#à¢ÇFV×ÆFR6FVfVÇCÒ'²&÷rÒ#à¢ÆVÂ×FrbÖf÷#Ò'66÷R–â66÷TÆ—7B‡&÷r’"¦¶W“Ò'66÷R"6—¦SÒ'6ÖÆÂ"VffV7CÒ'Æ–â"6Æ73Ò&×"Ó#à¢·²66÷TÆ&VÂ‡66÷R’×Ð¢ÂöVÂ×Fsà¢Â÷FV×ÆFSà¢ÂöVÂ×F&ÆRÖ6öÇVÖãà¢ÆVÂ×F&ÆRÖ6öÇVÖâÆ&VÃÒ.™™kX"v–GFƒÒ###à¢ÇFV×ÆFR6FVfVÇCÒ'²&÷rÒ#ç·²&÷rç&FTÆ–Ö—EW$Ö–çWFRóò~(	Br×ÒjÊþXˆcÂ÷FV×ÆFSà¢ÂöVÂ×F&ÆRÖ6öÇVÖãà¢ÆVÂ×F&ÆRÖ6öÇVÖâÆ&VÃÒ.x«nh"v–GFƒÒ##à¢ÇFV×ÆFR6FVfVÇCÒ'²&÷rÒ#à¢ÆVÂ×Fr§G—SÒ'&÷rç7FGW2ÓÓÒt5D•dRròw7V66W72r¢v–æfòr"6—¦SÒ'6ÖÆÂ"VffV7CÒ'Æ–â#à¢·²&÷rç7FGW2ÓÓÒt5D•dRrò~iÈžiX‚r¢~[{.Y®™Hr×Ð¢ÂöVÂ×Fsà¢Â÷FV×ÆFSà¢ÂöVÂ×F&ÆRÖ6öÇVÖãà¢ÆVÂ×F&ÆRÖ6öÇVÖâÆ&VÃÒ.iÈžiXŽiÉò"v–GFƒÒ#s#à¢ÇFV×ÆFR6FVfVÇCÒ'²&÷rÒ#ç·²&÷ræW‡—&W4BÇÂ~™[þiÉþiÈžiX‚r×ÓÂ÷FV×ÆFSà¢ÂöVÂ×F&ÆRÖ6öÇVÖãà¢ÆVÂ×F&ÆRÖ6öÇVÖâÆ&VÃÒ.iÈ‹ù‹>yJ‚"v–GFƒÒ#s#à¢ÇFV×ÆFR6FVfVÇCÒ'²&÷rÒ#ç·²&÷ræÆ7EW6VDBÇÂ~(	Br×ÓÂ÷FV×ÆFSà¢ÂöVÂ×F&ÆRÖ6öÇVÖãà¢ÆVÂ×F&ÆRÖ6öÇVÖâÆ&VÃÒ.i8ÞKÙÂ"v–GFƒÒ#33"f—†VCÒ'&–v‡B#à¢ÇFV×ÆFR6FVfVÇCÒ'²&÷rÒ#à¢ÆVÂÖ'WGFöâbÖ–cÒ&†4ÖVÖ÷'”6&–Æ—G’‡&÷r’"Æ–æ²G—SÒ'&–Ö'’"6—¦SÒ'6ÖÆÂ"6Æ–6³Ò&÷VäÖVÖ÷'•öÆ–7’‡&÷r’#îŠë[øn[ÈX[3ÂöVÂÖ'WGFöãà¢ÆVÂÖ'WGFöâbÖ–cÒ&†4ÖVÖ÷'•66÷R‡&÷r’"Æ–æ²G—SÒ'&–Ö'’"6—¦SÒ'6ÖÆÂ"6Æ–6³Ò&÷VäÖVÖ÷'”66W72‡&÷r’#îŠë[ønhèŽiØ3ÂöVÂÖ'WGFöãà¢ÆVÂÖ'WGFöâbÖ–cÒ&†4ÖVÖ÷'•66÷R‡&÷r’"Æ–æ²G—SÒ'&–Ö'’"6—¦SÒ'6ÖÆÂ"6Æ–6³Ò&÷VäÖVÖ÷'”ÖævW"‡&÷r’#îŠë[ønzêycÂöVÂÖ'WGFöãà¢ÆVÂÖ'WGFöâbÖ–cÒ'&÷rç7FGW2ÓÓÒt5D•dRr"Æ–æ²G—SÒ&FævW""6—¦SÒ'6ÖÆÂ"6Æ–6³Ò'&Wfö¶R‡&÷r’#îY®™HÂöVÂÖ'WGFöãà¢Ç7âbÖVÇ6R6Æ73Ò'FW‡BÕ³…ÒFW‡BÖ–æ²ÓS#î[{.ZKiXƒÂ÷7ãà¢Â÷FV×ÆFSà¢ÂöVÂ×F&ÆRÖ6öÇVÖãà¢ÂöVÂ×F&ÆSà¢ÂõæVÅ7FFSà¢ÂöF—cà¢Âö'F–6ÆSà ¢ÆF—bbÖ–cÒ'6V7F–öãÓÓÒw6W'f–6W2r"6Æ73Ò&×BÓBw&–Bw&–BÖ6öÇ2ÓvÓB†Ã¦w&–BÖ6öÇ2Ó"#à¢Æ'F–6ÆR6Æ73Ò&¶"Ö6&B#à¢ÆF—b6Æ73Ò&¶"Ö6&BÖ†VB#ãÆ"6Æ73Ò'FW‡B×6Ò#îhê^XZ^zK®Kè³Âö#ãÇ7â6Æ73Ò&¶"Ö×WFVB#îZHÞX‹nXÛ>XúþˆN‹3Â÷7ããÂöF—cà¢ÆF—b6Æ73Ò'Ó2#à¢ÆVÂ×F'2bÖÖöFVÃÒ&W†×ÆUF"#à¢ÆVÂ×F"×æRÆ&VÃÒ%$U5FgVÂ"æÖSÒ'&W7B#à¢Ç&R6Æ73Ò&6öFRÖ&Æö6²#ç·²&W7DW†×ÆR×ÓÂ÷&Sà¢ÂöVÂ×F"×æSà¢ÆVÂ×F"×æRÆ&VÃÒ$Ô5"æÖSÒ&Ö7#à¢Ç&R6Æ73Ò&6öFRÖ&Æö6²#ç·²Ö7W†×ÆR×ÓÂ÷&Sà¢ÂöVÂ×F"×æSà¢ÆVÂ×F"×æRÆ&VÃÒ%54R"æÖSÒ'76R#à¢Ç&R6Æ73Ò&6öFRÖ&Æö6²#ç·²76TW†×ÆR×ÓÂ÷&Sà¢ÂöVÂ×F"×æSà¢ÂöVÂ×F'3à¢Ç6Æ73Ò&¶"Ö×WFVB×BÓ"FW‡BÕ³…Ò#ç·²ç7vW$f÷&ÖD†–çB×ÓÂ÷à¢Ç6Æ73Ò&¶"Ö×WFVB×BÓFW‡BÕ³…Ò#ç·²Ö–å66÷&T†–çB×ÓÂ÷à¢Ç6Æ73Ò&¶"Ö×WFVB×BÓFW‡BÕ³…Ò#ç·²&W7öç6TÖöFT†–çB×ÓÂ÷à¢ÇbÖ–cÒ&W†×ÆUF"ÓÓÒw76Rr"6Æ73Ò&¶"Ö×WFVB×BÓFW‡BÕ³…Ò#ç·²6öçFVçD†–çB×ÓÂ÷à¢ÆF—b6Æ73Ò&×BÓ2&÷&FW"×B&÷&FW"Ö–æ²ÓBÓ2#à¢ÆF—b6Æ73Ò&fÆW‚fÆW‚×w&—FV×2Ö6VçFW"vÓ"#à¢Æ–çWBbÖÖöFVÃÒ'&ö&U6V7&WB"6Æ73Ò&¶"Ö–çWBfÆW‚Ó"Æ6V†öÆFW#Ò.{)Ž‹KNiˆîihr’Zøn™*^X®‹ùî˜	®h
+~ˆz®j8"óà¢Æ'WGFöâ6Æ73Ò&¶"Ö'FâÖ÷WFÆ–æR"¦F—6&ÆVCÒ'&ö&–ærÇÂ&ö&U6V7&WBçG&–Ò‚’"6Æ–6³Ò'&ö&R#å$U5Bˆz®j8Âö'WGFöãà¢Æ'WGFöâ6Æ73Ò&¶"Ö'FâÖ÷WFÆ–æR"¦F—6&ÆVCÒ'&ö&–ærÇÂ&ö&U6V7&WBçG&–Ò‚’"6Æ–6³Ò'&ö&U76R#å54Rˆz®j8Âö'WGFöãà¢ÂöF—cà¢ÇbÖ–cÒ'&ö&U&W7VÇB"6Æ73Ò&×BÓ"FW‡BÕ³…Ò"¦6Æ73Ò'&ö&Tö²òwFW‡BÕ¶6öÆ÷#§f"‚ÒÖö²•Òr¢wFW‡BÕ¶6öÆ÷#§f"‚ÒÖFævW"•Òr#à¢·²&ö&U&W7VÇB×Ð¢Â÷à¢Ç6Æ73Ò&¶"Ö×WFVB×BÓ"#à¢ˆz®j8Šû~k.KˆÞ[Šnhê~X‹nXûKÉ®ŠùÞûÈÎKˆîZIn˜:Ž‹>yJŽikžZèÎXZŽKˆˆ{NûÉ®Xúþš¨ÎŠøXzÞŠøiŠþY
+niÈžiXŽ8yú^Šøn[©>ˆÈ>Y»NiŠþY
+nyIþiXŽ8˜XÞš)ÞiŠþY
+nŠ*¾™™kX8 ¢Â÷à¢ÂöF—cà¢ÂöF—cà¢Âö'F–6ÆSà ¢ÂÒÒZûžZIn‹>yJŽXú®YÊŽ‹ùž˜xÎ™Ë.iÈ‹ùXziÚX®X^[«~KÙŠøûÉ®XZŽ˜xþiˆî{¸n{¹þKˆXë¾8Î‹>yJŽiz^[ù~8ÞyÈ¾ûÈÀ¢YÎKˆh›žZêŠêi[hÚîKˆÞYÊŽKŠNKŠ¢F"YNinKˆ[ÊXú>[èNKˆÞYÎy¨NŠŽ8"ÒÓà¢Æ'F–6ÆR6Æ73Ò&¶"Ö6&B#à¢ÆF—b6Æ73Ò&¶"Ö6&BÖ†VB#à¢Æ"6Æ73Ò'FW‡B×6Ò#îiÈ‹ù‹>yJƒÂö#à¢Æ'WGFöâ6Æ73Ò'FW‡B×‡2föçBÖÖVF—VÒFW‡BÖ66VçB†÷fW#§FW‡BÖ66VçB"6Æ–6³Ò'6†VÆÂææf–vFR‚v–çFVw&F–öâæÆöw2r’#à¢‹>yJŽiz^[ùr(i ¢Âö'WGFöãà¢ÂöF—cà¢ÆF—b6Æ73Ò&F—f–FR×’F—f–FRÖ–æ²Ó‚ÓB#à¢ÆF—bbÖf÷#Ò"‡&÷rÆ’’–âVF—G2"¦¶W“Ò&’"6Æ73Ò&fÆW‚—FV×2Ö6VçFW"vÓ"’Ó"FW‡BÕ³'…Ò#à¢ÆVÂ×Fr6—¦SÒ'6ÖÆÂ"VffV7CÒ'Æ–â"§G—SÒ&6†ææVÅG—R‡&÷ræ6†ææVÂ’#ç·²&÷ræ6†ææVÂ×ÓÂöVÂ×Fsà¢Ç7â6Æ73Ò&Ö–â×rÓfÆW‚ÓG'Væ6FRFW‡BÖ–æ²Ós#ç·²&÷ræÖWF†öBÇÂ~(	Br×ÓÂ÷7ãà¢Ç7â6Æ73Ò'6‡&–æ²ÓFW‡BÕ³…ÒFW‡BÖ–æ²ÓS#ç·²&÷ræGW&F–öä×2×Ò×3Â÷7ãà¢Ç7à¢6Æ73Ò'6‡&–æ²ÓFW‡BÕ³…Ò ¢¦6Æ73Ò'&÷rç7FGW46öFRãÒCòwFW‡BÕ¶6öÆ÷#§f"‚ÒÖFævW"•Òr¢wFW‡BÕ¶6öÆ÷#§f"‚ÒÖö²•Òr#à¢·²&÷rç7FGW46öFRóò~(	Br×Ð¢Â÷7ãà¢ÂöF—cà¢ÆF—bbÖ–cÒ&VF—DÆöF–ær"6Æ73Ò'’ÓbFW‡BÖ6VçFW"FW‡BÕ³'…ÒFW‡BÖ–æ²ÓS#îXª‹ÛÞKŠÞ(
+cÂöF—cà¢ÆF—bbÖVÇ6RÖ–cÒ"VF—G2æÆVæwF‚"6Æ73Ò'’ÓbFW‡BÖ6VçFW"FW‡BÕ³'…ÒFW‡BÖ–æ²ÓS#à¢i¨.izZûžZIn‹>yJŽŠë[Ù^ûÈÎZIn˜:Ž{;¾{¹þXù‹[~‹>yJŽYîKÉ®YÊŽjÚNyYžyyP¢ÂöF—cà¢ÂöF—cà¢Âö'F–6ÆSà¢ÂöF—cà ¢ÆVÂÖF–ÆörbÖÖöFVÃÒ&7&VFUf—6–&ÆR"F—FÆSÒ.zÛîXù’Zøn™*R"v–GFƒÒ#Sc‚#à¢ÆVÂÖf÷&ÒÆ&VÂ×v–GFƒÒ#“g‚"6—¦SÒ'6ÖÆÂ#à¢ÆVÂÖf÷&ÒÖ—FVÒÆ&VÃÒ.‹>yJŽikžYÞz{#à¢ÆVÂÖ–çWBbÖÖöFVÃÒ&f÷&ÒææÖR"Æ6V†öÆFW#Ò.Zh.ûÉ¤U%™zîzÙNXªžh˜²"óà¢ÂöVÂÖf÷&ÒÖ—FVÓà¢ÆVÂÖf÷&ÒÖ—FVÒÆ&VÃÒ.yú^Šøn[©>ˆÈ>Y»B#à¢ÆVÂ×6VÆV7BbÖÖöFVÃÒ&f÷&Òæ¶æ÷vÆVFvT&6T–B"6ÆV&&ÆR6Æ73Ò'rÖgVÆÂ"Æ6V†öÆFW#Ò.KˆÞ{¹Zé£ÞK¸^XúþŠxXZÎ[È[©2#à¢ÆVÂÖ÷F–öâbÖf÷#Ò&&6R–â&6W2"¦¶W“Ò&&6Ræ–B"§fÇVSÒ&&6Ræ–B"¦Æ&VÃÒ&&6RææÖR"óà¢ÂöVÂ×6VÆV7Cà¢ÂöVÂÖf÷&ÒÖ—FVÓà¢ÆVÂÖf÷&ÒÖ—FVÒÆ&VÃÒ.iØ>™™#à¢ÆVÂ×6VÆV7BbÖÖöFVÃÒ&f÷&Òç66÷W2"×VÇF—ÆR6Æ73Ò'rÖgVÆÂ#à¢ÆVÂÖ÷F–öâfÇVSÒ%$TB"Æ&VÃÒ.Šû¾XùnXZŽ˜:ŽûÈŽX[ÎZëžiØ>™™{¸NûÈ’"óà¢ÆVÂÖ÷F–öâfÇVSÒ$Ä•5B"Æ&VÃÒ.X‰~X{®yú^Šøn[©2"óà¢ÆVÂÖ÷F–öâfÇVSÒ%TU%’"Æ&VÃÒ.yú^Šøn™zîzÙNûÈŽyIþh‰zÙNjŽûÈ’"óà¢ÆVÂÖ÷F–öâfÇVSÒ%4T$4‚"Æ&VÃÒ.yú^Šønj8{J.ûÈŽXú®‹ùNY¹îX	ž˜žûÈ’"óà¢ÆVÂÖ÷F–öâfÇVSÒ%$TEôô$¤T5B"Æ&VÃÒ.Šû¾Xùnyú^ŠønZûž‹KˆîŠøhÚâ"óà¢ÆVÂÖ÷F–öâfÇVSÒ%u$•DR"Æ&VÃÒ.XižXZ^ûÈŽyú^Šønk+¾ynûÈ’"óà¢ÆVÂÖ÷F–öâfÇVSÒ$”ätU5B"Æ&VÃÒ.hê^XZ^ûÈŽih~iÊÎiNXZ^ûÈ’"óà¢ÆVÂÖ÷F–öâfÇVSÒ$ÔTÔõ%•õ$TB"Æ&VÃÒ.Šû¾XùnŠë[ønûÈ„vVçB&V6ÆÎûÈ’"óà¢ÆVÂÖ÷F–öâfÇVSÒ$ÔTÔõ%•õu$•DR"Æ&VÃÒ.XižXZ^Šë[ønûÈ„6GW&Ròf÷&vWNûÈ’"óà¢ÂöVÂ×6VÆV7Cà¢ÂöVÂÖf÷&ÒÖ—FVÓà¢ÇFV×ÆFRbÖ–cÒ&f÷&Òç66÷W2æ–æ6ÇVFW2‚tÔTÔõ%•õ$TBr’ÇÂf÷&Òç66÷W2æ–æ6ÇVFW2‚tÔTÔõ%•õu$•DRr’#à¢ÆVÂÖf÷&ÒÖ—FVÒÆ&VÃÒ.Šë[ønYÞYÞz›®™{B#à¢ÆVÂÖ–çWBbÖÖöFVÃÒ&f÷&ÒæÖVÖ÷'”æÖW76R"Æ6V†öÆFW#Ò.z›®XÎi{nK¸^iÊÎZøn™*^XúþŠxûÉ¾YÎXÎyJŽK¨îi‹î[ÈþX[Kª¾šžyºâòK»¾XªŠë[øb"óà¢ÂöVÂÖf÷&ÒÖ—FVÓà¢ÆVÂÖf÷&ÒÖ—FVÒÆ&VÃÒ$vVçB{Énz#à¢ÆVÂÖ–çWBbÖÖöFVÃÒ&f÷&ÒæÖVÖ÷'”vVçD6öFR"Æ6V†öÆFW#Ò.z›®XÎi{nKÛþyJŽiÊÎZøn™*^{ÉnzûÉ¾yJŽK¨âvVçBzxiÈžŠë[øn™©Nzk²"óà¢ÂöVÂÖf÷&ÒÖ—FVÓà¢Â÷FV×ÆFSà¢ÆVÂÖf÷&ÒÖ—FVÒÆ&VÃÒ.™™kX#à¢ÆVÂÖ–çWBÖçVÖ&W"bÖÖöFVÃÒ&f÷&Òç&FTÆ–Ö—EW$Ö–çWFR"¦Ö–ãÒ#"¦ÖƒÒ#c"óà¢Ç7â6Æ73Ò&ÖÂÓ"FW‡BÕ³…ÒFW‡BÖ–æ²ÓS#îjÊòXˆn™)óÂ÷7ãà¢ÂöVÂÖf÷&ÒÖ—FVÓà¢ÆVÂÖf÷&ÒÖ—FVÒÆ&VÃÒ.iÈžiXŽiÉò#à¢ÆVÂÖ–çWBbÖÖöFVÃÒ&f÷&ÒæW‡—&W4B"Æ6V†öÆFW#Ò.yYžz›®™[þiÉþiÈžiXŽûÈÎZh"##bÓ"Ó3C#3£S“£S’"óà¢ÂöVÂÖf÷&ÒÖ—FVÓà¢ÂöVÂÖf÷&Óà¢Ç6Æ73Ò&¶"Ö×WFVB#à¢{¹Zé®yú^Šøn[©>YîûÈÎXzÞŠøXú®ˆ;ÞŠëþ™zîŠú^[©>ûÉ¾KˆÞ{¹Zé®i{nK¸^ˆ;ÞyÈ¾X‹XZÎ[Èyú^Šøn[©>8.Šë[ønYÞYÞz›®™{N›¹ŽŠêNhÈžZøn™*^™©Nzk¾ûÈÎYÎKˆYÞYÞz›®™{N™ÈyKzêynYŽiˆîzî˜XÞ{ÚîYîh˜ÞX[Kª¾šžyºâòK»¾XªŠë[øn8 ¢Â÷à¢ÇFV×ÆFR6fö÷FW#à¢ÆVÂÖ'WGFöâ6—¦SÒ'6ÖÆÂ"6Æ–6³Ò&7&VFUf—6–&ÆRÒfÇ6R#îXùnkhƒÂöVÂÖ'WGFöãà¢ÆVÂÖ'WGFöâ6—¦SÒ'6ÖÆÂ"G—SÒ'&–Ö'’"¦ÆöF–æsÒ'6f–ær"6Æ–6³Ò'6fT¶W’#îzÛîXùÂöVÂÖ'WGFöãà¢Â÷FV×ÆFSà¢ÂöVÂÖF–Æösà ¢ÆVÂÖF–ÆörbÖÖöFVÃÒ&ÖVÖ÷'•öÆ–7•f—6–&ÆR"F—FÆSÒ$’¶W’Šë[øn[ÈX[2"v–GFƒÒ#Cc‚#à¢ÆF—bbÖ–cÒ&ÖVÖ÷'•öÆ–7”¶W’"6Æ73Ò'76R×’Ó2#à¢ÆF—b6Æ73Ò&¶"Ö×WFVB#ç·²ÖVÖ÷'•öÆ–7”¶W’ææÖR×Ò+r·²ÖVÖ÷'•öÆ–7”¶W’æ¶W•&Vf—‚×ÓÂöF—cà¢ÆVÂÖÆW'BbÖ–cÒ"÷fW'f–Wsòç&W7CòævVçDÖVÖ÷'”Væ&ÆVB"G—SÒ'v&æ–ær"¦6Æ÷6&ÆSÒ&fÇ6R ¢F—FÆSÒ.[›>Xû{ª~Šë[øniÈÞXª[Ù>X˜Þ[{.X[>™zÞûÉ¾h™>[ÈjÚNXzÞŠøiØ>™™K™þKˆÞKÉ®Y
+þyJŽŠë[ønhê^Xú>8""óà¢ÆVÂÖf÷&ÒÆ&VÂ×v–GFƒÒ#‚"6—¦SÒ'6ÖÆÂ#à¢ÆVÂÖf÷&ÒÖ—FVÒÆ&VÃÒ.XXŠëŽXúÎY¹â#à¢ÆVÂ×7v—F6‚bÖÖöFVÃÒ&ÖVÖ÷'•öÆ–7’ç&VDVæ&ÆVB"¦F—6&ÆVCÒ"†4FV6Æ&VE66÷R†ÖVÖ÷'•öÆ–7”¶W’ÂtÔTÔõ%•õ$TBr’"óà¢Ç7âbÖ–cÒ"†4FV6Æ&VE66÷R†ÖVÖ÷'•öÆ–7”¶W’ÂtÔTÔõ%•õ$TBr’"6Æ73Ò&ÖÂÓ"¶"Ö×WFVB#îzÛîXùi{niÊ®hèŽK¨‚ÔTÔõ%•õ$TCÂ÷7ãà¢ÂöVÂÖf÷&ÒÖ—FVÓà¢ÆVÂÖf÷&ÒÖ—FVÒÆ&VÃÒ.XXŠëŽXižXZRòXŠ™šB#à¢ÆVÂ×7v—F6‚bÖÖöFVÃÒ&ÖVÖ÷'•öÆ–7’çw&—FTVæ&ÆVB"¦F—6&ÆVCÒ"†4FV6Æ&VE66÷R†ÖVÖ÷'•öÆ–7”¶W’ÂtÔTÔõ%•õu$•DRr’"óà¢Ç7âbÖ–cÒ"†4FV6Æ&VE66÷R†ÖVÖ÷'•öÆ–7”¶W’ÂtÔTÔõ%•õu$•DRr’"6Æ73Ò&ÖÂÓ"¶"Ö×WFVB#îzÛîXùi{niÊ®hèŽK¨‚ÔTÔõ%•õu$•DSÂ÷7ãà¢ÂöVÂÖf÷&ÒÖ—FVÓà¢ÂöVÂÖf÷&Óà¢Ç6Æ73Ò&¶"Ö×WFVB#îjÚNzÙnyZ^Xú®ˆ;ÞX[>™zÞh‰nh.ZHÞzÛîXùi{n[{.hèŽK¨Žy¨NiØ>™™ûÈÎKˆÞˆ;ÞZ)îXªiky¨B66÷^8.X[>™zÞYâ$U5B‹>yJŽKÉ®Š*¾h¹.{¹ÞûÈÄÔ5KˆÞXhÞXZÎ[ˆ>Zûž[©N[z^X[~8#Â÷à¢ÂöF—cà¢ÇFV×ÆFR6fö÷FW#à¢ÆVÂÖ'WGFöâ6—¦SÒ'6ÖÆÂ"6Æ–6³Ò&ÖVÖ÷'•öÆ–7•f—6–&ÆSÖfÇ6R#îXùnkhƒÂöVÂÖ'WGFöãà¢ÆVÂÖ'WGFöâ6—¦SÒ'6ÖÆÂ"G—SÒ'&–Ö'’"¦ÆöF–æsÒ&ÖVÖ÷'•öÆ–7•6f–ær"6Æ–6³Ò'6fTÖVÖ÷'•öÆ–7’#îKùÞZÙƒÂöVÂÖ'WGFöãà¢Â÷FV×ÆFSà¢ÂöVÂÖF–Æösà ¢ÆVÂÖF–ÆörbÖÖöFVÃÒ&ÖVÖ÷'”66W75f—6–&ÆR"F—FÆSÒ.X[Kª¾Šë[ønhèŽiØ2"v–GFƒÒ#sC‚#à¢Ç6Æ73Ò&¶"Ö×WFVBÖ"Ó2#îzxiÈ’tTåBŠë[ønK¸ÞhÈžZøn™*^‹ª¾K»Þ™©Nzk¾8.X[Kª¾Šë[øn[ø^š¾˜	šžhèŽiØ>ûÉ·66÷R6öFRy»ŽYÍwó‹h‘éì¶»§q«^t<span>æš‚åœè®°å½•ä¸ä¼šè¿›å…¥ Agent Recallã€‚</span>
         <el-button v-if="memoryHasMore" link type="primary" size="small" :loading="memoryManagerLoading" @click="loadMoreManagedMemories">åŠ è½½æ›´å¤š</el-button>
       </div>
     </el-dialog>
@@ -519,7 +161,8 @@ function hasMemoryCapability(row:ExternalKeyRow) {
 }
 function scopeLabel(scope:string) {
   const labels:Record<string,string> = {
-    READ:'è¯»å–ï¼ˆREADï¼‰', WRITE:'çŸ¥è¯†å†™å…¥ï¼ˆWRITEï¼‰', INGEST:'æ–‡æœ¬æŽ¥å…¥ï¼ˆINGESTï¼‰',
+    READ:'è¯»å–å…¨éƒ¨ï¼ˆå…¼å®¹æƒé™ç»„ï¼‰', LIST:'åˆ—å‡ºçŸ¥è¯†åº“', QUERY:'çŸ¥è¯†é—®ç­”', SEARCH:'çŸ¥è¯†æ£€ç´¢',
+    READ_OBJECT:'è¯»å–çŸ¥è¯†å¯¹è±¡ä¸Žè¯æ®', WRITE:'çŸ¥è¯†å†™å…¥ï¼ˆWRITEï¼‰', INGEST:'æ–‡æœ¬æŽ¥å…¥ï¼ˆINGESTï¼‰',
     MEMORY_READ:'è®°å¿†è¯»å–', MEMORY_WRITE:'è®°å¿†å†™å…¥',
   }
   return labels[scope] || scope

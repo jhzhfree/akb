@@ -93,6 +93,7 @@ public class EmbedController {
     @Operation(summary = "组件配置：知识库名称、可展示的检索阶段定义与参数上限")
     public ApiResponse<Object> config(HttpServletRequest request, @RequestParam(value = "knowledgeBaseId", required = false) Long knowledgeBaseId) {
         ApiKey key = accessService.authenticateEmbed(request);
+        accessService.assertScope(key, ApiKey.SCOPE_READ_OBJECT);
         Long kb = accessService.resolveKnowledgeBase(key, knowledgeBaseId);
         Map<String, Object> data = new LinkedHashMap<String, Object>();
         data.put("knowledgeBaseId", kb);
@@ -116,7 +117,7 @@ public class EmbedController {
         }
         // Only an API key can mint a token: a token must never be able to extend itself.
         ApiKey key = accessService.authenticate(request);
-        accessService.assertScope(key, ApiKey.SCOPE_READ);
+        accessService.assertScope(key, ApiKey.SCOPE_QUERY);
         accessService.assertOrigin(key, request);
         Long kb = accessService.resolveKnowledgeBase(key, knowledgeBaseId);
         String site = origin == null || origin.trim().isEmpty() ? ExternalAccessService.originOf(request) : origin.trim();
@@ -138,7 +139,7 @@ public class EmbedController {
         data.put("expiresInSeconds", issued.isPermanent() ? null : Math.max(0L, (issued.getExpiresAt() - System.currentTimeMillis()) / 1000L));
         data.put("knowledgeBaseId", kb);
         data.put("origin", site);
-        data.put("scope", ApiKey.SCOPE_READ);
+        data.put("scope", ApiKey.SCOPE_QUERY);
         return data;
     }
 

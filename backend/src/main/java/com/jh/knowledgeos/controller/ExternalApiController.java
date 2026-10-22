@@ -217,6 +217,10 @@ public class ExternalApiController {
             Integer topK = topKParam(body);
             boolean withAnswer = flagParam(body, "includeAnswer");
             boolean includeMemory = flagParam(body, "includeMemory");
+            accessService.assertScope(key, ApiKey.SCOPE_SEARCH);
+            if (withAnswer) {
+                accessService.assertScope(key, ApiKey.SCOPE_QUERY);
+            }
             kb = retrievals.resolveKnowledgeBase(key, request.getHeader(KB_ID_HEADER),
                 body == null ? null : body.get("knowledgeBaseId"));
             Long resolved = accessService.resolveKnowledgeBase(key, kb);
@@ -307,6 +311,10 @@ public class ExternalApiController {
                 throw new SecurityException("对外接口服务已关闭");
             }
             key = accessService.authenticateEmbed(request);
+            String requiredScope = requiredScope(method);
+            if (requiredScope != null) {
+                accessService.assertScope(key, requiredScope);
+            }
             Long kb = requestedKb == null ? null : accessService.resolveKnowledgeBase(key, requestedKb);
             Object data = body.run(key, kb);
             auditService.record(key, ApiCallAudit.CHANNEL_REST, method, kb, 200, System.currentTimeMillis() - start, null, params,
@@ -375,6 +383,24 @@ public class ExternalApiController {
         if (ExternalAccessService.embedTokenOf(request) != null) {
             throw new SecurityException("记忆接口不接受嵌入令牌，请使用服务端 API Key");
         }
+    }
+
+    private String requiredScope(String method) {
+        if ("GET /bases".equals(method)) {
+            return ApiKey.SCOPE_LIST;
+        }
+        if ("POST /query".equals(method)) {
+            return ApiKey.SCOPE_QUERY;
+        }
+        if ("POST /search".equals(method)) {
+            return ApiKey.SCOPE_SEARCH;
+        }
+        if ("GET /cards".equals(method) || "GET /cards/{code}".equals(method) || "GET /claims".equals(method)
+            || "GET /claims/{code}".equals(method) || "GET /evidence/{code}".equals(method) || "GET /graph/{code}".equals(method)
+            || "GET /queries/{queryId}".equals(method) || "GET /overview".equals(method)) {
+            return ApiKey.SCOPE_READ_OBJECT;
+        }
+        return null;
     }
 
     private interface ExternalCall {

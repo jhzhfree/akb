@@ -5,6 +5,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.jh.knowledgeos.config.KnowledgeProperties;
@@ -61,8 +64,29 @@ class ExternalApiRetrievalTest {
         body.put("topK", 3);
         ResponseEntity<Object> response = controller.retrievals(request, body);
 
+        verify(access).assertScope(key, ApiKey.SCOPE_SEARCH);
         assertEquals(200, response.getStatusCodeValue());
         assertEquals(data, response.getBody());
+    }
+
+    @Test
+    void includeAnswerRequiresQueryInAdditionToSearch() {
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        when(access.authenticateEmbed(request)).thenReturn(key);
+        when(retrievals.resolveKnowledgeBase(eq(key), isNull(), isNull())).thenReturn(41L);
+        when(access.resolveKnowledgeBase(key, 41L)).thenReturn(41L);
+        doThrow(new SecurityException("missing QUERY scope")).when(access).assertScope(key, ApiKey.SCOPE_QUERY);
+        Map<String, Object> body = new HashMap<String, Object>();
+        body.put("question", "question");
+        body.put("includeAnswer", true);
+
+        ResponseEntity<Object> response = controller.retrievals(request, body);
+
+        verify(access).assertScope(key, ApiKey.SCOPE_SEARCH);
+        verify(access).assertScope(key, ApiKey.SCOPE_QUERY);
+        verify(retrievals, never()).retrieve(key, 41L, "question", null, true, false);
+        assertEquals(403, response.getStatusCodeValue());
+        assertError(response.getBody(), "FORBIDDEN");
     }
 
     @Test

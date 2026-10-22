@@ -9,10 +9,10 @@ AKB 可作为 Octop 的企业知识来源，通过 AKB MCP Server 让 Agent 使�
 | Transport | Streamable HTTP |
 | MCP URL | `https://<AKB 域名>/api/mcp` |
 | Header | `X-API-Key: <AKB API Key>` |
-| 建议权限 | `READ` |
+| 建议权限 | 按需 `SEARCH`、`QUERY`；需要列出知识库时增加 `LIST`，读取卡片/证据时增加 `READ_OBJECT` |
 | MCP 工具 | `knowledge_search`、`knowledge_query`、`list_knowledge_bases` 等 |
 
-建议为每个知识空间创建绑定的 API Key，并只授予 `READ`。只读 Key 的 MCP `tools/list` 不会公布 `ingest_text`，而且服务端仍会在每次调用校验 scope。绑定 Key 会限制可访问的知识库。旧调用可继续传 `knowledgeBaseId`；新调用可用稳定的 `knowledgeBaseCode`（即知识库 `baseCode`），绑定 Key 也可省略两者。AKB 只会在该 Key 可见的知识库中解析编码，再执行原有绑定、READ scope 与 ACL 检查；同时传入不匹配的 ID 和编码会被拒绝。API Key 不应写入 Agent Prompt、业务文档或代码仓库。
+建议为每个知识空间创建绑定的 API Key，并按 Agent 使用方式授予细分 scope：仅生成答案授予 `QUERY`，仅检索候选授予 `SEARCH`，需要展示知识库目录授予 `LIST`，读取知识卡片或证据详情再授予 `READ_OBJECT`。MCP `tools/list` 会按授权过滤工具，服务端也会在每次调用时复核 scope。旧 Key 的 `READ` 仍兼容为上述四项读取权限。绑定 Key 会限制可访问的知识库。旧调用可继续传 `knowledgeBaseId`；新调用可用稳定的 `knowledgeBaseCode`（即知识库 `baseCode`），绑定 Key 也可省略两者。AKB 只会在该 Key 可见的知识库中解析编码，再执行原有绑定、scope 与 ACL 检查；同时传入不匹配的 ID 和编码会被拒绝。API Key 不应写入 Agent Prompt、业务文档或代码仓库。
 
 在 Octop 的 **Agent → Connectors → 自定义 MCP** 中选择 **添加 AKB 知识库**，填写 MCP URL 与 `X-API-Key`，保存后执行探测。将该连接加入目标 Agent 的 MCP 配置，再由 Agent 调用 `knowledge_search` 获取段落、候选与引用，或调用 `knowledge_query` 获取带引用答案。
 

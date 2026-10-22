@@ -17,7 +17,7 @@
 | **外部标签被当作授权依据** | ❌ **确认存在**。请求标签原样进入检索过滤条件 | `ExternalKnowledgeFacade.java:144-145` → `KnowledgeQueryService.java:68`（`aiClient.post`）→ ai-service `app/services/retrieval/hybrid.py:177/183/195/214` 把标签传给 ES / BM25 / Milvus / Neo4j |
 | **跨库越权** | ✅ 已有防护 | `ExternalAccessService.java:85 resolveKnowledgeBase`：绑定库与请求库不符抛 `SecurityException`；未绑定时走 `assertExternalAccess` 公开库规则 |
 | **对象读取链路** | ✅ 未受影响 | `ExternalApiController` 的 cards / claims / evidence / graph / overview 传的都是 `null`，不接收外部标签 |
-| **操作权限枚举** | ⚠️ 偏粗 | `ApiKey.java:23-31`：`READ` / `WRITE` / `INGEST` / `MEMORY_READ` / `MEMORY_WRITE`，缺 `SEARCH` / `READ_OBJECT` / `MANAGE_ACL` 细分 |
+| **操作权限枚举** | ✅ 已有第一阶段细分 | 新 Key 支持 `LIST` / `QUERY` / `SEARCH` / `READ_OBJECT` / `INGEST`；`READ` 与 `WRITE` 保持旧 Key 兼容。`MANAGE_ACL` 尚未开放，因为外部 ACL 管理端点尚不存在 |
 | **租户** | ❌ 不存在 | 全仓 grep `tenant` 零命中，当前为单租户 |
 | **资料 ACL 字段** | ✅ 已有基础 | `t_source` / `t_knowledge_card` / `t_claim` 均有 `permission_tags` JSON 列；已有 `t_acl_access_audit`、`t_acl_change` |
 | **知识库可见性** | ✅ 已有 | `KnowledgeBaseVisibility`：`PUBLIC` / `PRIVATE` / `GROUP` |
@@ -78,11 +78,12 @@ effectiveTags = 凭证授权标签 ∩ 请求标签
 
 ### P1：主体与多知识库授权（未开始）
 
-1. 建 `t_principal`、`t_principal_kb_grant`（见 §4）
-2. `t_api_key` 增加 `principal_id`，迁移脚本把现有 `knowledge_base_id` 绑定转成等价 grant
-3. `/bases`、MCP 工具清单按授权清单返回
-4. 管理端：授予 / 撤销 / 有效期 / 原因 + 授权变更审计
-5. 验收用例：1 / 2 / 7 / 10
+1. ✅ 完成基础动作 Scope：新 Key 可按 `LIST` / `QUERY` / `SEARCH` / `READ_OBJECT` 分配读取动作；MCP 工具清单过滤未授权工具，REST、SSE、Embed、MCP 调用逐次执行相同 Scope 校验。旧 `READ` 继续等价于四个读取动作，旧 `WRITE` 继续隐含读取动作与 `INGEST`。
+2. 建 `t_principal`、`t_principal_kb_grant`（见 §4）
+3. `t_api_key` 增加 `principal_id`，迁移脚本把现有 `knowledge_base_id` 绑定转成等价 grant
+4. `/bases`、MCP 工具清单按授权清单返回
+5. 管理端：授予 / 撤销 / 有效期 / 原因 + 授权变更审计
+6. 验收用例：1 / 2 / 7 / 10
 
 ### P2：委托身份与细粒度 ACL（未开始）
 

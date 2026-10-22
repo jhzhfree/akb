@@ -42,6 +42,18 @@ class McpServerServiceTest {
     }
 
     @Test
+    void toolListContainsOnlyTheGrantedKnowledgeAction() {
+        ApiKey key = new ApiKey();
+        key.setScopes(ApiKey.SCOPE_QUERY);
+        McpServerService service = new McpServerService(null, null, new ObjectMapper());
+
+        List<Map<String, Object>> tools = (List<Map<String, Object>>) service.toolsList(key).get("tools");
+
+        assertEquals(1, tools.size());
+        assertEquals("knowledge_query", tools.get(0).get("name"));
+    }
+
+    @Test
     void readOnlyKeyDoesNotAdvertiseIngestionTool() {
         ApiKey key = mock(ApiKey.class);
         when(key.hasScope(ApiKey.SCOPE_INGEST)).thenReturn(false);
@@ -119,7 +131,7 @@ class McpServerServiceTest {
         Map<String, Object> result = service.toolsCall(key, toolCall("knowledge_search", args));
 
         verify(access).resolveKnowledgeBase(key, 23L);
-        verify(access).assertScope(key, ApiKey.SCOPE_READ);
+        verify(access).assertScope(key, ApiKey.SCOPE_SEARCH);
         assertEquals("q-code", ((Map<?, ?>) result.get("structuredContent")).get("queryId"));
     }
 
@@ -163,7 +175,7 @@ class McpServerServiceTest {
 
         Map<String, Object> result = service.toolsCall(key, toolCall("knowledge_search", args));
 
-        verify(access).assertScope(key, ApiKey.SCOPE_READ);
+        verify(access).assertScope(key, ApiKey.SCOPE_SEARCH);
         verify(facade).search(eq(key), eq(23L), eq("leave policy"), eq(5), eq(Arrays.asList("hr")), eq(PlatformEventPublisher.SOURCE_MCP),
             eq(0.65d));
         assertEquals(Boolean.FALSE, result.get("isError"));

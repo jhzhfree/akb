@@ -83,13 +83,13 @@ public class ExternalStreamController {
         resolved.put("content", wholeAnswer ? CONTENT_FINAL : "stream");
         resolved.put("minScore", minScore);
         ApiKey key = open(request, "/stream/query", knowledgeBaseId, handshake("/stream/query", resolved));
+        accessService.assertScope(key, ApiKey.SCOPE_QUERY);
         // minScore 与 /query 同一语义：0~1 的最低相关度。校验放在凭证闸门之后——放在之前的话，
         // 一个不带凭证的请求也能靠"400 vs 401"探出参数规则；同时也让审计记下越界取值。
         if (minScore != null && (minScore < 0.0d || minScore > 1.0d)) {
             throw new IllegalArgumentException("minScore 必须在 0~1 之间");
         }
         Long kb = accessService.resolveKnowledgeBase(key, knowledgeBaseId);
-        accessService.assertScope(key, ApiKey.SCOPE_READ);
         SseEmitter emitter = new SseEmitter(0L);
         streamService.streamQuery(key, kb, question, topK, answerFormat, wholeAnswer, minScore,
             Boolean.TRUE.equals(useMemory), emitter);
@@ -115,8 +115,8 @@ public class ExternalStreamController {
         resolved.put("sinceEventId", since);
         resolved.put("legacy", legacy);
         ApiKey key = open(request, "/stream/events", knowledgeBaseId, handshake("/stream/events", resolved));
+        accessService.assertScope(key, ApiKey.SCOPE_LIST);
         Long kb = accessService.resolveKnowledgeBase(key, knowledgeBaseId);
-        accessService.assertScope(key, ApiKey.SCOPE_READ);
         if (legacy) {
             SseEmitter emitter = new SseEmitter(0L);
             streamService.streamEvents(key, kb, emitter);

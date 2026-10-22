@@ -12,6 +12,7 @@ import java.util.ArrayList;
 import java.util.Base64;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 /**
@@ -170,12 +171,18 @@ public class ApiKeyService {
         List<String> cleaned = new ArrayList<String>();
         if (scopes != null) {
             for (String scope : scopes) {
-                String value = String.valueOf(scope == null ? "" : scope).trim().toUpperCase();
-                if (value.isEmpty() || cleaned.contains(value)) {
+                String value = String.valueOf(scope == null ? "" : scope).trim().toUpperCase(Locale.ROOT);
+                if (value.isEmpty()) {
                     continue;
                 }
-                if (ApiKey.SCOPE_READ.equals(value) || ApiKey.SCOPE_WRITE.equals(value) || ApiKey.SCOPE_INGEST.equals(value)
-                    || ApiKey.SCOPE_MEMORY_READ.equals(value) || ApiKey.SCOPE_MEMORY_WRITE.equals(value)) {
+                boolean supported = ApiKey.SCOPE_READ.equals(value) || ApiKey.SCOPE_LIST.equals(value) || ApiKey.SCOPE_QUERY.equals(value)
+                    || ApiKey.SCOPE_SEARCH.equals(value) || ApiKey.SCOPE_READ_OBJECT.equals(value)
+                    || ApiKey.SCOPE_WRITE.equals(value) || ApiKey.SCOPE_INGEST.equals(value)
+                    || ApiKey.SCOPE_MEMORY_READ.equals(value) || ApiKey.SCOPE_MEMORY_WRITE.equals(value);
+                if (!supported) {
+                    throw new IllegalArgumentException("不支持的权限范围：" + value);
+                }
+                if (!cleaned.contains(value)) {
                     cleaned.add(value);
                 }
             }

@@ -123,6 +123,7 @@ public class McpServerService {
 
     public Map<String, Object> toolsList(ApiKey key) {
         List<Map<String, Object>> tools = new ArrayList<Map<String, Object>>();
+        if (key == null || key.hasScope(ApiKey.SCOPE_QUERY)) {
         tools.add(tool("knowledge_query",
             "可追溯知识问答：返回答案、引用与 queryId，可用于后续溯源；答案可按 answerFormat 交付成 Markdown / 纯文本 / HTML",
             schema(properties(
@@ -133,6 +134,8 @@ public class McpServerService {
                 prop("minScore", "number", "最低相关度分数（0~1）：低于该分数的候选不参与答案生成；不传即不过滤"),
                 prop("answerFormat", "string", "答案返回格式：default（不传即此项）/ markdown / text / html；返回值里的 answerFormat 是实际生效的那个")),
                 Arrays.asList("question"))));
+        }
+        if (key == null || key.hasScope(ApiKey.SCOPE_SEARCH)) {
         tools.add(tool("knowledge_search",
             "只做检索不生成答案：返回召回候选、重排结果与引用，便于自行装配上下文",
             schema(properties(
@@ -142,7 +145,11 @@ public class McpServerService {
                 arrayProp("permissionTags", "可选的检索标签过滤；知识库 ACL 仍由服务端强制执行"),
                 prop("minScore", "number", "最低相关度分数（0~1）：低于该分数的候选不返回；不传即不过滤。返回里的 returned 是过滤后实际给出的条数")),
                 Arrays.asList("query"))));
+        }
+        if (key == null || key.hasScope(ApiKey.SCOPE_LIST)) {
         tools.add(tool("list_knowledge_bases", "列出当前 API Key 可见的知识库", schema(new LinkedHashMap<String, Object>(), new ArrayList<String>())));
+        }
+        if (key == null || key.hasScope(ApiKey.SCOPE_READ_OBJECT)) {
         tools.add(tool("list_knowledge_cards", "列出知识卡片（结构化标准答案，如 SOP）", schema(properties(prop("knowledgeBaseId", "integer", "知识库 ID")),
             Arrays.asList("knowledgeBaseId"))));
         tools.add(tool("get_knowledge_card", "按编码读取一张知识卡片的详情与证据链", schema(properties(prop("knowledgeBaseId", "integer", "知识库 ID"), prop("code",
@@ -155,6 +162,7 @@ public class McpServerService {
             "string", "证据编码")), Arrays.asList("knowledgeBaseId", "evidenceCode"))));
         tools.add(tool("graph_neighbors", "读取实体/知识对象的图谱邻域", schema(properties(prop("knowledgeBaseId", "integer", "知识库 ID"), prop("code", "string",
             "对象编码"), prop("depth", "integer", "跳数，默认 2"), prop("limit", "integer", "返回上限，默认 50")), Arrays.asList("knowledgeBaseId", "code"))));
+        }
         if (isMemoryEnabled() && key != null && key.hasScope(ApiKey.SCOPE_MEMORY_READ)) {
             tools.add(tool("memory_recall", "按当前 Agent 或已授权团队/项目/任务/工作流/会话作用域召回记忆",
                 schema(properties(prop("query", "string", "待召回的关键词或问题"), prop("scopeType", "string", "AGENT（默认）/ TEAM / PROJECT / TASK / WORKFLOW / SESSION"),
@@ -199,45 +207,45 @@ public class McpServerService {
         }
         Object value;
         if ("knowledge_query".equals(name)) {
+            accessService.assertScope(key, ApiKey.SCOPE_QUERY);
             Long kb = resolve(key, args);
-            accessService.assertScope(key, ApiKey.SCOPE_READ);
             value = facade.query(key, kb, text(args, "question"), integer(args, "topK"), strings(args, "permissionTags"),
                 PlatformEventPublisher.SOURCE_MCP, text(args, "answerFormat"), resolveMinScore(args));
         } else if ("knowledge_search".equals(name)) {
+            accessService.assertScope(key, ApiKey.SCOPE_SEARCH);
             Long kb = resolve(key, args);
-            accessService.assertScope(key, ApiKey.SCOPE_READ);
             value = facade.search(key, kb, text(args, "query"), integer(args, "topK"), strings(args, "permissionTags"),
                 PlatformEventPublisher.SOURCE_MCP, resolveMinScore(args));
         } else if ("list_knowledge_bases".equals(name)) {
-            accessService.assertScope(key, ApiKey.SCOPE_READ);
+            accessService.assertScope(key, ApiKey.SCOPE_LIST);
             value = facade.bases(key.getKnowledgeBaseId());
         } else if ("list_knowledge_cards".equals(name)) {
+            accessService.assertScope(key, ApiKey.SCOPE_READ_OBJECT);
             Long kb = resolve(key, args);
-            accessService.assertScope(key, ApiKey.SCOPE_READ);
             value = facade.cards(kb, null);
         } else if ("get_knowledge_card".equals(name)) {
+            accessService.assertScope(key, ApiKey.SCOPE_READ_OBJECT);
             Long kb = resolve(key, args);
-            accessService.assertScope(key, ApiKey.SCOPE_READ);
             value = facade.objectDetail(kb, "CARD", text(args, "code"), null);
         } else if ("list_claims".equals(name)) {
+            accessService.assertScope(key, ApiKey.SCOPE_READ_OBJECT);
             Long kb = resolve(key, args);
-            accessService.assertScope(key, ApiKey.SCOPE_READ);
             value = facade.claims(kb, null);
         } else if ("get_claim".equals(name)) {
+            accessService.assertScope(key, ApiKey.SCOPE_READ_OBJECT);
             Long kb = resolve(key, args);
-            accessService.assertScope(key, ApiKey.SCOPE_READ);
             value = facade.objectDetail(kb, "CLAIM", text(args, "code"), null);
         } else if ("get_evidence".equals(name)) {
+            accessService.assertScope(key, ApiKey.SCOPE_READ_OBJECT);
             Long kb = resolve(key, args);
-            accessService.assertScope(key, ApiKey.SCOPE_READ);
             value = facade.objectDetail(kb, "EVIDENCE", text(args, "evidenceCode"), null);
         } else if ("graph_neighbors".equals(name)) {
+            accessService.assertScope(key, ApiKey.SCOPE_READ_OBJECT);
             Long kb = resolve(key, args);
-            accessService.assertScope(key, ApiKey.SCOPE_READ);
             value = facade.graph(kb, text(args, "code"), integer(args, "depth"), integer(args, "limit"), null);
         } else if ("ingest_text".equals(name)) {
-            Long kb = resolve(key, args);
             accessService.assertScope(key, ApiKey.SCOPE_INGEST);
+            Long kb = resolve(key, args);
             value = facade.ingestText(kb, text(args, "title"), text(args, "text"), text(args, "permissionTags"));
         } else if ("memory_capture".equals(name)) {
             requireMemoryService();
@@ -276,7 +284,7 @@ public class McpServerService {
     }
 
     public Map<String, Object> resourcesList(ApiKey key) {
-        accessService.assertScope(key, ApiKey.SCOPE_READ);
+        accessService.assertScope(key, ApiKey.SCOPE_LIST);
         List<Map<String, Object>> resources = new ArrayList<Map<String, Object>>();
         for (Map<String, Object> base : facade.bases(key.getKnowledgeBaseId())) {
             Map<String, Object> resource = new LinkedHashMap<String, Object>();
@@ -297,7 +305,7 @@ public class McpServerService {
     }
 
     public Map<String, Object> resourcesRead(ApiKey key, Map<String, Object> params) {
-        accessService.assertScope(key, ApiKey.SCOPE_READ);
+        accessService.assertScope(key, ApiKey.SCOPE_READ_OBJECT);
         String uri = params == null ? null : String.valueOf(params.get("uri"));
         if (uri == null || !uri.startsWith("knowledge://")) {
             throw new IllegalArgumentException("不支持的资源 URI：" + uri);

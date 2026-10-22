@@ -4,6 +4,7 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Locale;
 
 /**
  * Credential for the external interface-service layer (RESTful / MCP Server / SSE).
@@ -21,6 +22,15 @@ public class ApiKey {
      * READ: 检索与问答；WRITE: 知识对象治理；INGEST: 接入与摄入。
      */
     public static final String SCOPE_READ = "READ";
+
+    /** Fine-grained read actions. READ remains a backward-compatible bundle of these four. */
+    public static final String SCOPE_LIST = "LIST";
+
+    public static final String SCOPE_QUERY = "QUERY";
+
+    public static final String SCOPE_SEARCH = "SEARCH";
+
+    public static final String SCOPE_READ_OBJECT = "READ_OBJECT";
 
     public static final String SCOPE_WRITE = "WRITE";
 
@@ -96,9 +106,17 @@ public class ApiKey {
             return false;
         }
         List<String> owned = scopeList();
-        String requested = scope.toUpperCase();
-        boolean granted = owned.contains(requested) || (owned.contains(SCOPE_WRITE)
-            && (SCOPE_READ.equals(requested) || SCOPE_INGEST.equals(requested)));
+        String requested = scope.toUpperCase(Locale.ROOT);
+        boolean legacyRead = owned.contains(SCOPE_READ) || owned.contains(SCOPE_WRITE);
+        boolean granted = owned.contains(requested);
+        if (SCOPE_READ.equals(requested)) {
+            granted = legacyRead;
+        } else if (SCOPE_INGEST.equals(requested)) {
+            granted = granted || owned.contains(SCOPE_WRITE);
+        } else if (SCOPE_LIST.equals(requested) || SCOPE_QUERY.equals(requested) || SCOPE_SEARCH.equals(requested)
+            || SCOPE_READ_OBJECT.equals(requested)) {
+            granted = granted || legacyRead;
+        }
         if (!granted) {
             return false;
         }
@@ -117,7 +135,7 @@ public class ApiKey {
             defaults.add(SCOPE_READ);
             return defaults;
         }
-        return Arrays.asList(scopes.toUpperCase().split(","));
+        return Arrays.asList(scopes.toUpperCase(Locale.ROOT).split(","));
     }
 
     public boolean isUsable() {
