@@ -94,6 +94,37 @@ class ApiKeyServiceTest {
         assertEquals(ApiKey.SCOPE_QUERY, captor.getValue().getScopes());
     }
 
+    @Test
+    void replacesPrincipalKnowledgeBaseGrantsAndAuditsBothRevocationAndGrant() {
+        ApiKey key = key("QUERY");
+        key.setPrincipalId(71L);
+        when(mapper.getApiKey(9L)).thenReturn(key);
+        when(mapper.countKnowledgeBase(7L)).thenReturn(1);
+        when(mapper.countKnowledgeBase(8L)).thenReturn(1);
+        when(mapper.listPrincipalKnowledgeBaseGrants(71L)).thenReturn(Arrays.asList(3L, 4L), Arrays.asList(7L, 8L));
+
+        Map<String, Object> result = service.replaceKnowledgeBaseGrants(9L, Arrays.asList(7L, 7L, 8L), 2L).get(0);
+
+        verify(mapper).deletePrincipalKnowledgeBaseGrants(71L);
+        verify(mapper).insertPrincipalKnowledgeBaseGrant(71L, 7L, 2L, "控制台授权");
+        verify(mapper).insertPrincipalKnowledgeBaseGrant(71L, 8L, 2L, "控制台授权");
+        verify(mapper).insertPrincipalKnowledgeBaseGrantAudit(71L, 3L, "REVOKE", 2L, "控制台替换授权");
+        verify(mapper).insertPrincipalKnowledgeBaseGrantAudit(71L, 4L, "REVOKE", 2L, "控制台替换授权");
+        verify(mapper).insertPrincipalKnowledgeBaseGrantAudit(71L, 7L, "GRANT", 2L, "控制台授权");
+        assertEquals(7L, result.get("knowledgeBaseId"));
+    }
+
+    @Test
+    void rejectsInvalidGrantInputBeforeChangingExistingPermissions() {
+        ApiKey key = key("QUERY");
+        key.setPrincipalId(71L);
+        when(mapper.getApiKey(9L)).thenReturn(key);
+
+        assertThrows(IllegalArgumentException.class, () -> service.replaceKnowledgeBaseGrants(9L, Arrays.asList(7L, 0L), 2L));
+
+        verify(mapper, never()).deletePrincipalKnowledgeBaseGrants(71L);
+    }
+
     private ApiKey key(String scopes) {
         ApiKey key = new ApiKey();
         key.setId(9L);

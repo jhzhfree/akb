@@ -218,7 +218,7 @@ public class McpServerService {
                 PlatformEventPublisher.SOURCE_MCP, resolveMinScore(args));
         } else if ("list_knowledge_bases".equals(name)) {
             accessService.assertScope(key, ApiKey.SCOPE_LIST);
-            value = facade.bases(key.getKnowledgeBaseId());
+            value = facade.basesFor(key, accessService.grantedKnowledgeBases(key));
         } else if ("list_knowledge_cards".equals(name)) {
             accessService.assertScope(key, ApiKey.SCOPE_READ_OBJECT);
             Long kb = resolve(key, args);
@@ -286,7 +286,7 @@ public class McpServerService {
     public Map<String, Object> resourcesList(ApiKey key) {
         accessService.assertScope(key, ApiKey.SCOPE_LIST);
         List<Map<String, Object>> resources = new ArrayList<Map<String, Object>>();
-        for (Map<String, Object> base : facade.bases(key.getKnowledgeBaseId())) {
+        for (Map<String, Object> base : facade.basesFor(key, accessService.grantedKnowledgeBases(key))) {
             Map<String, Object> resource = new LinkedHashMap<String, Object>();
             resource.put("uri", "knowledge://kb/" + base.get("id"));
             resource.put("name", String.valueOf(base.get("name")));
@@ -348,7 +348,7 @@ public class McpServerService {
                 throw new IllegalArgumentException("knowledgeBaseCode 超出长度限制");
             }
             Long codeMatch = null;
-            for (Map<String, Object> base : facade.bases(key.getKnowledgeBaseId())) {
+            for (Map<String, Object> base : facade.basesFor(key, accessService.grantedKnowledgeBases(key))) {
                 if (code.equals(String.valueOf(base.get("baseCode")))) {
                     Object id = base.get("id");
                     if (id instanceof Number) {

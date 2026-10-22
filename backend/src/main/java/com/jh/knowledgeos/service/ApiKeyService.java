@@ -1,6 +1,7 @@
 package com.jh.knowledgeos.service;
 
 import com.jh.knowledgeos.domain.ApiKey;
+import com.jh.knowledgeos.domain.ExternalPrincipal;
 import com.jh.knowledgeos.mapper.ExternalApiMapper;
 import org.springframework.stereotype.Service;
 import java.nio.charset.StandardCharsets;
@@ -14,6 +15,9 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.LinkedHashSet;
+import java.util.Set;
+import org.springframework.transaction.annotation.Transactional;
 
 /**
  * Issues and verifies external-service credentials.
@@ -50,6 +54,7 @@ public class ApiKeyService {
     /**
      * Creates a credential and returns its profile including the one-time plaintext secret.
      */
+    @Transactional
     public Map<String, Object> create(String name, Long knowledgeBaseId, List<String> scopes, Integer rateLimitPerMinute, LocalDateTime expiresAt,
         Long createdBy) {
         return create(name, knowledgeBaseId, scopes, rateLimitPerMinute, expiresAt, createdBy, null);
@@ -58,13 +63,23 @@ public class ApiKeyService {
     /**
      * Same as above but also binds the credential to the sites allowed to embed it.
      */
+    @Transactional
     public Map<String, Object> create(String name, Long knowledgeBaseId, List<String> scopes, Integer rateLimitPerMinute, LocalDateTime expiresAt,
         Long createdBy, List<String> allowedOrigins) {
         return create(name, knowledgeBaseId, scopes, rateLimitPerMinute, expiresAt, createdBy, allowedOrigins, null, null);
     }
 
+    @Transactional
     public Map<String, Object> create(String name, Long knowledgeBaseId, List<String> scopes, Integer rateLimitPerMinute, LocalDateTime expiresAt,
         Long createdBy, List<String> allowedOrigins, String memoryNamespace, String memoryAgentCode) {
+        if (knowledgeBaseId != null && mapper.countKnowledgeBase(knowledgeBaseId) == 0) {
+            throw new IllegalArgumentException("知识库不存在：" + knowledgeBaseId);
+        }
+        ExternalPrincipal principal = new ExternalPrincipal();
+        principal.setPrincipalCode(ids.next("PR_"));
+        principal.setName(name == null || name.trim().isEmpty() ? "未命名调用方" : name.trim());
+        principal.setCreatedBy(createdBy);
+        mapper.insertPrincipal(principal);
         String secret = newSecret();
         ApiKey key = new ApiKey();
         key.setKeyCode(ids.next("AK_"));
@@ -72,6 +87,7 @@ public class ApiKeyService {
         key.setSecretHash(hash(secret));
         key.setKeyPrefix(secret.substring(0, SECRET_PREFIX.length() + 6));
         key.setKnowledgeBaseId(knowledgeBaseId);
+        key.setPrincipalId(principal.getId());
         key.setScopes(normalizeScopes(scopes));
         key.setRateLimitPerMinute(rateLimitPerMinute == null || rateLimitPerMinute < 1 ? 60 : rateLimitPerMinute);
         key.setStatus(ApiKey.STATUS_ACTIVE);
@@ -81,6 +97,9 @@ public class ApiKeyService {
         key.setMemoryNamespace(normalizeMemoryIdentity(memoryNamespace, "memoryNamespace"));
         key.setMemoryAgentCode(normalizeMemoryIdentity(memoryAgentCode, "memoryAgentCode"));
         mapper.insertApiKey(key);
+        if (knowledgeBaseId != null) {
+            mapper.insertPrincipalKnowledgeBaseGrant(principal.getId(), knowledgeBaseId, createdBy, "API Key 初始绑定知识库");
+        }
         Map<String, Object> result = profile(mapper.getApiKey(key.getId()));
         // 明文只在此处出现一次，界面提示调用方立即保存。
         result.put("secret", secret);
@@ -146,6 +165,8 @@ public class ApiKeyService {
         row.put("keyPrefix", key.getKeyPrefix());
         row.put("knowledgeBaseId", key.getKnowledgeBaseId());
         row.put("knowledgeBaseName", key.getKnowledgeBaseName());
+        row.put("principalId", key.getPrincipalId());
+        row.put("grantedKnowledgeBaseCount", key.getGrantedKnowledgeBaseCount() == null ? Integer.valueOf(0) : key.getGrantedKnowledgeBaseCount());
         row.put("scopes", key.getScopes());
         row.put("rateLimitPerMinute", key.getRateLimitPerMinute());
         row.put("status", key.getStatus());
@@ -159,6 +180,58 @@ public class ApiKeyService {
         row.put("createdByName", key.getCreatedByName());
         row.put("createdTime", key.getCreatedTime());
         return row;
+    }
+
+    public List<Long> grantedKnowledgeBases(ApiKey key) {
+        if (key == null || key.getPrincipalId() == null) {
+            return new ArrayList<Long>();
+        }
+        return mapper.listPrincipalKnowledgeBaseGrants(key.getPrincipalId());
+    }
+
+    public boolean hasKnowledgeBaseGrant(ApiKey key, Long knowledgeBaseId) {
+        return knowledgeBaseId != null && grantedKnowledgeBases(key).contains(knowledgeBaseId);
+    }
+
+    @Transactional
+    public List<Map<String, Object>> replaceKnowledgeBaseGrants(Long keyId, List<Long> knowledgeBaseIds, Long operatorId) {
+        ApiKey key = mapper.getApiKey(keyId);
+        if (key == null) {
+            throw new IllegalArgumentException("API Key 不存在");
+        }
+        if (key.getPrincipalId() == null) {
+            throw new IllegalStateException("API Key 缺少主体，需先执行 V61 数据迁移");
+        }
+        Set<Long> uniqueIds = new LinkedHashSet<Long>();
+        if (knowledgeBaseIds != null) {
+            if (knowledgeBaseIds.size() > 100) {
+                throw new IllegalArgumentException("单个主体最多授权 100 个知识库");
+            }
+            for (Long knowledgeBaseId : knowledgeBaseIds) {
+                if (knowledgeBaseId == null || knowledgeBaseId.longValue() <= 0) {
+                    throw new IllegalArgumentException("knowledgeBaseIds 只接受正整数");
+                }
+                if (mapper.countKnowledgeBase(knowledgeBaseId) == 0) {
+                    throw new IllegalArgumentException("知识库不存在：" + knowledgeBaseId);
+                }
+                uniqueIds.add(knowledgeBaseId);
+            }
+        }
+        for (Long oldGrant : mapper.listPrincipalKnowledgeBaseGrants(key.getPrincipalId())) {
+            mapper.insertPrincipalKnowledgeBaseGrantAudit(key.getPrincipalId(), oldGrant, "REVOKE", operatorId, "控制台替换授权");
+        }
+        mapper.deletePrincipalKnowledgeBaseGrants(key.getPrincipalId());
+        for (Long knowledgeBaseId : uniqueIds) {
+            mapper.insertPrincipalKnowledgeBaseGrant(key.getPrincipalId(), knowledgeBaseId, operatorId, "控制台授权");
+            mapper.insertPrincipalKnowledgeBaseGrantAudit(key.getPrincipalId(), knowledgeBaseId, "GRANT", operatorId, "控制台授权");
+        }
+        List<Map<String, Object>> result = new ArrayList<Map<String, Object>>();
+        for (Long id : grantedKnowledgeBases(key)) {
+            Map<String, Object> grant = new LinkedHashMap<String, Object>();
+            grant.put("knowledgeBaseId", id);
+            result.add(grant);
+        }
+        return result;
     }
 
     private String newSecret() {

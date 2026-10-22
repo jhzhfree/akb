@@ -135,12 +135,26 @@ curl -X POST http://<host>:8080/api/v1/external/query \
 
 记忆能力另有三项开关：平台总开关 `EXTERNAL_AGENT_MEMORY_ENABLED`（默认 `true`，关闭后 REST 记忆端点拒绝调用、MCP 不公开记忆工具）；API Key 的 `MEMORY_READ` / `MEMORY_WRITE` 签发 scope；以及凭证控制台中的逐 Key 记忆策略开关。逐 Key 策略只能关闭或恢复签发时已经授予的 scope，不能借此增加权限。普通 `POST /query` 和 MCP `knowledge_query` 不自动调用记忆；需要记忆的 Agent 应显式调用 `memory_recall`，任务完成后按策略调用 `memory_capture`。
 
-### 2.3 知识库归属规则
+### 2.3 知识库归属与主体授权
+
+API Key 通过主体获得知识库授权。管理员可读取或原子替换一个 Key 所属主体的授权：
+
+```http
+GET /api/external/admin/keys/{id}/knowledge-base-grants
+PUT /api/external/admin/keys/{id}/knowledge-base-grants
+Content-Type: application/json
+
+[12, 18]
+```
+
+`PUT` 请求体是知识库 ID 数组；空数组 `[]` 表示撤销全部。授权变更写入授予/撤销审计。API 请求中的知识库 ID 必须匹配有效 grant；V61 会把既有单库绑定迁移为等价 grant，撤销后不会通过遗留 `knowledge_base_id` 回退访问。
 
 | Key 形态 | 行为 |
 |---|---|
-| 绑定了知识库 | 只能访问该知识库；请求里传别的 `knowledgeBaseId` → **403** |
-| 未绑定知识库 | 必须显式传 `knowledgeBaseId`，且该知识库需满足对外访问规则；未传参数会一直透传到下游并报错，**调用方务必显式传值** |
+| V61 前的单库 Key | 迁移为主体 grant，行为保持原知识库范围；管理员可替换授权 |
+| 主体有 grant | 只能访问授权清单中的知识库；请求未带 `knowledgeBaseId` 时默认选择首个授权库 |
+| 主体无 grant 且原来未绑定知识库 | 仍只可访问公开知识库；问答、检索等单库操作需要显式传 `knowledgeBaseId` |
+| 撤销全部 grant 的已绑定 Key | 立即失去原绑定库访问权，不回退到旧 `knowledge_base_id` 字段 |
 
 ### 2.4 配额
 
@@ -202,7 +216,7 @@ curl -X POST http://<host>:8080/api/v1/external/query \
 {
   "success": false,
   "code": "KB-403-001",
-  "message": "该 API Key 已绑定知识库，不能访问其他知识库",
+  "message": "该 API Key 未获准访问此知识库",
   "traceId": "ff8961c0ed90482ab6a853ff7d2dab73",
   "data": null
 }
@@ -1382,6 +1396,8 @@ curl -N -H 'X-API-Key: kos_ak_xxx' \
 | GET | `/keys` | Key 列表（不含明文） |
 | POST | `/keys` | 签发 Key（明文仅此一次返回） |
 | POST | `/keys/{id}/revoke` | 吊销 Key，立即失效 |
+| GET | `/keys/{id}/knowledge-base-grants` | 查询主体当前有效的知识库授权 |
+| PUT | `/keys/{id}/knowledge-base-grants` | 原子替换知识库授权；请求体为 ID 数组，`[]` 撤销全部 |
 | GET | `/audits?keyId=&limit=` | 调用审计（REST/MCP/SSE 合并），字段含 `channel / method / knowledgeBaseId / statusCode / durationMs / traceId / message / createdTime` |
 | GET | `/mcp/manifest` | MCP 服务清单：协议版本、工具定义（含入参 schema） |
 | GET | `/mcp/calls?limit=` | MCP 通道最近调用 |

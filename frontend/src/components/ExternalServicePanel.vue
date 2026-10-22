@@ -123,9 +123,12 @@
             <el-table-column label="密钥前缀" width="180">
               <template #default="{ row }"><span class="text-[11px]">{{ row.keyPrefix || '—' }}</span></template>
             </el-table-column>
-            <el-table-column label="知识库范围" min-width="150">
+            <el-table-column label="知识库范围" min-width="180">
               <template #default="{ row }">
-                {{ row.knowledgeBaseName || (row.knowledgeBaseId ? `知识库 #${row.knowledgeBaseId}` : '全部可见库') }}
+                <span v-if="row.grantedKnowledgeBaseCount" class="text-xs">
+                  {{ row.grantedKnowledgeBaseCount }} 个授权库
+                </span>
+                <span v-else>{{ row.knowledgeBaseName || (row.knowledgeBaseId ? `知识库 #${row.knowledgeBaseId}` : '公开库') }}</span>
               </template>
             </el-table-column>
             <el-table-column label="记忆身份" min-width="190">
@@ -157,8 +160,9 @@
             <el-table-column label="最近调用" width="170">
               <template #default="{ row }">{{ row.lastUsedAt || '—' }}</template>
             </el-table-column>
-            <el-table-column label="操作" width="330" fixed="right">
+            <el-table-column label="操作" width="390" fixed="right">
               <template #default="{ row }">
+                <el-button link type="primary" size="small" @click="openKnowledgeBaseGrants(row)">知识库授权</el-button>
                 <el-button v-if="hasMemoryCapability(row)" link type="primary" size="small" @click="openMemoryPolicy(row)">记忆开关</el-button>
                 <el-button v-if="hasMemoryScope(row)" link type="primary" size="small" @click="openMemoryAccess(row)">记忆授权</el-button>
                 <el-button v-if="hasMemoryScope(row)" link type="primary" size="small" @click="openMemoryManager(row)">记忆管理</el-button>
@@ -279,6 +283,28 @@
       <template #footer>
         <el-button size="small" @click="createVisible = false">取消</el-button>
         <el-button size="small" type="primary" :loading="saving" @click="saveKey">签发</el-button>
+      </template>
+    </el-dialog>
+
+    <el-dialog v-model="knowledgeBaseGrantVisible" title="API Key 知识库授权" width="600px">
+      <div v-if="knowledgeBaseGrantKey" class="space-y-3">
+        <div class="kb-muted">{{ knowledgeBaseGrantKey.name }} · {{ knowledgeBaseGrantKey.keyPrefix }}</div>
+        <el-alert type="info" :closable="false" show-icon>
+          <template #title>选择该凭证可访问的知识库</template>
+          保存会整体替换授权。已绑定的私有库也必须保留在列表中才可继续访问。
+        </el-alert>
+        <el-select v-model="selectedKnowledgeBaseIds" class="w-full" multiple filterable clearable
+          collapse-tags collapse-tags-tooltip placeholder="选择一个或多个知识库">
+          <el-option v-for="base in bases" :key="base.id" :value="base.id" :label="base.name" />
+        </el-select>
+        <p class="kb-muted">
+          留空会撤销显式授权；未绑定知识库的凭证仍可访问系统公开库，绑定过的私有库则会失去访问权限。
+          知识库自身的访问策略仍会继续生效。
+        </p>
+      </div>
+      <template #footer>
+        <el-button size="small" @click="knowledgeBaseGrantVisible = false">取消</el-button>
+        <el-button size="small" type="primary" :loading="knowledgeBaseGrantSaving" @click="saveKnowledgeBaseGrants">保存授权</el-button>
       </template>
     </el-dialog>
 
@@ -404,9 +430,10 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import type { ExternalAuditRow, ExternalKeyRow, ExternalServiceOverview, KnowledgeBase } from '../types'
 import {
   createExternalKey, getExternalServices, getMemoryScopeGrants, listExternalAudits, listExternalKeys,
+  getKnowledgeBaseGrants, replaceKnowledgeBaseGrants,
   forgetManagedMemory, listManagedMemories, replaceMemoryScopeGrants, setManagedMemoryStatus, updateExternalMemoryPolicy,
   listMemoryGovernanceEvents, type ManagedMemoryItem, type MemoryGovernanceEvent, type MemoryScopeGrant,
-  probeExternal, revokeExternalKey,
+  probeExternal, revokeExternalKey, type KnowledgeBaseGrant,
 } from '../api/external'
 import { unwrap } from '../api/knowledge'
 import { errorMessage as message } from '../utils/feedback'
@@ -437,6 +464,10 @@ const error = ref('')
 const auditLimit = ref(5)
 
 const createVisible = ref(false)
+const knowledgeBaseGrantVisible = ref(false)
+const knowledgeBaseGrantSaving = ref(false)
+const knowledgeBaseGrantKey = ref<ExternalKeyRow | null>(null)
+const selectedKnowledgeBaseIds = ref<number[]>([])
 const memoryAccessVisible = ref(false)
 const memoryAccessSaving = ref(false)
 const memoryAccessKey = ref<ExternalKeyRow | null>(null)
@@ -547,6 +578,27 @@ async function loadAll() {
     loading.value = false
   }
   await loadAudits()
+}
+
+async function openKnowledgeBaseGrants(row:ExternalKeyRow) {
+  knowledgeBaseGrantKey.value = row
+  try {
+    const grants = unwrap(await getKnowledgeBaseGrants(row.id), [] as KnowledgeBaseGrant[])
+    selectedKnowledgeBaseIds.value = grants.map(grant => grant.knowledgeBaseId)
+    knowledgeBaseGrantVisible.value = true
+  } catch (e) { ElMessage.error(message(e)) }
+}
+async function saveKnowledgeBaseGrants() {
+  const key = knowledgeBaseGrantKey.value
+  if (!key) return
+  knowledgeBaseGrantSaving.value = true
+  try {
+    unwrap(await replaceKnowledgeBaseGrants(key.id, selectedKnowledgeBaseIds.value), [] as KnowledgeBaseGrant[])
+    knowledgeBaseGrantVisible.value = false
+    ElMessage.success('知识库授权已更新')
+    await loadAll()
+  } catch (e) { ElMessage.error(message(e)) }
+  finally { knowledgeBaseGrantSaving.value = false }
 }
 
 async function loadAudits() {

@@ -6,6 +6,7 @@ import com.jh.knowledgeos.exception.UnauthorizedException;
 import org.springframework.stereotype.Service;
 import javax.servlet.http.HttpServletRequest;
 import java.net.URI;
+import java.util.List;
 
 /**
  * Gatekeeper for the external interface-service layer.
@@ -75,25 +76,43 @@ public class ExternalAccessService {
         }
     }
 
+    public List<Long> grantedKnowledgeBases(ApiKey key) {
+        return apiKeyService.grantedKnowledgeBases(key);
+    }
+
     /**
      * Decides which knowledge base the call targets.
      *
-     * <p>A key bound to one workspace can never reach another one, even if the caller passes a
-     * different id. An unbound key must additionally satisfy the anonymous sharing rule, so it
-     * only ever sees public workspaces.</p>
+     * <p>A principal grant is required for private workspaces and is authoritative for every
+     * migrated key. A legacy key without a principal keeps its one-workspace binding; an unbound
+     * key without explicit grants continues to use the public-workspace sharing rule.</p>
      */
     public Long resolveKnowledgeBase(ApiKey key, Long requested) {
         Long bound = key.getKnowledgeBaseId();
-        Long kb = bound != null ? bound : requested;
+        List<Long> grants = apiKeyService.grantedKnowledgeBases(key);
+        Long kb = requested;
+        if (kb == null) {
+            kb = bound;
+            if (kb == null && !grants.isEmpty()) {
+                kb = grants.get(0);
+            }
+        }
         if (kb == null) {
             throw new IllegalArgumentException("缺少 knowledgeBaseId 参数");
         }
-        if (bound != null && requested != null && !bound.equals(requested)) {
-            throw new SecurityException("该 API Key 已绑定知识库，不能访问其他知识库");
+        if (grants.contains(kb)) {
+            return kb;
         }
-        if (bound == null) {
-            accessService.assertExternalAccess(kb, false);
+        if (bound != null) {
+            if (!bound.equals(kb) || key.getPrincipalId() != null) {
+                throw new SecurityException("该 API Key 未获准访问此知识库");
+            }
+            return kb;
         }
+        if (key.getPrincipalId() != null && !grants.isEmpty()) {
+            throw new SecurityException("该 API Key 所属主体未获准访问此知识库");
+        }
+        accessService.assertExternalAccess(kb, false);
         return kb;
     }
 

@@ -2,6 +2,7 @@ package com.jh.knowledgeos.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.jh.knowledgeos.common.AnswerFormat;
+import com.jh.knowledgeos.common.KnowledgeBaseVisibility;
 import com.jh.knowledgeos.common.ResponseMode;
 import com.jh.knowledgeos.common.ResponseReducer;
 import com.jh.knowledgeos.domain.ApiKey;
@@ -70,6 +71,32 @@ public class ExternalKnowledgeFacade {
         }
         for (KnowledgeBase base : knowledgeBaseService.list()) {
             rows.add(toBaseRow(base));
+        }
+        return rows;
+    }
+
+    /** Applies principal grants before returning any workspace metadata to an external caller. */
+    public List<Map<String, Object>> basesFor(ApiKey key, List<Long> grantedIds) {
+        List<Map<String, Object>> rows = new ArrayList<Map<String, Object>>();
+        if (grantedIds != null && !grantedIds.isEmpty()) {
+            for (Long id : grantedIds) {
+                KnowledgeBase base = knowledgeBaseService.get(id);
+                if (base != null) {
+                    rows.add(toBaseRow(base));
+                }
+            }
+            return rows;
+        }
+        if (key != null && key.getPrincipalId() != null && key.getKnowledgeBaseId() != null) {
+            return rows;
+        }
+        if (key != null && key.getKnowledgeBaseId() != null) {
+            return bases(key.getKnowledgeBaseId());
+        }
+        for (KnowledgeBase base : knowledgeBaseService.list()) {
+            if (base.visibility() == KnowledgeBaseVisibility.PUBLIC) {
+                rows.add(toBaseRow(base));
+            }
         }
         return rows;
     }

@@ -1,6 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?><!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd"><mapper namespace="com.jh.knowledgeos.mapper.ExternalApiMapper">
 
-<sql id="apiKeyColumns">k.id,k.key_code,k.name,k.secret_hash,k.key_prefix,k.knowledge_base_id,
+<sql id="apiKeyColumns">k.id,k.key_code,k.name,k.secret_hash,k.key_prefix,k.knowledge_base_id,k.principal_id AS principalId,
+  (SELECT COUNT(1) FROM t_principal_kb_grant g WHERE g.principal_id=k.principal_id AND g.status='ACTIVE'
+    AND (g.expires_at IS NULL OR g.expires_at&gt;CURRENT_TIMESTAMP)) AS grantedKnowledgeBaseCount,
   b.name AS knowledge_base_name,k.scopes,k.rate_limit_per_minute,k.status,k.expires_at,k.last_used_at,
   k.created_by,u.display_name AS created_by_name,k.created_time,k.updated_time,k.allowed_origins,
   k.memory_namespace AS memoryNamespace,k.memory_agent_code AS memoryAgentCode,
@@ -22,8 +24,24 @@
   LEFT JOIN t_user u ON u.id=k.created_by
   WHERE k.secret_hash=#{secretHash} LIMIT 1</select>
 
-<insert id="insertApiKey" parameterType="com.jh.knowledgeos.domain.ApiKey" useGeneratedKeys="true" keyProperty="id">INSERT INTO t_api_key(key_code,name,secret_hash,key_prefix,knowledge_base_id,scopes,permission_tags,rate_limit_per_minute,status,expires_at,created_by,allowed_origins,memory_namespace,memory_agent_code)
-  VALUES(#{keyCode},#{name},#{secretHash},#{keyPrefix},#{knowledgeBaseId},#{scopes},CAST(#{permissionTags} AS JSON),#{rateLimitPerMinute},#{status},#{expiresAt},#{createdBy},#{allowedOrigins},#{memoryNamespace},#{memoryAgentCode})</insert>
+<insert id="insertApiKey" parameterType="com.jh.knowledgeos.domain.ApiKey" useGeneratedKeys="true" keyProperty="id">INSERT INTO t_api_key(key_code,name,secret_hash,key_prefix,knowledge_base_id,principal_id,scopes,permission_tags,rate_limit_per_minute,status,expires_at,created_by,allowed_origins,memory_namespace,memory_agent_code)
+  VALUES(#{keyCode},#{name},#{secretHash},#{keyPrefix},#{knowledgeBaseId},#{principalId},#{scopes},CAST(#{permissionTags} AS JSON),#{rateLimitPerMinute},#{status},#{expiresAt},#{createdBy},#{allowedOrigins},#{memoryNamespace},#{memoryAgentCode})</insert>
+
+<insert id="insertPrincipal" parameterType="com.jh.knowledgeos.domain.ExternalPrincipal" useGeneratedKeys="true" keyProperty="id">INSERT INTO t_principal(principal_code,name,status,created_by)
+  VALUES(#{principalCode},#{name},'ACTIVE',#{createdBy})</insert>
+
+<select id="countKnowledgeBase" resultType="int">SELECT COUNT(1) FROM t_knowledge_base WHERE id=#{knowledgeBaseId}</select>
+
+<insert id="insertPrincipalKnowledgeBaseGrant">INSERT INTO t_principal_kb_grant(principal_id,knowledge_base_id,status,reason,created_by)
+  VALUES(#{principalId},#{knowledgeBaseId},'ACTIVE',#{reason},#{createdBy})</insert>
+
+<select id="listPrincipalKnowledgeBaseGrants" resultType="long">SELECT knowledge_base_id FROM t_principal_kb_grant
+  WHERE principal_id=#{principalId} AND status='ACTIVE' AND (expires_at IS NULL OR expires_at&gt;CURRENT_TIMESTAMP) ORDER BY knowledge_base_id</select>
+
+<delete id="deletePrincipalKnowledgeBaseGrants">DELETE FROM t_principal_kb_grant WHERE principal_id=#{principalId}</delete>
+
+<insert id="insertPrincipalKnowledgeBaseGrantAudit">INSERT INTO t_principal_kb_grant_audit(principal_id,knowledge_base_id,action,reason,operator_id)
+  VALUES(#{principalId},#{knowledgeBaseId},#{action},#{reason},#{operatorId})</insert>
 
 <update id="updateApiKeyStatus">UPDATE t_api_key SET status=#{status} WHERE id=#{id}</update>
 

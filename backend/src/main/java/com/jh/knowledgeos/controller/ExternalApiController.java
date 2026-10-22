@@ -73,7 +73,7 @@ public class ExternalApiController {
     @GetMapping("/bases")
     @Operation(summary = "列出当前 API Key 可见的知识库")
     public ApiResponse<Object> bases(HttpServletRequest request) throws Exception {
-        return call(request, "GET /bases", null, (key, kb) -> facade.bases(key.getKnowledgeBaseId()));
+        return call(request, "GET /bases", null, (key, kb) -> facade.basesFor(key, accessService.grantedKnowledgeBases(key)));
     }
 
     @PostMapping("/query")

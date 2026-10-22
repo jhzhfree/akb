@@ -76,14 +76,14 @@ effectiveTags = 凭证授权标签 ∩ 请求标签
 授权为空 → 只看公开资料（默认拒绝）
 ```
 
-### P1：主体与多知识库授权（未开始）
+### P1：主体与多知识库授权（基础闭环已实现）
 
 1. ✅ 完成基础动作 Scope：新 Key 可按 `LIST` / `QUERY` / `SEARCH` / `READ_OBJECT` 分配读取动作；MCP 工具清单过滤未授权工具，REST、SSE、Embed、MCP 调用逐次执行相同 Scope 校验。旧 `READ` 继续等价于四个读取动作，旧 `WRITE` 继续隐含读取动作与 `INGEST`。
-2. 建 `t_principal`、`t_principal_kb_grant`（见 §4）
-3. `t_api_key` 增加 `principal_id`，迁移脚本把现有 `knowledge_base_id` 绑定转成等价 grant
-4. `/bases`、MCP 工具清单按授权清单返回
-5. 管理端：授予 / 撤销 / 有效期 / 原因 + 授权变更审计
-6. 验收用例：1 / 2 / 7 / 10
+2. ✅ 增加 `t_principal`、`t_principal_kb_grant` 与 V61 迁移；每个现有 API Key 迁成独立主体，原单库绑定转成同等 grant。
+3. ✅ API Key 创建时创建主体；管理端可读取或原子替换知识库授权，空数组表示撤销全部。授权替换会写 `t_principal_kb_grant_audit`，保留授予与撤销记录。
+4. ✅ REST `/bases`、MCP 工具及资源清单按 grant 返回；访问具体知识库时逐请求校验 grant。未绑定且无 grant 的旧 Key 仍只可访问公开知识库；已迁移 Key 撤销 grant 后不能再借旧 `knowledge_base_id` 回退访问。
+5. ⏳ 后续补充共享 Principal（多 Key 绑定同一主体）、授权有效期管理和按知识库隔离的标签范围；当前授权记录的 `expires_at` 字段预留但管理端尚未开放。
+6. ⏳ 验收用例：1 / 2 / 7 / 10；需在带 JDK / Maven 的环境运行后端全套测试与迁移验证。
 
 ### P2：委托身份与细粒度 ACL（未开始）
 

@@ -608,6 +608,7 @@ export interface ExternalServiceOverview {
 export interface ExternalKeyRow {
   id:number; keyCode:string; name:string; keyPrefix:string
   knowledgeBaseId:number|null; knowledgeBaseName:string|null
+  grantedKnowledgeBaseCount?:number
   scopes:string; rateLimitPerMinute:number; status:string
   memoryNamespace?:string|null; memoryAgentCode?:string|null
   memoryReadEnabled?:boolean; memoryWriteEnabled?:boolean

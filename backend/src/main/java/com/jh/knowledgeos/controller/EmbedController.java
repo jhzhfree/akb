@@ -145,7 +145,7 @@ public class EmbedController {
 
     private String knowledgeBaseName(ApiKey key, Long kb) {
         try {
-            for (Map<String, Object> base : facade.bases(key.getKnowledgeBaseId())) {
+            for (Map<String, Object> base : facade.basesFor(key, accessService.grantedKnowledgeBases(key))) {
                 Object id = base.get("id");
                 if (id != null && String.valueOf(id).equals(String.valueOf(kb))) {
                     return String.valueOf(base.get("name"));
@@ -162,7 +162,7 @@ public class EmbedController {
      */
     private String knowledgeBaseDefaultQuery(ApiKey key, Long kb) {
         try {
-            for (Map<String, Object> base : facade.bases(key.getKnowledgeBaseId())) {
+            for (Map<String, Object> base : facade.basesFor(key, accessService.grantedKnowledgeBases(key))) {
                 Object id = base.get("id");
                 if (id != null && String.valueOf(id).equals(String.valueOf(kb))) {
                     Object query = base.get("defaultQuery");

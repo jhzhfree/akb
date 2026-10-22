@@ -52,6 +52,11 @@ public class ApiKey {
 
     private Long knowledgeBaseId;
 
+    /** Service principal owning this credential's knowledge-base grants. */
+    private Long principalId;
+
+    private Integer grantedKnowledgeBaseCount;
+
     private String knowledgeBaseName;
 
     private String scopes;
@@ -188,6 +193,22 @@ public class ApiKey {
 
     public void setKnowledgeBaseId(Long v) {
         knowledgeBaseId = v;
+    }
+
+    public Long getPrincipalId() {
+        return principalId;
+    }
+
+    public void setPrincipalId(Long v) {
+        principalId = v;
+    }
+
+    public Integer getGrantedKnowledgeBaseCount() {
+        return grantedKnowledgeBaseCount;
+    }
+
+    public void setGrantedKnowledgeBaseCount(Integer v) {
+        grantedKnowledgeBaseCount = v;
     }
 
     public String getKnowledgeBaseName() {

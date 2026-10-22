@@ -3,6 +3,7 @@ package com.jh.knowledgeos.mapper;
 import com.jh.knowledgeos.domain.ApiCallAudit;
 import com.jh.knowledgeos.domain.ApiKey;
 import com.jh.knowledgeos.domain.EmbedTokenRevocation;
+import com.jh.knowledgeos.domain.ExternalPrincipal;
 import org.apache.ibatis.annotations.Param;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -20,6 +21,20 @@ public interface ExternalApiMapper {
     ApiKey getApiKeyByHash(@Param("secretHash") String secretHash);
 
     int insertApiKey(ApiKey key);
+
+    int insertPrincipal(ExternalPrincipal principal);
+
+    int countKnowledgeBase(@Param("knowledgeBaseId") Long knowledgeBaseId);
+
+    int insertPrincipalKnowledgeBaseGrant(@Param("principalId") Long principalId, @Param("knowledgeBaseId") Long knowledgeBaseId,
+        @Param("createdBy") Long createdBy, @Param("reason") String reason);
+
+    List<Long> listPrincipalKnowledgeBaseGrants(@Param("principalId") Long principalId);
+
+    int deletePrincipalKnowledgeBaseGrants(@Param("principalId") Long principalId);
+
+    int insertPrincipalKnowledgeBaseGrantAudit(@Param("principalId") Long principalId, @Param("knowledgeBaseId") Long knowledgeBaseId,
+        @Param("action") String action, @Param("operatorId") Long operatorId, @Param("reason") String reason);
 
     int updateApiKeyStatus(@Param("id") Long id, @Param("status") String status);
 

@@ -15,6 +15,13 @@ export const createExternalKey = (payload:{
   name?:string; knowledgeBaseId?:number|null; scopes?:string[]; rateLimitPerMinute?:number
   expiresAt?:string|null; memoryNamespace?:string|null; memoryAgentCode?:string|null
 }):Promise<ApiResponse<ExternalKeyRow>> => axios.post('/api/external/admin/keys', payload)
+export interface KnowledgeBaseGrant {
+  knowledgeBaseId:number
+}
+export const getKnowledgeBaseGrants = (id:number):Promise<ApiResponse<KnowledgeBaseGrant[]>> =>
+  axios.get(`/api/external/admin/keys/${id}/knowledge-base-grants`)
+export const replaceKnowledgeBaseGrants = (id:number, knowledgeBaseIds:number[]):Promise<ApiResponse<KnowledgeBaseGrant[]>> =>
+  axios.put(`/api/external/admin/keys/${id}/knowledge-base-grants`, knowledgeBaseIds)
 export const revokeExternalKey = (id:number):Promise<ApiResponse<ExternalKeyRow>> =>
   axios.post(`/api/external/admin/keys/${id}/revoke`)
 export const updateExternalMemoryPolicy = (id:number, policy:{readEnabled:boolean;writeEnabled:boolean}):Promise<ApiResponse<ExternalKeyRow>> =>

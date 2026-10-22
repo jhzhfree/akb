@@ -147,6 +147,31 @@ public class ExternalServiceAdminController {
         return ApiResponse.ok(apiKeyService.revoke(id));
     }
 
+    @GetMapping("/keys/{id}/knowledge-base-grants")
+    @Operation(summary = "查看 API Key 所属主体的知识库授权")
+    public ApiResponse<Object> knowledgeBaseGrants(@PathVariable Long id) {
+        requireManager();
+        com.jh.knowledgeos.domain.ApiKey key = apiKeyService.get(id);
+        if (key == null) {
+            throw new IllegalArgumentException("API Key 不存在");
+        }
+        List<Map<String, Object>> grants = new ArrayList<Map<String, Object>>();
+        for (Long knowledgeBaseId : apiKeyService.grantedKnowledgeBases(key)) {
+            Map<String, Object> grant = new LinkedHashMap<String, Object>();
+            grant.put("knowledgeBaseId", knowledgeBaseId);
+            grants.add(grant);
+        }
+        return ApiResponse.ok(grants);
+    }
+
+    @PutMapping("/keys/{id}/knowledge-base-grants")
+    @Operation(summary = "原子替换 API Key 所属主体的知识库授权；空数组表示全部撤销")
+    public ApiResponse<Object> replaceKnowledgeBaseGrants(@PathVariable Long id, @RequestBody(required = false) List<Long> knowledgeBaseIds) {
+        User operator = requireManager();
+        return ApiResponse.ok(apiKeyService.replaceKnowledgeBaseGrants(id,
+            knowledgeBaseIds == null ? Collections.<Long>emptyList() : knowledgeBaseIds, operator.getId()));
+    }
+
     @PutMapping("/keys/{id}/memory-policy")
     @Operation(summary = "开关 API Key 的记忆读取和写入能力；不能新增未签发的 scope")
     public ApiResponse<Object> memoryPolicy(@PathVariable Long id, @RequestBody @javax.validation.Valid AgentMemoryKeyPolicyRequest body) {
