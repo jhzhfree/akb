@@ -1,7 +1,7 @@
 <template>
 <!-- 登录页是全站唯一的无框架页：左右分栏（左品牌 / 右表单）对齐原型 login.html。
-     mode=admin 为管理员控制台入口，mode=user 为普通用户登录；两页共用这一套结构与样式，
-     差异只在标题、副标题与底部互相切换的入口。 -->
+     平台已不再区分用户视图与管理视图——登录就是登录，进入后能看到什么由角色权限决定，
+     不再有「管理员登录」这个独立入口。 -->
 <div class="lv-page">
   <section class="lv-brand" aria-label="产品介绍">
     <!-- 品牌底图：深蓝渐变 + 细网格 + 知识网络装饰，配色取自 logo（深蓝底 / 亮蓝点缀）。
@@ -47,9 +47,8 @@
   <section class="lv-panel" aria-label="登录">
     <div class="lv-card">
       <div class="lv-head">
-        <span v-if="mode==='admin'" class="lv-badge">⚿ 管理员控制台</span>
-        <h2>{{mode==='admin'?'管理员登录':'欢迎回来'}}</h2>
-        <p>{{mode==='admin'?'使用管理员账号登录平台控制台':'登录以访问你的知识库'}}</p>
+        <h2>欢迎回来</h2>
+        <p>登录以访问你的知识库</p>
       </div>
 
       <div v-if="error" class="lv-error" role="alert">
@@ -58,9 +57,9 @@
 
       <form class="lv-form" @submit.prevent="submit">
         <label class="lv-field">
-          <span class="lv-label">{{mode==='admin'?'管理员账号':'用户名 / 邮箱'}}</span>
+          <span class="lv-label">用户名 / 邮箱</span>
           <input v-model="username" class="lv-input" type="text" autocomplete="username"
-            :placeholder="mode==='admin'?'admin':'请输入用户名或邮箱'" @keyup.enter="submit"/>
+            placeholder="请输入用户名或邮箱" @keyup.enter="submit"/>
         </label>
         <label class="lv-field">
           <span class="lv-label">密码</span>
@@ -76,14 +75,6 @@
         </button>
       </form>
 
-      <div class="lv-foot">
-        <template v-if="mode==='admin'">
-          不是管理员？<button type="button" class="lv-link" @click="switchMode('user')">使用普通用户登录 →</button>
-        </template>
-        <template v-else>
-          需要管理控制台？<button type="button" class="lv-link" @click="switchMode('admin')">管理员入口 →</button>
-        </template>
-      </div>
       <p v-if="hint" class="lv-hint">{{hint}}</p>
     </div>
   </section>
@@ -97,14 +88,8 @@ import KosBrandLogo from './KosBrandLogo.vue'
 import { login, setToken } from '../api/auth'
 import type { AuthSessionResult } from '../types'
 
-/** admin：管理员控制台登录页；user：普通用户登录页。 */
-export type LoginMode = 'admin' | 'user'
-
-defineProps<{ hint?: string; mode?: LoginMode }>()
-const emit = defineEmits<{
-  success: [session: AuthSessionResult]
-  'switch-mode': [mode: LoginMode]
-}>()
+defineProps<{ hint?: string }>()
+const emit = defineEmits<{ success: [session: AuthSessionResult] }>()
 
 const REMEMBER_KEY = 'kos.loginAccount'
 
@@ -120,10 +105,6 @@ onMounted(() => {
   if (saved) username.value = saved
 })
 
-function switchMode(mode: LoginMode) {
-  error.value = ''
-  emit('switch-mode', mode)
-}
 function forgot() {
   ElMessage.info('请联系平台管理员重置密码')
 }
@@ -204,12 +185,6 @@ async function submit() {
   background:var(--bg-raised);border:1px solid var(--line-d);box-shadow:var(--sd-2);
 }
 .lv-head{margin-bottom:20px}
-.lv-badge{
-  display:inline-flex;align-items:center;gap:5px;margin-bottom:12px;padding:3px 10px;border-radius:999px;
-  font-size:11px;font-weight:600;color:var(--accent-text);
-  background:color-mix(in srgb,var(--brand-500) 12%,transparent);
-  border:1px solid color-mix(in srgb,var(--brand-500) 34%,transparent);
-}
 .lv-head h2{margin:0;font-size:22px;font-weight:700;color:var(--ink-900);letter-spacing:-.01em}
 .lv-head p{margin:7px 0 0;font-size:12.5px;color:var(--ink-500)}
 .lv-error{
@@ -240,10 +215,6 @@ async function submit() {
 .lv-submit:hover{opacity:.94}
 .lv-submit:active{transform:translateY(1px)}
 .lv-submit:disabled{opacity:.55;cursor:not-allowed}
-.lv-foot{
-  margin-top:20px;padding-top:16px;border-top:1px solid var(--line-d);
-  font-size:12px;color:var(--ink-500);text-align:center;
-}
 .lv-hint{margin:12px 0 0;font-size:11px;line-height:1.7;color:var(--ink-400);text-align:center}
 
 @media(max-width:900px){

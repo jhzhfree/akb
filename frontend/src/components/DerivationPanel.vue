@@ -14,8 +14,8 @@
         </p>
       </div>
       <div class="flex shrink-0 items-center gap-2">
-        <button class="kb-btn-outline" :disabled="loading" @click="load">刷新</button>
-        <button class="kb-btn" @click="openRule()">新增规则</button>
+        <el-button size="small" plain :disabled="loading" @click="load">刷新</el-button>
+        <el-button size="small" type="primary" @click="openRule()">新增规则</el-button>
       </div>
     </header>
 
@@ -29,9 +29,16 @@
 
     <div v-if="error" class="kb-alert-error mt-3">{{ error }}</div>
 
+    <!-- 切换样式与「知识资产」「知识 Schema」保持一致：一排圆角小按钮，选中态用 info 底色，条数跟在名称后。 -->
     <div class="mt-4 flex flex-wrap gap-2">
-      <button v-for="item in tabs" :key="item.key" class="kb-chip" :class="tab===item.key?'kb-chip-active':''"
-        @click="tab=item.key">{{ item.label }}</button>
+      <button v-for="item in tabs" :key="item.key" :title="item.hint"
+        class="rounded-lg border px-3 py-1.5 text-[13px] transition"
+        :class="tab===item.key
+          ? 'border-[color:var(--info-bd)] kb-state-info'
+          : 'border-ink-200 bg-white text-ink-600 hover:border-[color:var(--info-bd)]'"
+        @click="tab=item.key">
+        {{ item.label }}<em class="ml-1 not-italic tabular-nums opacity-70">{{ item.count }}</em>
+      </button>
     </div>
 
     <!-- 常用规则库：开箱即用的预设，含默认定义与可修改边界 -->
@@ -40,9 +47,9 @@
         <b class="text-sm">常用衍生规则</b>
         <div class="flex items-center gap-2">
           <span class="kb-muted">已启用 {{ installedCount }}/{{ presets.length }}，缺省手动触发；一键启用后可立即执行</span>
-          <button class="kb-btn-outline" :disabled="seeding || installedCount===presets.length" @click="seedAll">
+          <el-button size="small" plain :disabled="seeding || installedCount===presets.length" @click="seedAll">
             {{ seeding ? '启用中...' : '一键启用全部' }}
-          </button>
+          </el-button>
         </div>
       </div>
       <div class="p-4">
@@ -54,8 +61,8 @@
                 <b class="text-ink-700">{{ preset.name }}</b>
                 <div class="kb-muted text-[11px]">{{ preset.presetCode }} · {{ typeLabel(preset.derivationType) }}</div>
               </div>
-              <button v-if="preset.installed" class="kb-link" @click="focusRule(preset)">查看</button>
-              <button v-else class="kb-btn-outline" :disabled="seeding" @click="enablePreset(preset)">启用</button>
+              <el-button v-if="preset.installed" size="small" plain @click="focusRule(preset)">查看</el-button>
+              <el-button v-else size="small" plain :disabled="seeding" @click="enablePreset(preset)">启用</el-button>
             </div>
             <p class="mt-2 text-[12px] leading-5 text-ink-600">{{ preset.description }}</p>
             <div class="mt-2 rounded bg-ink-50 px-2 py-1 text-[11px] text-ink-500">场景：{{ preset.scene }}</div>
@@ -107,14 +114,14 @@
                   {{ rule.enabled ? '启用' : '停用' }}
                 </span>
               </td>
+              <!-- 按钮与「知识 Schema」一致：size=small + plain，危险动作只靠 type 区分颜色 -->
               <td class="whitespace-nowrap text-right">
-                <button class="kb-link" :disabled="running===rule.ruleCode" @click="run(rule)">
-                  {{ running===rule.ruleCode ? '执行中...' : '手动执行' }}
-                </button>
-                <button class="kb-link ml-2" @click="openRule(rule)">编辑</button>
-                <button v-if="rule.presetCode" class="kb-link ml-2" @click="resetRule(rule)">恢复默认</button>
-                <button class="kb-link ml-2" @click="toggleRule(rule)">{{ rule.enabled ? '停用' : '启用' }}</button>
-                <button class="kb-link ml-2 text-[color:var(--danger)]" @click="removeRule(rule)">删除</button>
+                <el-button size="small" plain :loading="running===rule.ruleCode" @click="run(rule)">手动执行</el-button>
+                <el-button size="small" plain @click="openRule(rule)">编辑</el-button>
+                <el-button v-if="rule.presetCode" size="small" plain @click="resetRule(rule)">恢复默认</el-button>
+                <el-button v-if="rule.enabled" size="small" type="warning" plain @click="toggleRule(rule)">停用</el-button>
+                <el-button v-else size="small" plain @click="toggleRule(rule)">启用</el-button>
+                <el-button size="small" type="danger" plain @click="removeRule(rule)">删除</el-button>
               </td>
             </tr>
           </tbody>
@@ -151,8 +158,9 @@
               <td>{{ ((candidate.confidence ?? 0) * 100).toFixed(1) }}%</td>
               <td><span class="kb-badge" :class="candidateBadge(candidate.status)">{{ statusLabel(candidate.status) }}</span></td>
               <td class="whitespace-nowrap text-right">
-                <button class="kb-link" v-if="candidate.status!=='APPROVED'" @click="review(candidate,'APPROVED')">批准</button>
-                <button class="kb-link ml-2" v-if="candidate.status!=='REJECTED'" @click="review(candidate,'REJECTED')">驳回</button>
+                <el-button size="small" plain @click="openCandidate(candidate)">详情</el-button>
+                <el-button v-if="candidate.status!=='APPROVED'" size="small" plain @click="review(candidate,'APPROVED')">批准</el-button>
+                <el-button v-if="candidate.status!=='REJECTED'" size="small" type="warning" plain @click="review(candidate,'REJECTED')">驳回</el-button>
               </td>
             </tr>
           </tbody>
@@ -267,8 +275,8 @@
         预设规则「{{ ruleForm.presetCode }}」的推导方式不可修改，定义可随时恢复默认。
       </p>
       <template #footer>
-        <button class="kb-btn-outline" @click="ruleVisible=false">取消</button>
-        <button class="kb-btn ml-2" :disabled="saving" @click="saveRule">保存</button>
+        <el-button size="small" plain @click="ruleVisible=false">取消</el-button>
+        <el-button size="small" type="primary" :loading="saving" @click="saveRule">保存</el-button>
       </template>
     </el-dialog>
   </section>
@@ -323,11 +331,12 @@ const editableBounds = computed<DerivationFieldBound[]>(() => {
 const candidateVisible = ref(false)
 const candidate = ref<DerivedCandidateDetail|null>(null)
 
+/** 与 Schema / 知识资产的切换按钮同构：label 后面跟条数，hint 说明这一栏是什么。 */
 const tabs = computed(() => [
-  { key:'presets' as const, label:'常用规则库' },
-  { key:'rules' as const, label:'衍生规则' },
-  { key:'candidates' as const, label:'候选衍生知识' },
-  { key:'runs' as const, label:'运行记录' },
+  { key:'presets' as const, label:'常用规则库', hint:'开箱即用的常用规则，可直接启用并执行', count: presets.value.length },
+  { key:'rules' as const, label:'衍生规则', hint:'手动执行一次，或按 cron 计划执行', count: rules.value.length },
+  { key:'candidates' as const, label:'候选衍生知识', hint:'等待人工确认的衍生知识', count: stats.value.total || 0 },
+  { key:'runs' as const, label:'运行记录', hint:'手动与计划的执行历史', count: runs.value.length },
 ])
 
 /** 定义字段的默认值：预设或类型默认，缺省字段一并补齐，编辑时只覆盖提交的那一项。 */

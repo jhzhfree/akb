@@ -299,12 +299,49 @@ generationTrace, judgmentId, createdAt, updatedAt</div>
 
 <section id="a8"><h2>8. 安全、治理与可观测性</h2>
 <div class="grid">
-<div class="card"><strong>权限控制</strong><p>ACL 必须在查询规划/召回、图遍历和 Context Assembly 阶段同时生效；优先使用检索引擎可执行的 pre-filter / metadata filter 或权限分区。若底层 ANN 只能后过滤，必须扩大候选集并设置最小结果补偿，同时在进入 Rerank/LLM 前再次强制校验；禁止仅在最终答案展示阶段隐藏无权限结果。</p></div>
+<div class="card"><strong>权限控制</strong><p>ACL 必须在查询规划/召回、图遍历和 Context Assembly 阶段同时生效；优先使用检索引擎可执行的 pre-filter / metadata filter 或权限分区。若底层 ANN 只能后过滤，必须扩大候选集并设置最小结果补偿，同时在进入 Rerank/LLM 前再次强制校验；禁止仅在最终答案展示阶段隐藏无权限结果。<b>四层落地方式与开关见 8.1。</b></p></div>
 <div class="card"><strong>版本治理</strong><p>ACTIVE、CONFLICT、SUPERSEDED、EXPIRED、ARCHIVED 等状态进入所有检索过滤条件，支持时间点查询。</p></div>
 <div class="card"><strong>内容与模型安全</strong><p>敏感数据脱敏、Prompt Injection 防护、模型输出约束、引用校验、派生知识风险分级。</p></div>
 <div class="card"><strong>审计与追溯</strong><p>每次生产和查询生成 traceId，可追踪 Source → Evidence → Assertion → Card → Answer。</p></div>
 </div>
-<h3>8.1 可观测指标</h3>
+<h3>8.1 知识库权限：四层落地（对齐当前实现）</h3>
+<p>权限不是一张“主体 × 对象 × 动作”的矩阵，而是四道依次收紧的闸门：越靠前越粗（能不能进这个门），越靠后越细（能看见哪一条）。任一层拒绝，后续不再执行。</p>
+<table>
+<tr><th>层</th><th>判定什么</th><th>实现载体</th><th>不满足时</th></tr>
+<tr><td>① 会话</td><td>是谁、凭证是否有效</td><td>AuthInterceptor + t_auth_session</td><td>401（白名单除外）</td></tr>
+<tr><td>② 功能权限</td><td>这个角色能不能用这个功能</td><td>Permissions 权限码 + t_role_menu</td><td>403（PermissionInterceptor）</td></tr>
+<tr><td>③ 知识库可见性</td><td>能不能进这个库</td><td>t_knowledge_base 的 visibility / created_by / owner_group_id</td><td>403；列表里直接不出现</td></tr>
+<tr><td>④ 对象级标签</td><td>库内能看见哪些来源 / 卡片 / 断言</td><td>permission_tags JSON 列 + t_acl_* 主体映射</td><td>检索与详情里不可见（过滤发生在存储层）</td></tr>
+</table>
+
+<p><b>① 会话。</b>三个拦截器按 <code>order</code> 串联：<code>AuthInterceptor</code>(1) → <code>KnowledgeBaseAccessInterceptor</code>(2，只挂 <code>/api/knowledge/**</code>) → <code>PermissionInterceptor</code>(3)。token 接受三种携带方式（<code>Authorization: Bearer</code>、裸 token、<code>X-Auth-Token</code>），以 <code>t_auth_session</code> 判定：状态必须 ACTIVE、<code>expires_at</code> 未过期，过期就 <code>revokeSession</code> 并回 401；随后还要 <code>t_user.status</code> 为 ACTIVE。白名单（<code>/api/auth/login</code>、<code>/api/v1/external/</code>、<code>/api/mcp</code> 等）不过认证。开关只有两个：<code>knowledge.auth.enabled</code>（<code>AUTH_ENABLED</code>）与 <code>knowledge.auth.allow-anonymous</code>；关掉认证时 <code>AuthContext</code> 为空，全站按“不受限”处理——这是单机演示态，生产必须打开。</p>
+
+<p><b>② 功能权限。</b>权限码是字符串常量（<code>system:acl</code>、<code>generate:import</code>、<code>search:graph</code>……）定义在 <code>Permissions</code>，中文标签同表维护。关键取舍：<b>权限码不是手工维护的角色-权限表，而是“该角色可见菜单项的并集”</b>，由 <code>t_role_menu(role_code, leaf_key, visible)</code> 派生（<code>RoleMenuService#permissionsFor</code>）；<code>UserRole</code> 里的默认角色集只用于初始化，ADMIN 恒为全集。<code>PermissionInterceptor</code> 用一张“路径 → 权限码”规则表匹配（从具体到宽泛，命中第一条），写操作可单独收紧（<code>WRITE_ONLY</code> 只拦非 GET）。<b>没有 <code>t_role_permission</code> 这类表</b>：菜单即权限面，改菜单即改权限，避免两处配置互相打架；代价是“需要某接口权限、但菜单里没有对应入口”的场景无法单独授予。</p>
+
+<p><b>③ 知识库可见性。</b>库只有三态：<code>PUBLIC / PRIVATE / GROUP</code>（未知值按 PUBLIC）。判定顺序是 ADMIN 豁免 → PUBLIC 放行 → PRIVATE 看 <code>created_by</code> → GROUP 看 <code>created_by</code> 或 <code>t_user_group_member</code> 是否含该库的 <code>owner_group_id</code>。列表在 SQL 里过滤，不靠前端筛：</p>
+<div class="flow">WHERE b.status &lt;&gt; 'ARCHIVED'
+  AND (b.visibility = 'PUBLIC' OR b.created_by = #{userId}
+       OR (b.owner_group_id IS NOT NULL
+           AND EXISTS (SELECT 1 FROM t_user_group_member m
+                       WHERE m.group_id = b.owner_group_id AND m.user_id = #{userId})))</div>
+<p>写权限在此之上再收一层：<code>ADMIN / KNOWLEDGE_ADMIN</code> 直接放行，其余要求“既在可读范围、角色又具备写知识的能力”（<code>UserRole#canWriteKnowledge</code>，含 OPERATOR 与 AUDITOR）。入库入口由 <code>KnowledgeBaseAccessInterceptor</code> 统一拦截，从路径变量 <code>kb</code>、<code>/bases/{id}</code> 或表单参数 <code>knowledgeBaseId</code> 取库 ID，GET 按读、其余按写判定——新增接口不必逐个记得加校验。</p>
+
+<p><b>④ 对象级标签。</b>标签挂在业务对象上：<code>t_source</code> / <code>t_knowledge_card</code> / <code>t_claim</code> 的 <code>permission_tags</code> JSON 列。主体能拿到哪些标签，由 <code>t_acl_subject</code>、<code>t_acl_role</code>、<code>t_acl_subject_role</code>、<code>t_acl_role_tag</code>、<code>t_acl_subject_tag</code>、<code>t_acl_department_tag</code> 六张表解析（主体直挂、角色挂、部门挂三者取并集）。<code>AclContextResolver</code> 返回<b>三态</b>，这是整套 ACL 的核心语义：</p>
+<table>
+<tr><th>返回值</th><th>含义</th><th>典型场景</th></tr>
+<tr><td><code>null</code></td><td>不受限，不加任何过滤条件</td><td>ADMIN / KNOWLEDGE_ADMIN、未开启认证</td></tr>
+<tr><td><code>[]</code></td><td>只能看公开内容（无标签的对象）</td><td>主体存在但没有任何标签授权</td></tr>
+<tr><td><code>["t1","t2"]</code></td><td>公开内容 + 命中任一标签</td><td>普通受控主体</td></tr>
+</table>
+<p>过滤在存储层完成，三种引擎语义一致（无标签=公开、命中任一标签可见、<code>null</code> 不过滤）：MySQL 用 <code>JSON_LENGTH</code> 加 <code>JSON_CONTAINS</code>；Elasticsearch 用 <code>bool.should</code>（<code>must_not exists permission_tags</code>，或 <code>terms</code> 命中，<code>minimum_should_match=1</code>）；Milvus 用 <code>json_contains_any(permission_tags, ["__public__", ...])</code>。图谱侧另落范围表 <code>t_entity_acl_scope</code> / <code>t_relation_acl_scope</code>，避免跨来源实体聚合后越权可见。</p>
+
+<p><b>外部调用主体。</b>开放接口不是“一个 API Key 绑死一个知识库”，而是<b>主体（Principal）→ 知识库授权（Grant）</b>两层：<code>t_principal</code> 是调用主体，<code>t_principal_kb_grant</code> 记录它对某个库的授权，带 <code>status</code>、<code>expires_at</code> 与库级 <code>permission_tags</code>（该库内的标签上限）；<code>t_api_key</code> 只是凭证（secret 只存 SHA-256，另存 <code>key_prefix</code> 便于识别）。一个主体可持多个 Key，也可被授予多个库；授权的授予 / 变更 / 撤销与凭证换绑都写 <code>t_principal_kb_grant_audit</code> / <code>t_api_key_principal_audit</code>，换绑只改 <code>principal_id</code> 而不删主体，避免把仍持有共享授权的主体一并删掉。单主体授权库数上限 100，库级标签数上限 100、单标签 128 字符——这些上限写在校验里而非数据库约束，便于按部署调整。</p>
+
+<p><b>内外部如何收敛。</b>两条路径入口不同，收敛点相同：内部请求由控制器把 <code>X-Authenticated-Permission-Tags</code> 交给 <code>AclContextResolver</code> 覆盖请求体里的标签；外部请求由 <code>RetrievalAuthorizationService</code> 做交集收窄（授权标签与请求标签取交，且受 Key 标签、库授权标签、委托身份标签共同约束），按 <code>knowledge.acl.external-tag-mode</code> 分为 <code>CLIENT</code>（完全信任调用方）、<code>SHADOW</code>（只记录差异并告警）、<code>ENFORCE</code>（强制收窄，未配置授权时默认拒绝）三种模式。两者最终都写成同一个字段 <code>payload.permissionTags</code> 交给 ai-service，在 ES / Milvus 的查询规划阶段落地。<b>过滤点是召回，不是答案展示</b>——这是本章开头那条原则的具体落法。</p>
+
+<p><b>刻意没有做的四件事。</b>① 不做“来源权限向下继承”：真实数据里一个 Source 往往同时喂多个库、多个对象，继承会引入隐性提权；改为对象各自持有标签，需要一致时由抽取侧按来源标签写入。② 不做 READ/WRITE/REVIEW/MANAGE 四动作矩阵：读写按“库级 canRead/canWrite + 接口级权限码”两处表达已足够，动作维度在当前产品里没有第四个真实取值。③ 不做单一 <code>acl.enabled</code> 总开关：拆成身份库、可信头、外部标签模式三个独立开关，可以分别灰度。④ 不在前端隐藏越权数据：不可见一律在存储层过滤，前端只做入口置灰与提示。</p>
+
+<h3>8.2 可观测指标</h3>
 <table><thead><tr><th>域</th><th>关键指标</th></tr></thead><tbody>
 <tr><td>生产链</td><td>解析成功率、抽取耗时、候选知识量、冲突率、自动裁决率、人工审核积压</td></tr>
 <tr><td>检索链</td><td>各通道 Recall、RRF 命中贡献、Rerank 延迟、TopK 点击/命中、零结果率</td></tr>

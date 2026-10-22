@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<settings xmlns="http://maven.apache.org/SETTINGS/1.0.0"
+          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+          xsi:schemaLocation="http://maven.apache.org/SETTINGS/1.0.0 https://maven.apache.org/xsd/settings-1.0.0.xsd">
+  <!--
+    镜像构建专用配置：容器内没有宿主机的 ~/.m2/settings.xml，默认直连
+    repo.maven.apache.org（实测约 0.46MB/s），换成阿里云镜像约 2MB/s。
+
+    这里刻意不配 proxies：宿主机那份用的是 127.0.0.1:7890，而容器里的
+    127.0.0.1 是容器自己，照搬过来会让所有下载连不上。构建容器走桥接网络
+    可以直接出网，无需代理。
+  -->
+  <mirrors>
+    <mirror>
+      <id>aliyun-public</id>
+      <name>aliyun public</name>
+      <url>https://maven.aliyun.com/repository/public</url>
+      <mirrorOf>central</mirrorOf>
+    </mirror>
+  </mirrors>
+</settings>

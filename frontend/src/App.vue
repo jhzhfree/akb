@@ -4,7 +4,7 @@
 <div v-if="!authReady" class="flex h-screen items-center justify-center text-[13px] text-ink-500">
   正在进入工作台…
 </div>
-<LoginView v-else-if="needLogin" :hint="loginHint" :mode="loginMode" @switch-mode="setLoginMode" @success="onLogin"/>
+<LoginView v-else-if="needLogin" :hint="loginHint" @success="onLogin"/>
 <div v-else class="kos-shell">
 <AppHeader :base-name="activeBase?.name" :visibility="visibilityLabel(activeBase?.visibility)"
   v-model:keyword="globalKeyword" :avatar="avatarText" :display-name="me?.user?.displayName||me?.user?.username"
@@ -363,19 +363,6 @@ const loginHint=computed(()=>{
   if(authStatus.value&&!authStatus.value.initialized)return '系统尚未创建管理员账号：请查看后端启动日志中的初始密码'
   return '登录后可访问自己创建、所属用户组与公开的知识库'
 })
-/**
- * 登录入口：user 普通用户登录页 / admin 管理员控制台登录页。
- * 默认普通用户；访问 #/admin 直达管理员入口，选过一次后记住，避免每次都要再点一次切换。
- */
-const loginMode=ref<'user'|'admin'>(initialLoginMode())
-function initialLoginMode():'user'|'admin'{
-  if(typeof location!=='undefined'&&location.hash==='#/admin')return 'admin'
-  return localStorage.getItem('kos.loginMode')==='admin'?'admin':'user'
-}
-function setLoginMode(mode:'user'|'admin'){
-  loginMode.value=mode
-  try{localStorage.setItem('kos.loginMode',mode)}catch{/* 隐私模式下记不住，本次会话内仍生效 */}
-}
 /** 各知识库的概览统计：主页面的汇总数字按库聚合，拉取失败的库按 0 计入。 */
 const baseStats=ref<Record<number,Overview>>({})
 const baseStatsLoading=ref(false)
@@ -1033,9 +1020,6 @@ async function onLogin(){
   try{me.value=unwrap(await getMe(),null)}catch(e){err(e)}
   if(!me.value?.user)return
   await loadGroups()
-  // 从管理员入口登录的账号如果不是管理员，说明走错了入口：仍允许登录，但明确提示。
-  if(loginMode.value==='admin'&&me.value.user.role!=='ADMIN')
-    ElMessage.warning('该账号不是平台管理员，已进入普通用户视图')
   // 拿到角色权限后再决定落地页，登录前不能沿用旧的会话位置。
   resolveInitialView()
   await initialLoad()

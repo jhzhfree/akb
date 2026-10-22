@@ -368,7 +368,7 @@ data: {"code":"...","message":"..."}</div>
 <p>字段：time、service、protocol、client、requestId、traceId、status、latency、retrievalCount、tokenUsage、errorCode、<b>callerIp（调用方 IP）</b>，以及<b>传入参数（requestParams）与返回数据（responseData）</b>。点击 traceId 跳转 Query Trace，形成“外部调用 → 检索 → Evidence → Answer”的完整追溯。调用方 IP 按 <code>X-Forwarded-For</code> → <code>X-Real-IP</code> → 直连地址的顺序解析，取不到记为空，不影响其它列。</p>
 <div class="note ok"><b>明文入参与返回（对齐当前实现）：</b>调用日志在列表与详情中直接展示传入参数与返回数据的<b>明文内容</b>（REST 的请求体与响应体、MCP 的工具入参与结果、SSE 的增量与完成事件），便于调用方自查；展示前按系统配置的脱敏规则处理敏感字段。REST / MCP / SSE 三种协议的调用统一落库，协议的入参与返回由请求体缓存与响应包装统一采集，避免不同协议各写一套。</div>
 <h3>6.9 外部主体与多知识库授权</h3>
-<p>凭证背后是<b>调用主体（Principal）</b>，授权挂在主体而不是单个 Key 上：一个主体可持有多个 API Key，也可被授予多个知识库。</p>
+<p>凭证背后是<b>调用主体（Principal）</b>，授权挂在主体而不是单个 Key 上：一个主体可持有多个 API Key，也可被授予多个知识库。本节讲数据模型与配置约束，<b>运行时的授权判定与标签收窄见 10.1.5</b>。</p>
 <table><thead><tr><th>项</th><th>设计</th></tr></thead><tbody>
 <tr><td>主体</td><td>应用主体（<code>APPLICATION</code>）与委托员工身份（<code>USER</code>，显式绑定 IdP subject）；存量 API Key 升级时自动转成独立主体，其原单库绑定迁移为等价授权</td></tr>
 <tr><td>授权</td><td>主体 → 知识库的授权记录，含 status、expiresAt、reason；一个主体可同时持有多个知识库的授权</td></tr>
@@ -423,13 +423,73 @@ Tab：概览 | 关联 | Evidence | 版本 | 权限 | 审计</div>
 </section>
 
 <section id="d10"><h2>10. 权限与状态设计</h2>
-<p>ACL：USER/ROLE/DEPARTMENT/GROUP → SPACE/SOURCE/DOCUMENT/CARD/ENTITY/ASSERTION → READ/WRITE/REVIEW/MANAGE。Source 权限默认向下继承，知识对象可以收紧但不能突破来源权限。</p>
-<h3>10.1 知识状态</h3><div class="flow">CANDIDATE → PENDING → APPROVED → ACTIVE
+<p>ACL 抽象：USER/ROLE/DEPARTMENT/GROUP → SPACE/SOURCE/DOCUMENT/CARD/ENTITY/ASSERTION → READ/WRITE/REVIEW/MANAGE。<b>落地实现见 10.1</b>——动作维度收敛为读与写，来源继承未实现（对象各自持有标签，原因见 10.1.7），其余差异也在 10.1.7 一并说明。</p>
+<h3>10.1 权限模型：四层落地与判定顺序</h3>
+<p>本节承接章首的 ACL 抽象，写<b>当前代码的实际落地</b>。抽象里的“USER/ROLE/DEPARTMENT/GROUP → SPACE/SOURCE/… → READ/WRITE/REVIEW/MANAGE”在实现中收敛为四层闸门，动作维度只保留读与写两种；与抽象的差异集中在 10.1.7 说明。</p>
+<table>
+<tr><th>层</th><th>拦截 / 判定点</th><th>关键类与表</th><th>开关</th></tr>
+<tr><td>① 会话</td><td>AuthInterceptor（order 1，全 <code>/api/**</code>）</td><td>t_auth_session、t_user、AuthContext</td><td>knowledge.auth.enabled / allow-anonymous</td></tr>
+<tr><td>② 功能权限</td><td>PermissionInterceptor（order 3）</td><td>Permissions、t_role_menu、RoleMenuService</td><td>—</td></tr>
+<tr><td>③ 库可见性</td><td>KnowledgeBaseAccessInterceptor（order 2，只挂 <code>/api/knowledge/**</code>）</td><td>t_knowledge_base、t_user_group_member</td><td>—</td></tr>
+<tr><td>④ 对象标签</td><td>控制器显式调用 AclContextResolver</td><td>permission_tags 列、t_acl_*、t_entity_acl_scope / t_relation_acl_scope</td><td>knowledge.acl.identity-db-enabled / trusted-header-enabled / external-tag-mode</td></tr>
+</table>
+
+<p><b>10.1.1 判定顺序。</b>三个拦截器按 <code>order</code> 串联，顺序不能换：先确认身份（①），再判断功能（②），最后判断具体库（③）。之所以让库访问在功能权限之后，是为了把“这个角色根本不该用这个功能”和“这个角色能用功能但不能进这个库”区分成两种错误——前者 403 且不需要知道库是否存在，后者只在已通过功能校验后才暴露库维度的结论，避免用错误码探测库的存在性。④ 不在拦截器里，因为对象标签需要按请求体里的检索范围动态计算，由各控制器在组装请求时统一调用 <code>aclContextResolver.resolve(header)</code> 注入。</p>
+
+<p><b>10.1.2 功能权限的派生。</b>权限码是字符串常量（<code>system:acl</code>、<code>generate:import</code>、<code>search:graph</code>……），由 <code>Permissions</code> 维护，<code>require()</code> 抛 <code>SecurityException</code> 由全局异常处理映射为 403。角色到权限码不是静态表，而是<b>该角色可见菜单项的并集</b>：</p>
+<div class="flow">permissionsFor(role):
+  if role == ADMIN: return Permissions.all()
+  out = {}
+  for key in visibleKeys(role):            # 来自 t_role_menu(role_code, leaf_key, visible)
+      p = MenuCatalog.permissionOf(key)     # 菜单项 → 权限码
+      if p != null: out.add(p)
+  return out</div>
+<p><code>UserRole</code> 里列举的默认集只用于初始化 <code>t_role_menu</code>；未知角色一律降级为 VIEWER（最小集），避免脏角色数据变成越权。<code>Permissions.has()</code> 在 <code>AuthContext</code> 为空时返回 true，与“未开启认证即全放行”保持同一套语义，这一点前后端必须一致（前端 <code>hasPermission(null, code)</code> 同样全放行）。接口侧由 <code>PermissionInterceptor</code> 的“路径 → 权限码”规则表匹配，规则从具体到宽泛、命中第一条，写操作可只拦非 GET（<code>WRITE_ONLY</code>）。没有 <code>t_role_permission</code>：菜单即权限面。</p>
+
+<p><b>10.1.3 库可见性与读写判定。</b>库只有三态可见性（<code>PUBLIC / PRIVATE / GROUP</code>，null 或未知值按 PUBLIC），读判定：</p>
+<div class="flow">canRead(user, base):
+  if user.role == ADMIN: return true
+  switch base.visibility:
+    PUBLIC:  return true
+    PRIVATE: return base.created_by == user.id
+    GROUP:   return base.created_by == user.id
+               or countGroupMember(base.owner_group_id, user.id) &gt; 0
+
+canWrite(user, base):
+  if user.role in (ADMIN, KNOWLEDGE_ADMIN): return true
+  return base.created_by == user.id
+      or (user.role.canWriteKnowledge() and canRead(user, base))</div>
+<p><code>canWriteKnowledge()</code> 覆盖 ADMIN / KNOWLEDGE_ADMIN / KNOWLEDGE_OPERATOR / KNOWLEDGE_AUDITOR 四个角色。<code>user == null</code>（外部无会话或匿名）时只有 PUBLIC 可读。列表查询在 SQL 层过滤（<code>KnowledgeBaseMapper</code>），管理员的 <code>all=true</code> 才跳过条件。组关系是知识库上的单值 <code>owner_group_id</code> 加成员表 <code>t_user_group_member(group_id, user_id)</code>，没有“组-库”多对多表——一个库只归属一个组，需要多组共享时用 PUBLIC 或标签控制。</p>
+
+<p><b>10.1.4 对象标签与三态语义。</b>标签落在业务对象上（<code>t_source</code> / <code>t_knowledge_card</code> / <code>t_claim</code> 的 <code>permission_tags</code> JSON 列），主体标签由六张 ACL 表解析：</p>
+<div class="flow">resolveAclPermissionTags(subjectCode) =
+    subject 直挂 (t_acl_subject_tag)
+  ∪ 角色挂   (t_acl_subject_role → t_acl_role_tag)
+  ∪ 部门挂   (t_acl_department_tag)</div>
+<p><code>AclContextResolver.resolve()</code> 的返回值是整套 ACL 的语义核心，三态必须严格区分：<code>null</code> = 不受限（ADMIN、KNOWLEDGE_ADMIN、未开认证），查询不加任何条件；<code>[]</code> = 只能看公开内容；非空数组 = 公开内容加命中任一标签。若把 <code>[]</code> 与 <code>null</code> 混为一谈，不是越权就是全员失明，这是实现中最容易被改坏的一处。三种存储的过滤写法不同、语义相同：MySQL 用 <code>JSON_LENGTH(permission_tags)=0</code> 或 <code>JSON_CONTAINS</code>；Elasticsearch 用 <code>bool.should</code>（<code>must_not exists</code> 或 <code>terms</code>，<code>minimum_should_match=1</code>）；Milvus 用 <code>json_contains_any</code> 并固定带上 <code>__public__</code>。图谱侧为避免跨来源实体聚合后越权，单独落 <code>t_entity_acl_scope</code> / <code>t_relation_acl_scope</code>（按 <code>source_id</code> 记录该实体/关系的可见范围）。标签变更写 <code>t_acl_change</code>，同时投 outbox 事件 <code>INDEX_OBJECT_ACL</code> 触发索引侧重建，避免权威库与检索索引口径不一致。</p>
+
+<p><b>10.1.5 外部主体与授权判定。</b>凭证与授权分离：<code>t_api_key</code>（secret_hash、key_prefix、scopes、rate_limit、expires_at，外加 <code>principal_id</code> 与 <code>permission_tags</code>）是凭证，<code>t_principal</code> 是主体，<code>t_principal_kb_grant(principal_id, knowledge_base_id, status, expires_at, permission_tags)</code> 是授权。判定流程：</p>
+<div class="flow">resolveKnowledgeBase(key, kb, delegated):
+  grants = grantedKnowledgeBases(key)         # 委托身份时取 agentGrants ∩ employeeGrants
+  if kb in grants: return kb
+  if key.boundKb != null:
+      if kb != boundKb or key.principalId != null: throw SecurityException
+  if key.principalId != null and grants 非空 and kb not in grants: throw SecurityException
+  accessService.assertExternalAccess(kb, readOnly)   # 回落到库可见性（PUBLIC 兜底）</div>
+<p>标签收窄：<code>effectiveTags = keyTags ∩ kbGrantTags ∩ delegatedTags</code>，再与请求标签取交；<code>knowledge.acl.external-tag-mode</code> 决定强度——<code>CLIENT</code> 原样使用调用方标签，<code>SHADOW</code> 只记录“本应收窄到 X”的差异告警，<code>ENFORCE</code> 强制收窄且未配置任何授权时默认拒绝。授权写操作有三条硬约束：单主体授权库不超过 100、<code>expires_at</code> 必须晚于当前时间、标签不超过 100 个且单个不超过 128 字符；替换授权时先写 REVOKE 审计再删旧插新，保证审计链不缺环。</p>
+
+<p><b>10.1.6 前端契约。</b>前端不做权限裁决，只做呈现裁剪。登录只返回 token（<code>t_auth_session</code>），权限与菜单由 <code>GET /api/auth/me</code> 单独下发（<code>permissions</code>、<code>menu</code>、<code>role</code>、<code>homeView</code>），只放内存不落 localStorage。外壳通过 shell 契约暴露四个判定：<code>can(code)</code> 判功能权限码、<code>menuHas(key)</code> 判角色菜单可见性、<code>canNavigate(key)</code> 判页面可达、<code>tabs(section)</code> 取模块内可见 Tab。菜单裁剪优先级是<b>角色菜单配置 &gt; adminOnly &gt; 权限码</b>：后端下发的 <code>menu</code> 非空时它就是权威来源，为空才回落到内置规则。无权限时入口置灰并给出 title 提示，点击兜底提示“当前角色无权访问”，不发请求；401 由 axios 拦截器统一清 token 并派发 <code>kos-auth-expired</code> 事件，App 监听后回登录页，各调用点不各自处理。</p>
+
+<p><b>10.1.7 与章首抽象的三处差异。</b>① 没有四动作矩阵：实现只区分读写，REVIEW / MANAGE 由功能权限码（如 <code>generate:judge</code>、<code>system:acl</code>）表达，而不是对象级动作。② 没有“Source 权限向下继承”：对象各自持有标签，原因是同一 Source 常喂多个库，继承会造成隐性提权；需要一致时由抽取侧按来源标签写对象标签。③ 没有单一 ACL 总开关：拆为 <code>identity-db-enabled</code>（标签从身份库解析）、<code>trusted-header-enabled</code>（接受可信头传入标签，仅供内网网关）、<code>external-tag-mode</code>（外部标签强度）三个，可独立灰度与回滚。</p>
+
+<p><b>10.1.8 验证方式。</b>权限有 16 个端到端校验脚本按阶段覆盖，全部是“真打接口 + 断言可见性”的黑盒校验，而不是读代码推断：<code>scripts/check-acl-phase2.py</code>（基础主体与角色）、<code>phase3-governance</code>、<code>phase4-engineering-closure</code>、<code>phase5-orchestrator</code>、<code>phase6-machine-qualification</code>、<code>phase7-manifest-generation</code>、<code>phase8-neo4j-generation</code>、<code>phase9-graph-generation</code>、<code>phase10</code>、<code>phase11-cross-source</code>（跨来源越权）、<code>phase12-facets</code>（分面计数不泄露）、<code>phase13-evidence-citations</code>、<code>phase15-answer-evidence</code>、<code>phase16-structured-answer</code>、<code>phase17-answer-qualification</code>、<code>phase18-answer-quality-operations</code>。改动 ACL 语义时必须先跑这套脚本，尤其 <code>phase11</code> 与 <code>phase12</code>——它们盯的正是“列表/计数/引用里漏出无权限对象”这类隐蔽越权。</p>
+
+<h3>10.2 知识状态</h3><div class="flow">CANDIDATE → PENDING → APPROVED → ACTIVE
              ├→ REJECTED
              └→ CONFLICTED → JUDGED → APPROVED/REJECTED
 ACTIVE → SUPERSEDED | EXPIRED | ARCHIVED
 Derived ACTIVE → STALE → RECOMPUTING → PENDING/ACTIVE</div>
-<h3>10.2 集成服务状态</h3><div class="flow">DRAFT → TESTING → PUBLISHED → DISABLED → ARCHIVED
+<h3>10.3 集成服务状态</h3><div class="flow">DRAFT → TESTING → PUBLISHED → DISABLED → ARCHIVED
                    └→ ERROR</div>
 </section>
 
