@@ -99,7 +99,7 @@ table{width:100%;border-collapse:collapse;font-size:13.5px;margin:14px 0;display
 <section class="product" id="ali"><div class="product-head"><div><h2>11. 阿里云百炼 Knowledge Base</h2><span class="tag">RAG</span><span class="tag">Smart Chunk</span><span class="tag">Hit Test</span></div><div class="right"><div class="rank">重点参考 A</div>知识库创建体验</div></div>
 <div class="grid"><div><h3>功能模块</h3><p>Workspace、Knowledge Base、数据导入、智能解析/Chunk、Chunk 查看与编辑、Embedding、Hit Testing、应用/Workflow、API。</p><h3>产品特色</h3><p>创建知识库的产品流程非常清晰：选择知识库类型 → 选择数据 → 解析/切片 → 建库 → 命中测试 → 接入应用。官方说明 Chunk 可查看/编辑，智能解析会基于标题层级生成 chunk title / hierarchical title。</p></div><div><h3>真实产品 UI 截图</h3><figure class="real-ui"><a href="https://www.alibabacloud.com/help/zh/model-studio/rag-knowledge-base" target="_blank"><img src="https://i-blog.csdnimg.cn/img_convert/20dd148f475669b4a427678266c59bfb.png" alt="阿里云百炼：创建知识库真实页面（实操截图）" loading="lazy" referrerpolicy="no-referrer" onerror="this.parentElement.innerHTML='<div class=&quot;box soft&quot;>截图因来源站点防盗链未能加载，请点击查看截图来源页面。</div>'"/></a><figcaption><b>阿里云百炼：创建知识库真实页面（实操截图）</b><br><span class="shot-source">截图来源：</span><a href="https://www.alibabacloud.com/help/zh/model-studio/rag-knowledge-base" target="_blank">产品官方页面/官方文档或真实产品实操资料</a>。截图仅用于竞品研究与 UI 参考，不代表当前版本全部功能。</figcaption></figure><div class="wire"><div class="wire-top">Model Studio → Data → Knowledge Base</div><div class="wire-body"><div class="wire-nav"><div>Applications</div><div>Components</div><div class="active">Knowledge Base</div><div>App Data</div></div><div class="wire-main"><div class="flow"><span class="node">Type</span><span class="arrow">→</span><span class="node">Data</span><span class="arrow">→</span><span class="node">Parsing</span><span class="arrow">→</span><span class="node">Create</span></div><div class="row" style="margin-top:12px"><div class="box">Chunks / titles / images</div><div class="box">Hit testing / threshold</div></div></div></div></div></div>
 <div class="takeaway"><b>主要借鉴：</b>知识库“创建向导”可以直接学习：业务类型先行，再选择解析策略；建库后第一入口不是 Chat，而是 Chunk 检查 + 命中测试。</div>
-<div class="source">官方参考：<a href="https://www.alibabacloud.com/help/en/model-studio/rag-knowledge-base">Alibaba Cloud Model Studio Knowledge Base</a>。</div></section>
+<div class="source">官方参考：<a href="https://www.alibabacloud.com/help/en/model-studio/rag-knowledge-base">Alibaba Cloud Model Studio Knowledge Base</a>。</div></div></section>
 
 <section class="product" id="baidu"><div class="product-head"><div><h2>12. 百度千帆</h2><span class="tag">AI Platform</span><span class="tag">Knowledge</span><span class="tag">Agent</span></div><div class="right"><div class="rank">重点参考 B+</div>云AI平台一体化</div></div>
 <div class="grid"><div><h3>功能模块</h3><p>模型服务、知识库/数据、RAG、应用/Agent、Workflow、评测、API 与企业权限体系。</p><h3>产品特色</h3><p>优势是知识能力与模型、Agent、应用开发在同一云 AI 平台中协同，适合研究“知识能力如何被应用层消费”。</p></div><div><h3>真实产品 UI 截图</h3><div class="real-ui"><a href="https://cloud.baidu.com/doc/APPBUILDER/index.html" target="_blank"><div class="box soft" style="padding:18px"><b>真实 UI 截图：</b>百度千帆 AppBuilder：官方资料含知识库真实页面截图（PDF资料）<br><span style="font-size:12px;color:#667085">百度官方企业级 RAG 资料包含知识库列表、知识详情、切片/知识点等后台截图。点击查看官方页面。</span></div></a><figcaption><span class="shot-source">截图来源：</span>百度智能云官方资料。为避免把示意线框误当真实 UI，此处仅引用官方真实截图资料入口。</figcaption></div><div class="wire"><div class="wire-top">AI Platform</div><div class="wire-body"><div class="wire-nav"><div>Models</div><div class="active">Knowledge</div><div>Agents</div><div>Workflow</div><div>Evaluation</div></div><div class="wire-main"><div class="cards"><div class="box">Knowledge bases</div><div class="box">Datasets</div><div class="box">Retrieval config</div></div><div class="box" style="margin-top:10px">Preview / Test / Bind to application</div></div></div></div></div></div>
@@ -137,19 +137,22 @@ table{width:100%;border-collapse:collapse;font-size:13.5px;margin:14px 0;display
 <h3>知识生成工作区建议（对齐当前实现的五大一级菜单）</h3><div class="arch">知识生成工作区（对应竞品的 Dataset Workspace）
 │
 ├─ 生成概览     接入 → 解析 → Chunk → 抽取 → Evidence → 衍生 → 裁决 → 发布
+├─ 生成配置     切片策略、抽取对象与场景模板；已入库文档需「重新生成知识」
 ├─ 文档导入     文件 / URL / 文本、解析策略、导入历史
 ├─ 连接器       File / Web / API / DB / SaaS 持续同步
 ├─ 外部知识     按外部系统浏览同步下来的条目
-├─ 生成任务     Pipeline 任务、阶段状态、失败重试
+├─ 知识台账     来源的责任人 / 有效期 / 适用范围
 ├─ 知识裁决     Evidence / Conflict / Adjudication / Version
 └─ 知识衍生     Rule / Calculation / Graph / AI 候选与记录
 
 知识检索（原「知识图谱 / 检索中心 / 评测中心」归入此处）
-├─ 搜索          知识卡片 / 断言 / 文档 / 实体 + Evidence
+├─ 智能检索      知识卡片 / 断言 / 文档 / 实体 + Evidence
 ├─ 检索测试      BM25 / Vector / RRF / Rerank / Trace
 ├─ 检索策略      Retrieval Profile
-├─ 检索链路追踪  Query Trace 时间线
+├─ 检索链路追踪  Query Trace 时间线（分页浏览 + 调用方 IP）
 ├─ 知识图谱      Entity / Relation / 路径分析 / Graph Recall
+├─ 回答反馈      真实问答的问题与修正建议
+└─ 检索评测      批量评测与回归
 └─ 检索评测      Dataset + metrics + regression
 
 接口服务（原「知识应用」）：服务 / API / MCP / SSE / 凭证 / 调用日志

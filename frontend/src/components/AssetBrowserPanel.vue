@@ -102,11 +102,19 @@
             <el-table-column v-if="type==='relation'" prop="targetName" label="客体" min-width="140" show-overflow-tooltip />
             <el-table-column v-if="type==='relation'" prop="status" label="状态" width="100" />
 
-            <el-table-column label="操作" width="120" fixed="right">
+            <el-table-column label="操作" width="150" fixed="right">
               <template #default="{ row }">
-                <span class="text-[12px] text-accent">
-                  {{ actionable(row) ? '查看详情' : '—' }}
-                </span>
+                <el-button
+                  link type="primary" size="small" :disabled="!actionable(row)"
+                  @click.stop="openAsset(row)">{{ actionLabel }}</el-button>
+                <el-button
+                  v-if="type==='relation'"
+                  link type="primary" size="small"
+                  @click.stop="openRelationGraph(row)">图谱</el-button>
+                <el-button
+                  v-if="type==='source'||type==='document'"
+                  link type="primary" size="small"
+                  @click.stop="openPreview(row)">预览</el-button>
               </template>
             </el-table-column>
           </el-table>
@@ -119,11 +127,25 @@
         </PanelState>
       </div>
     </article>
+
+    <!-- 来源 / 文档 / 关系不是知识对象（没有 Evidence、版本与审计），单独用只读抽屉查看全量字段。 -->
+    <AssetDetailDrawer
+      :visible="detailVisible" :type="detailKind" :row="detailRow"
+      @close="detailVisible=false" @open-graph="onDrawerGraph" @navigate="onDrawerNavigate" />
+
+    <!-- 预览走真实内容：来源取源文件，文档取自己的 Chunk 清单。 -->
+    <AssetPreviewDrawer
+      :visible="previewVisible" :knowledge-base-id="knowledgeBaseId" :type="previewKind" :row="previewRow"
+      @close="previewVisible=false" />
   </section>
 </template>
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import PanelState from './PanelState.vue'
+import AssetDetailDrawer from './AssetDetailDrawer.vue'
+import type { AssetDetailKind } from './AssetDetailDrawer.vue'
+import AssetPreviewDrawer from './AssetPreviewDrawer.vue'
+import type { GraphSeed } from '../shell'
 import { searchAssets, unwrap } from '../api/knowledge'
 import type { AssetPage, AssetRow } from '../types/knowledge'
 
@@ -133,7 +155,8 @@ const props = defineProps<{ knowledgeBaseId:number; type:AssetType }>()
 const emit = defineEmits<{
   'update:type':[type:AssetType]
   openDetail:[mode:'CARD'|'CLAIM', code:string]
-  openGraph:[code:string]
+  /** 第二个参数是附加查询条件：从关系进入图谱时用它把结果收敛到这条边。 */
+  openGraph:[code:string, seed?:GraphSeed]
   navigate:[key:string]
 }>()
 
@@ -156,6 +179,12 @@ const size = ref(20)
 const loading = ref(false)
 const error = ref('')
 const keyword = ref('')
+/** 来源 / 文档 / 关系的只读详情抽屉：直接透传列表行，不再为它单独拉一次接口。 */
+const detailVisible = ref(false)
+const detailRow = ref<AssetRow|null>(null)
+/** 内容预览抽屉：只服务来源与文档，预览时按当前行去取真实内容。 */
+const previewVisible = ref(false)
+const previewRow = ref<AssetRow|null>(null)
 let timer:number|undefined
 
 const currentLabel = computed(() => tabs.find(v => v.type === props.type)?.label || '资产')
@@ -189,27 +218,89 @@ function setSize(next:number) {
   load()
 }
 
+/** 有编码才有可跳转的目标：缺编码的行只能看，不能进详情或图谱。 */
 function actionable(row:AssetRow):boolean {
   if (props.type === 'card') return !!row.knowledgeCode
   if (props.type === 'assertion') return !!row.claimCode
   if (props.type === 'entity') return !!row.entityCode
-  return false
+  if (props.type === 'source') return !!row.sourceCode
+  if (props.type === 'document') return !!row.documentCode
+  return !!row.code
 }
 
+/** 操作列主按钮的语义：三类资产是「查看」，知识对象进详情抽屉，实体直接进图谱。 */
+const actionLabel = computed(() => {
+  if (props.type === 'card' || props.type === 'assertion') return '详情'
+  if (props.type === 'entity') return '图谱'
+  return '查看'
+})
+
+/** 抽屉只服务来源 / 文档 / 关系；其余类型不会打开它，这里的兜底值不会被渲染。 */
+const detailKind = computed<AssetDetailKind>(() => props.type === 'source' || props.type === 'document'
+  || props.type === 'relation' ? props.type : 'source')
+
 function onRowClick(row:AssetRow) {
-  if (props.type === 'card' && row.knowledgeCode) {
+  if (actionable(row)) openAsset(row)
+}
+
+/** 预览抽屉只用于来源 / 文档；其余类型不会打开它，兜底值不会被渲染。 */
+const previewKind = computed<'source'|'document'>(() => props.type === 'document' ? 'document' : 'source')
+
+function openAsset(row:AssetRow) {
+  if (props.type === 'card') {
     emit('openDetail', 'CARD', String(row.knowledgeCode))
     return
   }
-  if (props.type === 'assertion' && row.claimCode) {
+  if (props.type === 'assertion') {
     emit('openDetail', 'CLAIM', String(row.claimCode))
     return
   }
-  if (props.type === 'entity' && row.entityCode) {
-    emit('openGraph', String(row.entityCode))
+  if (props.type === 'entity') {
+    // 实体本身就是节点：以它为起点并聚焦它，进入图谱即看到它的邻域。
+    const code = String(row.entityCode)
+    emit('openGraph', code, { focus:code })
     return
   }
-  if (props.type === 'relation') emit('navigate', 'search.graph')
+  detailRow.value = row
+  detailVisible.value = true
+}
+
+function openPreview(row:AssetRow) {
+  previewRow.value = row
+  previewVisible.value = true
+}
+
+/**
+ * 关系在图谱里是一条边，而图谱只能按节点编码起跳（后端起点类型只有
+ * CARD / CLAIM / EVIDENCE / ENTITY / SOURCE），所以把这条关系拆成三个查询条件：
+ * 主体当起点、关系类型收敛边、客体作为聚焦节点——进去看到的就是这条关系本身，
+ * 而不是起点的整片邻域。主体缺失时退回客体；两端都没有就只进图谱页，不假装有定位。
+ */
+function openRelationGraph(row:AssetRow) {
+  const sourceCode = String(row.sourceCode || '')
+  const targetCode = String(row.targetCode || '')
+  const start = sourceCode || targetCode
+  if (!start) {
+    emit('navigate', 'search.graph')
+    return
+  }
+  const relationType = String(row.relationType || '')
+  emit('openGraph', start, {
+    relationType: relationType || undefined,
+    focus: sourceCode ? (targetCode || sourceCode) : targetCode,
+  })
+}
+
+/** 抽屉里的跳转都顺手关掉抽屉：目标页面已经换了上下文，留着它只会盖住下一页。 */
+function onDrawerGraph(code:string) {
+  detailVisible.value = false
+  // 抽屉里点的是「某个实体在图谱中查看」，不按关系类型收敛——要看的是这个实体的全部关系。
+  emit('openGraph', code, { focus:code })
+}
+
+function onDrawerNavigate(key:string) {
+  detailVisible.value = false
+  emit('navigate', key)
 }
 
 /** 分页与检索都在服务端完成：拿回的就是当前页数据与真实命中总数。 */

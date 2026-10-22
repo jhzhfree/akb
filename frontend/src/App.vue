@@ -95,6 +95,7 @@
     :result="result" :asking="asking"
     :history="queryHistory" :history-loading="historyLoading"
     :graph-code="graphCode" @update:graph-code="graphCode=$event"
+    :graph-relation-type="graphRelationType" :graph-focus-node="graphFocusNode"
     :answer-format="answerFormat" @update:answer-format="answerFormat=$event"
     :use-memory="useMemory" @update:use-memory="useMemory=$event"
     @select="selectKey" @ask="ask" @refresh-history="loadQueryHistory"
@@ -187,7 +188,7 @@ import SearchPage from './components/SearchPage.vue'
 import IntegrationPage from './components/IntegrationPage.vue'
 import SystemPage from './components/SystemPage.vue'
 import { KOS_SHELL } from './shell'
-import type { KosShell, RegenerationProgress } from './shell'
+import type { GraphSeed, KosShell, RegenerationProgress } from './shell'
 import {
   createKnowledgeBase, updateKnowledgeBase, getKnowledgeBases, getOverview, getSources, getDocuments,
   getPendingReviews, getOpenConflicts, getCapabilities, getAssessments,
@@ -256,7 +257,9 @@ const detailCode=ref(''), knowledgeDetail=ref<KnowledgeObjectDetail|null>(null)
 const capabilities=ref<Capabilities|null>(null),
     q=ref('知识为什么需要裁决？'),
     result=ref<QueryResult|null>(null),
-    graphCode=ref('')
+    graphCode=ref(''),
+    /** 图谱的附加查询条件：关系类型收敛边、聚焦节点指定看哪个节点，随 openGraph 一起下发。 */
+    graphRelationType=ref(''), graphFocusNode=ref('')
 /** 问答的返回格式：默认 / markdown / 纯文本 / html，随提问一起提交。
     默认取 markdown（服务端规范化后的正文 + 引用原文章节），与嵌入组件 public/embed/kos-chat.js
     的默认 answerFormat 保持一致 —— 两边取不同格式时，同一个问题会拿到两份不同的文本，
@@ -997,8 +1000,15 @@ try{await adjudicateConflict(id,decision,comment);
 ElMessage.success('冲突裁决已提交');
 selectedConflictId.value=null;conflictDetail.value=null;
 await Promise.all([loadReview(),loadOverview()])}catch(e){err(e)}}
-/** 打开图谱：V2.1 基线变更②——知识图谱归入知识检索，起点编码写入 graphCode 后由图谱面板加载邻域。 */
-function openGraph(code:string){graphCode.value=code;
+/**
+ * 打开图谱：V2.1 基线变更②——知识图谱归入知识检索，起点编码写入 graphCode 后由图谱面板加载邻域。
+ * 带 seed 时一并下发关系类型与聚焦节点：从某条关系进来，看到的就是这条关系本身，
+ * 而不是起点的整片邻域。只传 code 的调用（卡片 / 断言的「查看图谱」）行为不变。
+ */
+function openGraph(code:string,seed?:GraphSeed){
+graphCode.value=code
+graphRelationType.value=seed?.relationType||''
+graphFocusNode.value=seed?.focus||''
 active.value='search.graph'}
 /** 用户组列表：知识库可见范围选择「用户组」时需要，非管理员也加载（创建者可选自己所在组）。 */
 async function loadGroups(){
@@ -1085,7 +1095,8 @@ auditPage.value=1;changePage.value=1;
 void loadDashboard();
 void loadTasks();
 result.value=null;
-graphCode.value='';
+// 换库后旧库的图谱起点连同附加查询条件一起失效，不清会带着上一个库的条件去查新库。
+graphCode.value='';graphRelationType.value='';graphFocusNode.value='';
 runDetail.value=null;
 selectedRunId.value=null;
 resetPreview();

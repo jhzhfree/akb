@@ -63,7 +63,7 @@ footer{padding:28px;text-align:center;border-top:1px solid var(--line);color:#7a
 </ol></div>
 
 <section id="d1"><h2>1. 设计基线与总体原则</h2>
-<div class="note"><b>知识生成主页面交互约束：</b>左侧不再出现“文档导入、连接器、生成任务、知识裁决、知识衍生”等二级菜单。主页面顶部使用四个任务入口卡片：<b>导入文档 / 连接数据源 / 知识裁决 / 知识衍生</b>；下方使用 <b>生成概览 / 文档导入 / 连接器 / 生成任务 / 知识裁决 / 知识衍生</b> Tab 组织完整工作区。</div>
+<div class="note"><b>知识生成主页面交互约束：</b>左侧不再出现“文档导入、连接器、生成配置、知识台账、知识裁决、知识衍生”等二级菜单。主页面顶部使用四个任务入口卡片：<b>导入文档 / 连接数据源 / 知识裁决 / 知识衍生</b>；下方使用 <b>生成概览 / 生成配置 / 文档导入 / 连接器 / 外部知识 / 知识台账 / 知识裁决 / 知识衍生</b> Tab 组织完整工作区。</div>
 
 <p class="lead">详细设计承接 PRD V2.1，将产品从“功能模块集合”重构为围绕知识资产的五个用户任务域：看知识、建知识、找知识、接知识、管平台。</p>
 <div class="menu5"><div><b>知识概览</b><span class="small">看知识</span></div><div><b>知识生成</b><span class="small">建知识</span></div><div><b>知识检索</b><span class="small">找知识</span></div><div><b>接口服务</b><span class="small">接知识</span></div><div><b>系统配置</b><span class="small">管平台</span></div></div>
@@ -101,14 +101,14 @@ footer{padding:28px;text-align:center;border-top:1px solid var(--line);color:#7a
 <tr><td>用户区</td><td>头像（底色即角色身份色）+ 姓名 + 退出；角色名与职责说明收在侧栏底部用户面板，不占顶栏。</td></tr>
 <tr><td>主题切换</td><td>顶栏右侧切换深色 / 浅色；选择写入本地存储并在刷新后保持；未选择时跟随系统偏好。</td></tr>
 </tbody></table>
-<div class="note"><b>已移除：</b>顶栏不再放“任务”入口与“服务已连接”状态点。异步任务统一在“知识生成 · 生成任务”页内查看与跟踪（列表、阶段、重试），避免顶栏红点与页面内任务列表两处维护同一状态；服务可用性由页面内的空态、错误提示与 Trace 表达。</div>
+<div class="note"><b>已移除：</b>顶栏不再放“任务”入口与“服务已连接”状态点。异步任务在“知识生成 · 生成配置”页内跟踪，平台级任务统一在“系统配置 · 任务与告警”查看（列表、阶段、重试），避免顶栏红点与页面内任务列表两处维护同一状态；服务可用性由页面内的空态、错误提示与 Trace 表达。</div>
 <h3 id="d2view">2.3 用户视图 / 管理视图</h3>
 <p>视图是角色之上的一层“信息密度开关”：角色决定能不能操作，视图决定看到多少入口。实现上由外壳统一计算当前视图（<code>adminView = 管理员角色 && 视图模式='admin'</code>），页面内 Tab 与区块按它裁剪，页面自身不重复判定角色。</p>
 <table><thead><tr><th>模块</th><th>用户视图</th><th>管理视图增量</th></tr></thead><tbody>
-<tr><td>知识概览</td><td>首页 / 工作台 / 资产浏览 / 版本 / 质量</td><td>—</td></tr>
-<tr><td>知识生成</td><td>文档导入（默认进入）/ 知识裁决 / 知识衍生</td><td>生成概览、连接器、外部知识、生成任务</td></tr>
-<tr><td>知识检索</td><td>搜索 / 检索测试 / 检索策略 / 知识图谱</td><td>检索链路追踪、检索评测</td></tr>
-<tr><td>接口服务</td><td>服务（默认进入）</td><td>接口概览、API、MCP、SSE、凭证、调用日志</td></tr>
+<tr><td>知识概览</td><td>知识仪表盘 / 知识库工作台 / 知识资产 / 知识版本 / 知识质量</td><td>—</td></tr>
+<tr><td>知识生成</td><td>文档导入（默认进入）/ 知识裁决 / 知识衍生</td><td>生成概览、生成配置、连接器、外部知识、知识台账</td></tr>
+<tr><td>知识检索</td><td>智能检索 / 检索测试 / 检索策略 / 知识图谱</td><td>检索链路追踪、回答反馈、检索评测</td></tr>
+<tr><td>接口服务</td><td>服务（默认进入）</td><td>接口概览、API、MCP、SSE、事件总线、凭证、嵌入组件、调用日志</td></tr>
 <tr><td>系统配置</td><td>按权限可见的配置页</td><td>用户与组织等管理员入口</td></tr>
 </tbody></table>
 <div class="note"><b>面板内区块也要跟着视图走：</b>接口服务的“服务”面板内「服务 / 凭证」两个区块切换中，「凭证」只在管理视图渲染，避免用户视图下通过面板内部按钮绕回凭证管理。</div>
@@ -180,9 +180,10 @@ footer{padding:28px;text-align:center;border-top:1px solid var(--line);color:#7a
 </section>
 
 <section id="d3"><h2>3. 知识概览详细设计</h2>
-<p>路由建议：<code>/knowledge/workbench?spaceId=...</code>。这是登录后的默认业务首页。页面顶部 Tab：<b>首页 / 工作台 / 资产浏览 / 版本 / 质量</b>（横向切换，不是左侧二级菜单）。两种视图下 Tab 一致。</p>
-<div class="screen"><div class="bar">知识工作台</div><div class="body">
-<div class="flow">[空间名称]  知识健康度 92%                         [创建知识] [知识搜索]
+<p>路由建议：<code>/knowledge/workbench?spaceId=...</code>。这是登录后的默认业务落地页。页面顶部 Tab：<b>知识仪表盘 / 知识库工作台 / 知识资产 / 知识版本 / 知识质量</b>（横向切换，不是左侧二级菜单）。两种视图下 Tab 一致。</p>
+<div class="note ok"><b>知识仪表盘不显示知识库上下文条：</b>它是跨知识库视角——页面本身就把当前账号可见的知识库全列了出来，顶部再挂一个“当前空间”既重复，又会让人以为下面的统计只是这一个库的。其余 Tab 照常显示上下文条。</div>
+<div class="screen"><div class="bar">知识库工作台</div><div class="body">
+<div class="flow">[空间名称]  知识健康度 92%                         [创建知识] [智能检索]
 
 来源 12   文档 8,426   卡片 3,218   断言 12,805   实体 6,530   关系 18,203
 
@@ -196,7 +197,7 @@ footer{padding:28px;text-align:center;border-top:1px solid var(--line);color:#7a
 最近更新 / 热门知识                 图谱概览 / 检索质量
 ...</div></div></div>
 <h3>3.1 KPI 卡</h3>
-<p>来源、文档、卡片、断言、实体、关系均可点击。点击后不增加一级菜单，而是进入工作台的“资产浏览”二级页面，例如 <code>/knowledge/assets?type=assertion</code>。</p>
+<p>来源、文档、卡片、断言、实体、关系均可点击。点击后不增加一级菜单，而是进入“知识资产”二级页面，例如 <code>/knowledge/assets?type=assertion</code>。</p>
 <h3>3.2 生命周期组件</h3>
 <table><thead><tr><th>阶段</th><th>统计对象</th><th>异常状态</th><th>点击目标</th></tr></thead><tbody>
 <tr><td>接入</td><td>Source/Document</td><td>同步失败</td><td>来源/文档资产</td></tr>
@@ -211,8 +212,8 @@ footer{padding:28px;text-align:center;border-top:1px solid var(--line);color:#7a
 </section>
 
 <section id="d4"><h2>4. 知识生成详细设计</h2>
-<p>路由：<code>/knowledge/generate</code>。页面顶部 Tab：<b>生成概览 / 文档导入 / 连接器 / 外部知识 / 生成任务 / 知识裁决 / 知识衍生</b>。</p>
-<div class="note ok"><b>视图裁剪：</b>用户视图只渲染 <b>文档导入 / 知识裁决 / 知识衍生</b>，且默认落在「文档导入」；生成概览、连接器、生成任务仅管理视图可见。过滤后剩下的第一个可见 Tab 即用户视图的默认落点，不需要额外配置默认页。</div>
+<p>路由：<code>/knowledge/generate</code>。页面顶部 Tab：<b>生成概览 / 生成配置 / 文档导入 / 连接器 / 外部知识 / 知识台账 / 知识裁决 / 知识衍生</b>。</p>
+<div class="note ok"><b>视图裁剪：</b>用户视图只渲染 <b>文档导入 / 知识裁决 / 知识衍生</b>，且默认落在「文档导入」；生成概览、生成配置、连接器、外部知识、知识台账仅管理视图可见。过滤后剩下的第一个可见 Tab 即用户视图的默认落点，不需要额外配置默认页。</div>
 <h3>4.1 文档导入向导</h3>
 <div class="flow">Step 1 来源 → Step 2 文件/URL/文本 → Step 3 知识属性 → Step 4 处理策略 → Step 5 执行与结果</div>
 <table><thead><tr><th>步骤</th><th>字段</th><th>规则</th></tr></thead><tbody>
@@ -227,7 +228,7 @@ footer{padding:28px;text-align:center;border-top:1px solid var(--line);color:#7a
 <h3>4.3 外部知识</h3>
 <p>按外部系统的类型与属性浏览连接器同步下来的原始条目，用于核对「同步进来了什么」。列表字段：条目、来源系统、类型、同步时间、状态（已同步 / 待确认 / 失败）。属于连接器的伴生视图，随连接器一起只对管理视图开放。</p>
 <h3>4.4 解析/抽取结果</h3>
-<p>用户点击生成任务进入任务详情，展示 Document → Parse → Chunk → Extraction → Evidence → Candidate Knowledge。专业用户可打开“原文/结构/Chunk”三栏工作台。</p>
+<p>用户点击任务进入任务详情，展示 Document → Parse → Chunk → Extraction → Evidence → Candidate Knowledge。专业用户可打开“原文/结构/Chunk”三栏工作台。</p>
 <h3>4.5 知识裁决</h3>
 <div class="screen"><div class="bar">知识裁决</div><div class="body"><div class="flow">左：冲突/待审核列表
 中：Assertion A                 Assertion B
@@ -243,10 +244,10 @@ footer{padding:28px;text-align:center;border-top:1px solid var(--line);color:#7a
 </section>
 
 <section id="d5"><h2>5. 知识检索详细设计</h2>
-<p>路由：<code>/knowledge/search</code>，顶部 Tab：<b>搜索（智能问答）｜检索测试｜检索策略｜检索链路追踪（Query Trace）｜知识图谱｜检索评测（Benchmark）</b>。「检索测试」与「检索链路追踪」属于调试类页面：配置区 + 结果区 + Trace 抽屉。</p>
-<div class="note ok"><b>视图裁剪：</b>用户视图只渲染 <b>搜索 / 检索测试 / 检索策略 / 知识图谱</b>；<b>检索链路追踪</b>与<b>检索评测</b>属于检索质量的调试与测评入口，仅管理视图可见——普通成员不需要用它们完成“找知识”。</div>
-<div class="note"><b>菜单去重：</b>搜索（智能问答）页内不再重复一排与顶部 Tab 相同的导航菜单。检索模块的所有入口统一由页面顶部 Tab 承载；单次问答的链路详情从结果卡片的「查看完整链路」进入 Trace 抽屉，问答历史列同样可点开完整链路。</div>
-<h3>5.1 搜索（智能问答）</h3>
+<p>路由：<code>/knowledge/search</code>，顶部 Tab：<b>智能检索｜检索测试｜检索策略｜检索链路追踪（Query Trace）｜知识图谱｜回答反馈｜检索评测（Benchmark）</b>。「检索测试」与「检索链路追踪」属于调试类页面：配置区 + 结果区 + Trace 抽屉。</p>
+<div class="note ok"><b>视图裁剪：</b>用户视图只渲染 <b>智能检索 / 检索测试 / 检索策略 / 知识图谱</b>；<b>检索链路追踪</b>、<b>回答反馈</b>与<b>检索评测</b>属于检索质量的调试与测评入口，仅管理视图可见——普通成员不需要用它们完成“找知识”。</div>
+<div class="note"><b>菜单去重：</b>智能检索页内不再重复一排与顶部 Tab 相同的导航菜单。检索模块的所有入口统一由页面顶部 Tab 承载；单次问答的链路详情从结果卡片的「查看完整链路」进入 Trace 抽屉，问答历史列同样可点开完整链路。</div>
+<h3>5.1 智能检索</h3>
 <div class="flow">[自然语言或关键词................................] [搜索]
 过滤：来源 | 知识类型 | 标签 | 状态 | 时间 | 对象类型
 
@@ -264,6 +265,10 @@ footer{padding:28px;text-align:center;border-top:1px solid var(--line);color:#7a
 <p>Profile 采用“基础设置 + 高级设置”。基础设置仅包含知识范围、搜索模式、TopK；高级设置包含权重、阈值、RRF K、Reranker、Graph Expansion、Context Window。</p>
 <h3>5.4 检索评测（Benchmark）</h3>
 <p>数据集管理、运行历史、版本对比。至少显示 Hit@1/3/5、Recall@K、Citation Accuracy、Latency；P1 增加 MRR/NDCG/Faithfulness。</p>
+<h3>5.5 检索链路追踪（Query Trace）</h3>
+<p>以 traceId 为单位查看一次问答的完整链路：查询理解、多路召回、融合排序、重排、上下文装配与生成，以及各阶段耗时、模型与索引版本。列表按时间倒序<b>分页</b>（10 / 20 / 50 / 100 条每页，带总数与页码），避免长列表一次拉全量；排序在时间戳之外补 <code>id DESC</code>，否则同一秒的多条记录翻页会重复或漏行。每行展示<b>调用方 IP</b>（按 <code>X-Forwarded-For</code>、<code>X-Real-IP</code> 解析，取不到记为空不影响其它列），便于把异常调用定位到具体来源。从智能检索结果卡片与问答历史的「查看完整链路」可直达对应链路。</p>
+<h3>5.6 回答反馈</h3>
+<p>收集真实问答中暴露的问题与修正建议（答错、引用不准、缺失知识等）。反馈<b>不直接改写知识</b>：经人工确认后才进入知识治理流程，避免未核实的反馈被写进知识库。每条反馈关联到当时的 trace，可回溯检索与生成过程。</p>
 </section>
 
 
@@ -360,12 +365,24 @@ data: {"code":"...","message":"..."}</div>
 <h3>6.7 凭证</h3>
 <p>凭证字段：credentialId、name、type(API_KEY/OAUTH/JWT)、serviceIds、scopes、ipAllowlist、rateLimit、expireAt、status。Secret 仅创建时显示一次；列表只显示尾号。</p>
 <h3>6.8 调用日志</h3>
-<p>字段：time、service、protocol、client、requestId、traceId、status、latency、retrievalCount、tokenUsage、errorCode，以及<b>传入参数（requestParams）与返回数据（responseData）</b>。点击 traceId 跳转 Query Trace，形成“外部调用 → 检索 → Evidence → Answer”的完整追溯。</p>
+<p>字段：time、service、protocol、client、requestId、traceId、status、latency、retrievalCount、tokenUsage、errorCode、<b>callerIp（调用方 IP）</b>，以及<b>传入参数（requestParams）与返回数据（responseData）</b>。点击 traceId 跳转 Query Trace，形成“外部调用 → 检索 → Evidence → Answer”的完整追溯。调用方 IP 按 <code>X-Forwarded-For</code> → <code>X-Real-IP</code> → 直连地址的顺序解析，取不到记为空，不影响其它列。</p>
 <div class="note ok"><b>明文入参与返回（对齐当前实现）：</b>调用日志在列表与详情中直接展示传入参数与返回数据的<b>明文内容</b>（REST 的请求体与响应体、MCP 的工具入参与结果、SSE 的增量与完成事件），便于调用方自查；展示前按系统配置的脱敏规则处理敏感字段。REST / MCP / SSE 三种协议的调用统一落库，协议的入参与返回由请求体缓存与响应包装统一采集，避免不同协议各写一套。</div>
+<h3>6.9 外部主体与多知识库授权</h3>
+<p>凭证背后是<b>调用主体（Principal）</b>，授权挂在主体而不是单个 Key 上：一个主体可持有多个 API Key，也可被授予多个知识库。</p>
+<table><thead><tr><th>项</th><th>设计</th></tr></thead><tbody>
+<tr><td>主体</td><td>应用主体（<code>APPLICATION</code>）与委托员工身份（<code>USER</code>，显式绑定 IdP subject）；存量 API Key 升级时自动转成独立主体，其原单库绑定迁移为等价授权</td></tr>
+<tr><td>授权</td><td>主体 → 知识库的授权记录，含 status、expiresAt、reason；一个主体可同时持有多个知识库的授权</td></tr>
+<tr><td>标签上限</td><td>授权上的 <code>permission_tags</code>：<code>NULL</code> 继承该主体 API Key 的策略，空数组表示仅可访问公开资料</td></tr>
+<tr><td>审计</td><td>授权的授予 / 变更 / 撤销与凭证换绑均落审计表；换绑凭证不删除仍持有共享授权的主体</td></tr>
+</tbody></table>
+<h3>6.10 事件总线</h3>
+<p>平台关键事件的持久流水：知识库、摄入、抽取、检索、治理与权限动作都会落一条带事件号的记录，SSE 订阅推送的就是同一份数据。断线后可按事件号接着看，不必重放整条流；页面提供实时订阅开关。</p>
+<h3>6.11 嵌入组件</h3>
+<p>选定知识库与外观后生成一段可粘贴的代码，业务页面引入即得一个问答组件，无需自行对接 API。</p>
 </section>
 
 <section id="d7"><h2>7. 系统配置详细设计</h2>
-<p>页面顶部 Tab：<b>配置总览 / 模型配置 / 用户与组织 / 角色与权限 / 知识 Schema / 存储与索引 / 任务与告警 / 审计日志 / 知识空间</b>。低频平台配置集中在此，收在侧栏底部的设置图标进入，不占用业务导航；「用户与组织」仅管理视图可见。</p>
+<p>页面顶部 Tab：<b>配置总览 / 模型配置 / 用户与组织 / 角色与权限 / 知识 Schema / 存储与索引 / 任务与告警 / 审计日志 / 知识空间 / 角色菜单</b>。低频平台配置集中在此，收在侧栏底部的设置图标进入，不占用业务导航；「用户与组织」仅管理视图可见。</p>
 <table><thead><tr><th>模块</th><th>页面</th><th>关键设计</th></tr></thead><tbody>
 <tr><td>配置总览</td><td>平台健康 / 版本 / 容量 / 最近变更</td><td>各配置页的统一入口与平台状态一览</td></tr>
 <tr><td>模型配置</td><td>LLM / Embedding / Reranker / OCR</td><td>Provider、Endpoint、Model、Key、Timeout、默认模型、连通性测试</td></tr>
@@ -376,6 +393,7 @@ data: {"code":"...","message":"..."}</div>
 <tr><td>任务告警</td><td>任务 / DLQ / 告警规则</td><td>重试、人工重跑、Trace</td></tr>
 <tr><td>审计</td><td>操作 / 权限 / 裁决 / 集成调用</td><td>不可修改，按 traceId/objectId 检索</td></tr>
 <tr><td>知识空间</td><td>空间列表 / 成员 / 默认策略</td><td>空间是全局上下文，不在业务导航中重复出现</td></tr>
+<tr><td>角色菜单</td><td>角色 × 功能入口</td><td>按角色勾选可见入口，勾选即得该入口与其所需权限码</td></tr>
 </tbody></table>
 </section>
 
@@ -395,8 +413,8 @@ Tab：概览 | 关联 | Evidence | 版本 | 权限 | 审计</div>
 
 <section id="d9"><h2>9. 页面跳转与任务闭环</h2>
 <table><thead><tr><th>起点</th><th>动作</th><th>终点</th></tr></thead><tbody>
-<tr><td>工作台“冲突 21”</td><td>点击</td><td>知识生成 / 裁决，filter=CONFLICTED</td></tr>
-<tr><td>工作台“文档失败”</td><td>点击</td><td>生成任务详情，filter=FAILED</td></tr>
+<tr><td>知识库工作台“冲突 21”</td><td>点击</td><td>知识生成 / 裁决，filter=CONFLICTED</td></tr>
+<tr><td>知识库工作台“文档失败”</td><td>点击</td><td>任务详情，filter=FAILED</td></tr>
 <tr><td>搜索结果 Evidence</td><td>点击</td><td>Document 详情并定位原文</td></tr>
 <tr><td>集成调用 traceId</td><td>点击</td><td>知识检索 / Query Trace</td></tr>
 <tr><td>Derived Assertion</td><td>查看依据</td><td>Lineage 展示基础 Assertion 与 graphPath</td></tr>
@@ -441,7 +459,7 @@ evaluation.completed</div>
 
 <section id="d12"><h2>12. 异常、空态与审计</h2>
 <table><thead><tr><th>场景</th><th>产品行为</th></tr></thead><tbody>
-<tr><td>空间无知识</td><td>工作台显示 onboarding：导入文档 / 创建连接器，而不是全屏 0 指标。</td></tr>
+<tr><td>空间无知识</td><td>知识库工作台显示 onboarding：导入文档 / 创建连接器，而不是全屏 0 指标。</td></tr>
 <tr><td>解析失败</td><td>显示失败 Stage、错误摘要、重试；高级模式展示技术日志。</td></tr>
 <tr><td>搜索无结果</td><td>给出过滤条件提示、相近 Query、Knowledge Gap 反馈入口。</td></tr>
 <tr><td>证据不足</td><td>Answer 可返回“证据不足”，并展示已检索到的相关知识。</td></tr>

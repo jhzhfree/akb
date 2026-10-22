@@ -28,6 +28,7 @@
   <GraphPanel
     v-else-if="active==='search.graph'"
     :knowledge-base-id="knowledgeBaseId" :code="graphCode"
+    :relation-type="graphRelationType" :focus-node="graphFocusNode"
     @update:code="$emit('update:graphCode',$event)" />
 
   <QueryFeedbackPanel v-else-if="active==='search.feedback'" :knowledge-base-id="knowledgeBaseId" />
@@ -75,6 +76,9 @@ const props = defineProps<{
   history: QueryHistoryItem[]
   historyLoading: boolean
   graphCode: string
+  /** 图谱附加查询条件：从某条关系进来时带的关系类型与聚焦节点，透传给图谱面板。 */
+  graphRelationType?: string
+  graphFocusNode?: string
   /** 答案返回格式：跟随问答面板的选择，由 ask 带上一起提交。 */
   answerFormat: AnswerFormat
   /** 是否并入当前登录用户的长期记忆：与问答面板共用一个开关，两处勾选状态一致。 */

@@ -32,6 +32,18 @@ export interface RegenerationProgress {
   error:string
 }
 
+/**
+ * 图谱的额外查询条件：从某条关系进入图谱时带上。
+ * 关系是边而不是节点，图谱页只能按节点编码起跳，所以要把「哪条关系」拆成
+ * 关系类型与另一端的节点一起传过去，结果才收敛到刚才点的那条边上。
+ */
+export interface GraphSeed {
+  /** 关系类型过滤：只保留该类型的边，比如从「位于」这条关系进来就只看这类边。 */
+  relationType?: string
+  /** 加载完成后聚焦的节点，缺省聚焦起点自身。 */
+  focus?: string
+}
+
 export interface KosShell {
   /** 切换视图：接受 IA 视图 key，旧 key 由 navigation 归一化。 */
   navigate: (key: string) => void
@@ -45,8 +57,12 @@ export interface KosShell {
   tabs: (sectionKey: string) => NavLeaf[]
   /** 工作台 KPI 下钻：按对象类型进入资产浏览（设计 §3.1）。 */
   openAssets: (type: AssetType) => void
-  /** 打开知识图谱并定位到指定实体。 */
-  openGraph: (code: string) => void
+  /**
+   * 打开知识图谱并检索：起点编码写入 graphCode 后由图谱面板加载邻域。
+   * 额外查询条件用于从某条关系进入时把结果收敛到它——否则跳过去看到的是整片邻域，
+   * 还得自己再筛一遍才知道刚才点的是哪条边。
+   */
+  openGraph: (code: string, seed?: GraphSeed) => void
   /** 任务中心 / 生成页点击任务：选中该次运行并进入文档中心。 */
   openRun: (runId: number) => void
   /** 打开 检索链路追踪 抽屉。 */

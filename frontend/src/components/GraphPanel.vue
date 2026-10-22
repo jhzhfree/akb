@@ -38,10 +38,11 @@
           </select>
         </label>
         <div class="flex items-end gap-2">
-          <button class="kb-btn-primary" :disabled="loading" @click="loadGraph">查询邻域</button>
+          <button class="kb-btn-primary" :disabled="loading" @click="loadGraph()">查询邻域</button>
           <button class="kb-btn-outline" @click="focused=''">清除聚焦</button>
         </div>
       </div>
+      <p v-if="seedHint" class="px-4 pb-2 text-[12px] text-ink-500">当前查询条件：{{ seedHint }}</p>
       <div class="flex flex-wrap gap-2 px-4 pb-3">
         <span class="muted mr-1">常用起点：</span>
         <button
@@ -159,12 +160,21 @@ import type { GraphEdge, GraphNode, GraphResult, KnowledgeCard } from '../types'
 import { objectTypeLabel, statusLabel } from '../types'
 import GraphCanvas from './GraphCanvas.vue'
 
-const props = defineProps<{ knowledgeBaseId?: number|null; code?: string }>()
+const props = defineProps<{
+  knowledgeBaseId?: number|null
+  code?: string
+  /** 外部指定的关系类型：从某条关系进来时，结果只保留这类边。 */
+  relationType?: string
+  /** 加载完成后聚焦的节点：关系场景传另一端，让这条边的两端都进视野。 */
+  focusNode?: string
+}>()
 const emit = defineEmits<{ 'update:code':[value:string] }>()
 
 const startCode = ref('')
 const depth = ref(2)
 const relationFilter = ref('')
+/** 已应用到当前结果的关系类型：判断外部条件是否真的变了，避免同一条关系重复查询。 */
+const relationFilterApplied = ref('')
 const limit = ref(80)
 const loading = ref(false)
 const graph = ref<GraphResult|null>(null)
@@ -203,6 +213,15 @@ const nodeByCode = computed(() => {
 })
 
 const focusedNode = computed(() => nodeByCode.value.get(focused.value) || null)
+
+/** 把当前生效的查询条件摊开显示：从资产页跳进来时，用户得能确认带的确实是那一条。 */
+const seedHint = computed(() => {
+  const parts:string[] = []
+  if (startCode.value) parts.push(`起点 ${startCode.value}`)
+  if (relationFilter.value) parts.push(`关系类型 ${relationFilter.value}`)
+  if (focused.value) parts.push(`聚焦 ${focused.value}`)
+  return parts.join(' · ')
+})
 
 const neighborSummary = computed(() => {
   if (!focused.value) return ''
@@ -252,12 +271,28 @@ const emptyHint = computed(() => {
   return '该起点暂无可展示的关联关系，可尝试增大跳数。'
 })
 
-async function loadGraph() {
+/**
+ * @param seedFocus 外部指定的聚焦节点：从关系进来时传另一端，加载完直接选中它。
+ *                  手动点「查询邻域」不传，保留重新检索时清空聚焦的原有行为。
+ */
+async function loadGraph(seedFocus?:string) {
   if (!props.knowledgeBaseId || !startCode.value.trim()) return
   loading.value = true
-  focused.value = ''
+  focused.value = seedFocus || ''
   try {
     graph.value = unwrap(await getGraph(props.knowledgeBaseId, startCode.value.trim(), depth.value, limit.value), null)
+    /**
+     * 外部带来的关系类型在当前结果里不存在时退回不过滤：图源可能是 neo4j，
+     * 边类型的命名未必与 t_relation.relation_type 一致，硬筛会把图筛成空白，
+     * 那比多看几条边糟糕得多。
+     */
+    if (relationFilter.value && !relationOptions.value.includes(relationFilter.value)) relationFilter.value = ''
+    relationFilterApplied.value = relationFilter.value
+    /**
+     * 聚焦的节点不在结果里时（图源换了，节点编码未必一致）退回聚焦起点：
+     * 聚焦落空的话，跳转条件看起来就像没带进来。
+     */
+    if (focused.value && !nodeByCode.value.has(focused.value)) focused.value = startCode.value
     canvasKey.value++
   } catch {
     graph.value = { available:false, nodes:[], edges:[] }
@@ -273,11 +308,21 @@ function setStartCode(value: string) {
 }
 
 /** 外部起点编码变化（卡片/断言列表的「查看图谱」入口）时自动加载邻域。 */
-watch(() => props.code, (value) => {
-  const code = String(value || '').trim()
-  if (!code || code === startCode.value) return
+/**
+ * 外部起点（含附加查询条件）变化：起点、关系类型与聚焦节点一起生效。
+ * 关系类型先落再查，否则查完再筛会先把整片邻域渲染出来闪一下。
+ */
+watch(() => [props.code, props.relationType, props.focusNode], ([rawCode, rawRelation, rawFocus]) => {
+  const code = String(rawCode || '').trim()
+  if (!code) return
+  relationFilter.value = String(rawRelation || '')
+  const focus = String(rawFocus || '')
+  // 起点没变也要重来：换的是关系类型或聚焦节点，结果集本来就不一样。
+  const same = code === startCode.value && relationFilter.value === relationFilterApplied.value
+    && focus === focused.value
+  if (same) return
   startCode.value = code
-  if (props.knowledgeBaseId) loadGraph()
+  if (props.knowledgeBaseId) loadGraph(focus)
 }, { immediate:true })
 
 async function loadCenterNodes() {
@@ -296,10 +341,19 @@ async function loadCenterNodes() {
   }
 }
 
+/**
+ * 换知识库时清空重来，但起点、关系类型与聚焦节点一律回到外部传入的值：
+ * 这个 watch 在起点 watch 之后执行且是 immediate 的，首次挂载时外部条件刚被写好，
+ * 这里要是清成空，就等于把资产页跳进来的对象/关系条件丢了——
+ * 表现正是「图谱页开了，但起点空、也没聚焦」。换库时 App 已把这三个值清掉，
+ * 所以「保留外部值」同时也覆盖了换库场景。
+ */
 watch(() => props.knowledgeBaseId, () => {
   graph.value = null
-  focused.value = ''
-  startCode.value = ''
+  startCode.value = String(props.code || '')
+  relationFilter.value = String(props.relationType || '')
+  relationFilterApplied.value = relationFilter.value
+  focused.value = String(props.focusNode || '')
   loadCenterNodes()
 }, { immediate:true })
 
