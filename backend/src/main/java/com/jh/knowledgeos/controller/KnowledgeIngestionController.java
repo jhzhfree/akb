@@ -22,6 +22,7 @@ import com.jh.knowledgeos.service.KnowledgeBaseService;
 import com.jh.knowledgeos.service.KnowledgeBasePurgeService;
 import com.jh.knowledgeos.service.IngestionObservabilityService;
 import com.jh.knowledgeos.service.KnowledgeLifecycleService;
+import com.jh.knowledgeos.service.DocumentIngestionService;
 import com.jh.knowledgeos.service.KnowledgeService;
 import com.jh.knowledgeos.service.IndexOutboxService;
 import com.jh.knowledgeos.service.IndexSchemaService;
@@ -29,6 +30,7 @@ import com.jh.knowledgeos.service.AiClient;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.web.bind.annotation.CrossOrigin;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -65,8 +67,11 @@ public class KnowledgeIngestionController {
     private final KnowledgeBasePurgeService purgeService;
     private final BatchIngestionService batchIngestionService;
 
+    private final DocumentIngestionService ingestionService;
+
     public KnowledgeIngestionController(
         KnowledgeService service,
+        DocumentIngestionService ingestionService,
         AclContextResolver aclContextResolver,
         AiClient aiClient,
         KnowledgeBaseService knowledgeBaseService,
@@ -74,6 +79,7 @@ public class KnowledgeIngestionController {
         KnowledgeBasePurgeService purgeService,
         BatchIngestionService batchIngestionService) {
         this.service = service;
+        this.ingestionService = ingestionService;
         this.aclContextResolver = aclContextResolver;
         this.aiClient = aiClient;
         this.knowledgeBaseService = knowledgeBaseService;
@@ -125,6 +131,25 @@ public class KnowledgeIngestionController {
     public ApiResponse<Object> updateBase(@PathVariable Long id, @Valid @RequestBody KnowledgeBaseRequest request) {
         return ApiResponse.ok(knowledgeBaseService.update(id, request.getName(), request.getDescription(), request.getVisibility(),
             request.getOwnerGroupId(), request.getScenario(), request.getDefaultQuery()));
+    }
+
+
+    /**
+     * 删除工作区。知识、检索索引（Elasticsearch / Milvus / 图库）与上传的源文件一并清理，
+     * 最后移除工作区本身。
+     *
+     * <p>要求 {@code confirm} 等于知识库 id 或名称：删除不可逆，不该由一个误触的请求触发。</p>
+     */
+    @DeleteMapping("/bases/{id}")
+    @Operation(summary = "删除知识库工作区（含知识、检索索引与源文件）")
+    public ApiResponse<Object> deleteBase(@PathVariable Long id, @RequestParam(value = "confirm", required = false) String confirm) {
+        Map<String, Object> result = purgeService.deleteWorkspace(id, confirm);
+        // 检索索引与源文件在 MySQL 之外，必须等事务提交后再清：删索引不可逆，若事务最终
+        // 回滚而索引已清，这个库就再也检索不到任何东西了。与清空端点同一套节奏。
+        @SuppressWarnings("unchecked")
+        List<String> storagePaths = (List<String>) result.remove("sourceStoragePaths");
+        result.putAll(purgeService.cleanup(id, storagePaths, true));
+        return ApiResponse.ok(result);
     }
 
 
@@ -200,6 +225,17 @@ public class KnowledgeIngestionController {
     @Operation(summary = "批量接入批次状态：总进度与每个文件的文档/运行/失败原因")
     public ApiResponse<Object> batchStatus(@PathVariable String batchCode) {
         return ApiResponse.ok(batchIngestionService.status(batchCode));
+    }
+
+
+    /**
+     * 只重跑抽取。复用已入库的切片与证据编码，不重新解析文件——解析结果没变，重跑它只会
+     * 换掉一批证据编码，让已有引用变成死链。
+     */
+    @PostMapping("/documents/{id}/reextract")
+    @Operation(summary = "只重跑抽取（复用已有切片与证据，不重新解析）")
+    public ApiResponse<Object> reextractDocument(@PathVariable Long id) {
+        return ApiResponse.ok(ingestionService.reextract(id));
     }
 
 

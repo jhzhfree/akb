@@ -37,18 +37,43 @@ public interface CardClaimMapper {
     List<Map<String, Object>> listExpiringClaims(@Param("kb") Long kb, @Param("horizon") Date horizon);
 
     /**
-     * 同库已有卡片的标题，供抽取去重使用。
+     * 按抽取幂等键找已有卡片编码。
      *
-     * <p>只取标题一列：抽取时每行都要比对，取整行会把正文也拉进内存。
-     * 去重按归一化后的标题做，所以这里返回原始值，归一化在调用侧统一处理。</p>
+     * <p>重跑同一篇文档时用来判定“这条已经写过了”，命中就只补证据、不重复插入。</p>
      */
-    List<String> listCardTitles(@Param("kb") Long kb);
+    String findCardCodeByDedupKey(@Param("kb") Long kb, @Param("dedupKey") String dedupKey);
 
     /**
-     * 同库已有断言的三元组（subject|predicate|object），供抽取去重使用。
+     * 按等价指纹找同库的其它卡片（不含自己）。
      *
-     * <p>同一条规则被多篇文档命中时（模板化文档尤其常见），模型会为每篇都产出一条
-     * 措辞相同的主张；按三元组比对能把它们收敛成一条，而不是让同一句话在库里躺 N 份。</p>
+     * <p>用于记录重复关系。命中不合并：两侧都是独立资产，只是多一条待裁决的重复记录。</p>
      */
-    List<String> listClaimTriples(@Param("kb") Long kb);
+    List<Map<String, Object>> findCardCodesByFingerprint(@Param("kb") Long kb, @Param("fingerprint") String fingerprint,
+        @Param("selfCode") String selfCode);
+
+    /** 按抽取幂等键找已有断言编码，语义同 {@link #findCardCodeByDedupKey}。 */
+    String findClaimCodeByDedupKey(@Param("kb") Long kb, @Param("dedupKey") String dedupKey);
+
+    /** 按等价指纹找同库的其它断言，语义同 {@link #findCardCodesByFingerprint}。 */
+    List<Map<String, Object>> findClaimCodesByFingerprint(@Param("kb") Long kb, @Param("fingerprint") String fingerprint,
+        @Param("selfCode") String selfCode);
+
+    /**
+     * 校验模型给出的证据：确实存在、属于这个知识库、并且出自这篇文档。
+     *
+     * <p>只按 evidence_code 命中是不够的——模型可能引用别的文档的证据，也可能给出根本
+     * 不存在的编码。这两种情况都不该变成“这条知识有据可查”。</p>
+     */
+    List<Long> findEvidenceIdsByCodes(@Param("kb") Long kb, @Param("codes") List<String> codes,
+        @Param("documentId") Long documentId);
+
+    /**
+     * 按证据 id 精确关联卡片。
+     *
+     * <p>支持分给 0.90：证据是模型点名的，比“整篇文档都算这条知识的证据”更有指向性。</p>
+     */
+    int linkCardEvidenceByIds(@Param("kb") Long kb, @Param("knowledgeCode") String knowledgeCode, @Param("ids") List<Long> ids);
+
+    /** 按证据 id 精确关联断言，语义同 {@link #linkCardEvidenceByIds}。 */
+    int linkClaimEvidenceByIds(@Param("kb") Long kb, @Param("claimCode") String claimCode, @Param("ids") List<Long> ids);
 }

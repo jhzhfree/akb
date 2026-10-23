@@ -35,6 +35,12 @@ public interface KnowledgeBaseMapper {
 
     int updateKnowledgeBaseOwner(@Param("id") Long id, @Param("createdBy") Long createdBy);
 
+    /**
+     * 删除工作区本身。只应在知识已清空之后调用——反过来的顺序会留下一个指向已删知识库的
+     * 检索索引，而那个索引再也没人能按知识库 id 清掉。
+     */
+    int deleteKnowledgeBase(@Param("id") Long id);
+
     Map<String, Object> getKbScenario(@Param("kb") Long kb);
 
     int saveKbScenario(@Param("kb") Long kb, @Param("scenario") String scenario, @Param("profileJson") String profileJson,

@@ -43,6 +43,19 @@ public class Claim {
 
     private Integer version = 1;
 
+    /**
+     * 断言等价指纹：规范化后的主词/谓词/宾词 + 极性 + 条件 + 有效期。
+     *
+     * <p>极性、条件、有效期必须参与：只差极性或有效期的两条主张并不等价，只按三元组
+     * 比对会把它们错误地当成同一条。</p>
+     */
+    private String claimFingerprint;
+
+    /**
+     * 抽取幂等键：知识库 + 文档 + 抽取版本 + 指纹，由数据库唯一约束保证不重复落库。
+     */
+    private String dedupKey;
+
     public Long getId() {
         return id;
     }
@@ -179,5 +192,21 @@ public class Claim {
      */
     public void setVersion(Integer version) {
         this.version = version == null || version < 1 ? 1 : version;
+    }
+
+    public String getClaimFingerprint() {
+        return claimFingerprint;
+    }
+
+    public void setClaimFingerprint(String claimFingerprint) {
+        this.claimFingerprint = claimFingerprint;
+    }
+
+    public String getDedupKey() {
+        return dedupKey;
+    }
+
+    public void setDedupKey(String dedupKey) {
+        this.dedupKey = dedupKey;
     }
 }

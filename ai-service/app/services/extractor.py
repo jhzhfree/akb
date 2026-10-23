@@ -966,6 +966,65 @@ class KnowledgeExtractor:
                 best[key] = relation
         return list(best.values())[:MAX_RELATIONS]
 
+    # 兜底断言只认原文里明确写出的关系模式。宁可抽不出来，也不能推断原文没有的关系——
+    # 一条编出来的断言看起来比没有断言更糟：它会带着引用出现在答案里。
+    _CLAIM_PATTERNS = (
+        (r"^(.{2,20}?)\s*负责\s*(.{2,60})[。.]?$", "负责", "POSITIVE"),
+        (r"^(.{2,20}?)\s*适用于\s*(.{2,60})[。.]?$", "适用于", "POSITIVE"),
+        (r"^(.{2,20}?)\s*(?:须|应|必须)\s*(.{2,60})[。.]?$", "要求", "POSITIVE"),
+        (r"^(.{2,20}?)\s*不得\s*(.{2,60})[。.]?$", "要求", "NEGATIVE"),
+    )
+
+    def _rule_claims(self, sources: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        """Assertions read straight out of the text, for the no-LLM path.
+
+        These restate what the sentence already says, so they are marked deterministic:
+        they carry no inference of their own and are as trustworthy as the chunk they are
+        anchored to. Every claim keeps the evidence id of its source unit, so a citation
+        still points at the sentence it came from.
+        """
+        claims: list[dict[str, Any]] = []
+        for source in sources:
+            content = str(source.get("content") or "").strip()
+            evidence = list(source.get("evidence_ids") or [])
+            for sentence in re.split(r"[。；;\n]", content):
+                sentence = sentence.strip()
+                if not 6 <= len(sentence) <= 120:
+                    continue
+                # 问句不是主张：原文在提问，说明它自己也没有结论，抽出来就成了臆造。
+                if sentence.endswith("？") or sentence.endswith("?"):
+                    continue
+                for pattern, predicate, polarity in self._CLAIM_PATTERNS:
+                    matched = re.match(pattern, sentence)
+                    if not matched:
+                        continue
+                    # 主语从句子开头取，常带出"如果…，"这类从句尾巴，去掉读起来才完整。
+                    subject = matched.group(1).strip().rstrip("，,、：:")
+                    obj = matched.group(2).strip().rstrip("，,、；;")
+                    # 主词等于宾词（"X DESCRIBES X" 那类）、宾词是键值表：都不是一句主张。
+                    if not subject or not obj or subject == obj:
+                        continue
+                    if obj.count("：") + obj.count(":") >= 2:
+                        continue
+                    claims.append({
+                        "subject": subject,
+                        "predicate": predicate,
+                        "object": obj,
+                        "polarity": polarity,
+                        "confidence": 0.60,
+                        "certainty": 0.60,
+                        "conditions": [],
+                        "qualifiers": {},
+                        "evidence_ids": evidence,
+                        # 后端按 derivation=="DETERMINISTIC" 识别“原文直读”：这类断言不进
+                        # 治理队列直接 APPROVED，因为它们只是原文的重述，可信度等于原文；
+                        # 留在 UNCERTAIN 会让精确问题（年假多少天）永远命中不到断言。
+                        "derivation": "DETERMINISTIC",
+                        "provenance": "RULE_FALLBACK",
+                    })
+                    break
+        return claims
+
     def _fallback(self, text: str, material: list[dict[str, Any]]) -> dict[str, Any]:
         """Generate conservative candidates when no structured LLM is available."""
         if material:
@@ -990,7 +1049,7 @@ class KnowledgeExtractor:
         sources = [item for item in sources if has_content(item["content"])][:40]
 
         cards = []
-        claims = []
+        claims = self._rule_claims(sources)
         entities = []
         seen = set()
 

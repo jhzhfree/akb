@@ -122,6 +122,13 @@ WHERE r1.knowledge_base_id=#{kb} AND r2.knowledge_base_id=#{kb}
   AND a.id&lt;&gt;c.id
 LIMIT #{limit}</select>
 
+<select id="diagnoseGraph" resultType="map">SELECT
+  (SELECT count(*) FROM t_relation WHERE knowledge_base_id=#{kb} AND IFNULL(status,'ACTIVE')='ACTIVE') relations,
+  (SELECT count(*) FROM t_relation WHERE knowledge_base_id=#{kb} AND IFNULL(status,'ACTIVE')='ACTIVE' AND IFNULL(confidence,0)&gt;=#{minConfidence}) relationsAboveThreshold,
+  (SELECT max(IFNULL(confidence,0)) FROM t_relation WHERE knowledge_base_id=#{kb} AND IFNULL(status,'ACTIVE')='ACTIVE') maxConfidence,
+  (SELECT count(*) FROM t_relation r1 JOIN t_relation r2 ON r2.source_entity_id=r1.target_entity_id WHERE r1.knowledge_base_id=#{kb} AND r2.knowledge_base_id=#{kb} AND IFNULL(r1.status,'ACTIVE')='ACTIVE' AND IFNULL(r2.status,'ACTIVE')='ACTIVE') twoHopPaths,
+  (SELECT count(*) FROM t_relation r1 JOIN t_relation r2 ON r2.source_entity_id=r1.target_entity_id WHERE r1.knowledge_base_id=#{kb} AND r2.knowledge_base_id=#{kb} AND IFNULL(r1.status,'ACTIVE')='ACTIVE' AND IFNULL(r2.status,'ACTIVE')='ACTIVE' AND IFNULL(r1.confidence,0)&gt;=#{minConfidence} AND IFNULL(r2.confidence,0)&gt;=#{minConfidence}) twoHopAboveThreshold,
+  (SELECT count(*) FROM t_entity WHERE knowledge_base_id=#{kb}) entities</select>
 <select id="listActiveRelations" resultType="map">SELECT r.relation_code relationCode,r.relation_type relationType,
   s.entity_code sourceCode,s.canonical_name sourceName,t.entity_code targetCode,t.canonical_name targetName,
   IFNULL(r.confidence,0) confidence

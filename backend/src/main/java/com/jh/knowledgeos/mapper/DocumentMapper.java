@@ -41,6 +41,27 @@ public interface DocumentMapper {
 
     Map<String, Object> getSourcePreview(@Param("kb") Long kb, @Param("sourceId") Long sourceId, @Param("permissionTags") List<String> permissionTags);
 
+    /**
+     * 重跑抽取所需的上下文：文档正文、所属知识库与来源、来源的权限标签与权威度。
+     * 一次取齐，避免调用方拼出一条与真实来源不一致的权限标签——那会让重跑出来的知识
+     * 带上错误的可见范围。
+     */
+    Map<String, Object> findReextractContext(@Param("documentId") Long documentId);
+
+    /**
+     * 这篇文档已经入库的标准单元，连同每条单元的证据编码。
+     *
+     * <p>重跑抽取必须复用这些单元：证据编码是知识指向原文的锚点，重新解析会生成一批新的
+     * 编码，旧的引用关系全部作废。</p>
+     */
+    List<Map<String, Object>> findUnitsWithEvidence(@Param("documentId") Long documentId);
+
+    /** 记录抽取阶段的成败；解析与索引各自记在自己的列上，互不覆盖。 */
+    int updateExtractionStatus(@Param("id") Long id, @Param("status") String status);
+
+    /** 记录索引阶段的成败。 */
+    int updateIndexStatus(@Param("id") Long id, @Param("status") String status);
+
     List<Map<String, Object>> listDocuments(@Param("kb") Long kb, @Param("permissionTags") List<String> permissionTags);
 
     int supersedeDocumentChunks(@Param("documentId") Long documentId);

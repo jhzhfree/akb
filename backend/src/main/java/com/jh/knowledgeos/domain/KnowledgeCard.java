@@ -27,6 +27,19 @@ public class KnowledgeCard {
 
     private Integer version;
 
+    /**
+     * 知识等价指纹：完整规范化内容 + 关键语义字段。
+     *
+     * <p>只用来判断「不同来源是否表达了同一条知识」，命中不意味着可以合并——两侧资产
+     * 各自保留状态与权限标签，重复关系交给人工裁决。</p>
+     */
+    private String contentFingerprint;
+
+    /**
+     * 抽取幂等键：知识库 + 文档 + 抽取版本 + 指纹，由数据库唯一约束保证不重复落库。
+     */
+    private String dedupKey;
+
     public Long getId() {
         return id;
     }
@@ -105,6 +118,22 @@ public class KnowledgeCard {
 
     public void setVersion(Integer version) {
         this.version = version;
+    }
+
+    public String getContentFingerprint() {
+        return contentFingerprint;
+    }
+
+    public void setContentFingerprint(String contentFingerprint) {
+        this.contentFingerprint = contentFingerprint;
+    }
+
+    public String getDedupKey() {
+        return dedupKey;
+    }
+
+    public void setDedupKey(String dedupKey) {
+        this.dedupKey = dedupKey;
     }
 
     public String getPermissionTags() {

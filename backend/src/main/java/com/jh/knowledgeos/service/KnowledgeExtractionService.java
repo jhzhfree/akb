@@ -24,6 +24,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.Collections;
 
 /**
@@ -31,6 +32,15 @@ import java.util.Collections;
  */
 @Service
 public class KnowledgeExtractionService {
+
+    /** 有效正文短于这个长度、又看不出信息要素时，降级待审而不是当成空壳丢弃。 */
+    private static final int LOW_INFORMATION_LENGTH = 16;
+
+    /** 抽取版本：抽取逻辑变更时递增，让重跑能产出新键，而不是一直命中旧结果。 */
+    private static final String EXTRACTOR_VERSION = "E2";
+
+    /** 重复关系在待裁决项里的类型；与语义冲突共用一张表，靠类型区分。 */
+    private static final String DUPLICATE_CONFLICT_TYPE = "DUPLICATE";
 
     private final KnowledgeMapper mapper;
 
@@ -129,10 +139,12 @@ public class KnowledgeExtractionService {
         Map<String, Object> extractPolicy = scenarios.extraction(knowledgeBaseId);
         boolean graphEnabled = scenarios.graphEnabled(knowledgeBaseId);
         boolean claimsEnabled = Boolean.TRUE.equals(extractPolicy.get("claims"));
+        PersistStats cardStats = new PersistStats();
+        PersistStats claimStats = new PersistStats();
         PersistedKnowledge persisted = transactionRunner.retryingOnDeadlock(() -> {
-            List<Map<String, Object>> cards = persistCards(knowledgeBaseId, documentId, response.get("cards"), permissionTags, authorityScore);
+            List<Map<String, Object>> cards = persistCards(knowledgeBaseId, documentId, response.get("cards"), permissionTags, authorityScore, cardStats);
             List<Map<String, Object>> claims = claimsEnabled
-                ? persistClaims(knowledgeBaseId, documentId, response.get("claims"), permissionTags, authorityScore)
+                ? persistClaims(knowledgeBaseId, documentId, response.get("claims"), permissionTags, authorityScore, claimStats)
                 : new ArrayList<Map<String, Object>>();
             Map<String, Object> graph = graphEnabled ? persistAuthoritativeGraph(knowledgeBaseId, documentId, response, permissionTags)
                 : skippedGraph();
@@ -140,6 +152,15 @@ public class KnowledgeExtractionService {
         });
         List<Map<String, Object>> savedCards = persisted.cards;
         List<Map<String, Object>> savedClaims = persisted.claims;
+        // 响应里的 cards / claims 换成真正落库的对象。上游返回的候选数与落库数不是一回事：
+        // 候选可能命中已有知识（只补证据）、可能被质量闸门拒绝、也可能因为跨文档重复而
+        // 作为独立资产保留。台账、事件与前端都读这个字段，它必须反映库里实际多了什么。
+        response.put("cards", savedCards);
+        response.put("claims", savedClaims);
+        Map<String, Object> extractionStats = new LinkedHashMap<String, Object>();
+        extractionStats.put("card", cardStats.toMap());
+        extractionStats.put("claim", claimStats.toMap());
+        response.put("extractionStats", extractionStats);
         response.put("authoritativeGraph", persisted.graph);
         Map<String, Object> graphEvent = null;
         if (graphEnabled) {
@@ -163,7 +184,7 @@ public class KnowledgeExtractionService {
         // AI call and then merges duplicate graph nodes (design V1.1 §5.4).
         response.put("entityResolution", Boolean.TRUE.equals(extractPolicy.get("entityResolution"))
             ? entityResolutionService.resolveAndMerge(knowledgeBaseId, response.get("entities")) : skippedResolution());
-        announceExtraction(knowledgeBaseId, documentId, savedCards, savedClaims);
+        announceExtraction(knowledgeBaseId, documentId, savedCards, savedClaims, cardStats, claimStats);
         return response;
     }
 
@@ -174,11 +195,17 @@ public class KnowledgeExtractionService {
      * yield dozens of objects, and subscribers care about the batch outcome with its identifiers,
      * while individual objects announce themselves again when they are reviewed or superseded.</p>
      */
-    private void announceExtraction(Long knowledgeBaseId, Long documentId, List<Map<String, Object>> savedCards, List<Map<String, Object>> savedClaims) {
+    private void announceExtraction(Long knowledgeBaseId, Long documentId, List<Map<String, Object>> savedCards, List<Map<String, Object>> savedClaims,
+        PersistStats cardStats, PersistStats claimStats) {
         Map<String, Object> detail = new LinkedHashMap<String, Object>();
         detail.put("documentId", documentId);
         detail.put("cardCount", savedCards == null ? 0 : savedCards.size());
         detail.put("claimCount", savedClaims == null ? 0 : savedClaims.size());
+        // 处置明细：卡片/断言各自收到了多少候选、新增多少、复用了多少、拒绝了多少。
+        // 没有它，一次“新增 0 条”的运行无法区分是模型没产出、还是产出被质量闸门挡掉、
+        // 还是全部命中了已有知识——而这三者的处理方式完全不同。
+        detail.put("cardStats", cardStats == null ? null : cardStats.toMap());
+        detail.put("claimStats", claimStats == null ? null : claimStats.toMap());
         detail.put("cardCodes", codes(savedCards, "knowledge_code", 20));
         detail.put("claimCodes", codes(savedClaims, "claim_code", 20));
         detail.put("cardTitles", titles(savedCards, 5));
@@ -243,25 +270,30 @@ public class KnowledgeExtractionService {
 
     @SuppressWarnings("unchecked")
     /**
-     * 卡片入库：先过“空壳 / 重复”两道闸门，再写库。
+     * 卡片入库：空壳判定 → 幂等 → 写入 → 记录跨来源重复关系。
      *
-     * <p>两道闸门都是被真实数据逼出来的：一批模板化的制度文档抽出过一张标题等于文档名、
-     * 正文只有标题加页脚的卡片（检索时它排在前面却什么都没说）；同一批里还有两张标题完全
-     * 相同的卡片，分别来自两篇使用了同一套章节名的文档。前者污染排序，后者让“知识资产”
-     * 列表出现一眼可见的重复。</p>
+     * <p>三件事各有各的键，不要混用：</p>
+     * <ul>
+     *   <li><b>空壳判定</b>：只剔除排版噪声与作为独立标题行重复出现的标题；摘要<b>不参与</b>
+     *       扣除——摘要常常就是正文的前若干字，扣掉它会把「请假要求 / 年假应提前三个工作日
+     *       申请」这种有效短卡片误判为空壳。拿不准时降级待审而不是丢弃。</li>
+     *   <li><b>幂等键</b>（知识库 + 文档 + 抽取版本 + 指纹，唯一约束）：同一篇文档重跑不重复
+     *       落库，命中就只补证据。并发下的重复由数据库约束兜底，不靠先查后写。</li>
+     *   <li><b>等价指纹</b>（完整规范化正文 + 类型）：只用来发现「不同来源表达了同一条知识」，
+     *       命中<b>不合并</b>——两侧各自保留状态与权限标签，重复关系交人工裁决。</li>
+     * </ul>
      */
-    private List<Map<String, Object>> persistCards(Long knowledgeBaseId, Long documentId, Object cardsObject, String permissionTags, Double authorityScore) {
+    private List<Map<String, Object>> persistCards(Long knowledgeBaseId, Long documentId, Object cardsObject, String permissionTags, Double authorityScore, PersistStats stats) {
         List<Map<String, Object>> saved = new ArrayList<Map<String, Object>>();
         if (!(cardsObject instanceof List)) {
             return saved;
         }
-        // 已有标题懒加载：只有当这一批真的有卡片要写时才查一次库。
-        Set<String> existingTitles = null;
         for (Object item : (List<Object>) cardsObject) {
             if (!(item instanceof Map)) {
                 continue;
             }
             Map<String, Object> source = new LinkedHashMap<String, Object>((Map<String, Object>) item);
+            stats.received++;
             KnowledgeCard card = new KnowledgeCard();
             card.setKnowledgeCode(valueOrId(source.get("knowledge_code"), "K_"));
             card.setKnowledgeBaseId(knowledgeBaseId);
@@ -273,22 +305,49 @@ public class KnowledgeExtractionService {
             boolean deterministic = isDeterministic(source);
             // See persistClaims: a card assembled from the clause rows a unit already contains
             // adds no claim of its own, so it does not need to wait for review.
-            card.setStatus(deterministic ? KnowledgeStatus.APPROVED.name() : KnowledgeStatus.DRAFT.name());
             card.setPermissionTags(permissionTags);
             card.setVersion(1);
-            if (existingTitles == null) {
-                existingTitles = new HashSet<String>(normalizedKeys(cardClaimMapper.listCardTitles(knowledgeBaseId)));
-            }
-            String titleKey = normalizeKey(card.getTitle());
-            if (titleKey.isEmpty() || isStubCard(card) || !existingTitles.add(titleKey)) {
+            String fingerprint = cardFingerprint(card);
+            String dedupKey = dedupKey(knowledgeBaseId, documentId, fingerprint);
+            card.setContentFingerprint(fingerprint);
+            card.setDedupKey(dedupKey);
+            // 同一篇文档重跑：对象已经存在，只把这一次的证据补上，不重复插入。
+            String existingCode = cardClaimMapper.findCardCodeByDedupKey(knowledgeBaseId, dedupKey);
+            if (existingCode != null) {
+                stats.reused++;
+                stats.evidenceLinked += linkEvidence("CARD", existingCode, source.get("evidence_ids"), knowledgeBaseId, documentId);
                 continue;
             }
-            cardClaimMapper.insertCard(card);
+            int effective = effectiveContentLength(card);
+            if (effective == 0) {
+                // 正文只剩标题、页码与噪声：这是真正的空壳，没有保留价值。
+                stats.rejected++;
+                continue;
+            }
+            if (effective < LOW_INFORMATION_LENGTH && !hasInformationSignal(card.getContent())) {
+                // 短而且看不出信息要素：拿不准是不是空壳。宁可降级待审，也不要把可能有用的
+                // 短知识直接丢掉——丢掉就无法恢复，而待审只是多一道人工确认。
+                card.setStatus(KnowledgeStatus.UNCERTAIN.name());
+                stats.lowInformation++;
+            } else {
+                card.setStatus(deterministic ? KnowledgeStatus.APPROVED.name() : KnowledgeStatus.DRAFT.name());
+            }
+            if (cardClaimMapper.insertCard(card) == 0) {
+                // 并发下被唯一键挡住：另一个线程刚写了同一条，按命中已有处理。
+                existingCode = cardClaimMapper.findCardCodeByDedupKey(knowledgeBaseId, dedupKey);
+                if (existingCode == null) {
+                    stats.rejected++;
+                    continue;
+                }
+                stats.reused++;
+                stats.evidenceLinked += linkEvidence("CARD", existingCode, source.get("evidence_ids"), knowledgeBaseId, documentId);
+                continue;
+            }
+            stats.created++;
+            recordDuplicates(knowledgeBaseId, "CARD", card.getKnowledgeCode(), fingerprint, permissionTags, stats);
             governanceMapper.snapshotKnowledgeObject(knowledgeBaseId, "CARD", card.getKnowledgeCode(), "CREATED",
                 deterministic ? "DETERMINISTIC_PARSE" : "AI_EXTRACTION");
-            if (documentId != null) {
-                cardClaimMapper.linkCardEvidenceFromDocument(card.getKnowledgeCode(), documentId);
-            }
+            stats.evidenceLinked += linkEvidence("CARD", card.getKnowledgeCode(), source.get("evidence_ids"), knowledgeBaseId, documentId);
             source.put("knowledge_code", card.getKnowledgeCode());
             source.put("status", card.getStatus());
             source.put("permission_tags", permissionTags);
@@ -307,25 +366,27 @@ public class KnowledgeExtractionService {
 
     @SuppressWarnings("unchecked")
     /**
-     * 断言入库：先过“无意义 / 重复”两道闸门，再写库。
+     * 断言入库：无意义过滤 → 幂等 → 写入 → 记录跨来源重复关系。
      *
-     * <p>同一批文档抽出过“知识质量月度评估 V1.0 DESCRIBES 知识质量月度评估 V1.0”这样的
-     * 主张——主词与宾词相同，读起来是一句废话，却会占住结构化通道、还会被冲突检测当成
-     * 两条互相矛盾的主张（它与同一主词的另一条宾词不同），把状态判成 CONFLICTED，
-     * 于是这条知识既进不了衍生也进不了检索。重复三元组则来自多篇文档命中同一条规则。</p>
+     * <p>「无意义」指的是确定的噪声，只判两种：主词与宾词相同（“X DESCRIBES X”读起来是
+     * 一句废话），以及宾语是被塞进来的元数据键值表（“文档编号: 文档类型；…”是表格不是主张）。
+     * 它们会占住结构化通道，还会被冲突检测当成互相矛盾的主张，把状态判成 CONFLICTED，
+     * 于是这条知识既进不了衍生也进不了检索。</p>
+     *
+     * <p>重复判断<b>不再只按三元组</b>：指纹同时包含极性、条件与有效期。「支持 MySQL」与
+     * 「不支持 MySQL」只差极性，同一主张在不同有效期下也并不等价。</p>
      */
-    private List<Map<String, Object>> persistClaims(Long knowledgeBaseId, Long documentId, Object claimsObject, String permissionTags, Double authorityScore) {
+    private List<Map<String, Object>> persistClaims(Long knowledgeBaseId, Long documentId, Object claimsObject, String permissionTags, Double authorityScore, PersistStats stats) {
         List<Map<String, Object>> saved = new ArrayList<Map<String, Object>>();
         if (!(claimsObject instanceof List)) {
             return saved;
         }
-        // 已有三元组懒加载：只有当这一批真的有断言要写时才查一次库。
-        Set<String> existingTriples = null;
         for (Object item : (List<Object>) claimsObject) {
             if (!(item instanceof Map)) {
                 continue;
             }
             Map<String, Object> source = new LinkedHashMap<String, Object>((Map<String, Object>) item);
+            stats.received++;
             Claim claim = new Claim();
             claim.setClaimCode(valueOrId(source.get("claim_code"), "CLM_"));
             claim.setKnowledgeBaseId(knowledgeBaseId);
@@ -347,20 +408,37 @@ public class KnowledgeExtractionService {
             // a human approves it leaves the structured channels permanently empty, which is
             // why an exact question such as "年假多少天" never reaches a claim. Model-inferred
             // knowledge still enters the governance queue, as before.
-            claim.setStatus(deterministic ? KnowledgeStatus.APPROVED.name() : KnowledgeStatus.UNCERTAIN.name());
             claim.setPermissionTags(permissionTags);
-            if (existingTriples == null) {
-                existingTriples = new HashSet<String>(normalizedKeys(cardClaimMapper.listClaimTriples(knowledgeBaseId)));
-            }
-            if (!isMeaningfulClaim(claim) || !existingTriples.add(claimTripleKey(claim))) {
+            if (!isMeaningfulClaim(claim)) {
+                stats.rejected++;
                 continue;
             }
-            cardClaimMapper.insertClaim(claim);
+            String fingerprint = claimFingerprint(claim);
+            String dedupKey = dedupKey(knowledgeBaseId, documentId, fingerprint);
+            claim.setClaimFingerprint(fingerprint);
+            claim.setDedupKey(dedupKey);
+            String existingCode = cardClaimMapper.findClaimCodeByDedupKey(knowledgeBaseId, dedupKey);
+            if (existingCode != null) {
+                stats.reused++;
+                stats.evidenceLinked += linkEvidence("CLAIM", existingCode, source.get("evidence_ids"), knowledgeBaseId, documentId);
+                continue;
+            }
+            claim.setStatus(deterministic ? KnowledgeStatus.APPROVED.name() : KnowledgeStatus.UNCERTAIN.name());
+            if (cardClaimMapper.insertClaim(claim) == 0) {
+                existingCode = cardClaimMapper.findClaimCodeByDedupKey(knowledgeBaseId, dedupKey);
+                if (existingCode == null) {
+                    stats.rejected++;
+                    continue;
+                }
+                stats.reused++;
+                stats.evidenceLinked += linkEvidence("CLAIM", existingCode, source.get("evidence_ids"), knowledgeBaseId, documentId);
+                continue;
+            }
+            stats.created++;
+            recordDuplicates(knowledgeBaseId, "CLAIM", claim.getClaimCode(), fingerprint, permissionTags, stats);
             governanceMapper.snapshotKnowledgeObject(knowledgeBaseId, "CLAIM", claim.getClaimCode(), "CREATED",
                 deterministic ? "DETERMINISTIC_PARSE" : "AI_EXTRACTION");
-            if (documentId != null) {
-                cardClaimMapper.linkClaimEvidenceFromDocument(claim.getClaimCode(), documentId);
-            }
+            stats.evidenceLinked += linkEvidence("CLAIM", claim.getClaimCode(), source.get("evidence_ids"), knowledgeBaseId, documentId);
             source.put("claim_code", claim.getClaimCode());
             source.put("status", claim.getStatus());
             source.put("permission_tags", permissionTags);
@@ -723,16 +801,65 @@ public class KnowledgeExtractionService {
     }
 
     /**
-     * 空壳卡片：正文去掉标题与摘要后所剩无几。
+     * 有效正文长度：剔除排版噪声与作为独立标题行重复出现的标题之后，正文还剩多少字。
      *
-     * <p>判据刻意用“正文减标题减摘要”而不是正文长度——一张卡片可以很短但言之有物，
-     * 而空壳的共同点是正文只是把标题和摘要重复了一遍（真实样例里正文等于标题加页脚）。</p>
+     * <p><b>摘要刻意不参与扣除</b>。摘要通常是正文的前若干字，扣掉它等价于把内容清空：
+     * 「请假要求 / 年假应提前三个工作日申请」这种卡片会被算成零长度。同理，标题只在它
+     * 单独成行重复出现时才剔除，不把正文里出现过的同一个词都删掉——正文提到标题里的
+     * 名词是正常的写法。</p>
      */
-    private boolean isStubCard(KnowledgeCard card) {
-        String residual = String.valueOf(card.getContent() == null ? "" : card.getContent());
-        residual = residual.replace(String.valueOf(card.getTitle() == null ? "" : card.getTitle()), "");
-        residual = residual.replace(String.valueOf(card.getSummary() == null ? "" : card.getSummary()), "");
-        return normalizeKey(residual).length() < 8;
+    private int effectiveContentLength(KnowledgeCard card) {
+        String content = card.getContent() == null ? "" : card.getContent();
+        String title = card.getTitle() == null ? "" : card.getTitle().trim();
+        StringBuilder builder = new StringBuilder();
+        String[] lines = content.split("\n");
+        for (int i = 0; i < lines.length; i++) {
+            String line = lines[i].trim();
+            if (line.isEmpty() || isNoiseLine(line)) {
+                continue;
+            }
+            if (!title.isEmpty() && line.equals(title)) {
+                continue;
+            }
+            builder.append(line);
+        }
+        return normalizeContent(builder.toString()).length();
+    }
+
+    /** 页码与纯装饰行：“3”“第 3 页”“— 2 —”这类不该算作正文。 */
+    private boolean isNoiseLine(String line) {
+        String stripped = normalizeContent(line);
+        if (stripped.isEmpty()) {
+            return true;
+        }
+        if (stripped.matches("\\d+")) {
+            return true;
+        }
+        return stripped.matches("(?i)第\\s*[0-9]+\\s*页.*") || stripped.matches("[-—_.]{2,}");
+    }
+
+    /**
+     * 正文里有没有明确的信息要素（数字、单位、责任或规则词）。
+     *
+     * <p>短卡片不必然是空壳：制度文本里大量有效条款就是一句话。只要有数字或规则性表述，
+     * 就按有效知识处理，不因为“短”而降级。</p>
+     */
+    private boolean hasInformationSignal(String content) {
+        if (content == null) {
+            return false;
+        }
+        String text = content.replaceAll("\\s+", "");
+        if (text.matches(".*[0-9].*")) {
+            return true;
+        }
+        String[] signals = {"应", "须", "必须", "不得", "严禁", "负责", "包含", "要求", "适用于", "提前",
+            "不超过", "至少", "工作日", "百分比", "%", "由", "限于"};
+        for (int i = 0; i < signals.length; i++) {
+            if (text.contains(signals[i])) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**
@@ -753,8 +880,206 @@ public class KnowledgeExtractionService {
         return !(colons >= 2 && (raw.contains("；") || raw.contains(";")));
     }
 
-    private String claimTripleKey(Claim claim) {
-        return normalizeKey(claim.getSubject()) + "|" + normalizeKey(claim.getPredicate()) + "|" + normalizeKey(claim.getObjectValue());
+    /**
+     * 卡片等价指纹：完整规范化正文 + 类型。
+     *
+     * <p>取完整内容而不是前若干字——同一套模板下的两篇文档往往前半段相同、结论不同，
+     * 截断比对会把它们误判为同一条知识。类型参与是因为同一段文字作为「流程」和作为
+     * 「概念」并不是一回事。</p>
+     */
+    private String cardFingerprint(KnowledgeCard card) {
+        return fingerprint("CARD", normalizeContent(card.getType()), normalizeContent(card.getContent()));
+    }
+
+    /**
+     * 断言等价指纹：主词 / 谓词 / 宾词 + 极性 + 条件 + 限定 + 有效期。
+     *
+     * <p>极性、条件与有效期必须参与：只差极性或有效期的两条主张并不等价，只按三元组
+     * 比对会把它们错误地合并成一条（或反过来，把同一条主张在不同有效期下的两次出现
+     * 当成重复）。</p>
+     */
+    private String claimFingerprint(Claim claim) {
+        return fingerprint("CLAIM", normalizeContent(claim.getSubject()), normalizeContent(claim.getPredicate()),
+            normalizeContent(claim.getObjectValue()), normalizeContent(claim.getPolarity()),
+            normalizeContent(claim.getConditionJson()), normalizeContent(claim.getQualifierJson()),
+            claim.getValidFrom() == null ? "" : String.valueOf(claim.getValidFrom().getTime()),
+            claim.getValidTo() == null ? "" : String.valueOf(claim.getValidTo().getTime()));
+    }
+
+    /**
+     * 抽取幂等键：知识库 + 文档 + 抽取版本 + 指纹。
+     *
+     * <p>重跑同一篇文档时键不变，于是被唯一约束挡住，只补证据不重复插入。并发下的重复
+     * 同样由约束兜底：两个线程同时写同一条时，后写的那次拿到 0 行影响，按“命中已有”处理。
+     * 抽取版本参与是为了让抽取逻辑升级后能产出新键，而不是一直命中旧结果。</p>
+     */
+    private String dedupKey(Long knowledgeBaseId, Long documentId, String fingerprint) {
+        return knowledgeBaseId + "|DOC|" + (documentId == null ? "MANUAL" : documentId) + "|" + EXTRACTOR_VERSION + "|" + fingerprint;
+    }
+
+    /**
+     * 规范化正文以计算指纹：去空白、全角转半角，剔除标点。
+     *
+     * <p><b>保留数字里的小数点</b>：去掉它，「1.5 天」和「15 天」会算成同一条。百分号、
+     * 斜杠与减号同理，单位和区间靠它们区分。汉字保留，其余符号一律剔除。</p>
+     */
+    private String normalizeContent(String value) {
+        if (value == null) {
+            return "";
+        }
+        StringBuilder builder = new StringBuilder();
+        for (int i = 0; i < value.length(); i++) {
+            char c = value.charAt(i);
+            if (Character.isWhitespace(c)) {
+                continue;
+            }
+            if (c >= '０' && c <= '９') {
+                builder.append((char) (c - '０' + '0'));
+            } else if (c >= 'Ａ' && c <= 'Ｚ') {
+                builder.append((char) (c - 'Ａ' + 'A'));
+            } else if (c >= 'ａ' && c <= 'ｚ') {
+                builder.append((char) (c - 'ａ' + 'a'));
+            } else if (Character.isLetterOrDigit(c) || c == '.' || c == '%' || c == '/' || c == '-' || c == '+') {
+                builder.append(c);
+            } else if (c >= 0x4E00 && c <= 0x9FFF) {
+                builder.append(c);
+            }
+        }
+        return builder.toString();
+    }
+
+    private String fingerprint(String... parts) {
+        StringBuilder builder = new StringBuilder();
+        for (int i = 0; i < parts.length; i++) {
+            if (i > 0) {
+                builder.append('');
+            }
+            builder.append(parts[i] == null ? "" : parts[i]);
+        }
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            byte[] bytes = digest.digest(builder.toString().getBytes(StandardCharsets.UTF_8));
+            StringBuilder hex = new StringBuilder();
+            for (int i = 0; i < 16; i++) {
+                hex.append(String.format("%02x", bytes[i] & 0xff));
+            }
+            return hex.toString();
+        } catch (NoSuchAlgorithmException e) {
+            // SHA-256 是每个 JDK 都要求的算法，走到这里说明运行环境异常；退回哈希只为不让
+            // 整批抽取失败，代价是极小的碰撞概率。
+            return Integer.toHexString(builder.toString().hashCode());
+        }
+    }
+
+    /**
+     * 记录跨来源重复关系：命中同库同指纹的其它对象时，写一条 DUPLICATE 待裁决项。
+     *
+     * <p><b>只记录，不合并</b>：两侧都是独立资产，状态与权限标签都不动，由人工在裁决
+     * 工作台决定保留其一、合并还是都驳回。查询本身要求权限标签一致——把受控对象的存在
+     * 暴露给原本看不到它的人，本身就是越权，所以不同可见范围之间不记录重复关系。</p>
+     */
+    /**
+     * 证据关联：优先用模型点名的 evidence_ids，拿不到或站不住脚才回落到整篇文档。
+     *
+     * <p>模型给的编码要先校验（存在、属于本库、出自这篇文档），因为一个凭空出现的编码
+     * 不该让这条知识看起来“有据可查”。兜底仍然是必要的——模型经常不返回 evidence_ids，
+     * 这时候把整篇文档算作来源虽粗，却好过这条知识没有任何来源。两者用支持度区分：
+     * 点名的 0.90，兜底的 0.80，下游排序与展示因此能看出证据的强弱。</p>
+     */
+    @SuppressWarnings("unchecked")
+    private int linkEvidence(String objectType, String code, Object evidenceIds, Long knowledgeBaseId, Long documentId) {
+        if (documentId == null) {
+            return 0;
+        }
+        List<String> codes = toStringList(evidenceIds);
+        if (!codes.isEmpty()) {
+            List<Long> ids = cardClaimMapper.findEvidenceIdsByCodes(knowledgeBaseId, codes, documentId);
+            if (ids != null && !ids.isEmpty()) {
+                return "CARD".equals(objectType)
+                    ? cardClaimMapper.linkCardEvidenceByIds(knowledgeBaseId, code, ids)
+                    : cardClaimMapper.linkClaimEvidenceByIds(knowledgeBaseId, code, ids);
+            }
+        }
+        return "CARD".equals(objectType)
+            ? cardClaimMapper.linkCardEvidenceFromDocument(code, documentId)
+            : cardClaimMapper.linkClaimEvidenceFromDocument(code, documentId);
+    }
+
+    private List<String> toStringList(Object value) {
+        List<String> values = new ArrayList<String>();
+        if (!(value instanceof List)) {
+            return values;
+        }
+        for (Object item : (List<?>) value) {
+            if (item == null) {
+                continue;
+            }
+            String text = String.valueOf(item).trim();
+            if (!text.isEmpty()) {
+                values.add(text);
+            }
+        }
+        return values;
+    }
+
+    private void recordDuplicates(Long knowledgeBaseId, String objectType, String code, String fingerprint, String permissionTags, PersistStats stats) {
+        List<Map<String, Object>> twins = "CARD".equals(objectType)
+            ? cardClaimMapper.findCardCodesByFingerprint(knowledgeBaseId, fingerprint, code)
+            : cardClaimMapper.findClaimCodesByFingerprint(knowledgeBaseId, fingerprint, code);
+        if (twins == null || twins.isEmpty()) {
+            return;
+        }
+        for (int i = 0; i < twins.size(); i++) {
+            Map<String, Object> row = twins.get(i);
+            Object twinCode = row.get("code");
+            if (twinCode == null) {
+                continue;
+            }
+            String twin = String.valueOf(twinCode);
+            String twinTags = row.get("permissionTags") == null ? "" : String.valueOf(row.get("permissionTags"));
+            if (!sameVisibility(permissionTags, twinTags)) {
+                // 可见范围不同的两条知识之间不记重复关系：把受控对象的存在暴露给原本看不到
+                // 它的人，本身就是越权。宁可少记一条待裁决项，也不能让裁决台成为绕过 ACL 的入口。
+                continue;
+            }
+            // INSERT IGNORE + uk_conflict_pair：同一对对象只记一次。
+            governanceMapper.insertConflict(knowledgeBaseId, code, twin, DUPLICATE_CONFLICT_TYPE, 1.0D);
+            stats.duplicates++;
+        }
+    }
+
+    private boolean sameVisibility(String left, String right) {
+        return normalizeContent(left).equals(normalizeContent(right));
+    }
+
+    /**
+     * 一次抽取里某一类对象的处置结果。
+     *
+     * <p>恒等式：<code>received = created + reused + rejected</code>。lowInformation 与
+     * duplicates 是 created 内部的细分（降级待审的、发现了同指纹邻居的），不参与等式；
+     * evidenceLinked 单独记，因为“复用已有知识并补上证据”同样有业务价值，不该被
+     * created=0 抹掉。</p>
+     */
+    private static final class PersistStats {
+        int received;
+        int created;
+        int reused;
+        int rejected;
+        int lowInformation;
+        int duplicates;
+        int evidenceLinked;
+
+        Map<String, Object> toMap() {
+            Map<String, Object> map = new LinkedHashMap<String, Object>();
+            map.put("received", received);
+            map.put("created", created);
+            map.put("reused", reused);
+            map.put("rejected", rejected);
+            map.put("lowInformation", lowInformation);
+            map.put("duplicates", duplicates);
+            map.put("evidenceLinked", evidenceLinked);
+            return map;
+        }
     }
 
     /**

@@ -352,6 +352,10 @@ public class KnowledgeDerivationService {
             result.put("runCode", runCode);
             result.put("scanned", produced.size());
             result.put("candidates", created);
+            // 零产出必须自带解释：这正是要被追问的情形，干巴巴一个 scanned=0 等于让人去猜。
+            if (produced.isEmpty()) {
+                result.put("diagnosis", explainEmpty(scope, rule, triggerType));
+            }
             tasks.succeed(taskCode, result);
             mapper.updateDerivationRuleState(ruleCode, "IDLE", LocalDateTime.now().format(TS), nextFireTime(rule), null);
             Map<String, Object> summary = new LinkedHashMap<String, Object>(result);
@@ -372,6 +376,48 @@ public class KnowledgeDerivationService {
             failure.put("errorMessage", message);
             throw e;
         }
+    }
+
+    /**
+     * 零产出时说明为什么。
+     *
+     * <p>衍生建立在图谱之上，"产出 0"至少有三种完全不同的成因，处置方式也不一样：
+     * 库里没有关系（先做实体与关系抽取）、关系接不成两跳（图的形状不支持这类推导）、
+     * 关系质量达不到规则阈值（调低阈值或先提升关系质量）。把这三种混成一句"没有
+     * 产出"，排查就只能一次一次改参数试。</p>
+     */
+    private Map<String, Object> explainEmpty(Long kb, Map<String, Object> rule, String triggerType) {
+        Map<String, Object> definition = readDefinition(rule.get("definitionJson"), derivationType(rule.get("derivationType")));
+        double minConfidence = toDouble(definition.get("minConfidence"), 0.5);
+        Map<String, Object> diagnosis = new LinkedHashMap<String, Object>();
+        diagnosis.put("minConfidence", round(minConfidence));
+        Map<String, Object> stats = mapper.diagnoseGraph(kb, minConfidence);
+        if (stats != null) {
+            diagnosis.putAll(stats);
+        }
+        int relations = toInt(stats == null ? null : stats.get("relations"), 0);
+        int twoHop = toInt(stats == null ? null : stats.get("twoHopPaths"), 0);
+        int above = toInt(stats == null ? null : stats.get("twoHopAboveThreshold"), 0);
+        int relationsAbove = toInt(stats == null ? null : stats.get("relationsAboveThreshold"), 0);
+        double maxConfidence = toDouble(stats == null ? null : stats.get("maxConfidence"), 0.0D);
+        String reason;
+        if (relations == 0) {
+            reason = "库里没有实体关系：衍生是在已有关系上做推导，得先有实体与关系";
+        } else if (twoHop == 0) {
+            reason = "关系首尾接不上，形不成 A→B→C 的两跳路径：单条关系不足以推导";
+        } else if (relationsAbove == 0) {
+            reason = "关系置信度最高 " + round(maxConfidence) + "，没有任何一条达到规则要求的 "
+                + round(minConfidence) + "：先提升关系质量，或调低本规则的阈值";
+        } else if (above == 0) {
+            // 两跳要求两条关系都达标。单条最高值达标不代表能配成对——这正是最容易看错的
+            // 地方：看到"最高 0.62 ≥ 阈值 0.6"就以为该有产出，其实达标的那几条接不上。
+            reason = "有 " + relationsAbove + " 条关系达到阈值 " + round(minConfidence) + "，但库里的 "
+                + twoHop + " 条两跳路径没有一条是两段都达标的：达标关系没能落在同一条路径上";
+        } else {
+            reason = "存在满足条件的两跳路径 " + above + " 条，零产出要看规则的类型与模板配置";
+        }
+        diagnosis.put("reason", reason);
+        return diagnosis;
     }
 
     /**

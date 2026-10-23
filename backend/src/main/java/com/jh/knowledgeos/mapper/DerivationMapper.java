@@ -76,6 +76,14 @@ public interface DerivationMapper {
 
     List<Map<String, Object>> listDerivationRuns(@Param("kb") Long kb, @Param("ruleCode") String ruleCode, @Param("limit") int limit);
 
+    /**
+     * 衍生零产出时的图现状：有多少关系、置信度最高多少、有没有能首尾相接的两跳。
+     *
+     * <p>没有这些数，一次“产出 0”无法区分三种完全不同的情况：库里根本没有关系、关系
+     * 接不成两跳、关系质量达不到规则阈值。三者的处置方向完全不同，只能靠猜。</p>
+     */
+    Map<String, Object> diagnoseGraph(@Param("kb") Long kb, @Param("minConfidence") double minConfidence);
+
     List<Map<String, Object>> listGraphPathPairs(@Param("kb") Long kb, @Param("firstType") String firstType, @Param("secondType") String secondType,
             @Param("minConfidence") double minConfidence, @Param("limit") int limit);
 

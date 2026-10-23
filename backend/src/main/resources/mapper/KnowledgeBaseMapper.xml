@@ -17,6 +17,7 @@
 <update id="updateKnowledgeBase">UPDATE t_knowledge_base SET name=#{name},description=#{description},visibility=#{visibility},owner_group_id=#{ownerGroupId},default_query=#{defaultQuery} WHERE id=#{id}</update>
 
 <update id="updateKnowledgeBaseOwner">UPDATE t_knowledge_base SET created_by=#{createdBy} WHERE id=#{id} AND created_by IS NULL</update>
+<delete id="deleteKnowledgeBase">DELETE FROM t_knowledge_base WHERE id=#{id}</delete>
 
 <select id="getKbScenario" resultType="map">SELECT knowledge_base_id knowledgeBaseId,scenario,profile_json profileJson,updated_by updatedBy,updated_time updatedTime FROM t_kb_scenario WHERE knowledge_base_id=#{kb}</select>
 

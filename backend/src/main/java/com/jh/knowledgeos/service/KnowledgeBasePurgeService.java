@@ -1,6 +1,9 @@
 package com.jh.knowledgeos.service;
 
 import com.jh.knowledgeos.common.PlatformEventTypes;
+import com.jh.knowledgeos.common.UserRole;
+import com.jh.knowledgeos.domain.KnowledgeBase;
+import com.jh.knowledgeos.domain.User;
 import com.jh.knowledgeos.mapper.KnowledgeMapper;
 import com.jh.knowledgeos.mapper.IndexMapper;
 import org.slf4j.Logger;
@@ -43,7 +46,11 @@ public class KnowledgeBasePurgeService {
         "t_index_graph_evidence_manifest", "t_adjudication_assessment", "t_answer_evidence_assessment", "t_answer_qualification", "t_query_trace",
         "t_acl_access_audit", "t_acl_change", "t_acl_rebuild_job", "t_ingestion_run", "t_knowledge_version", "t_knowledge_conflict",
         "t_entity_acl_scope", "t_relation_acl_scope", "t_entity_facet", "t_relation_facet", "t_exact_evidence_binding", "t_entity_alias",
-        "t_relation", "t_entity", "t_evidence", "t_claim", "t_knowledge_card", "t_source"));
+        "t_relation", "t_entity", "t_evidence", "t_claim", "t_knowledge_card", "t_source",
+        // 衍生规则是挂在知识库上的配置，不是知识本身，清库时最容易漏掉。漏了就变成孤儿：
+        // 库已经不在了，规则还占着列表，于是规则总数一路涨到实际库的几十倍。
+        // 先删候选与运行记录，再删规则本身。
+        "t_derived_candidate", "t_derivation_run", "t_derivation_rule"));
 
     private final KnowledgeMapper mapper;
 
@@ -56,6 +63,10 @@ public class KnowledgeBasePurgeService {
 
     private final PlatformEventPublisher publisher;
 
+    /**
+     * 工作区行也由 {@code mapper} 读写：{@link KnowledgeMapper} 继承 {@link KnowledgeBaseMapper}，
+     * 再单独注入一个 KnowledgeBaseMapper 会让 Spring 看到两个候选 Bean 而启动失败。
+     */
     public KnowledgeBasePurgeService(KnowledgeMapper mapper, SourceFileStorageService sourceFileStorage, AiClient aiClient, PlatformEventPublisher
         publisher, IndexMapper indexMapper) {
         this.indexMapper = indexMapper;
@@ -84,6 +95,43 @@ public class KnowledgeBasePurgeService {
      * @return removed cardinality plus the stored source-file paths, which the caller passes to
      *         {@link #cleanup(Long, List, boolean)} after the commit
      */
+    @Transactional
+    /**
+     * 删除整个工作区：先清空知识与检索视图，再移除工作区本身。
+     *
+     * <p>必须按这个顺序：Elasticsearch / Milvus / 图库由 ai-service 持有，MySQL 里只记着
+     * 一个知识库 id。先把工作区行删掉，那些索引就再也没有按知识库清理的入口了，会变成
+     * 谁都够不着的孤儿数据。</p>
+     *
+     * <p>索引清理失败不阻断删除——它是派生态，下次重建会覆盖；而留着一个删不掉的工作区
+     * 更糟。所以这里的失败只记录，不回滚。</p>
+     *
+     * <p>删除不可逆，因此要求调用方显式确认：{@code confirm} 必须是知识库 id 或名称。一个
+     * 误触的 DELETE 不该清掉整个语料。</p>
+     */
+    public Map<String, Object> deleteWorkspace(Long kb, String confirm) {
+        KnowledgeBase base = mapper.getKnowledgeBase(kb);
+        if (base == null) {
+            throw new IllegalArgumentException("知识库不存在：id=" + kb);
+        }
+        User user = AuthContext.get();
+        boolean admin = user != null && UserRole.of(user.getRole()).canManageKnowledgeBases();
+        boolean owner = user != null && base.getCreatedBy() != null && base.getCreatedBy().equals(user.getId());
+        if (!admin && !owner) {
+            throw new IllegalArgumentException("只有知识库创建人或管理员可以删除该工作区");
+        }
+        boolean confirmed = confirm != null
+            && (confirm.equals(String.valueOf(kb)) || confirm.equalsIgnoreCase(String.valueOf(base.getName())));
+        if (!confirmed) {
+            throw new IllegalArgumentException("删除需要显式确认：confirm 传知识库 id 或名称");
+        }
+        Map<String, Object> result = purgeKnowledge(kb);
+        result.put("knowledgeBaseId", kb);
+        result.put("knowledgeBaseName", base.getName());
+        result.put("workspaceRemoved", mapper.deleteKnowledgeBase(kb) > 0);
+        return result;
+    }
+
     @Transactional
     public Map<String, Object> purgeKnowledge(Long kb) {
         Map<String, Object> result = new LinkedHashMap<String, Object>();

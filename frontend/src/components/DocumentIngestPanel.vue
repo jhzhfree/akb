@@ -147,6 +147,12 @@
                   :disabled="!isRetryableDocument(row)||retryingId===row.id"
                   :loading="retryingId===row.id"
                   @click.stop="retryDocumentRow(row)">重跑</el-button>
+                <!-- 只重跑抽取：解析成功但抽取为空时用它，避免为了重抽而把切片与证据编码整批换掉。 -->
+                <el-button
+                  link type="success" size="small"
+                  :disabled="Number(row.chunkCount||0)===0||reextractingId===row.id"
+                  :loading="reextractingId===row.id"
+                  @click.stop="reextractDocumentRow(row)">重跑抽取</el-button>
                 <el-button link type="info" size="small" @click.stop="openLog(row)">运行日志</el-button>
               </template>
             </el-table-column>
@@ -215,7 +221,7 @@ import type {
   BatchIngestStatus, IngestionRun, IngestionRunDetail, KnowledgeDocument, SourcePreview,
 } from '../types'
 import { documentStatusLabel, documentStatusTag, isRetryableDocument, stageLabel } from '../types'
-import { retryDocument, unwrap } from '../api/knowledge'
+import { reextractDocument, retryDocument, unwrap } from '../api/knowledge'
 import { confirmAction, notifyError, notifySuccess } from '../utils/feedback'
 import IngestionLogPanel from './IngestionLogPanel.vue'
 import ChunkExplorerPanel from './ChunkExplorerPanel.vue'
@@ -452,6 +458,34 @@ async function retryDocumentRow(row:KnowledgeDocument){
     emit('reloaded')
   }catch(e){ notifyError(e,'重跑失败') }
   finally{ retryingId.value = null }
+}
+
+/* ---- 只重跑抽取：复用已入库切片与证据编码，不重新解析 ---- */
+const reextractingId = ref<number|null>(null)
+async function reextractDocumentRow(row:KnowledgeDocument){
+  // 与「重跑」的区别必须写清楚：一个是重新解析，一个只重抽。选错会白换一批证据编码。
+  try{
+    await confirmAction({
+      title:'只重跑抽取？',
+      message:`将复用《${row.title}》已入库的 ${Number(row.chunkCount||0)} 个切片与证据编码重新抽取，`
+        + '不重新解析文件，已有引用不会断。解析失败、或还没有切片的文档请用「重跑」。',
+      confirmText:'重跑抽取',
+    })
+  }catch{ return }
+  reextractingId.value = row.id
+  try{
+    const d = unwrap(await reextractDocument(row.id),{})
+    if(d.skipped){
+      notifyError(new Error(String(d.reason||'该文档暂无可用切片')),'无法重跑抽取')
+      return
+    }
+    notifySuccess(
+      `抽取完成：卡片 ${Number(d.cards||0)} 条、断言 ${Number(d.claims||0)} 条`
+      + `，切片 ${Number(d.unitCount||0)} 个（已复用）`,
+    )
+    emit('reloaded')
+  }catch(e){ notifyError(e,'重跑抽取失败') }
+  finally{ reextractingId.value = null }
 }
 </script>
 

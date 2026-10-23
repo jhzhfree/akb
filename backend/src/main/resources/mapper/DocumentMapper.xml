@@ -80,4 +80,8 @@ LIMIT 1
 
 <select id="findContentUnitIdsByCodes" resultType="map">SELECT id,unit_code unitCode FROM t_content_unit WHERE unit_code IN <foreach collection="codes" item="code" open="(" separator="," close=")">#{code}</foreach></select>
 
+<select id="findReextractContext" resultType="map">SELECT d.id documentId, d.title title, d.raw_text rawText, s.id sourceId, s.knowledge_base_id knowledgeBaseId, s.authority_score authorityScore, CAST(IFNULL(s.permission_tags,'') AS CHAR) permissionTags FROM t_document d JOIN t_source_version sv ON sv.id=d.source_version_id JOIN t_source s ON s.id=sv.source_id WHERE d.id=#{documentId}</select>
+<select id="findUnitsWithEvidence" resultType="map">SELECT cu.id content_unit_id, cu.heading_path heading_path, cu.content content, cu.page_no page_no, cu.page_end page_end, cu.char_start char_start, cu.char_end char_end, cu.chunk_type chunk_type, cu.token_count token_count, e.evidence_code evidence_code FROM t_content_unit cu LEFT JOIN t_evidence e ON e.content_unit_id=cu.id WHERE cu.document_id=#{documentId} ORDER BY cu.id</select>
+<update id="updateExtractionStatus">UPDATE t_document SET extraction_status=#{status}, updated_time=NOW() WHERE id=#{id}</update>
+<update id="updateIndexStatus">UPDATE t_document SET index_status=#{status}, updated_time=NOW() WHERE id=#{id}</update>
 </mapper>

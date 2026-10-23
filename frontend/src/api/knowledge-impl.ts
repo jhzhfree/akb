@@ -106,6 +106,16 @@ export const getIngestionRun = (runId:number):Promise<ApiResponse<IngestionRunDe
 /** 重跑文档：仅 FAILED / DIRTY 可重跑，旧 Chunk revision 保留为 SUPERSEDED（设计 §16.1）。 */
 export const retryDocument = (documentId:number):Promise<ApiResponse<DocumentRetryResult>> =>
   axios.post(`/api/knowledge/documents/${documentId}/retry`, {}, { timeout:LONG_TIMEOUT_MS })
+
+/**
+ * 只重跑抽取，不重新解析文件。
+ *
+ * 与 retryDocument 的区别必须让用户看得见：后者从原始文件重新解析，会生成新的 Chunk
+ * revision 和一批新的证据编码；前者复用已入库的切片与证据编码，解析结果没问题时用它，
+ * 已有引用不会变成死链。
+ */
+export const reextractDocument = (documentId:number):Promise<ApiResponse<Record<string,unknown>>> =>
+  axios.post(`/api/knowledge/documents/${documentId}/reextract`, {}, { timeout:LONG_TIMEOUT_MS })
 /** 文档 Chunk 清单与切分元数据（设计 §7.2）。 */
 export const getDocumentChunks = (
   documentId:number,
