@@ -60,10 +60,12 @@ def main() -> int:
         if res.get("scanned"):
             continue  # 有产出就不要求诊断
         reasons[threshold] = diag.get("reason")
-        has_fields = all(k in diag for k in
-                         ("relations", "relationsAboveThreshold", "twoHopPaths", "twoHopAboveThreshold", "maxConfidence"))
+        # 图路径规则给的是关系与两跳统计，模板规则给的是跳过原因（状态不合格、置信度不足
+        # 各多少条）。字段名按规则类型而异，但都必须给出可核对的量——只有一句 reason 而
+        # 没有任何数字，等于没解释。
+        has_fields = any(k in diag for k in ("relations", "twoHopPaths", "skippedReasons", "maxConfidence"))
         checks.append((f"零产出带诊断：{name}", bool(diag.get("reason")) and has_fields,
-                       f"字段齐备={has_fields}，结论：{diag.get('reason')}"))
+                       f"诊断量齐备={has_fields}，结论：{diag.get('reason')}"))
 
     # 阈值不同 → 结论不同：能区分成因的诊断才算有用。
     distinct = len({v for v in reasons.values() if v}) > 1
