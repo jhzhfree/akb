@@ -16,9 +16,11 @@ import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -240,11 +242,21 @@ public class KnowledgeExtractionService {
     }
 
     @SuppressWarnings("unchecked")
+    /**
+     * 卡片入库：先过“空壳 / 重复”两道闸门，再写库。
+     *
+     * <p>两道闸门都是被真实数据逼出来的：一批模板化的制度文档抽出过一张标题等于文档名、
+     * 正文只有标题加页脚的卡片（检索时它排在前面却什么都没说）；同一批里还有两张标题完全
+     * 相同的卡片，分别来自两篇使用了同一套章节名的文档。前者污染排序，后者让“知识资产”
+     * 列表出现一眼可见的重复。</p>
+     */
     private List<Map<String, Object>> persistCards(Long knowledgeBaseId, Long documentId, Object cardsObject, String permissionTags, Double authorityScore) {
         List<Map<String, Object>> saved = new ArrayList<Map<String, Object>>();
         if (!(cardsObject instanceof List)) {
             return saved;
         }
+        // 已有标题懒加载：只有当这一批真的有卡片要写时才查一次库。
+        Set<String> existingTitles = null;
         for (Object item : (List<Object>) cardsObject) {
             if (!(item instanceof Map)) {
                 continue;
@@ -264,6 +276,13 @@ public class KnowledgeExtractionService {
             card.setStatus(deterministic ? KnowledgeStatus.APPROVED.name() : KnowledgeStatus.DRAFT.name());
             card.setPermissionTags(permissionTags);
             card.setVersion(1);
+            if (existingTitles == null) {
+                existingTitles = new HashSet<String>(normalizedKeys(cardClaimMapper.listCardTitles(knowledgeBaseId)));
+            }
+            String titleKey = normalizeKey(card.getTitle());
+            if (titleKey.isEmpty() || isStubCard(card) || !existingTitles.add(titleKey)) {
+                continue;
+            }
             cardClaimMapper.insertCard(card);
             governanceMapper.snapshotKnowledgeObject(knowledgeBaseId, "CARD", card.getKnowledgeCode(), "CREATED",
                 deterministic ? "DETERMINISTIC_PARSE" : "AI_EXTRACTION");
@@ -287,11 +306,21 @@ public class KnowledgeExtractionService {
     }
 
     @SuppressWarnings("unchecked")
+    /**
+     * 断言入库：先过“无意义 / 重复”两道闸门，再写库。
+     *
+     * <p>同一批文档抽出过“知识质量月度评估 V1.0 DESCRIBES 知识质量月度评估 V1.0”这样的
+     * 主张——主词与宾词相同，读起来是一句废话，却会占住结构化通道、还会被冲突检测当成
+     * 两条互相矛盾的主张（它与同一主词的另一条宾词不同），把状态判成 CONFLICTED，
+     * 于是这条知识既进不了衍生也进不了检索。重复三元组则来自多篇文档命中同一条规则。</p>
+     */
     private List<Map<String, Object>> persistClaims(Long knowledgeBaseId, Long documentId, Object claimsObject, String permissionTags, Double authorityScore) {
         List<Map<String, Object>> saved = new ArrayList<Map<String, Object>>();
         if (!(claimsObject instanceof List)) {
             return saved;
         }
+        // 已有三元组懒加载：只有当这一批真的有断言要写时才查一次库。
+        Set<String> existingTriples = null;
         for (Object item : (List<Object>) claimsObject) {
             if (!(item instanceof Map)) {
                 continue;
@@ -320,6 +349,12 @@ public class KnowledgeExtractionService {
             // knowledge still enters the governance queue, as before.
             claim.setStatus(deterministic ? KnowledgeStatus.APPROVED.name() : KnowledgeStatus.UNCERTAIN.name());
             claim.setPermissionTags(permissionTags);
+            if (existingTriples == null) {
+                existingTriples = new HashSet<String>(normalizedKeys(cardClaimMapper.listClaimTriples(knowledgeBaseId)));
+            }
+            if (!isMeaningfulClaim(claim) || !existingTriples.add(claimTripleKey(claim))) {
+                continue;
+            }
             cardClaimMapper.insertClaim(claim);
             governanceMapper.snapshotKnowledgeObject(knowledgeBaseId, "CLAIM", claim.getClaimCode(), "CREATED",
                 deterministic ? "DETERMINISTIC_PARSE" : "AI_EXTRACTION");
@@ -650,6 +685,76 @@ public class KnowledgeExtractionService {
             }
         });
         return conflictsObject;
+    }
+
+    /**
+     * 归一化比较键：去掉空白与标点差异，让“知识管理办法 V1.0”与“知识管理办法V1.0”算同一条。
+     *
+     * <p>只用于判断相同与否，不入库、不展示，所以可以放心折叠大小写与标点。</p>
+     */
+    private String normalizeKey(String value) {
+        if (value == null) {
+            return "";
+        }
+        StringBuilder builder = new StringBuilder();
+        for (int i = 0; i < value.length(); i++) {
+            char c = value.charAt(i);
+            if (Character.isWhitespace(c) || c == '｜' || c == '|' || c == '：' || c == ':' || c == '、' || c == '，'
+                || c == ',' || c == '。' || c == '.' || c == '（' || c == '）' || c == '(' || c == ')') {
+                continue;
+            }
+            builder.append(Character.toLowerCase(c));
+        }
+        return builder.toString();
+    }
+
+    private Set<String> normalizedKeys(List<String> values) {
+        Set<String> keys = new HashSet<String>();
+        if (values == null) {
+            return keys;
+        }
+        for (String value : values) {
+            String key = normalizeKey(value);
+            if (!key.isEmpty()) {
+                keys.add(key);
+            }
+        }
+        return keys;
+    }
+
+    /**
+     * 空壳卡片：正文去掉标题与摘要后所剩无几。
+     *
+     * <p>判据刻意用“正文减标题减摘要”而不是正文长度——一张卡片可以很短但言之有物，
+     * 而空壳的共同点是正文只是把标题和摘要重复了一遍（真实样例里正文等于标题加页脚）。</p>
+     */
+    private boolean isStubCard(KnowledgeCard card) {
+        String residual = String.valueOf(card.getContent() == null ? "" : card.getContent());
+        residual = residual.replace(String.valueOf(card.getTitle() == null ? "" : card.getTitle()), "");
+        residual = residual.replace(String.valueOf(card.getSummary() == null ? "" : card.getSummary()), "");
+        return normalizeKey(residual).length() < 8;
+    }
+
+    /**
+     * 断言是否言之有物：主词与宾词相同、或宾词是被塞进来的结构化噪声，都不算。
+     *
+     * <p>噪声的典型形态是“文档编号: 文档类型；REPORT-001: 报告”——抽取把文档头部的
+     * 元数据表当成了一句话的宾语。它既读不通，又会和同一主词的正常主张互相判成冲突。</p>
+     */
+    private boolean isMeaningfulClaim(Claim claim) {
+        String subject = normalizeKey(claim.getSubject());
+        String objectValue = normalizeKey(claim.getObjectValue());
+        if (subject.isEmpty() || objectValue.isEmpty() || subject.equals(objectValue)) {
+            return false;
+        }
+        String raw = String.valueOf(claim.getObjectValue() == null ? "" : claim.getObjectValue());
+        int colons = raw.replaceAll("[^：:]", "").length();
+        // 两个以上的键值对分隔符 + 分号分隔：这是表格，不是一句主张。
+        return !(colons >= 2 && (raw.contains("；") || raw.contains(";")));
+    }
+
+    private String claimTripleKey(Claim claim) {
+        return normalizeKey(claim.getSubject()) + "|" + normalizeKey(claim.getPredicate()) + "|" + normalizeKey(claim.getObjectValue());
     }
 
     /**

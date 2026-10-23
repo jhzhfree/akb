@@ -253,10 +253,30 @@ public class DocumentIngestionService {
             observabilityService.event(run.getId(), "EXTRACTION_STARTED", "EXTRACT", "RUNNING", "开始抽取 Knowledge Card / Claim / Entity / Relation", null);
             stageHolder[0] = "EXTRACT";
             documentMapper.updateDocumentState(state.document.getId(), "PROCESSING", "EXTRACT", null, retryCount);
-            Map<String, Object> knowledgeResult = extractionService.extract(buildExtractionPayload(knowledgeBaseId, state.source, state.document,
-                parsed, state.indexChunks, parsedChunks));
+            Map<String, Object> extractionPayload = buildExtractionPayload(knowledgeBaseId, state.source, state.document,
+                parsed, state.indexChunks, parsedChunks);
+            Map<String, Object> knowledgeResult = extractionService.extract(extractionPayload);
             int cardCount = resultCount(knowledgeResult, "cards");
             int claimCount = resultCount(knowledgeResult, "claims");
+            /**
+             * 批量导入是并发的，并发抽取偶尔会拿到一份“什么都没有”的结果，而这段流程原本
+             * 无论拿到什么都写 SUCCESS——文档会被标成 READY、run 也会被标成 SUCCEEDED，
+             * 于是这篇文档的知识就这么没了，界面上却看不出任何异常（验证时 4 篇里丢了 2 篇，
+             * 且每次丢的不是同一篇）。这里补两步：
+             * 1) 空结果重试一次：抽取是幂等的，且入库前有去重闸门，重试不会产出重复卡片；
+             * 2) 仍然为空就记一条 WARN 事件，让“抽不出来”这件事在事件流里看得见，
+             *    而不是混在成功的 ingestion 里。
+             */
+            if (cardCount == 0 && claimCount == 0) {
+                knowledgeResult = extractionService.extract(extractionPayload);
+                cardCount = resultCount(knowledgeResult, "cards");
+                claimCount = resultCount(knowledgeResult, "claims");
+            }
+            if (cardCount == 0 && claimCount == 0) {
+                observabilityService.event(run.getId(), "EXTRACTION_EMPTY", "EXTRACT", "WARN",
+                    "抽取未产出任何卡片或断言（已重试一次），该文档已解析但无知识落地",
+                    extractionEventDetail(state.document.getId(), knowledgeResult));
+            }
             observabilityService.event(run.getId(), "EXTRACTION_COMPLETED", "EXTRACT", "SUCCESS", "候选知识抽取完成",
                 extractionEventDetail(state.document.getId(), knowledgeResult));
             observabilityService.complete(run.getId(), state.indexChunks.size(), cardCount, claimCount);

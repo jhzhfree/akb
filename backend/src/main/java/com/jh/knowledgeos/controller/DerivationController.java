@@ -125,10 +125,22 @@ public class DerivationController {
         return ApiResponse.ok("deleted");
     }
 
+    /**
+     * 手动执行衍生规则。
+     *
+     * <p>知识库从 query 参数取，同时也接受请求体里的 <code>knowledgeBaseId</code>：调用方
+     * 按“POST + JSON body”的直觉传 kb 时，原先会被静默丢弃，规则只能靠自己行上记录的知识库
+     * 兜底，一旦规则行没带 kb 就直接报“缺少知识库”。两条路都收，行为才和直觉一致。</p>
+     */
     @PostMapping("/rules/{ruleCode}/run")
     @Operation(summary = "手动执行衍生规则（立即产出候选并记录一次运行）")
-    public ApiResponse<Object> run(@PathVariable String ruleCode, @RequestParam(value = "kb", required = false) Long kb) {
-        return ApiResponse.ok(derivation.run(kb, ruleCode, KnowledgeDerivationService.SCHEDULE_MANUAL));
+    public ApiResponse<Object> run(@PathVariable String ruleCode, @RequestParam(value = "kb", required = false) Long kb,
+        @RequestBody(required = false) Map<String, Object> body) {
+        Long scope = kb;
+        if (scope == null && body != null && body.get("knowledgeBaseId") != null) {
+            scope = Long.valueOf(String.valueOf(body.get("knowledgeBaseId")));
+        }
+        return ApiResponse.ok(derivation.run(scope, ruleCode, KnowledgeDerivationService.SCHEDULE_MANUAL));
     }
 
     @PostMapping("/rules/{ruleCode}/plan")
