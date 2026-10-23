@@ -23,6 +23,7 @@ def test_pipeline(tmp_path: Path):
         for i, chunk in enumerate(parsed["chunks"], 1):
             item = dict(chunk)
             item["content_unit_id"] = 900000 + i
+            item["evidence_code"] = "EVD_TEST_%s" % i
             chunks.append(item)
 
         await KnowledgeIndexer().index_chunks(9999, 9999, sample.name, "test://sample.md", chunks, [])

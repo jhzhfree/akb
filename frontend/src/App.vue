@@ -829,9 +829,15 @@ async function retryBatch(code:string){
     startBatchWatch()
   }catch(e){err(e,'重跑失败文件失败')}
 }
-async function ask(){if(!q.value.trim())return;
-asking.value=true;
-try{result.value=unwrap(await queryKnowledge(knowledgeBaseId.value,q.value,[],answerFormat.value,useMemory.value),null);await loadQueryHistory()}catch(e){err(e)}finally{asking.value=false}}
+async function ask(){
+  if(!q.value.trim())return
+  asking.value=true
+  try{
+    result.value=unwrap(await queryKnowledge(knowledgeBaseId.value,q.value,[],answerFormat.value,useMemory.value),null)
+    await loadQueryHistory()
+  }catch(e){err(e)}
+  finally{asking.value=false}
+}
 async function openEvidence(evidenceCode:string){
 evidenceVisible.value=true;evidenceLoading.value=true
 try{evidenceDetail.value=unwrap(await getEvidenceDetail(knowledgeBaseId.value,evidenceCode),null)}

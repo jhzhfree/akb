@@ -13,8 +13,6 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
-import java.util.concurrent.Semaphore;
-import java.util.concurrent.TimeUnit;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.concurrent.Callable;
@@ -32,34 +30,6 @@ public class DocumentIngestionService {
     private static final double DEFAULT_AUTHORITY_SCORE = 0.80D;
 
     private static final int DB_BATCH_SIZE = 100;
-
-    /**
-     * 抽取排队的最长等待时间：等不到槽位就让这次摄入带着明确原因失败，而不是一直挂着，
-     * 从外面看跟“后端卡死”没有区别。
-     */
-    private static final int EXTRACTION_QUEUE_TIMEOUT_SECONDS = 300;
-
-    /**
-     * 抽取阶段的并发闸门。
-     *
-     * <p>抽取是这条链路上最重的一步，也是唯一会争抢模型资源的一步：解析、持久化、索引
-     * 都可以并发，只有模型推理会被排队。批量导入按 3 并发同时打抽取时，本地模型
-     * （{@code qwen2.5:7b}）会被打满，表现为某些文档拿到一份“什么都没有”的结果——
-     * 统计里显示为 {@code received=0}，也就是上游一个候选都没给。</p>
-     *
-     * <p><b>实测：{@code received=0} 的真正原因不是并发</b>，而是传给抽取服务的 units 取错了
-     * 对象（用了不带 evidence_code 的解析原始块，模型调用失败时兜底路径产不出任何知识）。
-     * 串行导入同样会随机出现空产出，且失败的文档每次不同。闸门修好前曾把并发降到 1 观察：
-     * 排队耗时随之涨到 70–112 秒/篇，空产出却照旧——说明这个代价没有换来任何收益。因此
-     * 默认恢复 3；闸门本身保留，排队耗时继续上报，一旦模型层真成为瓶颈，改配置即可。</p>
-     *
-     * <p>只把这一步串行化，其余阶段仍并发，因此总耗时增加有限。</p>
-     *
-     * <p><b>这只约束本实例。</b>多实例部署时每个实例各有一道闸门，总量仍是“实例数 × 上限”；
-     * 真正的部署级限制要在共享的模型调用层做，这里解决的是单机批量导入把模型打满这一
-     * 最常见的情形。</p>
-     */
-    private final Semaphore extractionSlot;
 
     private final KnowledgeMapper mapper;
 
@@ -92,11 +62,13 @@ public class DocumentIngestionService {
 
     private final TaskCenterService taskCenterService;
 
+    private final DocumentExtractionAccess extractionAccess;
+
     public DocumentIngestionService(KnowledgeMapper mapper, AiClient aiClient, KnowledgeExtractionService extractionService, ObjectMapper
         objectMapper, IdGenerator idGenerator, TransactionRunner transactionRunner, IndexOutboxService outboxService, IngestionObservabilityService
         observabilityService, SourceFileStorageService sourceFileStorage, PlatformEventPublisher publisher, ChunkPolicyService chunkPolicyService,
         KbScenarioService kbScenarioService, @Lazy TaskCenterService taskCenterService, DocumentMapper documentMapper, EvidenceMapper evidenceMapper,
-        @Value("${knowledge.extraction.concurrency:3}") int extractionConcurrency) {
+        DocumentExtractionAccess extractionAccess) {
         this.evidenceMapper = evidenceMapper;
         this.documentMapper = documentMapper;
         this.mapper = mapper;
@@ -109,7 +81,7 @@ public class DocumentIngestionService {
         this.observabilityService = observabilityService;
         this.sourceFileStorage = sourceFileStorage;
         this.publisher = publisher;
-        this.extractionSlot = new Semaphore(Math.max(1, extractionConcurrency));
+        this.extractionAccess = extractionAccess;
         this.chunkPolicyService = chunkPolicyService;
         this.kbScenarioService = kbScenarioService;
         this.taskCenterService = taskCenterService;
@@ -155,6 +127,7 @@ public class DocumentIngestionService {
      * traceability.
      */
     public Map<String, Object> retry(Long documentId) throws Exception {
+        extractionAccess.requireWrite(documentId);
         Map<String, Object> context = documentMapper.findDocumentRetryContext(documentId);
         if (context == null) {
             throw new IllegalArgumentException("文档不存在：" + documentId);
@@ -279,6 +252,7 @@ public class DocumentIngestionService {
                     throw new IllegalStateException("Persist parsed document failed", ex);
                 }
             });
+            observabilityService.checkpoint(run.getId(), state.indexChunks.size(), 0, 0);
             stageHolder[0] = "CHUNK";
             publisher.emitUser(PlatformEventTypes.CHUNK_CHANGED, knowledgeBaseId, PlatformEventPublisher.SOURCE_UI, "DOCUMENT",
                 String.valueOf(state.document.getId()), "文档切片完成：" + state.indexChunks.size() + " 个 Chunk（revision " + state.revision + "）",
@@ -302,39 +276,19 @@ public class DocumentIngestionService {
              */
             Map<String, Object> extractionPayload = buildExtractionPayload(knowledgeBaseId, state.source, state.document,
                 parsed, state.indexChunks, state.indexChunks);
-            Map<String, Object> knowledgeResult = extractWithSlot(extractionPayload);
+            documentMapper.updateExtractionStatus(state.document.getId(), "RUNNING");
+            Map<String, Object> knowledgeResult = extractionService.extract(extractionPayload);
             int cardCount = resultCount(knowledgeResult, "cards");
             int claimCount = resultCount(knowledgeResult, "claims");
-            /**
-             * 批量导入是并发的，并发抽取偶尔会拿到一份“什么都没有”的结果，而这段流程原本
-             * 无论拿到什么都写 SUCCESS——文档会被标成 READY、run 也会被标成 SUCCEEDED，
-             * 于是这篇文档的知识就这么没了，界面上却看不出任何异常（验证时 4 篇里丢了 2 篇，
-             * 且每次丢的不是同一篇）。这里补两步：
-             * 1) 空结果重试一次：抽取是幂等的（幂等键由数据库唯一约束保证），重试不会产出重复知识；
-             * 2) 仍然为空就记一条 WARN 事件，让“抽不出来”这件事在事件流里看得见，
-             *    而不是混在成功的 ingestion 里。
-             *
-             * <p><b>判空看的是“这一次留下了几条”，不是“返回了几条候选”</b>：重跑一篇已经
-             * 抽取过的文档时，新增为 0、全部命中已有知识（复用并补证据）是完全正常的成功，
-             * 按返回条数判空会把它误当成失败反复重抽。</p>
-             */
-            if (persistedCount(knowledgeResult) == 0) {
-                knowledgeResult = extractWithSlot(extractionPayload);
-                cardCount = resultCount(knowledgeResult, "cards");
-                claimCount = resultCount(knowledgeResult, "claims");
+            String extractionStatus = String.valueOf(knowledgeResult.get("extractionStatus"));
+            observabilityService.checkpoint(run.getId(), state.indexChunks.size(), cardCount, claimCount);
+            if (!"EXTRACTED".equals(extractionStatus)) {
+                observabilityService.event(run.getId(), "EXTRACTION_" + extractionStatus, "EXTRACT", "WARN",
+                    "抽取阶段完成：" + extractionStatus, extractionEventDetail(state.document.getId(), knowledgeResult));
             }
-            if (persistedCount(knowledgeResult) == 0) {
-                observabilityService.event(run.getId(), "EXTRACTION_EMPTY", "EXTRACT", "WARN",
-                    "抽取未产出任何卡片或断言（已重试一次），该文档已解析但无知识落地",
-                    extractionEventDetail(state.document.getId(), knowledgeResult));
-            }
-            // 抽取的成败单独记一列。解析成功但抽取为空，正是最需要被筛出来重跑的一类文档；
-            // 混在文档 status 里就只能靠“重新导入一遍试试”来发现。
-            documentMapper.updateExtractionStatus(state.document.getId(),
-                persistedCount(knowledgeResult) > 0 ? "EXTRACTED" : "EMPTY");
             observabilityService.event(run.getId(), "EXTRACTION_COMPLETED", "EXTRACT", "SUCCESS", "候选知识抽取完成",
                 extractionEventDetail(state.document.getId(), knowledgeResult));
-            observabilityService.complete(run.getId(), state.indexChunks.size(), cardCount, claimCount);
+            observabilityService.completeOutcome(run.getId(), state.indexChunks.size(), cardCount, claimCount, extractionStatus);
             Map<String, Object> result = new LinkedHashMap<String, Object>();
             result.put("runId", run.getId());
             result.put("runCode", run.getRunCode());
@@ -344,12 +298,12 @@ public class DocumentIngestionService {
             result.put("chunkCount", state.indexChunks.size());
             result.put("chunkRevision", state.revision);
             result.put("status", "READY");
+            result.put("extractionStatus", extractionStatus);
             result.put("index", state.indexEvent);
             result.put("standardIndex", state.standardEvent);
             result.put("standard", standardSummary(standard));
             result.put("knowledge", knowledgeResult);
-            // READY is claimed only after extraction succeeded: the document is not usable
-            // knowledge while its cards and claims are still missing.
+            // READY describes parsed source readiness; extraction and index status are independent dimensions.
             stageHolder[0] = "READY";
             documentMapper.updateDocumentState(state.document.getId(), "READY", "READY", null, retryCount);
             publisher.emitUser(PlatformEventTypes.INGESTION_COMPLETED, knowledgeBaseId, PlatformEventPublisher.SOURCE_UI, "INGESTION_RUN",
@@ -361,6 +315,7 @@ public class DocumentIngestionService {
             Long failedDocument = documentIdHolder[0];
             if (failedDocument != null) {
                 documentMapper.updateDocumentState(failedDocument, "FAILED", stageHolder[0], abbreviate(ex.getMessage(), 900), retryCount);
+                if ("EXTRACT".equals(stageHolder[0])) { documentMapper.updateExtractionStatus(failedDocument, "FAILED"); }
             }
             Map<String, Object> detail = receivedDetail(run, material, authorityScore);
             detail.put("stage", stageHolder[0]);
@@ -411,6 +366,8 @@ public class DocumentIngestionService {
         detail.put("chunkCount", state.indexChunks.size());
         detail.put("cardCount", cardCount);
         detail.put("claimCount", claimCount);
+        detail.put("extractionStatus", knowledgeResult.get("extractionStatus"));
+        detail.put("extractionStats", knowledgeResult.get("extractionStats"));
         detail.put("conflictCount", resultCount(knowledgeResult, "conflicts"));
         return detail;
     }
@@ -439,68 +396,48 @@ public class DocumentIngestionService {
      * 重建——重跑抽取本身不碰索引。</p>
      */
     public Map<String, Object> reextract(Long documentId) {
-        Map<String, Object> context = documentMapper.findReextractContext(documentId);
-        if (context == null) {
-            throw new IllegalArgumentException("文档不存在：id=" + documentId);
-        }
+        Map<String, Object> context = extractionAccess.requireWrite(documentId);
         List<Map<String, Object>> units = documentMapper.findUnitsWithEvidence(documentId);
-        Map<String, Object> result = new LinkedHashMap<String, Object>();
-        result.put("documentId", documentId);
-        result.put("unitCount", units == null ? 0 : units.size());
-        if (units == null || units.isEmpty()) {
-            result.put("skipped", Boolean.TRUE);
-            result.put("reason", "该文档还没有已入库的标准单元，需要先完整导入一次");
-            return result;
-        }
-        Map<String, Object> payload = new LinkedHashMap<String, Object>();
-        payload.put("knowledgeBaseId", context.get("knowledgeBaseId"));
-        payload.put("sourceId", context.get("sourceId"));
-        payload.put("documentId", documentId);
-        payload.put("text", context.get("rawText"));
-        payload.put("chunks", units);
-        payload.put("units", units);
-        payload.put("permissionTags", context.get("permissionTags"));
-        Map<String, Object> knowledge = extractWithSlot(payload);
-        int persisted = persistedCount(knowledge);
-        String extractionStatus = persisted > 0 ? "EXTRACTED" : "EMPTY";
-        documentMapper.updateExtractionStatus(documentId, extractionStatus);
-        documentMapper.updateIndexStatus(documentId, "STALE");
-        result.put("cards", resultCount(knowledge, "cards"));
-        result.put("claims", resultCount(knowledge, "claims"));
-        result.put("persisted", persisted);
-        result.put("extractionStatus", extractionStatus);
-        result.put("indexStatus", "STALE");
-        return result;
-    }
-
-    /**
-     * 带并发闸门的抽取调用：先等模型槽位，再调模型，并把纯排队耗时带回事件里。
-     *
-     * <p>排队时间是判断“模型是不是瓶颈”的直接证据：批次里每篇都在排队，说明并发配高了；
-     * 排队恒为 0 却仍有空结果，瓶颈就在别处——这两种情况的处置方向完全不同，没有这个数
-     * 只能靠猜。</p>
-     */
-    private Map<String, Object> extractWithSlot(Map<String, Object> payload) {
-        long arrivedAt = System.currentTimeMillis();
-        boolean acquired = false;
+        if (units == null || units.isEmpty()) { throw new IllegalStateException("No active evidence-backed units; parse the document first"); }
+        com.jh.knowledgeos.domain.IngestionRun run = observabilityService.start(
+            Long.valueOf(String.valueOf(context.get("knowledgeBaseId"))), "重跑抽取：" + context.get("title"));
+        documentMapper.updateExtractionStatus(documentId, "RUNNING");
         try {
-            acquired = extractionSlot.tryAcquire(EXTRACTION_QUEUE_TIMEOUT_SECONDS, TimeUnit.SECONDS);
-        } catch (InterruptedException ex) {
-            Thread.currentThread().interrupt();
-            throw new IllegalStateException("抽取排队被中断", ex);
-        }
-        long queuedMs = System.currentTimeMillis() - arrivedAt;
-        if (!acquired) {
-            throw new IllegalStateException("抽取排队超时：" + EXTRACTION_QUEUE_TIMEOUT_SECONDS + "s 内未等到模型槽位");
-        }
-        try {
-            Map<String, Object> result = extractionService.extract(payload);
-            if (result != null) {
-                result.put("extractionQueueMs", queuedMs);
-            }
+            Map<String, Object> payload = new LinkedHashMap<String, Object>();
+            payload.put("knowledgeBaseId", context.get("knowledgeBaseId"));
+            payload.put("sourceId", context.get("sourceId"));
+            payload.put("documentId", documentId);
+            // Only current units form model input; raw_text may describe an older failed parsing attempt.
+            List<String> texts = new ArrayList<String>();
+            for (Map<String, Object> unit : units) { texts.add(String.valueOf(unit.get("content"))); }
+            payload.put("text", String.join("\n\n", texts));
+            payload.put("chunks", units);
+            payload.put("units", units);
+            payload.put("permissionTags", context.get("permissionTags"));
+            Map<String, Object> knowledge = extractionService.extract(payload);
+            int cards = resultCount(knowledge, "cards");
+            int claims = resultCount(knowledge, "claims");
+            observabilityService.checkpoint(run.getId(), units.size(), cards, claims);
+            String outcome = String.valueOf(knowledge.get("extractionStatus"));
+            documentMapper.refreshDocumentIndexStatus(documentId);
+            observabilityService.event(run.getId(), "EXTRACTION_COMPLETED", "EXTRACT", outcome,
+                "重跑抽取完成", extractionEventDetail(documentId, knowledge));
+            observabilityService.completeOutcome(run.getId(), units.size(), cards, claims, outcome);
+            Map<String, Object> result = new LinkedHashMap<String, Object>();
+            result.put("documentId", documentId);
+            result.put("runId", run.getId());
+            result.put("unitCount", units.size());
+            result.put("cards", cards);
+            result.put("claims", claims);
+            result.put("persisted", persistedCount(knowledge));
+            result.put("extractionStatus", outcome);
+            result.put("extractionStats", knowledge.get("extractionStats"));
+            result.put("postProcessingWarnings", knowledge.get("postProcessingWarnings"));
             return result;
-        } finally {
-            extractionSlot.release();
+        } catch (RuntimeException ex) {
+            documentMapper.updateExtractionStatus(documentId, "FAILED");
+            observabilityService.fail(run.getId(), "EXTRACT", ex);
+            throw ex;
         }
     }
 

@@ -101,7 +101,8 @@ VALUES(#{runCode},#{kb},#{ruleCode},#{triggerType},'RUNNING',CURRENT_TIMESTAMP)<
 
 <select id="listDerivationRuns" resultType="map">SELECT run_code runCode,knowledge_base_id knowledgeBaseId,
   rule_code ruleCode,trigger_type triggerType,status,scanned_count scannedCount,candidate_count candidateCount,
-  stale_count staleCount,error_message errorMessage,started_time startedTime,finished_time finishedTime
+  stale_count staleCount,error_message errorMessage,execution_summary_json executionSummaryJson,
+  started_time startedTime,finished_time finishedTime
 FROM t_derivation_run WHERE (knowledge_base_id=#{kb} OR #{kb} IS NULL)
 <if test="ruleCode != null and ruleCode != ''">AND rule_code=#{ruleCode}</if>
 ORDER BY started_time DESC,id DESC LIMIT #{limit}</select>
@@ -145,4 +146,14 @@ FROM t_claim WHERE knowledge_base_id=#{kb} AND IFNULL(confidence,0)&gt;=#{minCon
   AND IFNULL(status,'PENDING_REVIEW') IN ('APPROVED','EFFECTIVE','ACTIVE','PENDING_REVIEW')
 ORDER BY confidence DESC,id DESC LIMIT #{limit}</select>
 
+<update id="updateDerivationSummary">
+UPDATE t_derivation_run SET execution_summary_json=CAST(#{summary} AS JSON) WHERE run_code=#{runCode}
+</update>
+<select id="diagnoseDerivationClaims" resultType="map">
+SELECT COUNT(*) total,
+ COALESCE(SUM(IFNULL(status,'PENDING_REVIEW') NOT IN ('APPROVED','EFFECTIVE','ACTIVE','PENDING_REVIEW')),0) ineligibleStatus,
+ COALESCE(SUM(IFNULL(status,'PENDING_REVIEW') IN ('APPROVED','EFFECTIVE','ACTIVE','PENDING_REVIEW')
+ AND IFNULL(confidence,0)&lt;#{minConfidence}),0) belowConfidence
+FROM t_claim WHERE knowledge_base_id=#{kb}
+</select>
 </mapper>

@@ -74,6 +74,10 @@ public interface DerivationMapper {
             @Param("candidateCount") int candidateCount, @Param("staleCount") int staleCount, @Param("errorMessage") String errorMessage,
             @Param("finishedTime") String finishedTime);
 
+    int updateDerivationSummary(@Param("runCode") String runCode, @Param("summary") String summary);
+
+    Map<String, Object> diagnoseDerivationClaims(@Param("kb") Long kb, @Param("minConfidence") double minConfidence);
+
     List<Map<String, Object>> listDerivationRuns(@Param("kb") Long kb, @Param("ruleCode") String ruleCode, @Param("limit") int limit);
 
     /**

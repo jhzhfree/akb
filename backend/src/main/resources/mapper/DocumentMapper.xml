@@ -53,7 +53,8 @@ LIMIT 1
 </select>
 
 
-<select id="listDocuments" resultType="map">SELECT d.id,d.document_code documentCode,d.title,d.mime_type mimeType,d.parse_status parseStatus,d.status,d.current_stage currentStage,d.error_message errorMessage,d.retry_count retryCount,d.chunk_count chunkCount,s.name sourceName,s.id sourceId,d.created_time createdTime FROM t_document d JOIN t_source_version sv ON sv.id=d.source_version_id JOIN t_source s ON s.id=sv.source_id WHERE s.knowledge_base_id=#{kb}<choose><when test="permissionTags == null"></when><when test="permissionTags != null and permissionTags.size() > 0"> AND (s.permission_tags IS NULL OR JSON_LENGTH(s.permission_tags)=0 OR <foreach collection="permissionTags" item="tag" open="(" separator=" OR " close=")">JSON_CONTAINS(s.permission_tags, JSON_QUOTE(#{tag}))</foreach>)</when><otherwise> AND (s.permission_tags IS NULL OR JSON_LENGTH(s.permission_tags)=0)</otherwise></choose> ORDER BY d.created_time DESC</select>
+<select id="listDocuments" resultType="map">SELECT d.id,d.document_code documentCode,d.title,d.mime_type mimeType,d.parse_status parseStatus,d.extraction_status extractionStatus,d.index_status indexStatus,
+ d.extraction_summary_json extractionSummaryJson,d.status,d.current_stage currentStage,d.error_message errorMessage,d.retry_count retryCount,d.chunk_count chunkCount,s.name sourceName,s.id sourceId,d.created_time createdTime FROM t_document d JOIN t_source_version sv ON sv.id=d.source_version_id JOIN t_source s ON s.id=sv.source_id WHERE s.knowledge_base_id=#{kb}<choose><when test="permissionTags == null"></when><when test="permissionTags != null and permissionTags.size() > 0"> AND (s.permission_tags IS NULL OR JSON_LENGTH(s.permission_tags)=0 OR <foreach collection="permissionTags" item="tag" open="(" separator=" OR " close=")">JSON_CONTAINS(s.permission_tags, JSON_QUOTE(#{tag}))</foreach>)</when><otherwise> AND (s.permission_tags IS NULL OR JSON_LENGTH(s.permission_tags)=0)</otherwise></choose> ORDER BY d.created_time DESC</select>
 
 
 <select id="listDocumentUnits" resultType="map">SELECT cu.id unitId,cu.unit_code unitCode,cu.heading_path headingPath,cu.chunk_type chunkType,cu.page_no pageNo,cu.content content,e.evidence_code evidenceCode FROM t_content_unit cu LEFT JOIN t_evidence e ON e.content_unit_id=cu.id WHERE cu.document_id=#{documentId} AND cu.status='ACTIVE' ORDER BY cu.id</select>
@@ -81,7 +82,41 @@ LIMIT 1
 <select id="findContentUnitIdsByCodes" resultType="map">SELECT id,unit_code unitCode FROM t_content_unit WHERE unit_code IN <foreach collection="codes" item="code" open="(" separator="," close=")">#{code}</foreach></select>
 
 <select id="findReextractContext" resultType="map">SELECT d.id documentId, d.title title, d.raw_text rawText, s.id sourceId, s.knowledge_base_id knowledgeBaseId, s.authority_score authorityScore, CAST(IFNULL(s.permission_tags,'') AS CHAR) permissionTags FROM t_document d JOIN t_source_version sv ON sv.id=d.source_version_id JOIN t_source s ON s.id=sv.source_id WHERE d.id=#{documentId}</select>
-<select id="findUnitsWithEvidence" resultType="map">SELECT cu.id content_unit_id, cu.heading_path heading_path, cu.content content, cu.page_no page_no, cu.page_end page_end, cu.char_start char_start, cu.char_end char_end, cu.chunk_type chunk_type, cu.token_count token_count, e.evidence_code evidence_code FROM t_content_unit cu LEFT JOIN t_evidence e ON e.content_unit_id=cu.id WHERE cu.document_id=#{documentId} ORDER BY cu.id</select>
+<select id="findUnitsWithEvidence" resultType="map">SELECT cu.id content_unit_id, cu.unit_code unit_id, cu.heading_path heading_path, cu.content content, cu.page_no page_no, cu.page_end page_end, cu.char_start char_start, cu.char_end char_end, cu.chunk_type chunk_type, cu.token_count token_count, e.id evidence_id, e.evidence_code evidence_code FROM t_content_unit cu LEFT JOIN t_evidence e ON e.content_unit_id=cu.id
+ WHERE cu.document_id=#{documentId} AND cu.status='ACTIVE' AND e.status='ACTIVE' ORDER BY cu.id</select>
 <update id="updateExtractionStatus">UPDATE t_document SET extraction_status=#{status}, updated_time=NOW() WHERE id=#{id}</update>
 <update id="updateIndexStatus">UPDATE t_document SET index_status=#{status}, updated_time=NOW() WHERE id=#{id}</update>
+<select id="lockDocumentForExtraction" resultType="long">
+SELECT d.id FROM t_document d JOIN t_source_version sv ON sv.id=d.source_version_id
+JOIN t_source s ON s.id=sv.source_id WHERE d.id=#{documentId} AND s.knowledge_base_id=#{kb} FOR UPDATE
+</select>
+<select id="lockBaseForExtraction" resultType="long">SELECT id FROM t_knowledge_base WHERE id=#{kb} FOR UPDATE</select>
+<update id="updateExtractionSummary">
+UPDATE t_document SET extraction_status=#{status},extraction_summary_json=CAST(#{summary} AS JSON),updated_time=NOW() WHERE id=#{id}
+</update>
+<sql id="documentIndexAggregate">
+(o.aggregate_key=CONCAT('KB:',s.knowledge_base_id,':DOCUMENT:',d.id)
+ OR o.aggregate_key=CONCAT('KB:',s.knowledge_base_id,':STANDARD:',d.id)
+ OR o.aggregate_key=CONCAT('KB:',s.knowledge_base_id,':GRAPH:',d.id)
+ OR o.aggregate_key IN (SELECT CONCAT('KB:',s.knowledge_base_id,':CARD:',ke.knowledge_code)
+ FROM t_knowledge_evidence ke JOIN t_evidence e ON e.id=ke.evidence_id
+ JOIN t_content_unit cu ON cu.id=e.content_unit_id WHERE cu.document_id=d.id AND cu.status='ACTIVE')
+ OR o.aggregate_key IN (SELECT CONCAT('KB:',s.knowledge_base_id,':CLAIM:',ce.claim_code)
+ FROM t_claim_evidence ce JOIN t_evidence e ON e.id=ce.evidence_id
+ JOIN t_content_unit cu ON cu.id=e.content_unit_id WHERE cu.document_id=d.id AND cu.status='ACTIVE'))
+</sql>
+<select id="documentsForIndexAggregate" resultType="long">
+SELECT DISTINCT d.id FROM t_document d JOIN t_source_version sv ON sv.id=d.source_version_id
+JOIN t_source s ON s.id=sv.source_id JOIN t_index_outbox o ON o.knowledge_base_id=s.knowledge_base_id
+WHERE s.knowledge_base_id=#{kb} AND o.aggregate_key=#{aggregateKey} AND <include refid="documentIndexAggregate"/>
+</select>
+<update id="refreshDocumentIndexStatus">
+UPDATE t_document d JOIN t_source_version sv ON sv.id=d.source_version_id JOIN t_source s ON s.id=sv.source_id
+SET d.index_status=CASE
+ WHEN EXISTS (SELECT 1 FROM t_index_outbox o WHERE o.knowledge_base_id=s.knowledge_base_id
+ AND <include refid="documentIndexAggregate"/> AND o.status='DEAD') THEN 'FAILED'
+ WHEN EXISTS (SELECT 1 FROM t_index_outbox o WHERE o.knowledge_base_id=s.knowledge_base_id
+ AND <include refid="documentIndexAggregate"/> AND o.status IN ('PENDING','PROCESSING','RETRY')) THEN 'PENDING'
+ ELSE 'INDEXED' END WHERE d.id=#{id}
+</update>
 </mapper>

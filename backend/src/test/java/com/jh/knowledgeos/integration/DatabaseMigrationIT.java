@@ -10,6 +10,9 @@ import java.util.Map;
 import com.jh.knowledgeos.domain.QueryTraceRecord;
 import com.jh.knowledgeos.mapper.TraceMapper;
 import javax.sql.DataSource;
+import com.jh.knowledgeos.mapper.DocumentMapper;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.transaction.annotation.Transactional;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -34,6 +37,7 @@ public class DatabaseMigrationIT {
         registry.add("spring.datasource.password", MYSQL::getPassword);
         registry.add("spring.redis.host", () -> "127.0.0.1");
         registry.add("management.health.redis.enabled", () -> "false");
+        registry.add("indexing.outbox.enabled", () -> "false");
         registry.add("knowledge.ai-connect-timeout-ms", () -> "100");
         registry.add("knowledge.ai-read-timeout-ms", () -> "1000");
     }
@@ -43,6 +47,47 @@ public class DatabaseMigrationIT {
 
     @Autowired
     private TraceMapper traceMapper;
+
+    @Autowired
+    private DocumentMapper documents;
+
+    @Autowired
+    private JdbcTemplate jdbc;
+
+    @Test
+    @Transactional
+    void currentEvidenceContractAndIndexStageFollowAllPendingEvents() {
+        long id = 910001L;
+        jdbc.update("INSERT INTO t_knowledge_base(id,base_code,name) VALUES(?, 'KB_QUALITY_IT','质量验证')", id);
+        jdbc.update("INSERT INTO t_source(id,source_code,knowledge_base_id,name) VALUES(?,'SRC_QUALITY_IT',?,'policy')", id, id);
+        jdbc.update("INSERT INTO t_source_version(id,source_id,version_no) VALUES(?,?,1)", id, id);
+        jdbc.update("INSERT INTO t_document(id,source_version_id,document_code) VALUES(?,?,'DOC_QUALITY_IT')", id, id);
+        jdbc.update("INSERT INTO t_content_unit(id,document_id,unit_code,content,status) VALUES(?,?,'UC_ACTIVE','有效正文','ACTIVE')", id, id);
+        jdbc.update("INSERT INTO t_content_unit(id,document_id,unit_code,content,status) VALUES(?,?,'UC_OLD','旧正文','SUPERSEDED')", id+1, id);
+        jdbc.update("INSERT INTO t_evidence(evidence_code,knowledge_base_id,content_unit_id,status) VALUES('EV_ACTIVE',?,?,'ACTIVE')", id, id);
+        jdbc.update("INSERT INTO t_evidence(evidence_code,knowledge_base_id,content_unit_id,status) VALUES('EV_OLD',?,?,'ACTIVE')", id, id+1);
+        assertEquals(id, documents.lockDocumentForExtraction(id, id));
+        java.util.List<Map<String, Object>> units = documents.findUnitsWithEvidence(id);
+        assertEquals(1, units.size());
+        assertEquals("UC_ACTIVE", units.get(0).get("unit_id"));
+        assertEquals("EV_ACTIVE", units.get(0).get("evidence_code"));
+        assertNotNull(units.get(0).get("evidence_id"));
+        String key = "KB:"+id+":DOCUMENT:"+id;
+        jdbc.update("INSERT INTO t_index_outbox(event_id,idempotency_key,knowledge_base_id,aggregate_type,aggregate_key,event_type,"
+            + "object_version,target_path,payload_json,status) VALUES('EV_QIT','IDEM_QIT',?,'DOCUMENT',?,'DOCUMENT_CHUNKS_UPSERT',"
+            + "1,'/test','{}','PENDING')", id, key);
+        assertTrue(documents.documentsForIndexAggregate(id, key).contains(id));
+        documents.refreshDocumentIndexStatus(id);
+        assertEquals("PENDING", jdbc.queryForObject("SELECT index_status FROM t_document WHERE id=?", String.class, id));
+        jdbc.update("UPDATE t_index_outbox SET status='DEAD' WHERE event_id='EV_QIT'");
+        documents.refreshDocumentIndexStatus(id);
+        assertEquals("FAILED", jdbc.queryForObject("SELECT index_status FROM t_document WHERE id=?", String.class, id));
+        jdbc.update("UPDATE t_index_outbox SET status='SUCCEEDED' WHERE event_id='EV_QIT'");
+        documents.refreshDocumentIndexStatus(id);
+        assertEquals("INDEXED", jdbc.queryForObject("SELECT index_status FROM t_document WHERE id=?", String.class, id));
+        documents.updateExtractionSummary(id, "PARTIAL", "{\"created\":1}");
+        assertEquals("PARTIAL", jdbc.queryForObject("SELECT extraction_status FROM t_document WHERE id=?", String.class, id));
+    }
 
     @Test
     void flywayCreatesRequiredTablesAndTraceColumns() throws Exception {
@@ -58,6 +103,12 @@ public class DatabaseMigrationIT {
             assertTrue(tableExists(st, "t_api_key_principal_audit"));
             assertTrue(tableExists(st, "t_principal_identity_link"));
             assertTrue(tableExists(st, "t_principal_identity_audit"));
+            assertTrue(columnExists(st, "t_document", "extraction_status"));
+            assertTrue(columnExists(st, "t_document", "index_status"));
+            assertTrue(columnExists(st, "t_document", "extraction_summary_json"));
+            assertTrue(columnExists(st, "t_derivation_run", "execution_summary_json"));
+            assertTrue(columnExists(st, "t_knowledge_card", "dedup_key"));
+            assertTrue(columnExists(st, "t_claim", "claim_fingerprint"));
             assertTrue(columnExists(st, "t_principal", "principal_type"));
             assertTrue(columnExists(st, "t_api_key", "principal_id"));
             assertTrue(columnExists(st, "t_principal_kb_grant", "permission_tags"));

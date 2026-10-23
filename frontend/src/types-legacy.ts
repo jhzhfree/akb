@@ -48,6 +48,7 @@ export interface KnowledgeDocument {
   id:number; documentCode:string; title:string; mimeType?:string; parseStatus:string
   chunkCount:number; createdTime?:string
   sourceId?:number; sourceName?:string
+  extractionStatus?:string|null; indexStatus?:string|null; extractionSummaryJson?:string|null
   /** 文档状态机（设计 §16.1）：UPLOADED→PROCESSING→READY/FAILED→RETRYING→PROCESSING。 */
   status?:string; currentStage?:string; retryCount?:number; errorMessage?:string|null
 }

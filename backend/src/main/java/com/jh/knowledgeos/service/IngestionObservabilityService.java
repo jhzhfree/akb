@@ -66,6 +66,16 @@ public class IngestionObservabilityService {
         mapper.updateIngestionRunStage(runId, stage);
     }
 
+    public void checkpoint(Long runId, int chunks, int cards, int claims) {
+        mapper.checkpointIngestionRun(runId, chunks, cards, claims);
+    }
+
+    public void completeOutcome(Long runId, int chunks, int cards, int claims, String outcome) {
+        String state = "EXTRACTED".equals(outcome) ? "SUCCEEDED" : "PARTIAL";
+        mapper.completeIngestionRun(runId, state, "COMPLETED", chunks, cards, claims, null);
+        event(runId, "INGESTION_COMPLETED", "COMPLETED", state, "知识摄入完成：" + outcome, null);
+    }
+
     public void complete(Long runId, int chunks, int cards, int claims) {
         mapper.completeIngestionRun(runId, "SUCCEEDED", "COMPLETED", chunks, cards, claims, null);
         event(runId, "INGESTION_COMPLETED", "COMPLETED", "SUCCESS", "知识摄入流程完成", null);
@@ -75,7 +85,9 @@ public class IngestionObservabilityService {
         // A wrapped failure often carries no message of its own; the type then has to stand in,
         // otherwise the run would fail with no explanation of which statement broke.
         String message = error.getMessage() == null || error.getMessage().trim().isEmpty() ? error.getClass().getSimpleName() : error.getMessage();
-        mapper.completeIngestionRun(runId, "FAILED", stage, 0, 0, 0, clip(message, ERROR_LIMIT));
+        IngestionRun previous = mapper.getIngestionRun(runId);
+        mapper.completeIngestionRun(runId, "FAILED", stage, previous == null ? 0 : previous.getChunkCount(),
+            previous == null ? 0 : previous.getCardCount(), previous == null ? 0 : previous.getClaimCount(), clip(message, ERROR_LIMIT));
         event(runId, "INGESTION_FAILED", stage, "FAILED", message, null);
     }
 

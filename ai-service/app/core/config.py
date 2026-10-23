@@ -56,6 +56,7 @@ class Settings:
     reranker_device = os.getenv("RERANKER_DEVICE", "auto")
     reranker_batch_size = int(os.getenv("RERANKER_BATCH_SIZE", "4"))
     reranker_concurrency = int(os.getenv("RERANKER_CONCURRENCY", "1"))
+    reranker_auto_top_n = max(1, min(200, int(os.getenv("RERANKER_AUTO_TOP_N", "50"))))
     reranker_max_length = int(os.getenv("RERANKER_MAX_LENGTH", "1024"))
     reranker_max_chars = int(os.getenv("RERANKER_MAX_CHARS", "6000"))
 

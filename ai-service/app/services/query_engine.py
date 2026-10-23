@@ -117,7 +117,8 @@ class QueryEngine:
                     "detail": {"variants": rewritten, "enabled": bool(getattr(policy.rewrite, "enabled", True))},
                 },
             })
-        route = self.router.route(q, enabled=policy.route.enabled, defaultStrategies=policy.route.defaultStrategies)
+        route = self.router.route(q, rules=policy.route.rules, enabled=policy.route.enabled,
+                                  defaultStrategies=policy.route.defaultStrategies)
         strategies = list(effective_strategies(policy, route["strategies"]))
         # The library's declared channels are a floor, not a suggestion: the router may add
         # channels it thinks the question needs, but it must not drop one the library relies on.
@@ -244,7 +245,7 @@ class QueryEngine:
         rerank_output_count = 0
         rerank_depth = 0
         if policy.rerank.enabled:
-            rerank_depth = int(policy.rerank.topN) if int(policy.rerank.topN) > 0 else len(candidates)
+            rerank_depth = min(len(candidates), int(policy.rerank.topN) or settings.reranker_auto_top_n)
             rerank_input_count = min(rerank_depth, len(candidates))
             try:
                 async with self.rerank_semaphore:
@@ -283,6 +284,7 @@ class QueryEngine:
                         "reranker": reranker.name,
                         "enabled": bool(policy.rerank.enabled),
                         "topN": policy.rerank.topN,
+                        "effectiveTopN": rerank_depth,
                     },
                     "errors": rerank_errors,
                 },
@@ -299,7 +301,7 @@ class QueryEngine:
         # Retrieval-only callers (evaluation runs, the retrieval test page) must not pay for
         # generation: measuring recall latency with an LLM call inside it measures the wrong thing.
         if generate:
-            context, citations, evidence_pool = self._context(candidates, policy.answer.contextMaxChars)
+            context, citations, evidence_pool = self._context(candidates, policy.answer.contextMaxChars, policy=policy)
             # 记忆只并入生成用的上下文，不参与召回：它是"这个提问者以前留下过什么"，不是
             # 知识库里的证据。拿它去检索会把召回带偏，也会让证据链出现库里并不存在的来源。
             memory_block = self._memory_block(memory_context)
@@ -534,6 +536,7 @@ class QueryEngine:
                     "reranker": reranker.name,
                     "enabled": bool(policy.rerank.enabled),
                     "topN": policy.rerank.topN,
+                        "effectiveTopN": rerank_depth,
                 },
                 "errors": rerank_errors,
             },
@@ -612,6 +615,7 @@ class QueryEngine:
                 "name": reranker.name,
                 "enabled": policy.rerank.enabled,
                 "topN": policy.rerank.topN,
+                "effectiveTopN": rerank_depth,
                 "latencyMs": rerank_ms,
             },
             "selectedContext": selected_context,
@@ -900,7 +904,7 @@ class QueryEngine:
                 "若它与下面的知识上下文无关，就完全忽略它，也不要因为有了它就把上下文里不相干的内容"
                 "当成问题的答案——知识不足时照常说明缺什么。\n" + block)
 
-    def _context(self, candidates, limit=None):
+    def _context(self, candidates, limit=None, policy=None):
         blocks = []
         citations = []
         # 实际被装进上下文的候选。字符预算可能在中间截断，所以它不是 len(ordered)——
@@ -908,11 +912,26 @@ class QueryEngine:
         # 调用方自己猜一个切片。
         selected = []
         used = 0
-        policy = load_policy()
+        policy = policy or load_policy()
         budget = int(limit) if limit else int(policy.answer.contextMaxChars)
         ordered = self._chunk_floor(candidates, policy)
-        for i, c in enumerate(ordered, 1):
+        seen = {}
+        for c in ordered:
+            c = dict(c)
             meta = c.get("metadata", {})
+            # Identity and full text must both agree: one evidence can support distinct card contents.
+            anchor = meta.get("evidence_code") or meta.get("content_unit_id")
+            key = (meta.get("source_uri") or meta.get("source_name"), meta.get("source_version"),
+                   meta.get("generation_id"), anchor, c.get("content", "")) if anchor else None
+            if key is not None and key in seen:
+                seen[key]["channels"] = sorted(set(seen[key]["channels"] + [c["channel"]]))
+                seen[key]["objectRefs"].append({"id": c["id"], "objectType": meta.get("object_type")})
+                continue
+            i = len(citations) + 1
+            meta = c.get("metadata", {})
+            heading = meta.get("heading_path") or ""
+            if heading and c.get("title") == meta.get("source_name"):
+                c["title"] = "%s · %s" % (heading, c.get("title"))
             loc = ""
             if meta.get("page_no"):
                 loc = "，第%s页" % meta["page_no"]
@@ -936,6 +955,8 @@ class QueryEngine:
                     "id": c["id"],
                     "title": c.get("title", ""),
                     "channel": c["channel"],
+                    "channels": [c["channel"]],
+                    "objectRefs": [{"id": c["id"], "objectType": meta.get("object_type")}],
                     "source": c["channel"],
                     "score": c.get("score"),
                     "sourceName": meta.get("source_name"),
@@ -953,6 +974,8 @@ class QueryEngine:
                     "excerpt": answer_excerpt(c.get("content", "")),
                 }
             )
+            if key is not None:
+                seen[key] = citations[-1]
         return "\n\n".join(blocks), citations, selected
 
     def _prompt(self, q, ctx):

@@ -344,18 +344,24 @@ public class KnowledgeDerivationService {
             payloadOf(ruleCode, triggerType));
         String taskCode = text(task.get("taskCode"));
         tasks.start(taskCode, "SCAN");
+        ExecutionStats execution = new ExecutionStats();
         try {
-            List<Map<String, Object>> produced = execute(scope, rule);
+            List<Map<String, Object>> produced = execute(scope, rule, execution);
             int created = persist(scope, rule, produced);
-            mapper.updateDerivationRun(runCode, "SUCCEEDED", produced.size(), created, 0, null, LocalDateTime.now().format(TS));
+            mapper.updateDerivationRun(runCode, "SUCCEEDED", execution.scanned, created, 0, null, LocalDateTime.now().format(TS));
             Map<String, Object> result = new LinkedHashMap<String, Object>();
             result.put("runCode", runCode);
-            result.put("scanned", produced.size());
+            result.put("scanned", execution.scanned);
+            result.put("inputUnit", execution.inputUnit);
+            result.put("scanLimitReached", execution.limitReached);
+            result.put("produced", produced.size());
+            result.put("reused", produced.size() - created);
             result.put("candidates", created);
             // 零产出必须自带解释：这正是要被追问的情形，干巴巴一个 scanned=0 等于让人去猜。
             if (produced.isEmpty()) {
                 result.put("diagnosis", explainEmpty(scope, rule, triggerType));
             }
+            mapper.updateDerivationSummary(runCode, write(result));
             tasks.succeed(taskCode, result);
             mapper.updateDerivationRuleState(ruleCode, "IDLE", LocalDateTime.now().format(TS), nextFireTime(rule), null);
             Map<String, Object> summary = new LinkedHashMap<String, Object>(result);
@@ -366,7 +372,8 @@ public class KnowledgeDerivationService {
             return summary;
         } catch (RuntimeException e) {
             String message = e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage();
-            mapper.updateDerivationRun(runCode, "FAILED", 0, 0, 0, message, LocalDateTime.now().format(TS));
+            mapper.updateDerivationRun(runCode, "FAILED", execution.scanned, 0, 0, message, LocalDateTime.now().format(TS));
+            mapper.updateDerivationSummary(runCode, write(Collections.singletonMap("scanned", execution.scanned)));
             mapper.updateDerivationRuleState(ruleCode, "FAILED", LocalDateTime.now().format(TS), nextFireTime(rule), message);
             tasks.fail(taskCode, message);
             Map<String, Object> failure = new LinkedHashMap<String, Object>();
@@ -390,7 +397,18 @@ public class KnowledgeDerivationService {
         Map<String, Object> definition = readDefinition(rule.get("definitionJson"), derivationType(rule.get("derivationType")));
         double minConfidence = toDouble(definition.get("minConfidence"), 0.5);
         Map<String, Object> diagnosis = new LinkedHashMap<String, Object>();
+        String type = derivationType(rule.get("derivationType"));
+        diagnosis.put("derivationType", type);
         diagnosis.put("minConfidence", round(minConfidence));
+        if (!TYPE_GRAPH_PATH.equals(type)) {
+            Map<String, Object> claims = mapper.diagnoseDerivationClaims(kb, minConfidence);
+            diagnosis.put("sourceUnit", "CLAIM");
+            diagnosis.put("skippedReasons", claims);
+            diagnosis.put("reason", TYPE_AI.equals(type) ? "NO_MODEL_CANDIDATE_OR_NO_ELIGIBLE_CLAIM" : "NO_ELIGIBLE_CLAIM");
+            return diagnosis;
+        }
+        diagnosis.put("sourceUnit", "RELATION");
+        diagnosis.put("scope", "GRAPH_CONTEXT_NOT_RULE_MATCH_COUNT");
         Map<String, Object> stats = mapper.diagnoseGraph(kb, minConfidence);
         if (stats != null) {
             diagnosis.putAll(stats);
@@ -423,7 +441,7 @@ public class KnowledgeDerivationService {
     /**
      * The derivation itself: graph traversal, template rendering or a model call.
      */
-    private List<Map<String, Object>> execute(Long kb, Map<String, Object> rule) {
+    private List<Map<String, Object>> execute(Long kb, Map<String, Object> rule, ExecutionStats execution) {
         String type = derivationType(rule.get("derivationType"));
         Map<String, Object> definition = readDefinition(rule.get("definitionJson"), type);
         double minConfidence = toDouble(definition.get("minConfidence"), 0.5);
@@ -434,11 +452,12 @@ public class KnowledgeDerivationService {
             List<DerivationRuleCatalog.PathHop> hops = DerivationRuleCatalog.parsePathTypes(
                 text(definition.get(DerivationRuleCatalog.FIELD_PATH_TYPES)));
             if (!hops.isEmpty()) {
-                return deriveFromPath(kb, hops, definition, minConfidence, limit);
+                return deriveFromPath(kb, hops, definition, minConfidence, limit, execution);
             }
             String first = definition.get("firstType") == null ? null : text(definition.get("firstType"));
             String second = definition.get("secondType") == null ? null : text(definition.get("secondType"));
             List<Map<String, Object>> paths = mapper.listGraphPathPairs(kb, emptyToNull(first), emptyToNull(second), minConfidence, limit);
+            execution.loaded(paths.size(), "ELIGIBLE_PATH_PAIR", limit);
             List<Map<String, Object>> candidates = new ArrayList<Map<String, Object>>();
             for (Map<String, Object> path : paths) {
                 Map<String, Object> candidate = new LinkedHashMap<String, Object>();
@@ -459,9 +478,9 @@ public class KnowledgeDerivationService {
             return candidates;
         }
         if (TYPE_AI.equals(type)) {
-            return deriveWithModel(kb, rule, definition, limit);
+            return deriveWithModel(kb, rule, definition, limit, execution);
         }
-        return deriveFromTemplateClaims(kb, definition, minConfidence, limit);
+        return deriveFromTemplateClaims(kb, definition, minConfidence, limit, execution);
     }
 
     /**
@@ -472,8 +491,9 @@ public class KnowledgeDerivationService {
      * query per hop per branch turns a knowledge base of any size into a table scan per run.</p>
      */
     private List<Map<String, Object>> deriveFromPath(Long kb, List<DerivationRuleCatalog.PathHop> hops, Map<String, Object> definition,
-        double minConfidence, int limit) {
+        double minConfidence, int limit, ExecutionStats execution) {
         List<Map<String, Object>> relations = mapper.listActiveRelations(kb, minConfidence, RELATION_SCAN_LIMIT);
+        execution.loaded(relations.size(), "ELIGIBLE_RELATION", RELATION_SCAN_LIMIT);
         Map<String, List<Map<String, Object>>> byType = new LinkedHashMap<String, List<Map<String, Object>>>();
         Map<String, String> nameByCode = new LinkedHashMap<String, String>();
         for (Map<String, Object> relation : relations) {
@@ -589,6 +609,18 @@ public class KnowledgeDerivationService {
     }
 
     /** One walked path: the nodes it visited, the relations it travelled and its weakest link. */
+    private static final class ExecutionStats {
+        private int scanned;
+        private String inputUnit = "NONE";
+        private boolean limitReached;
+
+        void loaded(int size, String unit, int limit) {
+            scanned = size;
+            inputUnit = unit;
+            limitReached = size >= limit;
+        }
+    }
+
     private static final class Walk {
 
         private final List<String> nodes = new ArrayList<String>();
@@ -612,8 +644,10 @@ public class KnowledgeDerivationService {
         }
     }
 
-    private List<Map<String, Object>> deriveFromTemplateClaims(Long kb, Map<String, Object> definition, double minConfidence, int limit) {
+    private List<Map<String, Object>> deriveFromTemplateClaims(Long kb, Map<String, Object> definition, double minConfidence,
+        int limit, ExecutionStats execution) {
         List<Map<String, Object>> claims = mapper.listDerivationSourceClaims(kb, minConfidence, limit);
+        execution.loaded(claims.size(), "ELIGIBLE_CLAIM", limit);
         List<Map<String, Object>> candidates = new ArrayList<Map<String, Object>>();
         for (Map<String, Object> claim : claims) {
             Map<String, Object> values = new LinkedHashMap<String, Object>(claim);
@@ -639,14 +673,18 @@ public class KnowledgeDerivationService {
      * Model backed derivation. The model proposes, the platform disposes: whatever comes back is
      * stored as a candidate with its base assertions, never as sourced knowledge.
      */
-    private List<Map<String, Object>> deriveWithModel(Long kb, Map<String, Object> rule, Map<String, Object> definition, int limit) {
+    private List<Map<String, Object>> deriveWithModel(Long kb, Map<String, Object> rule, Map<String, Object> definition,
+        int limit, ExecutionStats execution) {
         Map<String, Object> request = new LinkedHashMap<String, Object>();
         request.put("knowledgeBaseId", kb);
         request.put("ruleCode", text(rule.get("ruleCode")));
         request.put("prompt", text(definition.get("prompt")));
         request.put("limit", limit);
         request.put("minConfidence", toDouble(definition.get("minConfidence"), 0.5));
-        request.put("claims", mapper.listDerivationSourceClaims(kb, toDouble(definition.get("minConfidence"), 0.5), limit));
+        List<Map<String, Object>> inputs = mapper.listDerivationSourceClaims(kb, toDouble(definition.get("minConfidence"), 0.5), limit);
+        execution.loaded(inputs.size(), "ELIGIBLE_CLAIM", limit);
+        request.put("claims", inputs);
+        if (inputs.isEmpty()) { return new ArrayList<Map<String, Object>>(); }
         Map<String, Object> response = aiClient.post(AiApiPaths.DERIVE, request);
         if (response == null) {
             throw new IllegalStateException("AI 服务未返回衍生结果");
@@ -684,9 +722,6 @@ public class KnowledgeDerivationService {
             if (!text(item.get("title")).isEmpty()) {
                 results.add(candidate);
             }
-        }
-        if (results.isEmpty()) {
-            throw new IllegalStateException("AI 服务未产出任何衍生候选");
         }
         return results;
     }

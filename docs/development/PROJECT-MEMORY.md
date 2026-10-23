@@ -31,3 +31,8 @@
 - JWT 由配置的 JWKS 验签，并校验配置 issuer、audience、`exp`、`nbf` 和非空 `sub`；不得信任 `X-User-Id` 之类的自报身份头。
 - 外部 IdP `(issuer, subject)` 必须由管理员显式映射至 ACTIVE `USER` Principal。Agent 和员工均需有目标知识库 grant，标签范围在 Key、Agent grant、员工 grant 之间取交集。
 - 委托模式拒绝独立 Embed Token。启用前必须验证 IdP 的 issuer/JWKS/audience 配置以及 Octop/MCP 客户端是否能并行发送两种凭证。
+
+
+## 知识质量闭环修复
+
+参见 [KNOWLEDGE-QUALITY-CLOSURE.md](KNOWLEDGE-QUALITY-CLOSURE.md)：E3 幂等键、资源级重抽取授权、入库计数及阶段摘要。MySQL 迁移和 Outbox 状态集成验证需要 Docker；本地未具备 Docker 时不得报告集成测试通过。

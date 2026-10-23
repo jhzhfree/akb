@@ -97,7 +97,9 @@ public class ExternalServiceAdminController {
         rest.put("delegatedIdentityRequired", properties.getDelegatedIdentity().isEnabled());
         rest.put("agentMemoryEnabled", properties.isAgentMemoryEnabled());
         rest.put("endpoints", Arrays.asList(endpoint("GET", "/bases", "可见知识库列表"), endpoint("POST", "/query", "可追溯问答"), endpoint("POST", "/search",
-            "检索（不生成答案）"), endpoint("POST", "/kb/retrievals", "第三方检索协议：chunks[] + 可选 answer"), endpoint("GET", "/cards", "知识卡片清单"), endpoint("GET", "/cards/{code}", "知识卡片详情"), endpoint("GET", "/claims", "断言清单"),
+            "检索（不生成答案）"), endpoint("POST", "/kb/retrievals", "第三方检索协议：chunks[] + 可选 answer"),
+            endpoint("GET", "/cards", "知识卡片清单"),
+            endpoint("GET", "/cards/{code}", "知识卡片详情"), endpoint("GET", "/claims", "断言清单"),
             endpoint("GET", "/claims/{code}", "断言详情"), endpoint("GET", "/evidence/{code}", "证据原文"), endpoint("GET", "/graph/{code}", "图谱邻域"),
             endpoint("GET", "/queries/{queryId}", "问答链路回放"), endpoint("GET", "/overview", "知识库概览"),
             endpoint("POST", "/documents/text", "文本接入（INGEST）"), endpoint("POST", "/memories/capture", "记忆写入（MEMORY_WRITE）"),

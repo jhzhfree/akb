@@ -306,7 +306,7 @@ class FusionPolicy(BaseModel):
 
 
 class RerankPolicy(BaseModel):
-    """Rerank node behaviour; ``topN = 0`` reranks every fused candidate."""
+    """Rerank node behaviour; zero selects a bounded automatic depth."""
 
     enabled: bool = True
     topN: int = Field(default=0, ge=0, le=200)
@@ -385,6 +385,8 @@ def default_policy() -> QueryPolicy:
 # policy — one library cannot quietly change what "no answer" means for everybody else.
 OVERRIDABLE_FIELDS = (
     ("route", "defaultStrategies"),
+    ("route", "rules"),
+    ("route", "enabled"),
     ("recall", "channels"),
     ("recall", "recallMultiplier"),
     ("recall", "minRecallCandidates"),

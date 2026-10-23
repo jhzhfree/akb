@@ -132,6 +132,12 @@
             <el-table-column label="阶段" width="110">
               <template #default="{ row }">{{ stageLabel(row.currentStage) || '—' }}</template>
             </el-table-column>
+            <el-table-column label="知识抽取" width="120">
+              <template #default="{ row }">{{ extractionLabel(row.extractionStatus) }}</template>
+            </el-table-column>
+            <el-table-column label="检索索引" width="100">
+              <template #default="{ row }">{{ indexLabel(row.indexStatus) }}</template>
+            </el-table-column>
             <el-table-column prop="chunkCount" label="内容块" width="90" />
             <el-table-column label="重跑" width="70">
               <template #default="{ row }">
@@ -461,6 +467,15 @@ async function retryDocumentRow(row:KnowledgeDocument){
 }
 
 /* ---- 只重跑抽取：复用已入库切片与证据编码，不重新解析 ---- */
+function extractionLabel(value?:string|null):string {
+  const labels:Record<string,string> = { RUNNING:'抽取中', EXTRACTED:'已完成', EMPTY:'无知识产出',
+    QUALITY_REJECTED:'候选未通过', PARTIAL:'后处理待重试', FAILED:'抽取失败' }
+  return value ? labels[value]||value : '未运行'
+}
+function indexLabel(value?:string|null):string {
+  const labels:Record<string,string> = { PENDING:'同步中', INDEXED:'已同步', FAILED:'同步失败', STALE:'待更新' }
+  return value ? labels[value]||value : '未运行'
+}
 const reextractingId = ref<number|null>(null)
 async function reextractDocumentRow(row:KnowledgeDocument){
   // 与「重跑」的区别必须写清楚：一个是重新解析，一个只重抽。选错会白换一批证据编码。
@@ -480,7 +495,7 @@ async function reextractDocumentRow(row:KnowledgeDocument){
       return
     }
     notifySuccess(
-      `抽取完成：卡片 ${Number(d.cards||0)} 条、断言 ${Number(d.claims||0)} 条`
+      `${extractionLabel(String(d.extractionStatus||''))}：卡片 ${Number(d.cards||0)} 条、断言 ${Number(d.claims||0)} 条`
       + `，切片 ${Number(d.unitCount||0)} 个（已复用）`,
     )
     emit('reloaded')

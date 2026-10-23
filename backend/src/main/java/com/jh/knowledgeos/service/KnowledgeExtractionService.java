@@ -11,6 +11,9 @@ import com.jh.knowledgeos.mapper.IndexMapper;
 import com.jh.knowledgeos.mapper.GraphMapper;
 import com.jh.knowledgeos.mapper.GovernanceMapper;
 import com.jh.knowledgeos.mapper.EvidenceMapper;
+import com.jh.knowledgeos.mapper.DocumentMapper;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
@@ -37,7 +40,7 @@ public class KnowledgeExtractionService {
     private static final int LOW_INFORMATION_LENGTH = 16;
 
     /** 抽取版本：抽取逻辑变更时递增，让重跑能产出新键，而不是一直命中旧结果。 */
-    private static final String EXTRACTOR_VERSION = "E2";
+    private static final String EXTRACTOR_VERSION = "E3";
 
     /** 重复关系在待裁决项里的类型；与语义冲突共用一张表，靠类型区分。 */
     private static final String DUPLICATE_CONFLICT_TYPE = "DUPLICATE";
@@ -71,12 +74,16 @@ public class KnowledgeExtractionService {
 
     private final KbScenarioService scenarios;
 
-    private final SimpleDateFormat dateTimeFormatter = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
+    private static final Logger LOG = LoggerFactory.getLogger(KnowledgeExtractionService.class);
+
+    private final DocumentMapper documentMapper;
+
+    private final ExtractionModelGate modelGate;
 
     public KnowledgeExtractionService(KnowledgeMapper mapper, AiClient aiClient, ObjectMapper objectMapper, IdGenerator idGenerator, TransactionRunner
         transactionRunner, IndexOutboxService outboxService, EntityResolutionService entityResolutionService, PlatformEventPublisher publisher,
         EvidenceMapper evidenceMapper, GovernanceMapper governanceMapper, GraphMapper graphMapper, IndexMapper indexMapper, CardClaimMapper cardClaimMapper,
-        KbScenarioService scenarios) {
+        KbScenarioService scenarios, DocumentMapper documentMapper, ExtractionModelGate modelGate) {
         this.cardClaimMapper = cardClaimMapper;
         this.evidenceMapper = evidenceMapper;
         this.governanceMapper = governanceMapper;
@@ -91,6 +98,8 @@ public class KnowledgeExtractionService {
         this.entityResolutionService = entityResolutionService;
         this.publisher = publisher;
         this.scenarios = scenarios;
+        this.documentMapper = documentMapper;
+        this.modelGate = modelGate;
     }
 
     /** Graph step skipped because the library's scenario builds no graph. */
@@ -121,10 +130,25 @@ public class KnowledgeExtractionService {
         // template too: which vocabulary names the subject of a parsed row and what the model
         // is told to look for differ between a runbook and a policy handbook. Without it the
         // template only tunes chunking and recall, and every library is generated the same way.
-        request.put("scenario", scenarios.scenario(knowledgeBaseId));
-        Map<String, Object> response = aiClient.post(AiApiPaths.EXTRACT, request);
+        Map<String, Object> payload = new LinkedHashMap<String, Object>(request);
+        payload.put("scenario", scenarios.scenario(knowledgeBaseId));
         Long documentId = request.get("documentId") == null ? null : Long.valueOf(String.valueOf(request.get("documentId")));
-        String permissionTags = normalizePermissionTags(request.get("permissionTags"));
+        Map<String, Object> source = documentId == null ? null : documentMapper.findReextractContext(documentId);
+        if (documentId != null && (source == null || !knowledgeBaseId.equals(Long.valueOf(String.valueOf(source.get("knowledgeBaseId")))))) {
+            throw new IllegalArgumentException("Document does not belong to knowledge base");
+        }
+        String permissionTags = normalizePermissionTags(source == null ? request.get("permissionTags") : source.get("permissionTags"));
+        payload.put("permissionTags", permissionTags);
+        if (documentId != null) {
+            List<Map<String, Object>> storedUnits = documentMapper.findUnitsWithEvidence(documentId);
+            if (storedUnits.isEmpty()) { throw new IllegalStateException("Document has no active evidence-backed units"); }
+            List<String> texts = new ArrayList<String>();
+            for (Map<String, Object> unit : storedUnits) { texts.add(stringValue(unit.get("content"))); }
+            payload.put("text", String.join("\n\n", texts));
+            payload.put("chunks", storedUnits);
+            payload.put("units", storedUnits);
+        }
+        Map<String, Object> response = modelGate.extract(aiClient, payload);
         // Source authority is read once and stamped onto every extracted object: retrieval uses it
         // as a ranking signal (design V1.1 §8.3) instead of re-reading rows per object.
         Double authorityScore = loadAuthorityScore(documentId);
@@ -139,52 +163,88 @@ public class KnowledgeExtractionService {
         Map<String, Object> extractPolicy = scenarios.extraction(knowledgeBaseId);
         boolean graphEnabled = scenarios.graphEnabled(knowledgeBaseId);
         boolean claimsEnabled = Boolean.TRUE.equals(extractPolicy.get("claims"));
-        PersistStats cardStats = new PersistStats();
-        PersistStats claimStats = new PersistStats();
         PersistedKnowledge persisted = transactionRunner.retryingOnDeadlock(() -> {
-            List<Map<String, Object>> cards = persistCards(knowledgeBaseId, documentId, response.get("cards"), permissionTags, authorityScore, cardStats);
+            // Serialize one document's write set before querying its dedup keys. A rolled-back attempt owns no counters.
+            if (documentId != null) {
+                if (documentMapper.lockDocumentForExtraction(documentId, knowledgeBaseId) == null) {
+                    throw new IllegalArgumentException("Document no longer exists");
+                }
+                Map<String, Object> current = documentMapper.findReextractContext(documentId);
+                String currentTags = normalizePermissionTags(current.get("permissionTags"));
+                if (!ExtractionCanonical.labels(permissionTags).equals(ExtractionCanonical.labels(currentTags))) {
+                    throw new IllegalStateException("Source authorization changed during extraction; request a fresh run");
+                }
+            } else {
+                documentMapper.lockBaseForExtraction(knowledgeBaseId);
+            }
+            PersistStats cardStats = new PersistStats();
+            PersistStats claimStats = new PersistStats();
+            List<Map<String, Object>> cards = persistCards(knowledgeBaseId, documentId, response.get("cards"), permissionTags,
+                authorityScore, cardStats);
             List<Map<String, Object>> claims = claimsEnabled
                 ? persistClaims(knowledgeBaseId, documentId, response.get("claims"), permissionTags, authorityScore, claimStats)
                 : new ArrayList<Map<String, Object>>();
+            if (!claimsEnabled && response.get("claims") instanceof List) {
+                claimStats.received = ((List<?>) response.get("claims")).size();
+                claimStats.rejected = claimStats.received;
+                claimStats.reasons.put("CHANNEL_DISABLED", claimStats.received);
+            }
             Map<String, Object> graph = graphEnabled ? persistAuthoritativeGraph(knowledgeBaseId, documentId, response, permissionTags)
                 : skippedGraph();
-            return new PersistedKnowledge(cards, claims, graph);
+            PersistedKnowledge result = new PersistedKnowledge(cards, claims, graph, cardStats, claimStats);
+            if (documentId != null) {
+                documentMapper.updateExtractionSummary(documentId, result.outcome(), jsonOrDefault(result.stats(), "{}"));
+            }
+            return result;
         });
         List<Map<String, Object>> savedCards = persisted.cards;
         List<Map<String, Object>> savedClaims = persisted.claims;
-        // 响应里的 cards / claims 换成真正落库的对象。上游返回的候选数与落库数不是一回事：
-        // 候选可能命中已有知识（只补证据）、可能被质量闸门拒绝、也可能因为跨文档重复而
-        // 作为独立资产保留。台账、事件与前端都读这个字段，它必须反映库里实际多了什么。
+        PersistStats cardStats = persisted.cardStats;
+        PersistStats claimStats = persisted.claimStats;
         response.put("cards", savedCards);
         response.put("claims", savedClaims);
-        Map<String, Object> extractionStats = new LinkedHashMap<String, Object>();
-        extractionStats.put("card", cardStats.toMap());
-        extractionStats.put("claim", claimStats.toMap());
-        response.put("extractionStats", extractionStats);
+        response.put("extractionStats", persisted.stats());
+        response.put("extractionStatus", persisted.outcome());
+        Map<String, String> warnings = new LinkedHashMap<String, String>();
         response.put("authoritativeGraph", persisted.graph);
         Map<String, Object> graphEvent = null;
-        if (graphEnabled) {
+        try {
+            if (graphEnabled) {
             Map<String, Object> graphPayload = buildKnowledgeIndexPayload(knowledgeBaseId, new ArrayList<Map<String, Object>>(),
                 new ArrayList<Map<String, Object>>(), withPermissionTags(response.get("entities"), permissionTags),
                 withPermissionTags(response.get("relations"), permissionTags));
             String graphKey = "KB:" + knowledgeBaseId + ":GRAPH:" + (documentId == null ? "MANUAL" : documentId);
             graphEvent = transactionRunner.required(() -> outboxService.enqueue(knowledgeBaseId, "GRAPH", graphKey,
                 "GRAPH_BATCH_UPSERT", AiApiPaths.INDEX_KNOWLEDGE, graphPayload, documentId == null ? "GRAPH_EXTRACT:" + graphKey + ":" +
-                UUID.randomUUID().toString() : "GRAPH_EXTRACT:" + graphKey + ":1"));
-        }
+                UUID.randomUUID().toString() : "GRAPH_EXTRACT:" + graphKey + ":" + fingerprint(jsonOrDefault(graphPayload, "{}"))));
+            }
+        } catch (RuntimeException ex) { postFailure(warnings, "GRAPH_INDEX", ex); }
         Map<String, Object> indexSummary = new LinkedHashMap<String, Object>();
         indexSummary.put("mode", "transactional-outbox");
         indexSummary.put("cardEvents", savedCards.size());
         indexSummary.put("claimEvents", savedClaims.size());
         indexSummary.put("graphEvent", graphEvent);
         response.put("knowledgeIndex", indexSummary);
-        response.put("conflicts", Boolean.TRUE.equals(extractPolicy.get("conflictDetection"))
-            ? detectAndPersistConflicts(knowledgeBaseId, savedClaims) : new ArrayList<Object>());
-        // Entity resolution runs here, outside the persistence transaction: it issues an external
-        // AI call and then merges duplicate graph nodes (design V1.1 §5.4).
-        response.put("entityResolution", Boolean.TRUE.equals(extractPolicy.get("entityResolution"))
-            ? entityResolutionService.resolveAndMerge(knowledgeBaseId, response.get("entities")) : skippedResolution());
-        announceExtraction(knowledgeBaseId, documentId, savedCards, savedClaims, cardStats, claimStats);
+        try {
+            response.put("conflicts", Boolean.TRUE.equals(extractPolicy.get("conflictDetection"))
+                ? detectAndPersistConflicts(knowledgeBaseId, claimStats.acceptedClaims) : new ArrayList<Object>());
+        } catch (RuntimeException ex) { postFailure(warnings, "CONFLICT_DETECTION", ex); }
+        try {
+            response.put("entityResolution", Boolean.TRUE.equals(extractPolicy.get("entityResolution"))
+                ? entityResolutionService.resolveAndMerge(knowledgeBaseId, response.get("entities")) : skippedResolution());
+        } catch (RuntimeException ex) { postFailure(warnings, "ENTITY_RESOLUTION", ex); }
+        try { announceExtraction(knowledgeBaseId, documentId, savedCards, savedClaims, cardStats, claimStats); }
+        catch (RuntimeException ex) { postFailure(warnings, "ANNOUNCE", ex); }
+        response.put("postProcessingWarnings", warnings);
+        if (!warnings.isEmpty()) {
+            response.put("extractionStatus", "PARTIAL");
+            if (documentId != null) {
+                Map<String, Object> summary = persisted.stats();
+                summary.put("postProcessingWarnings", warnings);
+                try { documentMapper.updateExtractionSummary(documentId, "PARTIAL", jsonOrDefault(summary, "{}")); }
+                catch (RuntimeException ex) { LOG.error("Could not save partial extraction outcome document={}", documentId, ex); }
+            }
+        }
         return response;
     }
 
@@ -283,13 +343,17 @@ public class KnowledgeExtractionService {
      *       命中<b>不合并</b>——两侧各自保留状态与权限标签，重复关系交人工裁决。</li>
      * </ul>
      */
-    private List<Map<String, Object>> persistCards(Long knowledgeBaseId, Long documentId, Object cardsObject, String permissionTags, Double authorityScore, PersistStats stats) {
+    private List<Map<String, Object>> persistCards(Long knowledgeBaseId, Long documentId, Object cardsObject, String permissionTags, Double authorityScore,
+        PersistStats stats) {
         List<Map<String, Object>> saved = new ArrayList<Map<String, Object>>();
         if (!(cardsObject instanceof List)) {
             return saved;
         }
+        List<Map<String, Object>> evidencePool = documentId == null ? Collections.emptyList() : documentMapper.findUnitsWithEvidence(documentId);
         for (Object item : (List<Object>) cardsObject) {
             if (!(item instanceof Map)) {
+                stats.received++;
+                stats.reject("INVALID_SHAPE");
                 continue;
             }
             Map<String, Object> source = new LinkedHashMap<String, Object>((Map<String, Object>) item);
@@ -302,26 +366,24 @@ public class KnowledgeExtractionService {
             card.setSummary(stringValue(source.get("summary")));
             card.setContent(stringValue(source.get("content")));
             card.setConfidence(doubleValue(source.get("confidence"), 0.0D));
-            boolean deterministic = isDeterministic(source);
+            boolean deterministic = documentId != null && isDeterministic(source);
             // See persistClaims: a card assembled from the clause rows a unit already contains
             // adds no claim of its own, so it does not need to wait for review.
             card.setPermissionTags(permissionTags);
             card.setVersion(1);
+            List<Long> evidence = resolveEvidence(source, evidencePool, "CARD");
+            if (documentId != null && evidence.isEmpty()) { stats.reject("INVALID_EVIDENCE"); continue; }
+            int effective = effectiveContentLength(card);
+            if (effective == 0) { stats.reject("EMPTY_BODY"); continue; }
             String fingerprint = cardFingerprint(card);
-            String dedupKey = dedupKey(knowledgeBaseId, documentId, fingerprint);
+            String dedupKey = dedupKey(knowledgeBaseId, documentId, fingerprint, permissionTags, evidencePool);
             card.setContentFingerprint(fingerprint);
             card.setDedupKey(dedupKey);
             // 同一篇文档重跑：对象已经存在，只把这一次的证据补上，不重复插入。
             String existingCode = cardClaimMapper.findCardCodeByDedupKey(knowledgeBaseId, dedupKey);
             if (existingCode != null) {
                 stats.reused++;
-                stats.evidenceLinked += linkEvidence("CARD", existingCode, source.get("evidence_ids"), knowledgeBaseId, documentId);
-                continue;
-            }
-            int effective = effectiveContentLength(card);
-            if (effective == 0) {
-                // 正文只剩标题、页码与噪声：这是真正的空壳，没有保留价值。
-                stats.rejected++;
+                stats.evidenceLinked += linkEvidence("CARD", existingCode, evidence, knowledgeBaseId);
                 continue;
             }
             if (effective < LOW_INFORMATION_LENGTH && !hasInformationSignal(card.getContent())) {
@@ -332,28 +394,18 @@ public class KnowledgeExtractionService {
             } else {
                 card.setStatus(deterministic ? KnowledgeStatus.APPROVED.name() : KnowledgeStatus.DRAFT.name());
             }
-            if (cardClaimMapper.insertCard(card) == 0) {
-                // 并发下被唯一键挡住：另一个线程刚写了同一条，按命中已有处理。
-                existingCode = cardClaimMapper.findCardCodeByDedupKey(knowledgeBaseId, dedupKey);
-                if (existingCode == null) {
-                    stats.rejected++;
-                    continue;
-                }
-                stats.reused++;
-                stats.evidenceLinked += linkEvidence("CARD", existingCode, source.get("evidence_ids"), knowledgeBaseId, documentId);
-                continue;
-            }
+            cardClaimMapper.insertCard(card);
             stats.created++;
             recordDuplicates(knowledgeBaseId, "CARD", card.getKnowledgeCode(), fingerprint, permissionTags, stats);
             governanceMapper.snapshotKnowledgeObject(knowledgeBaseId, "CARD", card.getKnowledgeCode(), "CREATED",
                 deterministic ? "DETERMINISTIC_PARSE" : "AI_EXTRACTION");
-            stats.evidenceLinked += linkEvidence("CARD", card.getKnowledgeCode(), source.get("evidence_ids"), knowledgeBaseId, documentId);
+            stats.evidenceLinked += linkEvidence("CARD", card.getKnowledgeCode(), evidence, knowledgeBaseId);
             source.put("knowledge_code", card.getKnowledgeCode());
             source.put("status", card.getStatus());
             source.put("permission_tags", permissionTags);
             // Retrieval quality signals: authority of the source, freshness anchor, evidence count.
             source.put("authority_score", authorityScore);
-            source.put("updated_at", dateTimeFormatter.format(new Date()));
+            source.put("updated_at", new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(new Date()));
             source.put("evidence_count", cardClaimMapper.countCardEvidence(card.getKnowledgeCode()));
             attachEvidenceAnchor("CARD", card.getKnowledgeCode(), source);
             Map<String, Object> payload = buildSingleKnowledgeIndexPayload(knowledgeBaseId, source, null);
@@ -376,13 +428,17 @@ public class KnowledgeExtractionService {
      * <p>重复判断<b>不再只按三元组</b>：指纹同时包含极性、条件与有效期。「支持 MySQL」与
      * 「不支持 MySQL」只差极性，同一主张在不同有效期下也并不等价。</p>
      */
-    private List<Map<String, Object>> persistClaims(Long knowledgeBaseId, Long documentId, Object claimsObject, String permissionTags, Double authorityScore, PersistStats stats) {
+    private List<Map<String, Object>> persistClaims(Long knowledgeBaseId, Long documentId, Object claimsObject, String permissionTags, Double authorityScore,
+        PersistStats stats) {
         List<Map<String, Object>> saved = new ArrayList<Map<String, Object>>();
         if (!(claimsObject instanceof List)) {
             return saved;
         }
+        List<Map<String, Object>> evidencePool = documentId == null ? Collections.emptyList() : documentMapper.findUnitsWithEvidence(documentId);
         for (Object item : (List<Object>) claimsObject) {
             if (!(item instanceof Map)) {
+                stats.received++;
+                stats.reject("INVALID_SHAPE");
                 continue;
             }
             Map<String, Object> source = new LinkedHashMap<String, Object>((Map<String, Object>) item);
@@ -401,7 +457,7 @@ public class KnowledgeExtractionService {
             claim.setValidFrom(dateValue(source.get("valid_from")));
             claim.setValidTo(dateValue(source.get("valid_to")));
             claim.setVersion(source.get("version") == null ? 1 : integerValue(source.get("version"), 1));
-            boolean deterministic = isDeterministic(source);
+            boolean deterministic = documentId != null && isDeterministic(source);
             // A clause read straight out of the source ("额度: 司龄满 1 年 5 天") asserts nothing
             // the source does not already say, so it is as trustworthy as the chunk it is
             // anchored to — and that chunk is retrievable today. Holding it in UNCERTAIN until
@@ -410,35 +466,30 @@ public class KnowledgeExtractionService {
             // knowledge still enters the governance queue, as before.
             claim.setPermissionTags(permissionTags);
             if (!isMeaningfulClaim(claim)) {
-                stats.rejected++;
+                stats.reject("INVALID_CLAIM");
                 continue;
             }
+            List<Long> evidence = resolveEvidence(source, evidencePool, "CLAIM");
+            if (documentId != null && evidence.isEmpty()) { stats.reject("INVALID_EVIDENCE"); continue; }
             String fingerprint = claimFingerprint(claim);
-            String dedupKey = dedupKey(knowledgeBaseId, documentId, fingerprint);
+            String dedupKey = dedupKey(knowledgeBaseId, documentId, fingerprint, permissionTags, evidencePool);
             claim.setClaimFingerprint(fingerprint);
             claim.setDedupKey(dedupKey);
             String existingCode = cardClaimMapper.findClaimCodeByDedupKey(knowledgeBaseId, dedupKey);
             if (existingCode != null) {
                 stats.reused++;
-                stats.evidenceLinked += linkEvidence("CLAIM", existingCode, source.get("evidence_ids"), knowledgeBaseId, documentId);
+                source.put("claim_code", existingCode);
+                stats.acceptedClaims.add(source);
+                stats.evidenceLinked += linkEvidence("CLAIM", existingCode, evidence, knowledgeBaseId);
                 continue;
             }
             claim.setStatus(deterministic ? KnowledgeStatus.APPROVED.name() : KnowledgeStatus.UNCERTAIN.name());
-            if (cardClaimMapper.insertClaim(claim) == 0) {
-                existingCode = cardClaimMapper.findClaimCodeByDedupKey(knowledgeBaseId, dedupKey);
-                if (existingCode == null) {
-                    stats.rejected++;
-                    continue;
-                }
-                stats.reused++;
-                stats.evidenceLinked += linkEvidence("CLAIM", existingCode, source.get("evidence_ids"), knowledgeBaseId, documentId);
-                continue;
-            }
+            cardClaimMapper.insertClaim(claim);
             stats.created++;
             recordDuplicates(knowledgeBaseId, "CLAIM", claim.getClaimCode(), fingerprint, permissionTags, stats);
             governanceMapper.snapshotKnowledgeObject(knowledgeBaseId, "CLAIM", claim.getClaimCode(), "CREATED",
                 deterministic ? "DETERMINISTIC_PARSE" : "AI_EXTRACTION");
-            stats.evidenceLinked += linkEvidence("CLAIM", claim.getClaimCode(), source.get("evidence_ids"), knowledgeBaseId, documentId);
+            stats.evidenceLinked += linkEvidence("CLAIM", claim.getClaimCode(), evidence, knowledgeBaseId);
             source.put("claim_code", claim.getClaimCode());
             source.put("status", claim.getStatus());
             source.put("permission_tags", permissionTags);
@@ -449,13 +500,14 @@ public class KnowledgeExtractionService {
             source.put("valid_from", formatDate(claim.getValidFrom()));
             source.put("valid_to", formatDate(claim.getValidTo()));
             source.put("authority_score", authorityScore);
-            source.put("updated_at", dateTimeFormatter.format(new Date()));
+            source.put("updated_at", new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(new Date()));
             source.put("evidence_count", cardClaimMapper.countClaimEvidence(claim.getClaimCode()));
             attachEvidenceAnchor("CLAIM", claim.getClaimCode(), source);
             Map<String, Object> payload = buildSingleKnowledgeIndexPayload(knowledgeBaseId, null, source);
             outboxService.enqueue(knowledgeBaseId, "CLAIM", "KB:" + knowledgeBaseId + ":CLAIM:" + claim.getClaimCode(), "KNOWLEDGE_OBJECT_UPSERT",
                 AiApiPaths.INDEX_KNOWLEDGE, payload, "CLAIM_CREATE:" + claim.getClaimCode() + ":1");
             saved.add(source);
+            stats.acceptedClaims.add(source);
         }
         return saved;
     }
@@ -733,6 +785,11 @@ public class KnowledgeExtractionService {
             item.put("objectValue", existing.getObjectValue());
             item.put("confidence", existing.getConfidence());
             item.put("status", existing.getStatus());
+            item.put("polarity", existing.getPolarity());
+            item.put("valid_from", formatDate(existing.getValidFrom()));
+            item.put("valid_to", formatDate(existing.getValidTo()));
+            item.put("conditions", readComparisonJson(existing.getConditionJson(), "[]"));
+            item.put("qualifiers", readComparisonJson(existing.getQualifierJson(), "{}"));
             conflictClaims.add(item);
         }
         Map<String, Object> payload = new LinkedHashMap<String, Object>();
@@ -753,13 +810,8 @@ public class KnowledgeExtractionService {
                 String objectB = stringValue(conflict.get("objectBCode"));
                 governanceMapper.insertConflict(knowledgeBaseId, objectA, objectB, stringValue(conflict.get("conflictType")),
                     doubleValue(conflict.get("conflictScore"), 0.0D));
-                governanceMapper.updateClaimStatus(objectA, KnowledgeStatus.CONFLICTED.name());
-                governanceMapper.updateClaimStatus(objectB, KnowledgeStatus.CONFLICTED.name());
-                governanceMapper.snapshotKnowledgeObject(knowledgeBaseId, "CLAIM", objectA, "CONFLICT_DETECTED", "CONFLICT_ENGINE");
-                governanceMapper.snapshotKnowledgeObject(knowledgeBaseId, "CLAIM", objectB, "CONFLICT_DETECTED", "CONFLICT_ENGINE");
-                String conflictOperation = "CONFLICT:" + objectA + ":" + objectB;
-                outboxService.enqueueObjectStatus(knowledgeBaseId, "CLAIM", objectA, KnowledgeStatus.CONFLICTED.name(), conflictOperation + ":A");
-                outboxService.enqueueObjectStatus(knowledgeBaseId, "CLAIM", objectB, KnowledgeStatus.CONFLICTED.name(), conflictOperation + ":B");
+                // A detected difference is an OPEN review candidate, never an automatic withdrawal.
+
             }
         });
         return conflictsObject;
@@ -869,8 +921,8 @@ public class KnowledgeExtractionService {
      * 元数据表当成了一句话的宾语。它既读不通，又会和同一主词的正常主张互相判成冲突。</p>
      */
     private boolean isMeaningfulClaim(Claim claim) {
-        String subject = normalizeKey(claim.getSubject());
-        String objectValue = normalizeKey(claim.getObjectValue());
+        String subject = ExtractionCanonical.text(claim.getSubject());
+        String objectValue = ExtractionCanonical.text(claim.getObjectValue());
         if (subject.isEmpty() || objectValue.isEmpty() || subject.equals(objectValue)) {
             return false;
         }
@@ -901,7 +953,7 @@ public class KnowledgeExtractionService {
     private String claimFingerprint(Claim claim) {
         return fingerprint("CLAIM", normalizeContent(claim.getSubject()), normalizeContent(claim.getPredicate()),
             normalizeContent(claim.getObjectValue()), normalizeContent(claim.getPolarity()),
-            normalizeContent(claim.getConditionJson()), normalizeContent(claim.getQualifierJson()),
+            ExtractionCanonical.json(claim.getConditionJson(), "[]"), ExtractionCanonical.json(claim.getQualifierJson(), "{}"),
             claim.getValidFrom() == null ? "" : String.valueOf(claim.getValidFrom().getTime()),
             claim.getValidTo() == null ? "" : String.valueOf(claim.getValidTo().getTime()));
     }
@@ -913,113 +965,74 @@ public class KnowledgeExtractionService {
      * 同样由约束兜底：两个线程同时写同一条时，后写的那次拿到 0 行影响，按“命中已有”处理。
      * 抽取版本参与是为了让抽取逻辑升级后能产出新键，而不是一直命中旧结果。</p>
      */
-    private String dedupKey(Long knowledgeBaseId, Long documentId, String fingerprint) {
-        return knowledgeBaseId + "|DOC|" + (documentId == null ? "MANUAL" : documentId) + "|" + EXTRACTOR_VERSION + "|" + fingerprint;
+    private String dedupKey(Long kb, Long documentId, String contentHash, String tags, List<Map<String, Object>> evidence) {
+        List<String> anchors = new ArrayList<String>();
+        for (Map<String, Object> row : evidence) { anchors.add(String.valueOf(row.get("evidence_code"))); }
+        Collections.sort(anchors);
+        return fingerprint(String.valueOf(kb), String.valueOf(documentId), EXTRACTOR_VERSION, contentHash,
+            ExtractionCanonical.labels(tags), jsonOrDefault(anchors, "[]"));
     }
 
-    /**
-     * 规范化正文以计算指纹：去空白、全角转半角，剔除标点。
-     *
-     * <p><b>保留数字里的小数点</b>：去掉它，「1.5 天」和「15 天」会算成同一条。百分号、
-     * 斜杠与减号同理，单位和区间靠它们区分。汉字保留，其余符号一律剔除。</p>
-     */
-    private String normalizeContent(String value) {
-        if (value == null) {
-            return "";
-        }
-        StringBuilder builder = new StringBuilder();
-        for (int i = 0; i < value.length(); i++) {
-            char c = value.charAt(i);
-            if (Character.isWhitespace(c)) {
-                continue;
-            }
-            if (c >= '０' && c <= '９') {
-                builder.append((char) (c - '０' + '0'));
-            } else if (c >= 'Ａ' && c <= 'Ｚ') {
-                builder.append((char) (c - 'Ａ' + 'A'));
-            } else if (c >= 'ａ' && c <= 'ｚ') {
-                builder.append((char) (c - 'ａ' + 'a'));
-            } else if (Character.isLetterOrDigit(c) || c == '.' || c == '%' || c == '/' || c == '-' || c == '+') {
-                builder.append(c);
-            } else if (c >= 0x4E00 && c <= 0x9FFF) {
-                builder.append(c);
-            }
-        }
-        return builder.toString();
-    }
+    private String normalizeContent(String value) { return ExtractionCanonical.text(value); }
 
     private String fingerprint(String... parts) {
-        StringBuilder builder = new StringBuilder();
-        for (int i = 0; i < parts.length; i++) {
-            if (i > 0) {
-                builder.append('');
-            }
-            builder.append(parts[i] == null ? "" : parts[i]);
-        }
         try {
-            MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            byte[] bytes = digest.digest(builder.toString().getBytes(StandardCharsets.UTF_8));
-            StringBuilder hex = new StringBuilder();
-            for (int i = 0; i < 16; i++) {
-                hex.append(String.format("%02x", bytes[i] & 0xff));
-            }
-            return hex.toString();
-        } catch (NoSuchAlgorithmException e) {
-            // SHA-256 是每个 JDK 都要求的算法，走到这里说明运行环境异常；退回哈希只为不让
-            // 整批抽取失败，代价是极小的碰撞概率。
-            return Integer.toHexString(builder.toString().hashCode());
-        }
+            byte[] bytes = MessageDigest.getInstance("SHA-256").digest(objectMapper.writeValueAsBytes(java.util.Arrays.asList(parts)));
+            StringBuilder value = new StringBuilder();
+            for (byte item : bytes) { value.append(String.format("%02x", item)); }
+            return value.toString();
+        } catch (Exception ex) { throw new IllegalStateException("Cannot compute extraction fingerprint", ex); }
     }
 
-    /**
-     * 记录跨来源重复关系：命中同库同指纹的其它对象时，写一条 DUPLICATE 待裁决项。
-     *
-     * <p><b>只记录，不合并</b>：两侧都是独立资产，状态与权限标签都不动，由人工在裁决
-     * 工作台决定保留其一、合并还是都驳回。查询本身要求权限标签一致——把受控对象的存在
-     * 暴露给原本看不到它的人，本身就是越权，所以不同可见范围之间不记录重复关系。</p>
-     */
-    /**
-     * 证据关联：优先用模型点名的 evidence_ids，拿不到或站不住脚才回落到整篇文档。
-     *
-     * <p>模型给的编码要先校验（存在、属于本库、出自这篇文档），因为一个凭空出现的编码
-     * 不该让这条知识看起来“有据可查”。兜底仍然是必要的——模型经常不返回 evidence_ids，
-     * 这时候把整篇文档算作来源虽粗，却好过这条知识没有任何来源。两者用支持度区分：
-     * 点名的 0.90，兜底的 0.80，下游排序与展示因此能看出证据的强弱。</p>
-     */
-    @SuppressWarnings("unchecked")
-    private int linkEvidence(String objectType, String code, Object evidenceIds, Long knowledgeBaseId, Long documentId) {
-        if (documentId == null) {
-            return 0;
-        }
-        List<String> codes = toStringList(evidenceIds);
-        if (!codes.isEmpty()) {
-            List<Long> ids = cardClaimMapper.findEvidenceIdsByCodes(knowledgeBaseId, codes, documentId);
-            if (ids != null && !ids.isEmpty()) {
-                return "CARD".equals(objectType)
-                    ? cardClaimMapper.linkCardEvidenceByIds(knowledgeBaseId, code, ids)
-                    : cardClaimMapper.linkClaimEvidenceByIds(knowledgeBaseId, code, ids);
+    private List<Long> resolveEvidence(Map<String, Object> source, List<Map<String, Object>> pool, String kind) {
+        List<String> supplied = toStringList(source.get("evidence_ids"));
+        Map<String, Long> allowed = new LinkedHashMap<String, Long>();
+        for (Map<String, Object> row : pool) {
+            if (row.get("evidence_id") instanceof Number) {
+                allowed.put(String.valueOf(row.get("evidence_code")), ((Number) row.get("evidence_id")).longValue());
             }
         }
-        return "CARD".equals(objectType)
-            ? cardClaimMapper.linkCardEvidenceFromDocument(code, documentId)
-            : cardClaimMapper.linkClaimEvidenceFromDocument(code, documentId);
+        List<Long> result = new ArrayList<Long>();
+        if (!supplied.isEmpty()) {
+            for (String code : supplied) {
+                if (!allowed.containsKey(code)) { return Collections.emptyList(); }
+                if (!result.contains(allowed.get(code))) { result.add(allowed.get(code)); }
+            }
+            return result;
+        }
+        String body = ExtractionCanonical.text(stringValue(source.get("CARD".equals(kind) ? "content" : "object")));
+        String subject = ExtractionCanonical.text(stringValue(source.get("subject")));
+        if (body.isEmpty()) { return result; }
+        // Legacy candidates may be anchored by an exact substring; never call all document chunks SUPPORT.
+        for (Map<String, Object> row : pool) {
+            String text = ExtractionCanonical.text(stringValue(row.get("content")));
+            Long id = allowed.get(String.valueOf(row.get("evidence_code")));
+            if (id != null && text.contains(body) && ("CARD".equals(kind) || !subject.isEmpty() && text.contains(subject))) {
+                result.add(id);
+            }
+        }
+        return result;
+    }
+
+    private int linkEvidence(String kind, String code, List<Long> evidence, Long kb) {
+        if (evidence.isEmpty()) { return 0; }
+        return "CARD".equals(kind) ? cardClaimMapper.linkCardEvidenceByIds(kb, code, evidence)
+            : cardClaimMapper.linkClaimEvidenceByIds(kb, code, evidence);
     }
 
     private List<String> toStringList(Object value) {
-        List<String> values = new ArrayList<String>();
-        if (!(value instanceof List)) {
-            return values;
-        }
-        for (Object item : (List<?>) value) {
-            if (item == null) {
-                continue;
-            }
-            String text = String.valueOf(item).trim();
-            if (!text.isEmpty()) {
-                values.add(text);
+        List<String> out = new ArrayList<String>();
+        if (value instanceof List) {
+            for (Object item : (List<?>) value) {
+                if (item != null && !String.valueOf(item).trim().isEmpty()) { out.add(String.valueOf(item).trim()); }
             }
         }
-        return values;
+        return out;
+    }
+
+    private void postFailure(Map<String, String> warnings, String stage, RuntimeException ex) {
+        LOG.error("Extraction committed; post-processing failed at {}", stage, ex);
+        warnings.put(stage, "FAILED_RETRYABLE");
     }
 
     private void recordDuplicates(Long knowledgeBaseId, String objectType, String code, String fingerprint, String permissionTags, PersistStats stats) {
@@ -1049,7 +1062,7 @@ public class KnowledgeExtractionService {
     }
 
     private boolean sameVisibility(String left, String right) {
-        return normalizeContent(left).equals(normalizeContent(right));
+        return ExtractionCanonical.labels(left).equals(ExtractionCanonical.labels(right));
     }
 
     /**
@@ -1068,6 +1081,13 @@ public class KnowledgeExtractionService {
         int lowInformation;
         int duplicates;
         int evidenceLinked;
+        final Map<String, Integer> reasons = new LinkedHashMap<String, Integer>();
+        final List<Map<String, Object>> acceptedClaims = new ArrayList<Map<String, Object>>();
+
+        void reject(String reason) {
+            rejected++;
+            reasons.put(reason, reasons.containsKey(reason) ? reasons.get(reason) + 1 : 1);
+        }
 
         Map<String, Object> toMap() {
             Map<String, Object> map = new LinkedHashMap<String, Object>();
@@ -1078,6 +1098,7 @@ public class KnowledgeExtractionService {
             map.put("lowInformation", lowInformation);
             map.put("duplicates", duplicates);
             map.put("evidenceLinked", evidenceLinked);
+            map.put("rejectedReasons", reasons);
             return map;
         }
     }
@@ -1091,6 +1112,11 @@ public class KnowledgeExtractionService {
      */
     private boolean isDeterministic(Map<String, Object> source) {
         return "DETERMINISTIC".equalsIgnoreCase(stringValue(source.get("derivation")));
+    }
+
+    private Object readComparisonJson(String value, String fallback) {
+        try { return objectMapper.readValue(value == null ? fallback : value, Object.class); }
+        catch (Exception ex) { throw new IllegalArgumentException("Invalid persisted comparison context", ex); }
     }
 
     private String valueOrId(Object value, String prefix) {
@@ -1142,14 +1168,14 @@ public class KnowledgeExtractionService {
             raw = raw + " 00:00:00";
         }
         try {
-            return dateTimeFormatter.parse(raw);
+            return new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").parse(raw);
         } catch (ParseException ex) {
             return null;
         }
     }
 
     private String formatDate(Date value) {
-        return value == null ? "" : dateTimeFormatter.format(value);
+        return value == null ? "" : new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(value);
     }
 
     private String normalizePermissionTags(Object value) {
@@ -1187,10 +1213,28 @@ public class KnowledgeExtractionService {
 
         private final Map<String, Object> graph;
 
-        private PersistedKnowledge(List<Map<String, Object>> cards, List<Map<String, Object>> claims, Map<String, Object> graph) {
+        private final PersistStats cardStats;
+        private final PersistStats claimStats;
+
+        private PersistedKnowledge(List<Map<String, Object>> cards, List<Map<String, Object>> claims, Map<String, Object> graph,
+            PersistStats cardStats, PersistStats claimStats) {
             this.cards = cards;
             this.claims = claims;
             this.graph = graph;
+            this.cardStats = cardStats;
+            this.claimStats = claimStats;
+        }
+
+        Map<String, Object> stats() {
+            Map<String, Object> out = new LinkedHashMap<String, Object>();
+            out.put("card", cardStats.toMap());
+            out.put("claim", claimStats.toMap());
+            return out;
+        }
+
+        String outcome() {
+            if (cardStats.created + cardStats.reused + claimStats.created + claimStats.reused > 0) { return "EXTRACTED"; }
+            return cardStats.received + claimStats.received > 0 ? "QUALITY_REJECTED" : "EMPTY";
         }
     }
 

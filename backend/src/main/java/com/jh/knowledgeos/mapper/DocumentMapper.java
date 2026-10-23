@@ -13,6 +13,16 @@ public interface DocumentMapper {
 
     int insertSource(KnowledgeSource source);
 
+    Long lockDocumentForExtraction(@Param("documentId") Long documentId, @Param("kb") Long kb);
+
+    Long lockBaseForExtraction(@Param("kb") Long kb);
+
+    int updateExtractionSummary(@Param("id") Long id, @Param("status") String status, @Param("summary") String summary);
+
+    List<Long> documentsForIndexAggregate(@Param("kb") Long kb, @Param("aggregateKey") String aggregateKey);
+
+    int refreshDocumentIndexStatus(@Param("id") Long id);
+
     int insertSourceVersion(@Param("sourceId") Long sourceId, @Param("versionNo") Integer versionNo, @Param("sourceHash") String hash,
         @Param("objectUri") String uri);
 

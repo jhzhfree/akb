@@ -114,6 +114,7 @@ public class IndexOutboxWorker {
             String responseJson = objectMapper.writeValueAsString(response);
             transactionRunner.required(() -> {
                 indexMapper.markIndexOutboxSucceeded(event.getId(), responseJson);
+                refreshDocuments(event);
                 updateAclPropagationAfterSuccess(event, response, responseJson);
                 indexMapper.insertIndexDeliveryAttempt(event.getEventId(), event.getAttemptCount(), "SUCCEEDED", duration, responseJson, null);
                 metrics.deliverySucceeded(duration);
@@ -142,11 +143,17 @@ public class IndexOutboxWorker {
             } else {
                 indexMapper.markIndexOutboxRetry(event.getId(), message, nextAttempt);
             }
+            refreshDocuments(event);
             indexMapper.insertIndexDeliveryAttempt(event.getEventId(), attempt, dead ? "DEAD" : "RETRY", duration, null, message);
             metrics.deliveryFailed(duration, dead);
         });
         log.warn("Index outbox delivery failed eventId={} attempt={}/{} status={}: {}", event.getEventId(), attempt, maxAttempts, dead ? "DEAD" :
             "RETRY", message);
+    }
+
+    private void refreshDocuments(IndexOutboxEvent event) {
+        List<Long> documents = documentMapper.documentsForIndexAggregate(event.getKnowledgeBaseId(), event.getAggregateKey());
+        for (Long document : documents) { documentMapper.refreshDocumentIndexStatus(document); }
     }
 
     private void updateAclPropagationAfterSuccess(IndexOutboxEvent event, Map<String, Object> response, String responseJson) {

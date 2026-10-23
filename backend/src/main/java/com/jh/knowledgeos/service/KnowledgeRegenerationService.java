@@ -155,12 +155,15 @@ public class KnowledgeRegenerationService {
                 cardCount += cards;
                 claimCount += claims;
                 processed++;
-                row.put("status", "SUCCESS");
+                row.put("status", result.get("extractionStatus"));
+                row.put("extractionStats", result.get("extractionStats"));
+                documentMapper.refreshDocumentIndexStatus(documentId);
                 row.put("cardCount", cards);
                 row.put("claimCount", claims);
             } catch (Exception ex) {
                 failed++;
                 row.put("status", "FAILED");
+                documentMapper.updateExtractionStatus(documentId, "FAILED");
                 row.put("message", String.valueOf(ex.getMessage()));
             }
             details.add(row);

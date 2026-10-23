@@ -1,6 +1,7 @@
 """Deterministic claim-conflict candidate detection used before AI/human adjudication."""
 
 import re
+import json
 from collections import defaultdict
 from collections.abc import Iterable
 from datetime import datetime
@@ -73,19 +74,22 @@ class ConflictDetector:
 
         object_left = normalize(left.get("object") or left.get("objectValue") or left.get("object_value"))
         object_right = normalize(right.get("object") or right.get("objectValue") or right.get("object_value"))
-        if object_left == object_right:
-            return None
-
         temporal = self.validity_relation(left, right)
-        if temporal == "DISJOINT":
-            # Design V1.1 §6 / §17: two statements valid in disjoint windows describe successive
-            # versions of reality. That is supersession, not contradiction, and must not reach
-            # the human conflict queue as a conflict.
+        if temporal == "DISJOINT" or self.scope(left) != self.scope(right):
             return None
-
         negative_left = self.polarity(left, object_left)
         negative_right = self.polarity(right, object_right)
         opposite = negative_left != negative_right
+        if object_left == object_right and not opposite:
+            return None
+        # Opposite statements must concern the same target, not two different supported products.
+        target_left = re.sub(r"^(?:不支持|支持|不允许|允许|禁止|不得|不应|不能|不|无)", "", object_left)
+        target_right = re.sub(r"^(?:不支持|支持|不允许|允许|禁止|不得|不应|不能|不|无)", "", object_right)
+        if opposite and target_left != target_right:
+            return None
+        single_value = {"额度", "上限", "申请时限", "金额", "版本", "保留期限", "port", "version", "limit", "timeout"}
+        if not opposite and predicate_left not in single_value:
+            return None
         score = 0.92 if opposite else 0.68
         conflict_type = "POLARITY_CONFLICT" if opposite else "VALUE_CONFLICT"
         if temporal == "OVERLAPPING":
@@ -110,6 +114,19 @@ class ConflictDetector:
             "temporal": temporal,
             "status": "OPEN",
         }
+
+    @staticmethod
+    def scope(claim: dict[str, Any]) -> str:
+        """Compare applicability, excluding provenance-only sourceRef metadata."""
+        qualifiers = claim.get("qualifiers") or {}
+        conditions = claim.get("conditions") or []
+        if isinstance(qualifiers, str):
+            qualifiers = json.loads(qualifiers)
+        if isinstance(conditions, str):
+            conditions = json.loads(conditions)
+        if isinstance(qualifiers, dict):
+            qualifiers = {key: value for key, value in qualifiers.items() if key != "sourceRef"}
+        return json.dumps([conditions, qualifiers], ensure_ascii=False, sort_keys=True)
 
     @staticmethod
     def polarity(claim: dict[str, Any], object_text: str) -> bool:

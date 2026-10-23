@@ -22,6 +22,9 @@ public interface IngestionMapper {
 
     int insertIngestionRun(IngestionRun run);
 
+    int checkpointIngestionRun(@Param("runId") Long runId, @Param("chunks") int chunks,
+        @Param("cards") int cards, @Param("claims") int claims);
+
     int insertIngestionEvent(@Param("runId") Long runId, @Param("eventType") String eventType, @Param("stage") String stage, @Param("status") String
             status, @Param("message") String message, @Param("detailJson") String detailJson);
 

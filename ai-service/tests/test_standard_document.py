@@ -110,7 +110,7 @@ def test_parser_produces_standard_model_and_clean_chunks(tmp_path):
 
 
 def test_extractor_cards_and_claims_carry_no_layout_markers():
-    units = [{"unit_id": "U1", "heading_path": "差旅报销标准 / 适用范围", "content": "本标准适用于所有国内出差员工。"}]
+    units = [{"unit_id": "U1", "heading_path": "差旅报销标准 / 适用范围", "content": "本标准适用于所有国内出差员工。", "evidence_code": "EVD1"}]
     result = KnowledgeExtractor()._fallback("", units)
 
     assert result["cards"], "expected at least one card from clean units"
@@ -118,8 +118,10 @@ def test_extractor_cards_and_claims_carry_no_layout_markers():
         assert card["title"].strip() == "适用范围"
         assert not any(char in card["title"] for char in "#*|")
         assert "|" not in card["content"]
+    assert result["claims"]
     for claim in result["claims"]:
-        assert claim["subject"].strip() == "适用范围"
+        assert claim["subject"].strip() == "本标准"
+        assert claim["derivation"] == "RULE_FALLBACK"
         assert not any(char in claim["subject"] for char in "#*|")
 
 

@@ -6,6 +6,7 @@ import com.jh.knowledgeos.domain.KnowledgeBase;
 import com.jh.knowledgeos.service.AuthContext;
 import com.jh.knowledgeos.service.ChunkPolicyService;
 import com.jh.knowledgeos.service.KnowledgeBaseAccessService;
+import com.jh.knowledgeos.service.DocumentExtractionAccess;
 import com.jh.knowledgeos.dto.AdjudicateRequest;
 import com.jh.knowledgeos.dto.ConflictAdjudicateRequest;
 import com.jh.knowledgeos.dto.ConflictResolveRequest;
@@ -61,13 +62,15 @@ public class KnowledgeGovernanceController {
     private final KnowledgeService service;
     private final AclContextResolver aclContextResolver;
     private final KnowledgeBaseAccessService accessService;
+    private final DocumentExtractionAccess extractionAccess;
     private final KnowledgeRegenerationService regenerationService;
 
     public KnowledgeGovernanceController(KnowledgeService service, AclContextResolver aclContextResolver, KnowledgeBaseAccessService accessService,
-        KnowledgeRegenerationService regenerationService) {
+        KnowledgeRegenerationService regenerationService, DocumentExtractionAccess extractionAccess) {
         this.service = service;
         this.aclContextResolver = aclContextResolver;
         this.accessService = accessService;
+        this.extractionAccess = extractionAccess;
         this.regenerationService = regenerationService;
     }
 
@@ -106,6 +109,7 @@ public class KnowledgeGovernanceController {
     @Operation(summary = "抽取候选知识")
     public ApiResponse<Object> extract(@Valid @RequestBody ExtractRequest request) {
         accessService.assertWrite(request.getKnowledgeBaseId());
+        if (request.getDocumentId() != null) { extractionAccess.requireWrite(request.getDocumentId()); }
         return ApiResponse.ok(service.extract(request.toMap()));
     }
 

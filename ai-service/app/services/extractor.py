@@ -636,8 +636,25 @@ class KnowledgeExtractor:
             "数字口径要求：额度、天数、金额、比例、上限、时限等精确数值必须原样保留在 object 中，"
             "不要换算、不要概括、不要省略单位。\n"
             + SCENARIO_FOCUS.get(str(scenario or "").upper(), "")
-            + "材料：\n" + text
+            + "证据要求：仅使用材料中提供的 evidence_code 填写 evidence_ids，不得自造编码；"
+            "无法定位证据则不输出该断言。主语与宾语不得相同，元数据目录和键值表头不是事实断言。\n"
+            + "材料：\n" + cls._evidence_material(text, material)
         )
+
+    @staticmethod
+    def _evidence_material(text: str, material: list[dict[str, Any]]) -> str:
+        """Expose bounded evidence IDs alongside their text so a model can reference real anchors."""
+        if not material:
+            return text
+        blocks = []
+        used = 0
+        for unit in material:
+            if used >= 14000:
+                break
+            content = str(unit.get("content") or "")[:14000 - used]
+            blocks.append("[evidence_code=%s]\n%s" % (unit.get("evidence_code") or "UNAVAILABLE", content))
+            used += len(content)
+        return "\n\n".join(blocks)
 
     def _normalize(
         self,
@@ -969,58 +986,38 @@ class KnowledgeExtractor:
     # 兜底断言只认原文里明确写出的关系模式。宁可抽不出来，也不能推断原文没有的关系——
     # 一条编出来的断言看起来比没有断言更糟：它会带着引用出现在答案里。
     _CLAIM_PATTERNS = (
-        (r"^(.{2,20}?)\s*负责\s*(.{2,60})[。.]?$", "负责", "POSITIVE"),
-        (r"^(.{2,20}?)\s*适用于\s*(.{2,60})[。.]?$", "适用于", "POSITIVE"),
-        (r"^(.{2,20}?)\s*(?:须|应|必须)\s*(.{2,60})[。.]?$", "要求", "POSITIVE"),
-        (r"^(.{2,20}?)\s*不得\s*(.{2,60})[。.]?$", "要求", "NEGATIVE"),
+        (r"^([^，,。；;！？:：]{2,30}?)\s*(?:不得|不应|禁止)\s*(.{2,80})$", "要求", "NEGATIVE"),
+        (r"^([^，,。；;！？:：]{2,30}?)\s*不负责\s*(.{2,80})$", "负责", "NEGATIVE"),
+        (r"^([^，,。；;！？:：]{2,30}?)\s*负责\s*(.{2,80})$", "负责", "POSITIVE"),
+        (r"^([^，,。；;！？:：]{2,30}?)\s*适用于\s*(.{2,80})$", "适用于", "POSITIVE"),
+        (r"^([^，,。；;！？:：]{2,30}?)\s*(?:必须|应当|须|应)\s*(.{2,80})$", "要求", "POSITIVE"),
     )
 
     def _rule_claims(self, sources: list[dict[str, Any]]) -> list[dict[str, Any]]:
-        """Assertions read straight out of the text, for the no-LLM path.
-
-        These restate what the sentence already says, so they are marked deterministic:
-        they carry no inference of their own and are as trustworthy as the chunk they are
-        anchored to. Every claim keeps the evidence id of its source unit, so a citation
-        still points at the sentence it came from.
-        """
+        """Conservative sentence patterns propose reviewable claims; they never auto-approve prose."""
         claims: list[dict[str, Any]] = []
         for source in sources:
-            content = str(source.get("content") or "").strip()
             evidence = list(source.get("evidence_ids") or [])
-            for sentence in re.split(r"[。；;\n]", content):
+            if not evidence:
+                continue
+            for sentence in re.split(r"[。；;\n]", str(source.get("content") or "")):
                 sentence = sentence.strip()
-                if not 6 <= len(sentence) <= 120:
+                if not 6 <= len(sentence) <= 120 or sentence.endswith(("？", "?")):
                     continue
-                # 问句不是主张：原文在提问，说明它自己也没有结论，抽出来就成了臆造。
-                if sentence.endswith("？") or sentence.endswith("?"):
+                # Conditional clauses cannot be reduced to an unconditional statement by removing a prefix.
+                if re.search(r"如果|除非|当.+时|仅在|只有|假如|并非|不得不|不一定", sentence):
                     continue
                 for pattern, predicate, polarity in self._CLAIM_PATTERNS:
-                    matched = re.match(pattern, sentence)
+                    matched = re.fullmatch(pattern, sentence)
                     if not matched:
                         continue
-                    # 主语从句子开头取，常带出"如果…，"这类从句尾巴，去掉读起来才完整。
-                    subject = matched.group(1).strip().rstrip("，,、：:")
-                    obj = matched.group(2).strip().rstrip("，,、；;")
-                    # 主词等于宾词（"X DESCRIBES X" 那类）、宾词是键值表：都不是一句主张。
-                    if not subject or not obj or subject == obj:
-                        continue
-                    if obj.count("：") + obj.count(":") >= 2:
+                    subject, obj = (part.strip() for part in matched.groups())
+                    if subject.endswith(("不", "未", "无")) or subject == obj or obj.count("：") + obj.count(":") >= 2:
                         continue
                     claims.append({
-                        "subject": subject,
-                        "predicate": predicate,
-                        "object": obj,
-                        "polarity": polarity,
-                        "confidence": 0.60,
-                        "certainty": 0.60,
-                        "conditions": [],
-                        "qualifiers": {},
-                        "evidence_ids": evidence,
-                        # 后端按 derivation=="DETERMINISTIC" 识别“原文直读”：这类断言不进
-                        # 治理队列直接 APPROVED，因为它们只是原文的重述，可信度等于原文；
-                        # 留在 UNCERTAIN 会让精确问题（年假多少天）永远命中不到断言。
-                        "derivation": "DETERMINISTIC",
-                        "provenance": "RULE_FALLBACK",
+                        "subject": subject, "predicate": predicate, "object": obj, "polarity": polarity,
+                        "confidence": 0.60, "certainty": 0.60, "conditions": [], "qualifiers": {},
+                        "evidence_ids": evidence, "derivation": "RULE_FALLBACK", "provenance": "RULE_FALLBACK",
                     })
                     break
         return claims
@@ -1070,28 +1067,6 @@ class KnowledgeExtractor:
                     "evidence_ids": source["evidence_ids"][:4],
                 }
             )
-            sentence = re.split(r"[。！？\n]", content)[0].strip()
-            if has_content(sentence):
-                # The object used to be ``sentence[40:160]``, a fixed offset meant to skip a
-                # repeated title. It landed mid-number instead, producing objects such as
-                # ",000；绩效工资占比: 15%" that read as corrupted and, because two fragments of
-                # the same sentence differ, were then reported as conflicting with each other.
-                # Only strip a prefix that genuinely repeats the title, never a blind slice.
-                body = sentence
-                if title and body.startswith(title):
-                    body = body[len(title) :].strip(" 　:：,，-—")
-                claims.append(
-                    {
-                        "claim_code": "CLM_" + uuid.uuid4().hex,
-                        "subject": title[:40],
-                        "predicate": self._infer_predicate(sentence, source.get("heading_path", "")),
-                        "object": (body or sentence)[:200],
-                        "conditions": [],
-                        "confidence": 0.62,
-                        "evidence_ids": source["evidence_ids"][:4],
-                        "derivation": "FALLBACK",
-                    }
-                )
             self._collect_entities(content, source.get("heading_path", ""), entities, seen)
 
         index = self._entity_index(entities)
