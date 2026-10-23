@@ -58,8 +58,8 @@ SELECT aggregate_key, status, COUNT(*) FROM t_index_outbox GROUP BY aggregate_ke
 
 - AI 服务 pytest：97 项通过（GRAPH_PROVIDER=local，清除环境代理后运行）。
 - Java 主代码及全部测试源码：使用 JDK 17 编译器 `--release 8` 编译通过；新增权限、规范化和抽取回归 8 项通过。
-- 全量后端测试使用 JUnit ConsoleLauncher：144 项中 140 项通过、4 项失败。失败位于本次未改动的 ExternalAccessServiceTest（集合 retainAll）和 ApiKeyServiceTest（3 项主体不存在或不可用）；这些失败仍需后续排查。非标准 Maven 执行方式，不能替代部署流水线。
+- 全量后端测试使用标准 Maven 执行（`cd backend && mvn -B verify -P integration-test`）：单元测试 144 项、集成测试 3 项**全部通过**。此前记录的 4 项失败已修，两者性质不同：`ExternalAccessServiceTest` 是源码缺陷——`grantedKnowledgeBases` 就地 `retainAll` 上游返回的集合，不可变列表会抛异常，且会污染可能被缓存或共享的返回值，已改为在副本上取交集；`ApiKeyServiceTest` 3 项是用例没跟上——授权前会校验主体存在且 ACTIVE，用例缺 `getPrincipal` mock，已补。
 - 前端 vue-tsc 类型检查及 Vite 生产构建通过，构建仍有大包体积提示。
 - `check-v11.sh` 在第 25 项被现有 App.vue 超过 250 行的结构门禁阻断；前 24 项通过。该组件基线已超过限制，本次仅格式调整，未放宽门禁。
-- 当前没有 Docker，未运行 Testcontainers/MySQL 集成测试；新增 DatabaseMigrationIT 覆盖 V67 字段、ACTIVE 证据和索引状态转换，应在具备 Docker 的环境执行 `cd backend && mvn verify`，并确认项目集成测试 profile/插件启用。
+- 集成测试已执行：`DatabaseMigrationIT` 3 项通过，Flyway 在 Testcontainers 起的独立 MySQL 容器上应用 67 个迁移至 v67，覆盖 V67 字段、ACTIVE 证据契约与索引状态转换。有两个前置条件容易踩：一是 failsafe 仅在 `integration-test` profile 下绑定目标，直接 `mvn verify` **不会跑任何 IT**；二是 **Testcontainers 需 ≥1.21**——1.20.x 的 docker-java 把 Docker API 版本固定为 1.32，而 Docker 29 要求 ≥1.44，握手即被拒且 `DOCKER_API_VERSION` 环境变量无效。已将 `testcontainers.version` 从 1.19.8 提到 1.21.4。
 - 未连接真实 Ollama、Neo4j、Milvus 或 Elasticsearch，不能把单元测试结果当作生产环境端到端验收。

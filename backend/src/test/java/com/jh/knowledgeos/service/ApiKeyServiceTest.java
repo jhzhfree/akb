@@ -31,6 +31,16 @@ class ApiKeyServiceTest {
     private final IdGenerator ids = mock(IdGenerator.class);
     private final ApiKeyService service = new ApiKeyService(mapper, ids);
 
+    /**
+     * 授权前会校验主体存在且 ACTIVE——给一个不存在或已停用的主体授权没有意义，所以
+     * 凡是要走授权写入的用例都得先把这个主体 mock 出来，否则只会拿到"主体不存在"。
+     */
+    private static ExternalPrincipal principal(String status) {
+        ExternalPrincipal principal = new ExternalPrincipal();
+        principal.setStatus(status);
+        return principal;
+    }
+
     @Test
     void memoryPolicyCanDisableAndRestoreOnlyPreviouslyGrantedScopes() {
         ApiKey before = key("READ,MEMORY_READ,MEMORY_WRITE");
@@ -108,6 +118,7 @@ class ApiKeyServiceTest {
         ApiKey key = key("QUERY");
         key.setPrincipalId(71L);
         when(mapper.getApiKey(9L)).thenReturn(key);
+        when(mapper.getPrincipal(71L)).thenReturn(principal("ACTIVE"));
         when(mapper.countKnowledgeBase(7L)).thenReturn(1);
         when(mapper.countKnowledgeBase(8L)).thenReturn(1);
         when(mapper.listPrincipalKnowledgeBaseGrants(71L)).thenReturn(Arrays.asList(7L, 8L));
@@ -131,6 +142,7 @@ class ApiKeyServiceTest {
         key.setPrincipalId(71L);
         LocalDateTime expiresAt = LocalDateTime.now().plusDays(10).withNano(0);
         when(mapper.getApiKey(9L)).thenReturn(key);
+        when(mapper.getPrincipal(71L)).thenReturn(principal("ACTIVE"));
         when(mapper.countKnowledgeBase(7L)).thenReturn(1);
         when(mapper.listPrincipalKnowledgeBaseGrants(71L)).thenReturn(Arrays.asList(7L));
         when(mapper.listPrincipalKnowledgeBaseGrantDetails(71L)).thenReturn(Collections.emptyList());
@@ -150,6 +162,7 @@ class ApiKeyServiceTest {
         ApiKey key = key("QUERY");
         key.setPrincipalId(71L);
         when(mapper.getApiKey(9L)).thenReturn(key);
+        when(mapper.getPrincipal(71L)).thenReturn(principal("ACTIVE"));
         when(mapper.countKnowledgeBase(7L)).thenReturn(1);
         when(mapper.listPrincipalKnowledgeBaseGrantDetails(71L)).thenReturn(Collections.emptyList());
         com.jh.knowledgeos.dto.ExternalKnowledgeBaseGrantRequest grant = new com.jh.knowledgeos.dto.ExternalKnowledgeBaseGrantRequest();

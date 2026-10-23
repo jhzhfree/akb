@@ -7,6 +7,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.beans.factory.annotation.Autowired;
 import javax.servlet.http.HttpServletRequest;
 import java.net.URI;
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -106,8 +107,11 @@ public class ExternalAccessService {
             return agentGrants;
         }
         List<Long> employeeGrants = apiKeyService.grantedKnowledgeBases(key.getDelegatedPrincipalId());
-        agentGrants.retainAll(employeeGrants);
-        return agentGrants;
+        // 交集必须算在副本上：上游返回的可能是不可变集合（retainAll 直接抛异常），更要紧
+        // 的是不能就地改别人的返回值——那个集合可能被缓存或共享，改了会波及调用方。
+        List<Long> visible = new ArrayList<Long>(agentGrants);
+        visible.retainAll(employeeGrants);
+        return visible;
     }
 
     /**
