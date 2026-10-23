@@ -255,7 +255,9 @@ const evidenceDetail=ref<EvidenceDetail|null>(null), evidenceVisible=ref(false),
 const detailVisible=ref(false), detailLoading=ref(false), detailMode=ref<'CARD'|'CLAIM'|'CHUNK'>('CARD')
 const detailCode=ref(''), knowledgeDetail=ref<KnowledgeObjectDetail|null>(null)
 const capabilities=ref<Capabilities|null>(null),
-    q=ref('知识为什么需要裁决？'),
+    /** 输入框初值留空：真正的问题由当前知识库的「默认问题」回填（见下方 watch）。
+        在这里写死一句话，切到别的库时还会留着上一句，问出来的内容与这个库无关。 */
+    q=ref(''),
     result=ref<QueryResult|null>(null),
     graphCode=ref(''),
     /** 图谱的附加查询条件：关系类型收敛边、聚焦节点指定看哪个节点，随 openGraph 一起下发。 */
@@ -308,6 +310,12 @@ const uploadReset=ref(0)
 /** 最近一次操作失败信息：错误需要在页面上停留可见，而不是一闪而过的 toast。 */
 const failure=ref('')
 const activeBase=computed(()=>bases.value.find(v=>v.id===knowledgeBaseId.value))
+/** 知识库的「默认问题」是建库时配好的示例问句，进了检索页就该直接躺在输入框里。
+    只把它当 placeholder 等于没用：用户看到的是一行提示，真正发出去的还是另一次输入。
+    切换知识库时上下文变了，一并换掉；该库没配就清空，不留着上一句误导人。 */
+watch([knowledgeBaseId,()=>activeBase.value?.defaultQuery||''],([,text])=>{
+  q.value=text
+},{immediate:true})
 /** 顶部上下文条：环境一次加载即可；索引状态随知识库与刷新动作更新。 */
 const environment=ref<Record<string,unknown>|null>(null)
 const environmentLabel=computed(()=>{

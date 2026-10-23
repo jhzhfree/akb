@@ -25,7 +25,9 @@ export function useExternalServiceLab(props: ExternalServiceLabProps) {
     apiKey:'',
     authMode:'header' as 'header' | 'bearer' | 'query',
     knowledgeBaseId:null as number | null,
-    question:'报销流程是什么？',
+    /** 留空：由当前知识库的「默认问题」回填（见下方 watch）。在这里写死一句，库里配好的
+        问句在联调台上就永远用不上，控制台与接口发出的也就不是同一句话。 */
+    question:'',
     topK:10,
     /** 最低相关度分数（0~1）：留空即不过滤，与不传这个参数完全一致。 */
     minScore:null as number | null,
@@ -42,6 +44,13 @@ export function useExternalServiceLab(props: ExternalServiceLabProps) {
   /** 未指定知识库时沿用控制台当前选择的库，避免默认请求直接报“缺少 knowledgeBaseId”。 */
   watch(() => props.bases, list => {
     if (cfg.knowledgeBaseId == null && list.length) cfg.knowledgeBaseId = list[0].id
+  }, { immediate:true })
+
+  /** 换库时把该库配的默认问题填进提问框：联调台与控制台发出的应当是同一句话，否则库里
+      配好的问句在这里永远用不上，试出来的结果也就不能代表一次真实调用。 */
+  watch(() => cfg.knowledgeBaseId, id => {
+    const base = (props.bases || []).find(v => v.id === id)
+    cfg.question = base?.defaultQuery || ''
   }, { immediate:true })
 
   /* ---------------- 通用：请求构造与结果判定 ---------------- */

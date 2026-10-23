@@ -289,7 +289,28 @@ public class ExternalKnowledgeFacade {
         return knowledgeService.query(payload);
     }
 
-    private static Map<String, Object> payload(ApiKey key, Long kb, String question, Integer topK, List<String> permissionTags,
+    /**
+     * 实际生效的提问内容：留空时回退到知识库建库时配的「默认问题」。
+     *
+     * <p>那句问句是建库时专门配的示例，控制台里看得见；对外接口若强制必填，调用方就只能
+     * 自己想一句，同一份配置在两个入口表现不一致。两者都没有才算参数错误，且错误要说清
+     * 缺的是哪一个，而不是笼统的一句"参数不合法"。</p>
+     */
+    private String resolveQuestion(Long kb, String question) {
+        String text = question == null ? "" : question.trim();
+        if (!text.isEmpty()) {
+            return text;
+        }
+        KnowledgeBase base = kb == null ? null : knowledgeBaseService.get(kb);
+        String fallback = base == null ? null : base.getDefaultQuery();
+        text = fallback == null ? "" : fallback.trim();
+        if (text.isEmpty()) {
+            throw new IllegalArgumentException("缺少提问内容，且该知识库未配置默认问题");
+        }
+        return text;
+    }
+
+    private Map<String, Object> payload(ApiKey key, Long kb, String question, Integer topK, List<String> permissionTags,
         String source, String answerFormat) {
         return payload(key, kb, question, topK, permissionTags, source, answerFormat, null);
     }
@@ -304,11 +325,11 @@ public class ExternalKnowledgeFacade {
         return topK == null || topK < 1 ? 10 : Math.min(topK, 50);
     }
 
-    private static Map<String, Object> payload(ApiKey key, Long kb, String question, Integer topK, List<String> permissionTags,
+    private Map<String, Object> payload(ApiKey key, Long kb, String question, Integer topK, List<String> permissionTags,
         String source, String answerFormat, Double minScore) {
         Map<String, Object> payload = new LinkedHashMap<String, Object>();
         payload.put("knowledgeBaseId", kb);
-        payload.put("query", question);
+        payload.put("query", resolveQuestion(kb, question));
         payload.put("topK", effectiveTopK(topK));
         payload.put("source", source == null ? PlatformEventPublisher.SOURCE_REST : source);
         payload.put("answerFormat", AnswerFormat.normalize(answerFormat));

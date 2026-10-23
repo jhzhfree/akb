@@ -4,7 +4,6 @@ import com.jh.knowledgeos.common.AnswerFormat;
 import com.jh.knowledgeos.common.ResponseMode;
 import javax.validation.constraints.Max;
 import javax.validation.constraints.Min;
-import javax.validation.constraints.NotBlank;
 import javax.validation.constraints.Size;
 import java.util.List;
 
@@ -15,7 +14,12 @@ public class ExternalQueryRequest {
 
     private Long knowledgeBaseId;
 
-    @NotBlank
+    /**
+     * 提问内容。留空时回退到知识库建库时配的「默认问题」——两者都没有才算参数错误。
+     *
+     * <p>以前这里是 {@code @NotBlank}：调用方必须自己想一句话，于是库里辛辛苦苦配的
+     * 默认问句对外接口永远用不上，控制台里能看到的示例句和 API 行为对不齐。</p>
+     */
     @Size(max = 4000)
     private String question;
 
