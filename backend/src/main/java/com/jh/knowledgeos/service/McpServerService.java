@@ -23,7 +23,7 @@ import java.util.Map;
 @Service
 public class McpServerService {
 
-    public static final String PROTOCOL_VERSION = "2024-11-05";
+    public static final String PROTOCOL_VERSION = "2025-06-18";
 
     public static final String SERVER_NAME = "knowledge-os";
 
@@ -55,17 +55,28 @@ public class McpServerService {
      */
     public Map<String, Object> handle(Map<String, Object> request, ApiKey key) {
         Object id = request == null ? null : request.get("id");
-        String method = request == null ? null : String.valueOf(request.get("method"));
+        if (request == null || !"2.0".equals(request.get("jsonrpc"))) {
+            return error(id, -32600, "jsonrpc must be 2.0");
+        }
+        Object rawMethod = request.get("method");
+        if (!(rawMethod instanceof String) || ((String) rawMethod).trim().isEmpty()) {
+            return error(id, -32600, "缺少 method 字段");
+        }
+        String method = (String) rawMethod;
         Map<String, Object> params = new LinkedHashMap<String, Object>();
         if (request != null && request.get("params") instanceof Map) {
             params = (Map<String, Object>) request.get("params");
         }
-        if (method == null || method.isEmpty()) {
-            return error(id, -32600, "缺少 method 字段");
+        if (method.startsWith("notifications/")) {
+            // JSON-RPC notifications never receive a response. The HTTP adapter returns 202.
+            return request.containsKey("id") ? error(id, -32600, "Notification must not include id") : null;
+        }
+        if (!request.containsKey("id") || id == null) {
+            return error(id, -32600, "A JSON-RPC request requires a non-null id");
         }
         try {
             if ("initialize".equals(method)) {
-                return result(id, initialize());
+                return result(id, initialize(params));
             }
             if ("ping".equals(method)) {
                 return result(id, new LinkedHashMap<String, Object>());
@@ -81,9 +92,6 @@ public class McpServerService {
             }
             if ("resources/read".equals(method)) {
                 return result(id, resourcesRead(key, params));
-            }
-            if ("notifications/initialized".equals(method)) {
-                return null;
             }
             return error(id, -32601, "不支持的方法：" + method);
         } catch (SecurityException e) {
@@ -115,6 +123,27 @@ public class McpServerService {
             + "平台启用记忆服务且凭证允许 MEMORY_READ / MEMORY_WRITE 时，会显示对应记忆工具。"
             + "知识库范围、Agent 身份和记忆命名空间授权始终由服务端强制执行。");
         return payload;
+    }
+
+    private Map<String, Object> initialize(Map<String, Object> params) {
+        if (params == null || !(params.get("protocolVersion") instanceof String)
+            || !(params.get("capabilities") instanceof Map) || !(params.get("clientInfo") instanceof Map)) {
+            throw new IllegalArgumentException("initialize requires protocolVersion, capabilities and clientInfo");
+        }
+        String requested = ((String) params.get("protocolVersion")).trim();
+        Map<?, ?> clientInfo = (Map<?, ?>) params.get("clientInfo");
+        if (requested.isEmpty() || blank(clientInfo.get("name")) || blank(clientInfo.get("version"))) {
+            throw new IllegalArgumentException("initialize requires a protocolVersion and clientInfo name/version");
+        }
+        Map<String, Object> payload = initialize();
+        // This stateless server implements the JSON request/response feature set introduced
+        // through 2025-06-18. Echo a supported request; otherwise negotiate our supported level.
+        payload.put("protocolVersion", PROTOCOL_VERSION.equals(String.valueOf(requested)) ? requested : PROTOCOL_VERSION);
+        return payload;
+    }
+
+    private boolean blank(Object value) {
+        return value == null || String.valueOf(value).trim().isEmpty();
     }
 
     public Map<String, Object> toolsList() {

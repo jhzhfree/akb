@@ -88,11 +88,11 @@ t_document
 
 召回状态由 `RETRIEVAL_STATUS_POLICY` 配置，并由 Local、Elasticsearch、Milvus、Neo4j 共用同一白名单：
 
-- `permissive`（默认）：`DRAFT / UNCERTAIN / APPROVED / EFFECTIVE`；
-- `standard`：仅 `APPROVED / EFFECTIVE`；
+- `standard`（默认）：仅 `APPROVED / EFFECTIVE`；
+- `permissive`：`DRAFT / UNCERTAIN / APPROVED / EFFECTIVE`，仅用于受控预览；
 - `custom`：从 `RETRIEVAL_ALLOWED_STATUSES` 读取逗号分隔的知识状态白名单。
 
-兼容行为也受策略约束：`permissive` 允许旧数据中缺少 status 的对象；`standard` 和 `custom` 要求对象具有白名单内的明确状态，因此标准模式下只有 `APPROVED / EFFECTIVE` 对象能进入问答召回。新写入的内容块在索引时会标记为 `EFFECTIVE`。`custom` 的值必须是已知知识状态；空值、未知状态或未知策略会报错，不会静默放宽。
+兼容行为也受策略约束：只有显式选择 `permissive` 时才允许旧数据中缺少 status 的对象；`standard` 和 `custom` 要求对象具有白名单内的明确状态，因此标准模式下只有 `APPROVED / EFFECTIVE` 对象能进入问答召回。新写入的内容块在索引时会标记为 `EFFECTIVE`。`custom` 的值必须是已知知识状态；空值、未知状态或未知策略会报错，不会静默放宽。
 
 ## 9. 运维 API
 

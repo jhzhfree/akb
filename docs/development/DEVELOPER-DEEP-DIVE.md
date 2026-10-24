@@ -1,3 +1,6 @@
+Warning: truncated output (original token count: 12214)
+Total output lines: 788
+
 # 研发技术实现详解（核心培训文档）
 
 > 面向对象：即将接手/维护本工程的研发人员。
@@ -347,148 +350,7 @@ load_policy + merge_override      场景模板 + 本次 override 合成策略
   → context + citation            组装上下文与引用（_context）
   → LLM generate                  生成答案
   → 三道门（gate）                证据门 / 结构化门 / 资格门
-  → stages 时间线                 rewrite/route/recall/acl_filter/fusion/rerank/context/llm/citation
-  → render_answer                 按 answerFormat 渲染（最后一步！）
-```
-
-**为什么 `render_answer` 放最后**：答案的"结构化校验"（structured gate）必须作用在模型输出的原始结构上；先渲染成 Markdown/HTML 再校验就无从校验了。
-
-### 4.3 融合算法：加权 RRF（`retrieval/hybrid.py`）
-
-```python
-# hybrid.py rrf()  L575
-scores[doc_id] += weight / (k + rank)     # k = policy.fusion.rrfK
-# 再 heapq.nlargest(top_k)，并保留 channelScores / channelRanks / matched_channels
-```
-
-- 通道权重来自 `channel_weights(policy)`；每通道召回预算来自 `recall_sizes(policy)`。
-- RRF 的选择理由：各通道分数不可比（BM25 是无界分数、向量是余弦），**只有排名可比**，所以融合排名而非融合分数；`k` 控制"高位的优势衰减"。
-- 融合之后才做乘性加成：`qualityBoost`（新鲜度 365 天半衰期、质量信号缺失取中性）与 `chunkBoost`（标题命中 + 中文 bigram/拉丁词覆盖）。
-
-### 4.4 双检索引擎与降级（`hybrid.search_with_diagnostics`）
-
-```
-检索模式 RETRIEVAL_MODE ∈ { auto, external, dual }   （core/config.py:77）
-  auto/external → 走 ES(bm25) + Milvus(vector)
-  失败时按 settings.retrieval_external_required 决定是否降级本地
-```
-
-- ES：`elasticsearch_provider.search()` 的 filter = 知识库 + ACL + document_id。
-- Milvus：`milvus_provider.search()` 的 filter 用 `json_contains_any(permission_tags, [...])`。
-- 诊断信息里明确标出 `PRE_TOPK` —— 表示 ACL 是**在 topK 之前下推**的，不是先召回再过滤。
-  这条决定了"某用户看不到某文档"是过滤生效，而不是排序靠后被截断。
-
-### 4.5 答案的门与评分
-
-| 环节 | 代码 | 作用 |
-|---|---|---|
-| 证据门 | `answer_evidence_gate.py` | 结论必须有证据支撑，否则降级为"仅检索结果" |
-| 结构化门 | `structured_answer_gate.py` | 答案必须能解析成约定结构（供前端分块渲染） |
-| 资格门 | `answer_qualification.py` + `answer_claims.py` | 逐 claim 判定是否被证据支持，落 `t_answer_claim_assessment` |
-| 冲突检测 | `conflict_detector.py` | 按 `(subject, predicate)` 分桶后组内两两比较（避免 O(N²)）；subject/predicate 同而 object 异才计冲突；`DISJOINT` 视为版本更替直接跳过；极性冲突 0.92 / 数值冲突 0.68，`OVERLAPPING` ×0.85 |
-| 渲染 | `answer_formatting.py` | `default/markdown/text/html` 四格式；Markdown 追加"### 引用原文"（模型已写则不去重追加）；HTML 先 escape 再出标签（防注入） |
-
-### 4.6 Trace：可观测性是产品功能，不是日志
-
-`KnowledgeQueryService.toTrace()`（`:185-214`）把 `rewrittenQueries / router / recall / fusion / rerank / selectedContext / citations` 全部存 JSON，
-延迟优先取 trace 自带的 `totalLatencyMs`，`stages` 单独成列。
-前端 `QueryTracePanel` + `LatencyWaterfall` + `ScoreBreakdownPanel` 直接消费它。
-
-> 这就是"为什么回答慢/为什么没答上来"的标准排查入口：**先看 trace 的 stages 时间线，再看 score breakdown 的 rrfContribution**。
-
-### 4.7 评测：把"答得好不好"变成可回归的数字
-
-`EvaluationService`（纯 Java，不依赖外部）：
-
-- 模式：`RETRIEVAL`（只打 `/ai/retrieve`，不含 LLM 延迟）/ `FULL`（打 `/ai/query`）。
-- 指标：`hit@1/3/5`、`recall@5`、`MRR`、`NDCG@10`、`latency P50/P95`、`citationAccuracy`、`faithfulness`。
-- 候选身份匹配很宽松：`candidateAliases()` 里 `objectCode / unitCode / claimCode / id` 任一命中即算对（避免编码变更导致假失败）。
-- 回归判定 `applyBaseline()`：与基线比 hit@1/MRR/recall@5，延迟超 `LATENCY_REGRESSION_RATIO` 也判 `REGRESSED`。
-- 同步执行（`EvaluationController.java:82-86`，注释说明"宁可阻塞也不给半写的运行"）；失败用例只标 `FAILED` 不拖垮整轮；`hitAt5==0` 的用例会额外发 `KNOWLEDGE_GAP_DETECTED` 事件 —— 把"知识缺口"变成治理输入。
-
----
-
-## 5. 场景五：权限 —— 从登录到 ES 过滤器的完整链路
-
-### 5.1 认证：两套体系
-
-| 通道 | 实现 | 位置 |
-|---|---|---|
-| 会话 | `Authorization: Bearer` 或 `X-Auth-Token` → `AuthService.authenticate()` → `AuthContext.set()` + MDC | `config/AuthInterceptor.java:56-101` |
-| API Key | `kos_ak_` 前缀，库里只存 SHA-256（明文仅返回一次） | `service/ApiKeyService.java:52-71 / :151` |
-
-拦截器顺序（`WebMvcSecurityConfig.java:27-31`）：
-`AuthInterceptor(order 1, /api/**)` → `KnowledgeBaseAccessInterceptor(order 2, /api/knowledge/**)` → `PermissionInterceptor(order 3)`。
-`/api/v1/external/`、`/api/mcp` 在白名单里（`AuthInterceptor:40-41`），它们走 API Key。
-
-高危索引运维另有旁路：`OpsRbacFilter`（仅 `/api/knowledge/index/`），`X-Ops-Token` 映射 0/1/2/3 级，GET=1、replay/skip=2、写=3。
-
-### 5.2 授权三层，越权防御也在三层
-
-1. **接口层（路径 → 权限码）**：`PermissionInterceptor.java:31-48` 的规则表，区分 `WRITE_ONLY` 与 `ALL_METHODS`。
-   `common/Permissions.require()` 抛 `SecurityException` → 全局映射 403。
-   角色降级策略很关键：`UserRole.of()` 对未知/空角色一律降为 `KNOWLEDGE_VIEWER`（最小权限），兼容旧 `EDITOR/VIEWER`。
-2. **对象层（知识库可见性）**：`KnowledgeBaseAccessService.canRead()`：
-   `PUBLIC` 全员 / `PRIVATE` 仅 owner / `GROUP` 需群组成员 / `ADMIN` 直通。
-   浏览员即使对公开库也 `canWrite == false`。
-3. **数据层（行级标签）**：`AclContextResolver.resolve()` 的**三态语义**（注释 `:34-46` 写明这是修过的坑）：
-
-   | resolve 结果 | 语义 |
-   |---|---|
-   | `null` | 无约束（无身份上下文或管理员）→ 全放行 |
-   | `[]` 空列表 | 有身份但无标签 → **只能看公开** |
-   | 非空 | 公开 ∪ 命中任一标签 |
-
-   标签来源是 `resolveAclPermissionTags`（subject ∪ role ∪ department）。
-
-### 5.3 标签如何下推到三个存储
-
-| 存储 | 写法 | 位置 |
-|---|---|---|
-| ES | `None` 不加任何 ACL 子句；否则 `must_not exists` OR `terms` 交集 | `elasticsearch_provider.py:58-73` |
-| Milvus | `json_contains_any(permission_tags, ["__public__", ...])`，公开资源写哨兵 `__public__` | `milvus_provider.py:309-323 / :173` |
-| Neo4j | 节点与关系都按 `permissionTags` 过滤，空标签=公开 | `graph_provider.py:617-677` |
-
-> 注意：**每条被索引的数据都必须带 `permissionTags`**，写入侧漏了这一列，查询侧就必然漏数据或漏权限。
-> 新增索引通道时，`permissionTags` 是强制字段而非可选字段。
-
-### 5.4 ACL 变更如何传播（最容易被改坏的一段）
-
-```
-AclAdministrationService.changeResourceAcl()  :58-109
-   ├─ 校验类型 SOURCE / CARD / CLAIM
-   ├─ updateResourcePermissionTags
-   ├─ 写 t_acl_change（changeCode = ACL-UUID，含 old/new tags 与 impact）
-   └─ outbox.enqueue(..., "ACL_CHANGED", ...)
-         ▼ IndexOutboxWorker:152-158
-           requiresAuthoritativeRebuild ? REBUILD_REQUIRED : COMPLETED
-```
-
-需要重建时走 **三段式编排** `AclRebuildOrchestrator`：
-`start()`（建 `ACLR-` 作业 → `schemaService.rebuild(kb, version)` 建**绿版本**，不动 active 指针 → `VALIDATING`）
-→ `qualify()`（带 manifestHash / entityCount / relationCount 调 `/ai/index/schema/acl-qualify/{kb}`，`qualified=true` 才 `READY/PASSED`）
-→ `activate()`（**双重闸门**：READY + PASSED 才切换指针）。
-
-为什么必须 qualify 之后再 activate：权限重建是"全量重算"，中途失败若已切指针，全库可见性就错了。**先验收后切换**是这个编排存在的全部理由。
-
-审计：`AclAuditService.record()` 落 `t_acl_access_audit`（带 traceId + URI），失败只记日志不阻断主链路。
-判定语义有区分：`READ_DETAIL` / `DENY` / `ACL_FILTERED_OR_NOT_FOUND` —— 最后一条避免"过滤掉"被误报成"越权尝试"。
-
----
-
-## 6. 场景六：索引运维 —— 蓝绿、重建、漂移、补偿
-
-### 6.1 索引 Schema Release（蓝绿切换）
-
-`IndexSchemaService`：`rebuild(kb, version)` → `activate(releaseId)` → `rollback(releaseId)`（rollback 就是 activate 旧 release，`:147-149`）。
-表 `t_index_schema_release`（迁移脚本 `V5__index_operations_and_schema_release.sql`）。
-
-要点：**rebuild 只建新版本，从不直接改 active**；切换是一次指针更新，因此可回滚。
-ACL 重建（`AclRebuildOrchestrator`）复用同一套机制，所以在"权限大改"场景下也能回滚。
-
-### 6.2 权威图谱重建
-
-`AuthoritativeGraphGenerationService.rebuild()`：读权威快照 → 逐行 canonical JSON 做 SHA-256 → POST `/ai/index/schema/graph-rebuild/{kb}` → 落三张 manifest（graph / facet / evidence）。
+  → stages 时间线                 rewrite/route/recall/acl_filter/fusion/rera…2214 tokens truncated…T `/ai/index/schema/graph-rebuild/{kb}` → 落三张 manifest（graph / facet / evidence）。
 真正写 Neo4j 的是 `graph_provider._neo4j_rebuild_authoritative_graph()`：先 `DETACH DELETE` 同 generation 的 `EntityGen`，再分类写入；`activate_generation()` 才切指针。
 Neo4j 关闭时降级为 `NullGraphProvider`（`get_graph_provider()`）—— 所以 Neo4j 是**可降级组件**，不是硬依赖。
 
@@ -585,8 +447,8 @@ resolveKnowledgeBase() :65-78  绑定 kb 的 key 传别的 id 直接抛 Security
 
 ### 8.2 MCP（Model Context Protocol）
 
-`McpServerService`：协议版本 `2024-11-05`，serverInfo `knowledge-os/1.2.0`。
-`handle()`（`:44-84`）是 JSON-RPC 2.0 分派器：`initialize / ping / tools/list / tools/call / resources/list / resources/read`，`notifications/initialized` 返回 `null`（通知无 id，不回包）。
+`McpServerService`：协议版本 `2025-06-18`，使用无会话 JSON 响应的 Streamable HTTP；serverInfo `knowledge-os/1.2.0`。
+`handle()`（`:44-84`）是 JSON-RPC 2.0 分派器：`initialize / ping / tools/list / tools/call / resources/list / resources/read`。无 `id` 的 `notifications/*` 由服务返回 `null`，HTTP 入口据此返回 202 空响应。
 
 异常映射值得记住：`SecurityException → -32001`、`IllegalArgumentException → -32602`、其它 `-32603`。
 10 个工具（`toolsList()` `:106-132`）：`knowledge_query / knowledge_search / list_knowledge_bases / list_knowledge_cards / get_knowledge_card / list_claims / get_claim / get_evidence / graph_neighbors / ingest_text`，每个都有 JSON Schema `inputSchema`。

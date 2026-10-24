@@ -1,7 +1,7 @@
 name: CI
 on:
   push:
-    branches: [ main, master, develop ]
+    branches: [ main, master, develop, feature/octop-mcp-integration ]
   pull_request:
     branches: [ main, master, develop ]
 jobs:

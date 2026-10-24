@@ -10,6 +10,7 @@
 | 重抽取绕过资源权限 | 以数据库中的文档归属、知识库写权限及来源标签为准，调用模型前拒绝越权；直接抽取和文档重试共用检查 | DocumentExtractionAccess、KnowledgeGovernanceController |
 | 标题去重、规范化丢失语义 | E3 指纹保留比较符、标点及词边界；JSON 结构规范化，标签按独立值排序；幂等键包含来源、证据和权限边界，同名不同正文保留 | ExtractionCanonical、KnowledgeExtractionService |
 | 无效证据被替换为整篇文档 | 只接受 ACTIVE 内容单元与证据；显式 evidence_ids 必须全部有效；没有 ID 时仅允许在当前单元中找到正文或主宾语锚点 | DocumentMapper.xml、KnowledgeExtractionService |
+| 自动批准只依赖抽取器标记 | Java 入库前独立核对候选与当前文档证据：卡片正文/摘要及标题必须能在同一证据单元定位；断言主体及“谓语:宾语”必须能在同一证据单元匹配；带条件、限定或有效期的断言继续待审 | DeterministicExtractionVerifier、KnowledgeExtractionService |
 | 并发重复插入、统计不准确 | 模型调用在事务外；入库事务按文档加锁，手动无文档抽取按知识库加锁；锁内查重并持久化 | DocumentMapper、KnowledgeExtractionService |
 | fallback 生成恒真句、否定误读 | 删除标题加首句造断言路径；仅识别明确谓语，优先处理否定；条件、疑问和双重否定保守跳过；规则回退不自动 APPROVED | extractor.py |
 | 冲突判断忽略适用范围 | 输入携带极性、条件、限定信息及有效期；不同范围或不重叠时间不直接冲突；多值谓语不套单值规则；候选冲突写 OPEN，交由裁决 | conflict_detector.py、KnowledgeExtractionService |
@@ -24,6 +25,8 @@
 
 文档 READY 表示解析就绪，与知识抽取及索引状态分开。抽取结果为 EXTRACTED、EMPTY、QUALITY_REJECTED、PARTIAL 或 FAILED；零产出不假装已经形成知识。重抽取入口可用于解析已完成但无知识的文档。
 
+`derivation=DETERMINISTIC` 只是候选来源提示，不能单独触发自动批准。服务端必须确认所有证据 ID 属于当前文档，再检查卡片正文、摘要和标题，或断言的主体、谓语和值与同一证据单元吻合。无法通过窄范围校验、包含额外条件/限定或有效期的候选进入待审状态。正式检索默认使用 `standard`（仅 `APPROVED`、`EFFECTIVE`）；只有受控预览才显式配置 `permissive`。
+
 `cards/claims` 代表本次新建对象，不代表模型候选数；复用不重复计入新增。`extractionStats` 保存候选、复用和拒绝等诊断，`extraction_summary_json` 保存摘要。衍生扫描数只代表实际取到的合格输入，不代表全库总行数；必须结合 inputUnit 和扫描上限理解。图诊断为图上下文诊断，不能当作某条规则精确匹配失败数量。
 
 模型槽只包住抽取请求，不覆盖解析、数据库写入和索引。配置 `knowledge.extraction.concurrency` 默认 1、`knowledge.extraction.queue-timeout-seconds` 默认 300。信号量作用于单个后端实例，多副本部署仍需共享队列或模型网关统一限流。`RERANKER_AUTO_TOP_N` 默认 50，配置范围限制为 1–200，显式正数 topN 优先。
@@ -33,6 +36,17 @@
 部署前备份 MySQL，正常启动时由 Flyway 执行新增的 `V67__knowledge_quality_outcomes.sql`，增加文档抽取摘要及衍生执行摘要 JSON 字段。未修改已经发布的 V65、V66，不能手动替换历史迁移。回退应用时可保留这两个可空字段，避免破坏 Flyway 历史。
 
 E3 不自动删除旧卡片、重写旧证据或恢复历史 CONFLICTED 状态。上线后先抽样审计旧资产，再按文档重抽取、比对和人工裁决；不要批量清空知识或直接把所有冲突改成 APPROVED。E2 到 E3 的首次抽取可能产生新对象，应核对历史资产后再归档。幂等键或规范化规则变更必须说明版本策略并增加回归用例。
+
+确定性校验只约束新建对象，不会自动降级历史上由 `DETERMINISTIC_PARSE` 创建的 APPROVED 对象。切换正式环境到 `standard` 前，应先盘点这些历史对象并抽样核验；不要自动降级已有人工作出裁决的知识。可先用以下只读查询定位抽取器自动批准的历史快照：
+
+```sql
+SELECT knowledge_base_id, object_type, object_code, version_no, title, content, created_time
+FROM t_knowledge_version
+WHERE change_type = 'CREATED'
+  AND changed_by = 'DETERMINISTIC_PARSE'
+  AND status = 'APPROVED'
+ORDER BY created_time DESC;
+```
 
 ## 4. 验证步骤
 

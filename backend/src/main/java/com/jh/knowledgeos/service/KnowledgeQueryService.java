@@ -11,7 +11,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 import java.util.List;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -41,6 +40,9 @@ public class KnowledgeQueryService {
     /** 落 trace 时记下调用方 IP，检索链路追踪页要看"这条链路是谁发起的"。 */
     private final ClientIpResolver clientIps;
 
+    /** Opens a short write transaction only after the remote AI query has completed. */
+    private final TransactionRunner transactionRunner;
+
     /** 控制台问答注入记忆的条数上限。 */
     private static final int MEMORY_CONTEXT_LIMIT = 8;
 
@@ -48,7 +50,7 @@ public class KnowledgeQueryService {
 
     public KnowledgeQueryService(TraceMapper traceMapper, AiClient aiClient, ObjectMapper objectMapper, IdGenerator idGenerator,
         PlatformEventPublisher publisher, KbScenarioService scenarios, AgentMemoryService memories,
-        AclContextResolver aclContext, ClientIpResolver clientIps) {
+        AclContextResolver aclContext, ClientIpResolver clientIps, TransactionRunner transactionRunner) {
         this.traceMapper = traceMapper;
         this.aiClient = aiClient;
         this.objectMapper = objectMapper;
@@ -58,6 +60,7 @@ public class KnowledgeQueryService {
         this.memories = memories;
         this.aclContext = aclContext;
         this.clientIps = clientIps;
+        this.transactionRunner = transactionRunner;
     }
 
     /**
@@ -117,14 +120,12 @@ public class KnowledgeQueryService {
      * Executes the AI query pipeline and persists trace data for routing, retrieval,
      * latency, model, and citation diagnostics.
      */
-    @Transactional
     public Map<String, Object> query(Map<String, Object> request) throws Exception {
         attachMemory(request);
         return runQuery(request);
     }
 
     /** Returns retrieval diagnostics without answer text for the retrieval endpoint. */
-    @Transactional
     public Map<String, Object> retrieve(Map<String, Object> request) throws Exception {
         Map<String, Object> response = runQuery(request);
         Map<String, Object> result = new LinkedHashMap<String, Object>();
@@ -140,7 +141,6 @@ public class KnowledgeQueryService {
     }
 
     /** Returns the answer payload with the delivery format normalized by the AI service. */
-    @Transactional
     public Map<String, Object> answer(Map<String, Object> request) throws Exception {
         Map<String, Object> response = runQuery(request);
         Map<String, Object> result = new LinkedHashMap<String, Object>();
@@ -257,11 +257,17 @@ public class KnowledgeQueryService {
      */
     private void persistAndAnnounce(String queryId, Map<String, Object> payload, Map<String, Object> response, long clientLatencyMs)
         throws Exception {
-        traceMapper.insertTrace(toTrace(queryId, payload, response, clientLatencyMs));
-        persistAnswerEvidenceAssessment(queryId, payload, response);
-        persistAnswerQualification(queryId, payload, response);
-        response.put("queryId", queryId);
-        announceRetrieval(payload, response, clientLatencyMs);
+        transactionRunner.required(() -> {
+            try {
+                traceMapper.insertTrace(toTrace(queryId, payload, response, clientLatencyMs));
+                persistAnswerEvidenceAssessment(queryId, payload, response);
+                persistAnswerQualification(queryId, payload, response);
+                response.put("queryId", queryId);
+                announceRetrieval(payload, response, clientLatencyMs);
+            } catch (Exception ex) {
+                throw new IllegalStateException("Failed to persist query trace", ex);
+            }
+        });
     }
 
     /**

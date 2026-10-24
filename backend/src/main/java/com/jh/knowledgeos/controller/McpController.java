@@ -10,6 +10,7 @@ import com.jh.knowledgeos.service.McpServerService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -22,8 +23,9 @@ import java.util.Map;
 /**
  * MCP Server endpoint: knowledge capabilities as tools and resources for external agents.
  *
- * <p>Speaks JSON-RPC 2.0 over a single POST endpoint, so an MCP client only needs the URL and
- * an API key header. Business failures travel as JSON-RPC errors, never as HTML error pages.</p>
+ * <p>Speaks JSON-RPC 2.0 over stateless Streamable HTTP. POST returns JSON; GET has no server
+ * event stream and is rejected with 405. An MCP client needs the URL and an API key header.
+ * Business failures travel as JSON-RPC errors, never as HTML error pages.</p>
  */
 @RestController
 @RequestMapping("/api/mcp")
@@ -49,7 +51,7 @@ public class McpController {
 
     @PostMapping(consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
     @Operation(summary = "JSON-RPC 2.0 入口：initialize / tools/list / tools/call / resources/*")
-    public Map<String, Object> handle(HttpServletRequest request, @RequestBody(required = false) Map<String, Object> body) {
+    public ResponseEntity<?> handle(HttpServletRequest request, @RequestBody(required = false) Map<String, Object> body) {
         if (!properties.isEnabled() || !properties.isMcpEnabled()) {
             throw new SecurityException("MCP 服务已关闭");
         }
@@ -59,6 +61,7 @@ public class McpController {
         // not as an opaque JSON-RPC envelope. "tools/call" repeated twenty times down a log tells an
         // operator nothing; "tools/call:knowledge_query" with the question and the answer does.
         String method = body == null ? "" : String.valueOf(body.get("method"));
+        boolean notification = body != null && !body.containsKey("id") && method.startsWith("notifications/");
         String auditedMethod = "tools/call".equals(method) ? "tools/call:" + toolName(body) : method;
         Object params = isMemoryTool(auditedMethod) ? memoryAuditRequest(auditedMethod) : auditService.mcpRequestParams(body);
         Long knowledgeBaseId = auditService.mcpKnowledgeBaseId(body);
@@ -77,10 +80,17 @@ public class McpController {
                 auditedResponse = rpcFailureBody(auditedResponse, rpcError);
             }
             String rpcMessage = rpcError == null ? null : String.valueOf(rpcError.get("message"));
-            auditService.record(key, ApiCallAudit.CHANNEL_MCP, auditedMethod, knowledgeBaseId, 200, System.currentTimeMillis() - start, rpcMessage, params,
-                auditedResponse);
-            // 通知类消息（无 id）协议上不返回结果，这里回空对象保持 HTTP 200。
-            return response == null ? new LinkedHashMap<String, Object>() : response;
+            int transportStatus = notification && response == null ? 202 : 200;
+            if (notification && response == null) {
+                Map<String, Object> accepted = new LinkedHashMap<String, Object>();
+                accepted.put("notificationAccepted", Boolean.TRUE);
+                auditedResponse = accepted;
+            }
+            auditService.record(key, ApiCallAudit.CHANNEL_MCP, auditedMethod, knowledgeBaseId, transportStatus,
+                System.currentTimeMillis() - start, rpcMessage, params, auditedResponse);
+            // Streamable HTTP notifications are accepted without a JSON-RPC response body.
+            if (notification && response == null) { return ResponseEntity.accepted().build(); }
+            return ResponseEntity.ok(response);
         } catch (UnauthorizedException e) {
             // 凭证无效时调用者也应当出现在日志里：否则"谁在拿错 key 打我们的 MCP"根本无从查起。
             auditService.record(key, ApiCallAudit.CHANNEL_MCP, auditedMethod, knowledgeBaseId, 401, System.currentTimeMillis() - start, e.getMessage(),
