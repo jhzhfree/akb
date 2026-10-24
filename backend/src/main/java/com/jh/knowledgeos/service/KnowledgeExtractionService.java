@@ -247,7 +247,11 @@ public class KnowledgeExtractionService {
         Map<String, Object> graphEvent = null;
         try {
             if (documentId != null && graphEnabled) {
-                graphEvent = runPostStage(documentId, runId, "GRAPH_INDEX");
+                // 各阶段返回的不是同一种东西（冲突是列表、实体消歧是 map、图谱是 outbox
+                // 事件），所以 runPostStage 统一返回 Object。这里只关心图谱事件，拿到的不是
+                // map 或阶段已跳过/已完成（返回 null）就当没有事件，不打断整条抽取。
+                Object staged = runPostStage(documentId, runId, "GRAPH_INDEX");
+                graphEvent = staged instanceof Map ? (Map<String, Object>) staged : null;
             } else if (documentId == null && graphEnabled) {
             Map<String, Object> graphPayload = buildKnowledgeIndexPayload(knowledgeBaseId, new ArrayList<Map<String, Object>>(),
                 new ArrayList<Map<String, Object>>(), withPermissionTags(response.get("entities"), permissionTags),

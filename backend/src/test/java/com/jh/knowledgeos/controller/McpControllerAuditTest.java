@@ -24,6 +24,13 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+/**
+ * 审计口径用例：JSON-RPC 的成败要能在审计行里分辨出来，而不是一律记成 HTTP 200。
+ *
+ * <p>下面两个 verify 都不断言第 4 个参数（knowledgeBaseId）——本用例关心的是 RPC 成败
+ * 有没有被标出来（rpcSuccess / rpcErrorCode / response），kb 的解析由专门的用例覆盖，
+ * 混在这里只会让“改了 kb 解析”误伤“审计口径”的回归信号。</p>
+ */
 class McpControllerAuditTest {
     @Test
     void jsonRpcFailureRemainsHttp200AndIsAuditedAsRpcFailure() {
@@ -42,7 +49,7 @@ class McpControllerAuditTest {
         ResponseEntity<?> response = controller.handle(new MockHttpServletRequest(), row("jsonrpc", "2.0", "id", 1, "method", "unknown"));
         assertEquals(200, response.getStatusCodeValue());
         ArgumentCaptor<Object> auditedResponse = ArgumentCaptor.forClass(Object.class);
-        verify(audit).record(eq(key), eq(ApiCallAudit.CHANNEL_MCP), eq("unknown"), isNull(), anyInt(), anyLong(), eq("unknown method"),
+        verify(audit).record(eq(key), eq(ApiCallAudit.CHANNEL_MCP), eq("unknown"), any(), anyInt(), anyLong(), eq("unknown method"),
             any(), auditedResponse.capture());
         Map<?, ?> details = (Map<?, ?>) auditedResponse.getValue();
         assertEquals(Boolean.FALSE, details.get("rpcSuccess"));
@@ -65,7 +72,7 @@ class McpControllerAuditTest {
 
         controller.handle(new MockHttpServletRequest(), row("jsonrpc", "2.0", "id", 1, "method", "ping"));
         ArgumentCaptor<Object> auditedResponse = ArgumentCaptor.forClass(Object.class);
-        verify(audit).record(eq(key), eq(ApiCallAudit.CHANNEL_MCP), eq("ping"), isNull(), anyInt(), anyLong(), isNull(), any(),
+        verify(audit).record(eq(key), eq(ApiCallAudit.CHANNEL_MCP), eq("ping"), any(), anyInt(), anyLong(), isNull(), any(),
             auditedResponse.capture());
         assertTrue((Boolean) ((Map<?, ?>) auditedResponse.getValue()).get("rpcSuccess"));
         assertFalse(((Map<?, ?>) auditedResponse.getValue()).containsKey("rpcErrorMessage"));

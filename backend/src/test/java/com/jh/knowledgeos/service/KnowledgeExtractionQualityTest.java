@@ -172,6 +172,8 @@ class KnowledgeExtractionQualityTest {
             assertTrue(stage.getIdempotencyKey().startsWith("EXTRACT_POST:" + stage.getRunId() + ":"));
         }
         assertEquals(new HashSet<String>(Arrays.asList("GRAPH_INDEX", "CONFLICT_DETECTION", "ENTITY_RESOLUTION", "EVENT_PUBLISHED")), codes);
-        assertEquals(3, keys.size());
+        // 阶段从 3 个增加到 4 个（补了 EVENT_PUBLISHED）后，上面断言的集合已经是 4 个，
+        // 这里却还守着 3——幂等键与阶段一一对应，数量必然一致。
+        assertEquals(4, keys.size());
     }
 }
