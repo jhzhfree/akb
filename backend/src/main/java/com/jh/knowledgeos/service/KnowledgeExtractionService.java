@@ -208,6 +208,7 @@ public class KnowledgeExtractionService {
         response.put("extractionStats", persisted.stats());
         response.put("extractionStatus", persisted.outcome());
         Map<String, String> warnings = new LinkedHashMap<String, String>();
+        Map<String, Object> postProcessingStages = new LinkedHashMap<String, Object>();
         response.put("authoritativeGraph", persisted.graph);
         Map<String, Object> graphEvent = null;
         try {
@@ -220,7 +221,8 @@ public class KnowledgeExtractionService {
                 "GRAPH_BATCH_UPSERT", AiApiPaths.INDEX_KNOWLEDGE, graphPayload, documentId == null ? "GRAPH_EXTRACT:" + graphKey + ":" +
                 UUID.randomUUID().toString() : "GRAPH_EXTRACT:" + graphKey + ":" + fingerprint(jsonOrDefault(graphPayload, "{}"))));
             }
-        } catch (RuntimeException ex) { postFailure(warnings, "GRAPH_INDEX", ex); }
+            recordPostProcessingStage(postProcessingStages, "GRAPH_INDEX", graphEnabled ? "OUTBOX_ENQUEUED" : "SKIPPED", null);
+        } catch (RuntimeException ex) { postFailure(warnings, postProcessingStages, "GRAPH_INDEX", ex); }
         Map<String, Object> indexSummary = new LinkedHashMap<String, Object>();
         indexSummary.put("mode", "transactional-outbox");
         indexSummary.put("cardEvents", savedCards.size());
@@ -228,23 +230,47 @@ public class KnowledgeExtractionService {
         indexSummary.put("graphEvent", graphEvent);
         response.put("knowledgeIndex", indexSummary);
         try {
-            response.put("conflicts", Boolean.TRUE.equals(extractPolicy.get("conflictDetection"))
-                ? detectAndPersistConflicts(knowledgeBaseId, claimStats.acceptedClaims) : new ArrayList<Object>());
-        } catch (RuntimeException ex) { postFailure(warnings, "CONFLICT_DETECTION", ex); }
+            if (Boolean.TRUE.equals(extractPolicy.get("conflictDetection"))) {
+                response.put("conflicts", detectAndPersistConflicts(knowledgeBaseId, claimStats.acceptedClaims));
+                recordPostProcessingStage(postProcessingStages, "CONFLICT_DETECTION", "SUCCEEDED", null);
+            } else {
+                response.put("conflicts", new ArrayList<Object>());
+                recordPostProcessingStage(postProcessingStages, "CONFLICT_DETECTION", "SKIPPED", "POLICY_DISABLED");
+            }
+        } catch (RuntimeException ex) { postFailure(warnings, postProcessingStages, "CONFLICT_DETECTION", ex); }
         try {
-            response.put("entityResolution", Boolean.TRUE.equals(extractPolicy.get("entityResolution"))
-                ? entityResolutionService.resolveAndMerge(knowledgeBaseId, response.get("entities")) : skippedResolution());
-        } catch (RuntimeException ex) { postFailure(warnings, "ENTITY_RESOLUTION", ex); }
-        try { announceExtraction(knowledgeBaseId, documentId, savedCards, savedClaims, cardStats, claimStats); }
-        catch (RuntimeException ex) { postFailure(warnings, "ANNOUNCE", ex); }
+            if (Boolean.TRUE.equals(extractPolicy.get("entityResolution"))) {
+                Map<String, Object> resolution = entityResolutionService.resolveAndMerge(knowledgeBaseId, response.get("entities"));
+                response.put("entityResolution", resolution);
+                if (Boolean.TRUE.equals(resolution.get("degraded"))) {
+                    postFailure(warnings, postProcessingStages, "ENTITY_RESOLUTION",
+                        new IllegalStateException(stringValue(resolution.get("reason"))));
+                } else {
+                    recordPostProcessingStage(postProcessingStages, "ENTITY_RESOLUTION", "SUCCEEDED", null);
+                }
+            } else {
+                response.put("entityResolution", skippedResolution());
+                recordPostProcessingStage(postProcessingStages, "ENTITY_RESOLUTION", "SKIPPED", "POLICY_DISABLED");
+            }
+        } catch (RuntimeException ex) { postFailure(warnings, postProcessingStages, "ENTITY_RESOLUTION", ex); }
+        try {
+            announceExtraction(knowledgeBaseId, documentId, savedCards, savedClaims, cardStats, claimStats);
+            recordPostProcessingStage(postProcessingStages, "ANNOUNCE", "SUBMITTED", null);
+        } catch (RuntimeException ex) { postFailure(warnings, postProcessingStages, "ANNOUNCE", ex); }
         response.put("postProcessingWarnings", warnings);
-        if (!warnings.isEmpty()) {
-            response.put("extractionStatus", "PARTIAL");
-            if (documentId != null) {
-                Map<String, Object> summary = persisted.stats();
-                summary.put("postProcessingWarnings", warnings);
-                try { documentMapper.updateExtractionSummary(documentId, "PARTIAL", jsonOrDefault(summary, "{}")); }
-                catch (RuntimeException ex) { LOG.error("Could not save partial extraction outcome document={}", documentId, ex); }
+        response.put("postProcessingStages", postProcessingStages);
+        String outcome = warnings.isEmpty() ? persisted.outcome() : "PARTIAL";
+        response.put("extractionStatus", outcome);
+        if (documentId != null) {
+            Map<String, Object> summary = persisted.stats();
+            summary.put("postProcessingWarnings", warnings);
+            summary.put("postProcessingStages", postProcessingStages);
+            try { documentMapper.updateExtractionSummary(documentId, outcome, jsonOrDefault(summary, "{}")); }
+            catch (RuntimeException ex) {
+                LOG.error("Could not save extraction post-processing outcome document={}", documentId, ex);
+                warnings.put("SUMMARY_PERSISTENCE", "FAILED_RETRYABLE");
+                recordPostProcessingStage(postProcessingStages, "SUMMARY_PERSISTENCE", "FAILED_RETRYABLE", safeError(ex));
+                response.put("extractionStatus", "PARTIAL");
             }
         }
         return response;
@@ -1038,9 +1064,25 @@ public class KnowledgeExtractionService {
         return out;
     }
 
-    private void postFailure(Map<String, String> warnings, String stage, RuntimeException ex) {
+    private void postFailure(Map<String, String> warnings, Map<String, Object> stages, String stage, RuntimeException ex) {
         LOG.error("Extraction committed; post-processing failed at {}", stage, ex);
         warnings.put(stage, "FAILED_RETRYABLE");
+        recordPostProcessingStage(stages, stage, "FAILED_RETRYABLE", safeError(ex));
+    }
+
+    private void recordPostProcessingStage(Map<String, Object> stages, String stage, String status, String lastError) {
+        Map<String, Object> result = new LinkedHashMap<String, Object>();
+        result.put("status", status);
+        result.put("attemptCount", 1);
+        if (lastError != null && !lastError.trim().isEmpty()) { result.put("lastError", lastError); }
+        stages.put(stage, result);
+    }
+
+    private String safeError(RuntimeException ex) {
+        String message = ex == null || ex.getMessage() == null ? "unknown error" : ex.getMessage();
+        String safe = ex.getClass().getSimpleName() + ": " + message.replaceAll(
+            "(?i)(api[_-]?key|authorization|token)(\\s*[:=]\\s*)[^\\s,;]+", "$1$2[REDACTED]");
+        return safe.length() <= 500 ? safe : safe.substring(0, 500);
     }
 
     private void recordDuplicates(Long knowledgeBaseId, String objectType, String code, String fingerprint, String permissionTags, PersistStats stats) {

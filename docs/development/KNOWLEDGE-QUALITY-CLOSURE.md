@@ -14,7 +14,7 @@
 | 并发重复插入、统计不准确 | 模型调用在事务外；入库事务按文档加锁，手动无文档抽取按知识库加锁；锁内查重并持久化 | DocumentMapper、KnowledgeExtractionService |
 | fallback 生成恒真句、否定误读 | 删除标题加首句造断言路径；仅识别明确谓语，优先处理否定；条件、疑问和双重否定保守跳过；规则回退不自动 APPROVED | extractor.py |
 | 冲突判断忽略适用范围 | 输入携带极性、条件、限定信息及有效期；不同范围或不重叠时间不直接冲突；多值谓语不套单值规则；候选冲突写 OPEN，交由裁决 | conflict_detector.py、KnowledgeExtractionService |
-| 入库后外部服务失败导致台账归零 | 图索引、冲突检查等后处理分别捕获错误；保留入库数，结果标 PARTIAL 并返回可重试阶段提示 | KnowledgeExtractionService |
+| 入库后处理状态不完整 | 图索引、冲突检查、实体归一和事件通知分别记录阶段状态；外部阶段失败保留新增数、返回脱敏错误摘要并标记 PARTIAL；实体归一的 degraded 响应也纳入 PARTIAL | KnowledgeExtractionService |
 | 索引状态长期 PENDING | Outbox 成功、重试、死亡后重新汇总相关文档状态；存在 DEAD 为 FAILED，待处理为 PENDING，否则 INDEXED | IndexOutboxWorker、DocumentMapper.xml |
 | 扫描数与产出数混淆 | 按规则分别记录实际合格输入、产出、创建及复用数量；保存输入单位、截断提示和跳过诊断 | KnowledgeDerivationService、DerivationMapper |
 | 策略快照丢失、重排与引用问题 | 同一查询策略传递至路由和上下文；topN=0 使用有上限的自适应值；引用按来源版本、证据和完整内容合并，保留对象引用与通道 | query_policy.py、query_engine.py |
@@ -28,6 +28,8 @@
 `derivation=DETERMINISTIC` 只是候选来源提示，不能单独触发自动批准。服务端必须确认所有证据 ID 属于当前文档，再检查卡片正文、摘要和标题，或断言的主体、谓语和值与同一证据单元吻合。无法通过窄范围校验、包含额外条件/限定或有效期的候选进入待审状态。正式检索默认使用 `standard`（仅 `APPROVED`、`EFFECTIVE`）；只有受控预览才显式配置 `permissive`。
 
 `cards/claims` 代表本次新建对象，不代表模型候选数；复用不重复计入新增。`extractionStats` 保存候选、复用和拒绝等诊断，`extraction_summary_json` 保存摘要。衍生扫描数只代表实际取到的合格输入，不代表全库总行数；必须结合 inputUnit 和扫描上限理解。图诊断为图上下文诊断，不能当作某条规则精确匹配失败数量。
+
+`postProcessingStages` 分别记录 `GRAPH_INDEX`、`CONFLICT_DETECTION`、`ENTITY_RESOLUTION`、`ANNOUNCE` 的状态；失败项带有限长、敏感字段脱敏后的 `lastError`。`GRAPH_INDEX=OUTBOX_ENQUEUED` 只表示图索引事件已可靠登记，最终投递状态仍以 Outbox 为准。当前该字段用于定位失败阶段；独立的按阶段补偿执行器仍需在后续 S3 工作中实现。
 
 模型槽只包住抽取请求，不覆盖解析、数据库写入和索引。配置 `knowledge.extraction.concurrency` 默认 1、`knowledge.extraction.queue-timeout-seconds` 默认 300。信号量作用于单个后端实例，多副本部署仍需共享队列或模型网关统一限流。`RERANKER_AUTO_TOP_N` 默认 50，配置范围限制为 1–200，显式正数 topN 优先。
 
