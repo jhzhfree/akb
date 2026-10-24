@@ -1,4 +1,639 @@
-YªçŠx-®éÜj×¢ëiºÚ+Š§j[h‘éÜ¢éí×ŸuÑ:-jZ.¶›­–)Ş³R""%VW'’VæFW'7FæF–ærÂ&WG&–WfÂ&÷WF–ærÂgW6–öâÂ&W&æ¶–ærÂ6öçFW‡B76VÖ&Ç’ÂæBç7vW"vVæW&F–öâà ¤WfW'’GVæ&ÆRæöFR&VG2—G2&ÖWFW'2g&öÒF†R'VçF–ÖRVW'’öÆ–7’†æ6÷&RçVW'•÷öÆ–7–’À§6ò÷W&F–öç27Ffb6âVF—B&÷WF–ær'VÆW2Â&V6ÆÂ6†ææVÇ2ÂgW6–öâvV–v‡G2Â&W&æ²FWF‚À¦æBç7vW"wV&G&–Ç2g&öÒF†R6öç6öÆRv—F†÷WB&VFWÆ÷––ærF†R’6W'f–6Rà¢""  ¦–×÷'B7–æ6–ğ¦–×÷'BÆövv–æp¦–×÷'B&P¦–×÷'BF–ÖP ¦g&öÒæ6÷&Ræ6öæf–r–×÷'B6WGF–æw0¦g&öÒæ6÷&RçVW'•÷öÆ–7’–×÷'B€¢6†ææVÅ÷vV–v‡G2À¢6‡Væµö&ö÷7E÷vV–v‡G2À¢VffV7F—fU÷7G&FVv–W2À¢ÆöE÷öÆ–7’À¢ÖW&vUö÷fW'&–FRÀ¢öÆ–7•÷7VÖÖ'’À¢VÆ—G•÷vV–v‡G2À¢&V6ÆÅ÷6—¦W2À¢¦g&öÒç6W'f–6W2æç7vW%öWf–FVæ6UövFR–×÷'Bç7vW$Wf–FVæ6TvFP¦g&öÒç6W'f–6W2æç7vW%öf÷&ÖGF–ær–×÷'BDTdTÅB2DTdTÅEôå5tU%ôdõ$Ô@¦g&öÒç6W'f–6W2æç7vW%öf÷&ÖGF–ær–×÷'BW†6W'B2ç7vW%öW†6W'@¦g&öÒç6W'f–6W2æç7vW%öf÷&ÖGF–ær–×÷'Bæ÷&ÖÆ—¦R2æ÷&ÖÆ—¦Uöç7vW%öf÷&Ö@¦g&öÒç6W'f–6W2æç7vW%öf÷&ÖGF–ær–×÷'B&VæFW"2&VæFW%öç7vW ¦g&öÒç6W'f–6W2æç7vW%÷VÆ–f–6F–öâ–×÷'Bç7vW%VÆ–f–6F–öà¦g&öÒç6W'f–6W2æÆÆÕ÷&÷f–FW"–×÷'BvWEöÆÆÕ÷&÷f–FW ¦g&öÒç6W'f–6W2çVW'•÷&W6VçFF–öâ–×÷'B'V–ÆE÷66÷&Uö'&V¶F÷vâÂ6‡Væµö&ö÷7BÂ—5ö6‡VæµöWf–FVæ6RÂVÆ—G•÷6–væÇ0¦g&öÒç6W'f–6W2çVW'•÷VæFW'7FæF–ær–×÷'BVW'•&Ww&—FW"ÂVW'•&÷WFW ¦g&öÒç6W'f–6W2ç&W&æ¶W"–×÷'BvWE÷&W&æ¶W ¦g&öÒç6W'f–6W2ç&WG&–WfÂæ‡–'&–B–×÷'B‡–'&–E&WG&–WfW"Â'&`¦g&öÒç6W'f–6W2ç7G'V7GW&VEöç7vW%övFR–×÷'B7G'V7GW&VDç7vW$vFP ¦ÆövvW"ÒÆövv–ærævWDÆövvW"…õöæÖUõò ¢26†–æW6RÆ&VÇ26†÷vâöâF†Rç7vW"6&B†Ö—'&÷'2F†RÆÆ×v–¶’VW7F–öâ×G—R&FvR’à¥TU5D”ôåõE•UôÄ$TÅ2Ò°¢$U„5B#¢.K‰>iÈYŞŠøÒş™IŠúşz"À¢$ÕTÅD”„õ#¢.ZI®‹{>™zîš)‚"À¢$4ôädÄ”5B#¢.Xk.z¨şx˜iÊÎ™zîš)‚"À¢%$TÄD”ôâ#¢.X[>{;¾™zîš)‚"À¢$4ôäD•D”ôâ#¢.iÚK»bşŠxNX‰™zîš)‚"À¢%$ô4TEU$R#¢%4õşi8ŞKÙÎ™zîš)‚"À¢$tÄô$Â#¢.XZ[h¾{¹2"À¢$d5B#¢.K¨¾ZéâşZé®K˜’"À¢$DTdTÅB#¢.˜	®yJ™zîzÙB"À§Ğ  ¦FVb÷v—F†÷WEö6Æ–×2†vFU÷&W7VÇB“ ¢""%&WGW&âvFR&W7VÇBv—F†÷WB—G2W"Ö6Æ–Ò&÷w2Â¶VW–ærWfW'’vw&VvFRà ¢W6VBv†W&RF†R6Æ–Ò&÷w2v÷VÆB&RGWÆ–6FRöbæ÷F†W"'BöbF†R&W7öç6S¢F†P¢6÷VçG2æBF†RvFR7FGW2&Rv†B6öç7VÖW"6†V6·2f—'7BÂæBG&÷–ærF†R&÷w0¢ÆVfW2F†÷6RVçF÷V6†VBâæöâÖF–7B&W7VÇG2‡F†R$äõEõ%Tâ"Æ6V†öÆFW'2’72F‡&÷Vv‚à¢"" ¢–bæ÷B—6–ç7Fæ6R†vFU÷&W7VÇBÂF–7B“ ¢&WGW&âvFU÷&W7VÇ@¢&WGW&â¶¶W“¢fÇVRf÷"¶W’ÂfÇVR–âvFU÷&W7VÇBæ—FV×2‚’–b¶W’Ò&6Æ–×2'Ğ  ¦6Æ72VW'”Væv–æS ¢""$6ö÷&F–æFRVW'’&Ww&—FRÂ×VÇF’Ö6†ææVÂ&V6ÆÂÂgW6–öâÂ&W&æ¶–ærÂ6öçFW‡BÂæBç7vW"vVæW&F–öââ""  ¢26Æ–Ò&÷w2&R–æFW†VB2'7V&¦V7B$TD”4DRö&¦V7B#²F†RWW&66RfW&"7Æ—G2F†RG&—ÆRà¢ô4Ä”ÕõE$•ÄUõ$RÒ&Ræ6ö×–ÆR‡"%åÇ2¢…Å2â£ò•Ç2²…´Õ¥Õ´Õ¥õ×³"ÇÒ•Ç2²…Å2â¢’B" ¢FVbõö–æ—Eõò‡6VÆb“ ¢6VÆbç&WG&–WfW"Ò‡–'&–E&WG&–WfW"‚¢6VÆbç&÷WFW"ÒVW'•&÷WFW"‚¢6VÆbç&W&æµ÷6VÖ†÷&RÒ7–æ6–òå6VÖ†÷&R†Ö‚ƒÂ6WGF–æw2ç&W&æ¶W%ö6öæ7W'&Væ7’’¢6VÆbç&Ww&—FW"ÒVW'•&Ww&—FW"‚ ¢7–æ2FVbVW'’‡6VÆbÂ–BÂ¶"ÂÂF÷²ÂW&Ö—76–öå÷Fw3ÔæöæRÂvVæW&FSÕG'VRÀ¢ç7vW%öf÷&ÖCÔDTdTÅEôå5tU%ôdõ$ÔBÂöÆ–7•ö÷fW'&–FSÔæöæRÂ&öw&W73ÔæöæRÀ¢Ö–å÷66÷&SÔæöæRÂ–æ6ÇVFU÷&V6ÆÅö6öçFVçCÔfÇ6RÂÖVÖ÷'•ö6öçFW‡CÒ""“ ¢""%'VâF†R—VÆ–æS¢&V6ÆÂ(i"gW6–öâ(i"&W&æ²ÂF†VâvVæW&F–öâVæÆW72vVæW&FV—2öfbà ¢vVæW&FSÔfÇ6Vv—fW2F†R&WG&–WfÂÖöæÇ’6†RF†RWfÇVF–öâ6VçFW"æVVG2(	BF†R6ÖP¢6æF–FFW2æBF†R6ÖRG&6RF–ÖVÆ–æRÂv—F†÷WBâÄÄÒ6ÆÂv†÷6RÆFVæ7’v÷VÆB÷F†W'v—6P¢&R6÷VçFVB2&WG&–WfÂÆFVæ7’à ¢öÆ–7•ö÷fW'&–FV6'&–W2F†R¶æ÷vÆVFvR&6Rw2÷vâ66Væ&–ò6WGF–æw2†ÖW&vVB–à¢¦gVæ3¦æ6÷&RçVW'•÷öÆ–7’æÖW&vUö÷fW'&–FV“¢Æ–'&'’7&VFVB2kÈşkIî[©26·2v—F‚F†P¢6†ææVÇ2æBF‡&W6†öÆG2F†B7V—B5dRVW7F–öç2v—F†÷WB6†æv–ærv†Bç’÷F†W"Æ–'&'¢6VW2à ¢&öw&W76Âv†Vâv—fVâÂ—2v—FVBgFW"WfW'’7FvRv—F‚7FvRWfVçBæBÂGW&–æp¢vVæW&F–öâÂv—F‚V6‚–V6Röbç7vW"FW‡BâF†B—2v†BGW&ç2&WVW7BF†BW6VBFğ¢&WGW&âöæR&Æö"BF†RVæB–çFò7G&VÒ6Æ–VçB6â&VæFW"2—B†Vç3²v—F†÷WB—@¢F†—2ÖWF†öB—2'—FRÖf÷"Ö'—FRF†RöÆB7–æ6‡&öæ÷W2F‚Â6òæ÷F†–ærF†BÇ&VG’v÷&·0¢†2Fò6†ævRà¢"" ¢öÆ–7’ÒÆöE÷öÆ–7’‚¢–böÆ–7•ö÷fW'&–FS ¢öÆ–7’ÒÖW&vUö÷fW'&–FR‡öÆ–7’ÂöÆ–7•ö÷fW'&–FR¢F÷FÅ÷7F'FVBÒF–ÖRçW&eö6÷VçFW"‚¢&Ww&—FU÷7F'FVBÒF–ÖRçW&eö6÷VçFW"‚¢æ÷&ÖÆ—¦VBÒ""æ¦ö–â‚‡÷"""’ç7G&—‚’ç7Æ—B‚’¢&Ww&—GFVâÒv—B6VÆbç&Ww&—FW"ç&Ww&—FR‡ÂöÆ–7’ç&Ww&—FR¢–bæ÷B&Ww&—GFVã ¢&Ww&—GFVâÒ¶æ÷&ÖÆ—¦VEĞ¢&Ww&—FUö×2Ò–çB‚‡F–ÖRçW&eö6÷VçFW"‚’Ò&Ww&—FU÷7F'FVB’¢¢–b&öw&W72—2æ÷BæöæS ¢v—B&öw&W72‡°¢'G—R#¢'7FvR"À¢'7FvR#¢°¢&¶W’#¢'&Ww&—FR"À¢&Æ&VÂ#¢.iú^Šú.iKXi’"À¢'7FGW2#¢&FöæR"À¢&ÆFVæ7”×2#¢&Ww&—FUö×2À¢&–çWD6÷VçB#¢À¢&÷WGWD6÷VçB#¢ÆVâ‡&Ww&—GFVâ’À¢&FWF–Â#¢²'f&–çG2#¢&Ww&—GFVâÂ&Væ&ÆVB#¢&ööÂ†vWFGG"‡öÆ–7’ç&Ww&—FRÂ&Væ&ÆVB"ÂG'VR’—ÒÀ¢ÒÀ¢Ò¢&÷WFRÒ6VÆbç&÷WFW"ç&÷WFR‡Â'VÆW3×öÆ–7’ç&÷WFRç'VÆW2ÂVæ&ÆVC×öÆ–7’ç&÷WFRæVæ&ÆVBÀ¢FVfVÇE7G&FVv–W3×öÆ–7’ç&÷WFRæFVfVÇE7G&FVv–W2¢7G&FVv–W2ÒÆ—7B†VffV7F—fU÷7G&FVv–W2‡öÆ–7’Â&÷WFU²'7G&FVv–W2%Ò’¢2F†RÆ–'&'’w2FV6Æ&VB6†ææVÇ2&RfÆö÷"Âæ÷B7VvvW7F–öã¢F†R&÷WFW"Ö’F@¢26†ææVÇ2—BF†–æ·2F†RVW7F–öâæVVG2Â'WB—B×W7Bæ÷BG&÷öæRF†RÆ–'&'’&VÆ–W2öâà¢2â÷W&F–öç2Æ–'&'’6¶–ær$4„rÓ##BÓr[ÛY8ŞK¨nY:®K©¾iÈŞXª"—2&÷WFVBFòF†Rw&‚Âæ@¢2v—F†÷WB$Ó#RF†BVW7F–öâ&WGW&ç2æ÷F†–ær(	BF†R–FVçF–f–W"—2öæÇ’–âF†RFW‡Bà¢–böÆ–7•ö÷fW'&–FS ¢f÷"æÖR–âvWFGG"‡öÆ–7’ç&÷WFRÂ&FVfVÇE7G&FVv–W2"ÂæöæR’÷"µÓ ¢–bæÖRæ÷B–â7G&FVv–W3 ¢7G&FVv–W2æVæB†æÖR ¢–b&öw&W72—2æ÷BæöæS ¢v—B&öw&W72‡°¢'G—R#¢'7FvR"À¢'7FvR#¢°¢&¶W’#¢'&÷WFR"À¢&Æ&VÂ#¢.hHşY»î‹zşyK"À¢'7FGW2#¢&FöæR"À¢&ÆFVæ7”×2#¢æöæRÀ¢&–çWD6÷VçB#¢À¢&÷WGWD6÷VçB#¢ÆVâ‡7G&FVv–W2’À¢&FWF–Â#¢°¢'VW7F–öåG—R#¢&÷WFRævWB‚'VW7F–öåG—R"’÷"$DTdTÅB"À¢'7G&FVv–W2#¢7G&FVv–W2À¢'&V6öâ#¢&÷WFRævWB‚'&V6öâ"’À¢&Væ&ÆVB#¢&ööÂ†vWFGG"‡öÆ–7’ç&÷WFRÂ&Væ&ÆVB"ÂfÇ6R’’À¢ÒÀ¢ÒÀ¢Ò¢&WG&–WfÅ÷7F'FVBÒF–ÖRçW&eö6÷VçFW"‚¢&W7VÇE÷6WG2Â&WG&–WfÅöF–væ÷7F–72ÂW6VE÷&Ww&—FRÒv—B6VÆbå÷&V6ÆÂ€¢¶"Â&Ww&—GFVâÂ7G&FVv–W2ÂF÷²ÂW&Ö—76–öå÷Fw2ÂöÆ–7¢¢&WG&–WfÅö×2Ò–çB‚‡F–ÖRçW&eö6÷VçFW"‚’Ò&WG&–WfÅ÷7F'FVB’¢¢–b&öw&W72—2æ÷BæöæS ¢&V6ÆÅö6÷VçG2Ò¶æÖS¢ÆVâ†—FV×2’f÷"æÖRÂ—FV×2–â&W7VÇE÷6WG2æ—FV×2‚—Ğ¢v—B&öw&W72‡°¢'G—R#¢'7FvR"À¢'7FvR#¢°¢&¶W’#¢'&V6ÆÂ"À¢&Æ&VÂ#¢.ZI®˜	®˜>XúÎY¹â"À¢'7FGW2#¢&FöæR"À¢&ÆFVæ7”×2#¢&WG&–WfÅö×2À¢&–çWD6÷VçB#¢À¢&÷WGWD6÷VçB#¢7VÒ‡&V6ÆÅö6÷VçG2çfÇVW2‚’’À¢&FWF–Â#¢°¢'6—¦W2#¢&V6ÆÅ÷6—¦W2‡öÆ–7’ÂF÷²’À¢&6÷VçG2#¢&V6ÆÅö6÷VçG2À¢&6†ææVÄÆFVæ7”×2#¢&WG&–WfÅöF–væ÷7F–72ævWB‚&6†ææVÄÆFVæ7”×2"Â·Ò’À¢ÒÀ¢ÒÀ¢Ò¢v—B&öw&W72‡°¢'G—R#¢'7FvR"À¢'7FvR#¢°¢&¶W’#¢&6Åöf–ÇFW""À¢&Æ&VÂ#¢$4ÂKˆîx«nh‹ø~kºB"À¢'7FGW2#¢&FöæR"À¢&ÆFVæ7”×2#¢æöæRÀ¢&–çWD6÷VçB#¢æöæRÀ¢&÷WGWD6÷VçB#¢7VÒ‡&V6ÆÅö6÷VçG2çfÇVW2‚’’À¢&FWF–Â#¢&WG&–WfÅöF–væ÷7F–72ævWB‚&f–ÇFW'2"Â·Ò’À¢ÒÀ¢Ò ¢gW6–öå÷vV–v‡G2Ò6†ææVÅ÷vV–v‡G2‡öÆ–7’¢gW6–öå÷7F'FVBÒF–ÖRçW&eö6÷VçFW"‚¢6æF–FFW2Ò'&b‡&W7VÇE÷6WG2Â³×öÆ–7’ægW6–öâç'&d²ÂvV–v‡G3ÖgW6–öå÷vV–v‡G2ÂF÷ö³×F÷²¢6æF–FFW2Ò6VÆbåö6‡Væµö6æF–FFUöfÆö÷"†6æF–FFW2Â&W7VÇE÷6WG2ÂöÆ–7’¢6–væÅ÷vV–v‡G2ÒVÆ—G•÷vV–v‡G2‡öÆ–7’¢6‡Væµ÷vV–v‡G2Ò6‡Væµö&ö÷7E÷vV–v‡G2‡öÆ–7’¢VÆ—G•÷6×ÆRÒµĞ¢&ö÷7FVBÒ&ööÂ‡6–væÅ÷vV–v‡G2÷"6‡Væµ÷vV–v‡G2¢–b6–væÅ÷vV–v‡G3 ¢f÷"6æF–FFR–â6æF–FFW3 ¢6–væÇ2ÒVÆ—G•÷6–væÇ2†6æF–FFR¢&ö÷7BÒ&÷VæBƒã²7VÒ‡vV–v‡B¢6–væÇ5¶¶W•Òf÷"¶W’ÂvV–v‡B–â6–væÅ÷vV–v‡G2æ—FV×2‚’’ÂB¢6æF–FFU²'VÆ—G”&ö÷7B%ÒÒ&ö÷7@¢6æF–FFU²'VÆ—G’%ÒÒ6–væÇ0¢6æF–FFU²'66÷&R%ÒÒfÆöB†6æF–FFRævWB‚'66÷&R"’÷"ã’¢&ö÷7@¢–b6‡Væµ÷vV–v‡G3 ¢f÷"6æF–FFR–â6æF–FFW3 ¢&ö÷7BÂ6–væÇ2Ò6‡Væµö&ö÷7B†6æF–FFRÂ&Ww&—GFVâÂ6‡Væµ÷vV–v‡G2¢–b6–væÇ2—2æöæS ¢6öçF–çVP¢6æF–FFU²&6‡Væ´&ö÷7B%ÒÒ&ö÷7@¢6æF–FFU²&6‡Væµ6–væÇ2%ÒÒ6–væÇ0¢6æF–FFU²'66÷&R%ÒÒfÆöB†6æF–FFRævWB‚'66÷&R"’÷"ã’¢&ö÷7@¢–b&ö÷7FVC ¢6æF–FFW2ç6÷'B†¶W“ÖÆÖ&F—FVÓ¢—FVÒævWB‚'66÷&R"’÷"ãÂ&WfW'6SÕG'VR¢VÆ—G•÷6×ÆRÒ°¢²&–B#¢—FVÒævWB‚&–B"’Â¢¦—FVÒævWB‚'VÆ—G’"Â·Ò’Â&&ö÷7B#¢—FVÒævWB‚'VÆ—G”&ö÷7B"—Ğ¢f÷"—FVÒ–â6æF–FFW5³£UĞ¢Ğ¢gW6–öåö×2Ò–çB‚‡F–ÖRçW&eö6÷VçFW"‚’ÒgW6–öå÷7F'FVB’¢¢–b&öw&W72—2æ÷BæöæS ¢v—B&öw&W72‡°¢'G—R#¢'7FvR"À¢'7FvR#¢°¢&¶W’#¢&gW6–öâ"À¢&Æ&VÂ#¢%%$b‰èŞY‚"À¢'7FGW2#¢&FöæR"À¢&ÆFVæ7”×2#¢gW6–öåö×2À¢&–çWD6÷VçB#¢7VÒ†ÆVâ†—FV×2’f÷"—FV×2–â&W7VÇE÷6WG2çfÇVW2‚’’À¢&÷WGWD6÷VçB#¢ÆVâ†6æF–FFW2’À¢&FWF–Â#¢°¢&Æv÷&—F†Ò#¢'vV–v‡FVE÷'&b"À¢&²#¢öÆ–7’ægW6–öâç'&d²À¢'vV–v‡G2#¢gW6–öå÷vV–v‡G2À¢'VÆ—G•6–væÇ2#¢6–væÅ÷vV–v‡G2À¢ÒÀ¢ÒÀ¢Ò¢gW6VE÷6æ6†÷BÒ¶F–7B†2’f÷"2–â6æF–FFW5Ğ¢gW6–öå÷&æ²Ò·7G"†2ævWB‚&–B"’“¢&æ²f÷"&æ²Â2–âVçVÖW&FR†gW6VE÷6æ6†÷BÂ—Ğ¢6†ææVÅ÷&æ·2Ò·Ğ¢f÷"6†ææVÂÂ—FV×2–â&W7VÇE÷6WG2æ—FV×2‚“ ¢f÷"&æ²Â—FVÒ–âVçVÖW&FR†—FV×2Â“ ¢6†ææVÅ÷&æ·2ç6WFFVfVÇB‡7G"†—FVÒævWB‚&–B"’’Â·Ò•¶6†ææVÅÒÒ&æ° ¢&W&æ¶W"ÒvWE÷&W&æ¶W"‚¢&W&æµ÷7F'FVBÒF–ÖRçW&eö6÷VçFW"‚¢&W&æµöW'&÷'2ÒµĞ¢&W&æµö–çWEö6÷VçBÒ ¢&W&æµö÷WGWEö6÷VçBÒ ¢&W&æµöFWF‚Ò ¢–böÆ–7’ç&W&æ²æVæ&ÆVC ¢&W&æµöFWF‚ÒÖ–â†ÆVâ†6æF–FFW2’Â–çB‡öÆ–7’ç&W&æ²çF÷â’÷"6WGF–æw2ç&W&æ¶W%öWFõ÷F÷öâ¢&W&æµö–çWEö6÷VçBÒÖ–â‡&W&æµöFWF‚ÂÆVâ†6æF–FFW2’¢G'“ ¢7–æ2v—F‚6VÆbç&W&æµ÷6VÖ†÷&S ¢†VBÒv—B7–æ6–òçFõ÷F‡&VB€¢&W&æ¶W"ç&W&æ²Â&Ww&—GFVå³ÒÂ6æF–FFW5³§&W&æµöFWF…ÒÂ&W&æµöFWF€¢¢6æF–FFW2Ò†VB²6æF–FFW5·&W&æµöFWFƒ¥Ğ¢&W&æµö÷WGWEö6÷VçBÒÆVâ††VB¢W†6WBW†6WF–öâ2W†3 ¢2&W&æ¶–ær—2â66VÆW&F÷"Âæ÷BvFS¢fÆÂ&6²FòF†RgW6VB÷&FW"æ@¢27W&f6RF†Rf–ÇW&RöâF†RG&6R–ç7FVBöbf–Æ–ærF†Rv†öÆRVW'’Œ*sbã2’à¢ÆövvW"çv&æ–ær‚'&W&æ²f–ÆVC²¶VW–ærgW6VB÷&FW#¢W2"ÂW†2¢&W&æµöW'&÷'2æVæB‡7G"†W†2’¢&W&æµö÷WGWEö6÷VçBÒÆVâ†6æF–FFW2¢&W&æµö×2Ò–çB‚‡F–ÖRçW&eö6÷VçFW"‚’Ò&W&æµ÷7F'FVB’¢¢f÷"&æ²Â6æF–FFR–âVçVÖW&FR†6æF–FFW2Â“ ¢6æF–FFU²&gW6–öå&æ²%ÒÒgW6–öå÷&æ²ævWB‡7G"†6æF–FFRævWB‚&–B"’’¢6æF–FFU²'&W&æµ&æ²%ÒÒ&æ°¢6æF–FFU²'&æ´FVÇF%ÒÒ†6æF–FFRævWB‚&gW6–öå&æ²"’÷"&æ²’Ò&æ°¢6æF–FFU²&6†ææVÅ&æ·2%ÒÒ6†ææVÅ÷&æ·2ævWB‡7G"†6æF–FFRævWB‚&–B"’’Â·Ò¢6æF–FFU²'66÷&T'&V¶F÷vâ%ÒÒ'V–ÆE÷66÷&Uö'&V¶F÷vâ€¢6æF–FFRÂgW6–öå÷vV–v‡G2ÂöÆ–7’ægW6–öâç'&d²Â&W&æµöFWF‚ÂF÷°¢ ¢–b&öw&W72—2æ÷BæöæS ¢v—B&öw&W72‡°¢'G—R#¢'7FvR"À¢'7FvR#¢°¢&¶W’#¢'&W&æ²"À¢&Æ&VÂ#¢.˜xŞhé""À¢'7FGW2#¢&FöæR"À¢&ÆFVæ7”×2#¢&W&æµö×2À¢&–çWD6÷VçB#¢&W&æµö–çWEö6÷VçBÀ¢&÷WGWD6÷VçB#¢&W&æµö÷WGWEö6÷VçBÀ¢&FWF–Â#¢°¢'&W&æ¶W"#¢&W&æ¶W"ææÖRÀ¢&Væ&ÆVB#¢&ööÂ‡öÆ–7’ç&W&æ²æVæ&ÆVB’À¢'F÷â#¢öÆ–7’ç&W&æ²çF÷âÀ¢&VffV7F—fUF÷â#¢&W&æµöFWF‚À¢ÒÀ¢&W'&÷'2#¢&W&æµöW'&÷'2À¢ÒÀ¢Ò¢2F†R66÷&RfÆö÷"—2Æ–VBgFW"&W&æ¶–ærÂæ÷B&Vf÷&S¢6æF–FFRF†BöæÇ’Æöö·0¢2vV²&Vf÷&R&W&æ¶–ærÖ’&RW†7FÇ’F†RöæRF†R&W&æ¶W"&öÖ÷FW2ÂæBG&÷–ær—@¢2V&Ç’v÷VÆB6†ævRF†R÷&FW&–ærf÷"WfW'’6ÆÆW"Â–æ6ÇVF–ærF†÷6RF†B6WBæòfÆö÷"à¢2f–ÇFW&–ær†W&RÇ6ò¶VW2&V6ÆÆ†öæW7B(	B—B&W÷'G2v†Bv27GVÆÇ’f÷VæBà¢–bÖ–å÷66÷&R—2æ÷BæöæS ¢6æF–FFW2Ò°¢2f÷"2–â6æF–FFW2–bfÆöB†2ævWB‚'66÷&R"’÷"ã’ãÒfÆöB†Ö–å÷66÷&R¢Ğ ¢2&WG&–WfÂÖöæÇ’6ÆÆW'2†WfÇVF–öâ'Vç2ÂF†R&WG&–WfÂFW7BvR’×W7Bæ÷B’f÷ ¢2vVæW&F–öã¢ÖV7W&–ær&V6ÆÂÆFVæ7’v—F‚âÄÄÒ6ÆÂ–ç6–FR—BÖV7W&W2F†Rw&öærF†–ærà¢–bvVæW&FS ¢6öçFW‡BÂ6—FF–öç2ÂWf–FVæ6U÷ööÂÒ6VÆbåö6öçFW‡B†6æF–FFW2ÂöÆ–7’æç7vW"æ6öçFW‡DÖ„6†'2ÂöÆ–7“×öÆ–7’¢2Šë[ønXú®[›nXZ^yIşh‰yJy¨NKˆ®Kˆ¾ih~ûÈÎKˆŞXø.KˆîXúÎY¹îûÉ®Zè>iŠò.‹ùKŠ®hù™zîˆ^Kº^X˜ŞyYKˆ¾‹ø~K¸K˜‚.ûÈÎKˆŞiŠğ¢2yú^Šøn[©>˜xÎy¨NŠøhÚî8.h»şZè>Xë¾j8{J.KÉ®h¨®XúÎY¹î[ŠnXşûÈÎK™şKÉ®ŠêŠøhÚî™;îX{®xë[©>˜xÎ[›nKˆŞZÙYÊy¨NiÚ^k©8 ¢ÖVÖ÷'•ö&Æö6²Ò6VÆbåöÖVÖ÷'•ö&Æö6²†ÖVÖ÷'•ö6öçFW‡B¢–bÖVÖ÷'•ö&Æö6³ ¢6öçFW‡BÒ†ÖVÖ÷'•ö&Æö6²²%ÆåÆâ"²6öçFW‡B’–b6öçFW‡BVÇ6RÖVÖ÷'•ö&Æö6°¢2ZÙ~zÊnš(Nzé~Xúşˆ;ŞYÊzÊÎKˆiÚ[‹h^™™ûÈÎ˜*>i{bö6öçFW‡BKˆKŠ®x˜~jë^˜;ŞŠ8^KˆŞ‹ù¾Xë¾ûÈÆWf–FVæ6U÷ööÂiŠşz›®y¨N8 ¢2z›®ŠøhÚî™¸nKÉ®Šê™zhê~h¨®jøşiÚ6Æ–Ò˜;ŞXŠNh‰.izŠøhÚîiJşhÈ.ûÈÎzÙNjŠ*¾i[Një^hºnhè(	N(	NŠxëX{®iÚ^[iŠğ¢2.[©>˜xÎiÈ‹ùiÚyú^ŠønXÛNj8{J.KˆŞX{®iÚR.8.‹ùi{n˜Y¹âF÷²Xˆ~x˜~ûÉ®ˆ{>[	KùŞKØş‹>yJikŠhy¨N˜*>XziÚûÈÀ¢2KˆŞKÉ®jùNiKXªX˜ŞûÈY»®Zé®yJ‚6æF–FFW5³§F÷µŞûÈi»N[zî8 ¢–bæ÷BWf–FVæ6U÷ööÂæB6æF–FFW3 ¢Wf–FVæ6U÷ööÂÒ6æF–FFW5³§F÷µĞ¢VÇ6S ¢6öçFW‡BÂ6—FF–öç2Ò""ÂµĞ¢Wf–FVæ6U÷ööÂÒ6æF–FFW5³§F÷µĞ¢6VÆV7FVEö6öçFW‡BÒ°¢°¢&–B#¢2ævWB‚&–B"’À¢'F—FÆR#¢2ævWB‚'F—FÆR"’À¢&6†ææVÂ#¢2ævWB‚&6†ææVÂ"’À¢'66÷&R#¢2ævWB‚'66÷&R"’À¢'&W&æµ66÷&R#¢2ævWB‚'&W&æµ66÷&R"’À¢&ö&¦V7EG—R#¢†2ævWB‚&ÖWFFF"’÷"·Ò’ævWB‚&ö&¦V7E÷G—R"’À¢&6öçFVçEVæ—D–B#¢†2ævWB‚&ÖWFFF"’÷"·Ò’ævWB‚&6öçFVçE÷Væ—Eö–B"’À¢'6÷W&6TæÖR#¢†2ævWB‚&ÖWFFF"’÷"·Ò’ævWB‚'6÷W&6UöæÖR"’À¢'vTæò#¢†2ævWB‚&ÖWFFF"’÷"·Ò’ævWB‚'vUöæò"’À¢&gW6–öå&æ²#¢2ævWB‚&gW6–öå&æ²"’À¢'&W&æµ&æ²#¢2ævWB‚'&W&æµ&æ²"’À¢'&æ´FVÇF#¢2ævWB‚'&æ´FVÇF"’À¢&6†ææVÅ&æ·2#¢2ævWB‚&6†ææVÅ&æ·2"’À¢'66÷&T'&V¶F÷vâ#¢2ævWB‚'66÷&T'&V¶F÷vâ"’À¢Ğ¢f÷"2–âWf–FVæ6U÷ööÀ¢Ğ ¢–b&öw&W72—2æ÷BæöæS ¢v—B&öw&W72‡°¢'G—R#¢'7FvR"À¢'7FvR#¢°¢&¶W’#¢&6öçFW‡B"À¢&Æ&VÂ#¢.Kˆ®Kˆ¾ih~Š8^˜XÒ"À¢'7FGW2#¢&FöæR"À¢&ÆFVæ7”×2#¢æöæRÀ¢&–çWD6÷VçB#¢ÆVâ†6æF–FFW2’À¢&÷WGWD6÷VçB#¢ÆVâ‡6VÆV7FVEö6öçFW‡B’À¢&FWF–Â#¢²&6†'2#¢ÆVâ†6öçFW‡B’Â&Ö„6†'2#¢öÆ–7’æç7vW"æ6öçFW‡DÖ„6†'7ÒÀ¢ÒÀ¢Ò¢ÆÆÕ÷7F'FVBÒF–ÖRçW&eö6÷VçFW"‚¢–bæ÷BvVæW&FS ¢2vFW27F’–âF†R–ÆöB2W‡Æ–6—B&æ÷B'Vâ"&F†W"F†â'6VçB¶W—2Â6ò¢26öç7VÖW"6âFVÆÂ'6¶—VB"'Bg&öÒ'76VB"v—F†÷WBwVW76–ærà¢ç7vW"Ò" ¢ÖöFVÂÒ&æöæR ¢fW&–f–6F–öâÒ²&vFU7FGW2#¢$äõEõ%Tâ"Â'&V6öâ#¢'&WG&–WfÂÖöæÇ’'Ğ¢7G'V7GW&VE÷fW&–f–6F–öâÒ²&vFU7FGW2#¢$äõEõ%Tâ"Â'&V6öâ#¢'&WG&–WfÂÖöæÇ’'Ğ¢VÆ–f–6F–öâÒ°¢&vFU7FGW2#¢$äõEõ%Tâ"À¢'öÆ–7•fW'6–öâ#¢öÆ–7’æç7vW"çöÆ–7•fW'6–öâÀ¢&6Æ–×2#¢µÒÀ¢&FVÆ—fW&VDç7vW"#¢""À¢Ğ¢ÆÆÕö×2Ò ¢VÆ–bæ÷B6æF–FFW3 ¢ç7vW"ÒöÆ–7’æç7vW"ææôç7vW%FW‡@¢ÖöFVÂÒ&æöæR ¢fW&–f–6F–öâÒ²&vFU7FGW2#¢$äõôUd”DTä4R"Â'&V6öâ#¢&æò6æF–FFR'Ğ¢7G'V7GW&VE÷fW&–f–6F–öâÒ²&vFU7FGW2#¢$äõôUd”DTä4R"Â'&V6öâ#¢&æò6æF–FFR'Ğ¢ı×Kh‘éì¶»§q«^vone, "totalTokens": None},
+"""Query understanding, retrieval routing, fusion, reranking, context assembly, and answer generation.
+
+Every tunable node reads its parameters from the runtime query policy (``app.core.query_policy``),
+so operations staff can edit routing rules, recall channels, fusion weights, rerank depth,
+and answer guardrails from the console without redeploying the AI service.
+"""
+
+import asyncio
+import logging
+import re
+import time
+
+from app.core.config import settings
+from app.core.query_policy import (
+    channel_weights,
+    chunk_boost_weights,
+    effective_strategies,
+    load_policy,
+    merge_override,
+    policy_summary,
+    quality_weights,
+    recall_sizes,
+)
+from app.services.answer_evidence_gate import AnswerEvidenceGate
+from app.services.answer_formatting import DEFAULT as DEFAULT_ANSWER_FORMAT
+from app.services.answer_formatting import excerpt as answer_excerpt
+from app.services.answer_formatting import normalize as normalize_answer_format
+from app.services.answer_formatting import render as render_answer
+from app.services.answer_qualification import AnswerQualification
+from app.services.llm_provider import get_llm_provider
+from app.services.query_presentation import build_score_breakdown, chunk_boost, is_chunk_evidence, quality_signals
+from app.services.query_understanding import QueryRewriter, QueryRouter
+from app.services.reranker import get_reranker
+from app.services.retrieval.hybrid import HybridRetriever, rrf
+from app.services.structured_answer_gate import StructuredAnswerGate
+
+logger = logging.getLogger(__name__)
+
+# Chinese labels shown on the answer card (mirrors the llmwiki question-type badge).
+QUESTION_TYPE_LABELS = {
+    "EXACT": "ä¸“æœ‰åè¯/é”™è¯¯ç ",
+    "MULTIHOP": "å¤šè·³é—®é¢˜",
+    "CONFLICT": "å†²çª/ç‰ˆæœ¬é—®é¢˜",
+    "RELATION": "å…³ç³»é—®é¢˜",
+    "CONDITION": "æ¡ä»¶/è§„åˆ™é—®é¢˜",
+    "PROCEDURE": "SOP/æ“ä½œé—®é¢˜",
+    "GLOBAL": "å…¨å±€æ€»ç»“",
+    "FACT": "äº‹å®/å®šä¹‰",
+    "DEFAULT": "é€šç”¨é—®ç­”",
+}
+
+
+def _without_claims(gate_result):
+    """Return a gate result without its per-claim rows, keeping every aggregate.
+
+    Used where the claim rows would be a duplicate of another part of the response: the
+    counts and the gate status are what a consumer checks first, and dropping the rows
+    leaves those untouched. Non-dict results (the "NOT_RUN" placeholders) pass through.
+    """
+    if not isinstance(gate_result, dict):
+        return gate_result
+    return {key: value for key, value in gate_result.items() if key != "claims"}
+
+
+class QueryEngine:
+    """Coordinate query rewrite, multi-channel recall, fusion, reranking, context, and answer generation."""
+
+    # Claim rows are indexed as "subject PREDICATE object"; the uppercase verb splits the triple.
+    _CLAIM_TRIPLE_RE = re.compile(r"^\s*(\S.*?)\s+([A-Z][A-Z_]{2,})\s+(\S.*)$")
+
+    def __init__(self):
+        self.retriever = HybridRetriever()
+        self.router = QueryRouter()
+        self.rerank_semaphore = asyncio.Semaphore(max(1, settings.reranker_concurrency))
+        self.rewriter = QueryRewriter()
+
+    async def query(self, qid, kb, q, topk, permission_tags=None, generate=True,
+                    answer_format=DEFAULT_ANSWER_FORMAT, policy_override=None, progress=None,
+                    min_score=None, include_recall_content=False, memory_context=""):
+        """Run the pipeline: recall â†’ fusion â†’ rerank, then generation unless `generate` is off.
+
+        `generate=False` gives the retrieval-only shape the evaluation center needs â€” the same
+        candidates and the same trace timeline, without an LLM call whose latency would otherwise
+        be counted as retrieval latency.
+
+        `policy_override` carries the knowledge base's own scenario settings (merged in
+        :func:`app.core.query_policy.merge_override`): a library created as æ¼æ´åº“ asks with the
+        channels and thresholds that suit CVE questions without changing what any other library
+        sees.
+
+        `progress`, when given, is awaited after every stage with a stage event and, during
+        generation, with each piece of answer text. That is what turns a request that used to
+        return one blob at the end into a stream a client can render as it happens; without it
+        this method is byte-for-byte the old synchronous path, so nothing that already works
+        has to change.
+        """
+        policy = load_policy()
+        if policy_override:
+            policy = merge_override(policy, policy_override)
+        total_started = time.perf_counter()
+        rewrite_started = time.perf_counter()
+        normalized = " ".join((q or "").strip().split())
+        rewritten = await self.rewriter.rewrite(q, policy.rewrite)
+        if not rewritten:
+            rewritten = [normalized]
+        rewrite_ms = int((time.perf_counter() - rewrite_started) * 1000)
+        if progress is not None:
+            await progress({
+                "type": "stage",
+                "stage": {
+                    "key": "rewrite",
+                    "label": "æŸ¥è¯¢æ”¹å†™",
+                    "status": "done",
+                    "latencyMs": rewrite_ms,
+                    "inputCount": 1,
+                    "outputCount": len(rewritten),
+                    "detail": {"variants": rewritten, "enabled": bool(getattr(policy.rewrite, "enabled", True))},
+                },
+            })
+        route = self.router.route(q, rules=policy.route.rules, enabled=policy.route.enabled,
+                                  defaultStrategies=policy.route.defaultStrategies)
+        strategies = list(effective_strategies(policy, route["strategies"]))
+        # The library's declared channels are a floor, not a suggestion: the router may add
+        # channels it thinks the question needs, but it must not drop one the library relies on.
+        # An operations library asking "CHG-2024-0117 å½±å“äº†å“ªäº›æœåŠ¡" is routed to the graph, and
+        # without BM25 that question returns nothing â€” the identifier is only in the text.
+        if policy_override:
+            for name in getattr(policy.route, "defaultStrategies", None) or []:
+                if name not in strategies:
+                    strategies.append(name)
+
+        if progress is not None:
+            await progress({
+                "type": "stage",
+                "stage": {
+                    "key": "route",
+                    "label": "æ„å›¾è·¯ç”±",
+                    "status": "done",
+                    "latencyMs": None,
+                    "inputCount": 1,
+                    "outputCount": len(strategies),
+                    "detail": {
+                        "questionType": route.get("questionType") or "DEFAULT",
+                        "strategies": strategies,
+                        "reason": route.get("reason"),
+                        "enabled": bool(getattr(policy.route, "enabled", False)),
+                    },
+                },
+            })
+        retrieval_started = time.perf_counter()
+        result_sets, retrieval_diagnostics, used_rewrite = await self._recall(
+            kb, rewritten, strategies, topk, permission_tags, policy
+        )
+        retrieval_ms = int((time.perf_counter() - retrieval_started) * 1000)
+        if progress is not None:
+            recall_counts = {name: len(items) for name, items in result_sets.items()}
+            await progress({
+                "type": "stage",
+                "stage": {
+                    "key": "recall",
+                    "label": "å¤šé€šé“å¬å›",
+                    "status": "done",
+                    "latencyMs": retrieval_ms,
+                    "inputCount": 1,
+                    "outputCount": sum(recall_counts.values()),
+                    "detail": {
+                        "sizes": recall_sizes(policy, topk),
+                        "counts": recall_counts,
+                        "channelLatencyMs": retrieval_diagnostics.get("channelLatencyMs", {}),
+                    },
+                },
+            })
+            await progress({
+                "type": "stage",
+                "stage": {
+                    "key": "acl_filter",
+                    "label": "ACL ä¸çŠ¶æ€è¿‡æ»¤",
+                    "status": "done",
+                    "latencyMs": None,
+                    "inputCount": None,
+                    "outputCount": sum(recall_counts.values()),
+                    "detail": retrieval_diagnostics.get("filters", {}),
+                },
+            })
+
+        fusion_weights = channel_weights(policy)
+        fusion_started = time.perf_counter()
+        candidates = rrf(result_sets, k=policy.fusion.rrfK, weights=fusion_weights, top_k=topk)
+        candidates = self._chunk_candidate_floor(candidates, result_sets, policy)
+        signal_weights = quality_weights(policy)
+        chunk_weights = chunk_boost_weights(policy)
+        quality_sample = []
+        boosted = bool(signal_weights or chunk_weights)
+        if signal_weights:
+            for candidate in candidates:
+                signals = quality_signals(candidate)
+                boost = round(1.0 + sum(weight * signals[key] for key, weight in signal_weights.items()), 4)
+                candidate["qualityBoost"] = boost
+                candidate["quality"] = signals
+                candidate["score"] = float(candidate.get("score") or 0.0) * boost
+        if chunk_weights:
+            for candidate in candidates:
+                boost, signals = chunk_boost(candidate, rewritten, chunk_weights)
+                if signals is None:
+                    continue
+                candidate["chunkBoost"] = boost
+                candidate["chunkSignals"] = signals
+                candidate["score"] = float(candidate.get("score") or 0.0) * boost
+        if boosted:
+            candidates.sort(key=lambda item: item.get("score") or 0.0, reverse=True)
+            quality_sample = [
+                {"id": item.get("id"), **item.get("quality", {}), "boost": item.get("qualityBoost")}
+                for item in candidates[:5]
+            ]
+        fusion_ms = int((time.perf_counter() - fusion_started) * 1000)
+        if progress is not None:
+            await progress({
+                "type": "stage",
+                "stage": {
+                    "key": "fusion",
+                    "label": "RRF èåˆ",
+                    "status": "done",
+                    "latencyMs": fusion_ms,
+                    "inputCount": sum(len(items) for items in result_sets.values()),
+                    "outputCount": len(candidates),
+                    "detail": {
+                        "algorithm": "weighted_rrf",
+                        "k": policy.fusion.rrfK,
+                        "weights": fusion_weights,
+                        "qualitySignals": signal_weights,
+                    },
+                },
+            })
+        fused_snapshot = [dict(c) for c in candidates]
+        fusion_rank = {str(c.get("id")): rank for rank, c in enumerate(fused_snapshot, 1)}
+        channel_ranks = {}
+        for channel, items in result_sets.items():
+            for rank, item in enumerate(items, 1):
+                channel_ranks.setdefault(str(item.get("id")), {})[channel] = rank
+
+        reranker = get_reranker()
+        rerank_started = time.perf_counter()
+        rerank_errors = []
+        rerank_input_count = 0
+        rerank_output_count = 0
+        rerank_depth = 0
+        if policy.rerank.enabled:
+            rerank_depth = min(len(candidates), int(policy.rerank.topN) or settings.reranker_auto_top_n)
+            rerank_input_count = min(rerank_depth, len(candidates))
+            try:
+                async with self.rerank_semaphore:
+                    head = await asyncio.to_thread(
+                        reranker.rerank, rewritten[0], candidates[:rerank_depth], rerank_depth
+                    )
+                candidates = head + candidates[rerank_depth:]
+                rerank_output_count = len(head)
+            except Exception as exc:
+                # Reranking is an accelerator, not a gate: fall back to the fused order and
+                # surface the failure on the trace instead of failing the whole query (Â§16.3).
+                logger.warning("rerank failed; keeping fused order: %s", exc)
+                rerank_errors.append(str(exc))
+                rerank_output_count = len(candidates)
+        rerank_ms = int((time.perf_counter() - rerank_started) * 1000)
+        for rank, candidate in enumerate(candidates, 1):
+            candidate["fusionRank"] = fusion_rank.get(str(candidate.get("id")))
+            candidate["rerankRank"] = rank
+            candidate["rankDelta"] = (candidate.get("fusionRank") or rank) - rank
+            candidate["channelRanks"] = channel_ranks.get(str(candidate.get("id")), {})
+            candidate["scoreBreakdown"] = build_score_breakdown(
+                candidate, fusion_weights, policy.fusion.rrfK, rerank_depth, topk
+            )
+
+        if progress is not None:
+            await progress({
+                "type": "stage",
+                "stage": {
+                    "key": "rerank",
+                    "label": "é‡æ’",
+                    "status": "done",
+                    "latencyMs": rerank_ms,
+                    "inputCount": rerank_input_count,
+                    "outputCount": rerank_output_count,
+                    "detail": {
+                        "reranker": reranker.name,
+                        "enabled": bool(policy.rerank.enabled),
+                        "topN": policy.rerank.topN,
+                        "effectiveTopN": rerank_depth,
+                    },
+                    "errors": rerank_errors,
+                },
+            })
+        # The score floor is applied after reranking, not before: a candidate that only looks
+        # weak before reranking may be exactly the one the reranker promotes, and dropping it
+        # early would change the ordering for every caller, including those that set no floor.
+        # Filtering here also keeps `recall` honest â€” it reports what was actually found.
+        if min_score is not None:
+            candidates = [
+                c for c in candidates if float(c.get("score") or 0.0) >= float(min_score)
+            ]
+
+        # Retrieval-only callers (evaluation runs, the retrieval test page) must not pay for
+        # generation: measuring recall latency with an LLM call inside it measures the wrong thing.
+        if generate:
+            context, citations, evidence_pool = self._context(candidates, policy.answer.contextMaxChars, policy=policy)
+            # è®°å¿†åªå¹¶å…¥ç”Ÿæˆç”¨çš„ä¸Šä¸‹æ–‡ï¼Œä¸å‚ä¸å¬å›ï¼šå®ƒæ˜¯"è¿™ä¸ªæé—®è€…ä»¥å‰ç•™ä¸‹è¿‡ä»€ä¹ˆ"ï¼Œä¸æ˜¯
+            # çŸ¥è¯†åº“é‡Œçš„è¯æ®ã€‚æ‹¿å®ƒå»æ£€ç´¢ä¼šæŠŠå¬å›å¸¦åï¼Œä¹Ÿä¼šè®©è¯æ®é“¾å‡ºç°åº“é‡Œå¹¶ä¸å­˜åœ¨çš„æ¥æºã€‚
+            memory_block = self._memory_block(memory_context)
+            if memory_block:
+                context = (memory_block + "\n\n" + context) if context else memory_block
+            # å­—ç¬¦é¢„ç®—å¯èƒ½åœ¨ç¬¬ä¸€æ¡å°±è¶…é™ï¼Œé‚£æ—¶ _context ä¸€ä¸ªç‰‡æ®µéƒ½è£…ä¸è¿›å»ï¼Œevidence_pool æ˜¯ç©ºçš„ã€‚
+            # ç©ºè¯æ®é›†ä¼šè®©é—¨æ§æŠŠæ¯æ¡ claim éƒ½åˆ¤æˆ"æ— è¯æ®æ”¯æŒ"ï¼Œç­”æ¡ˆè¢«æ•´æ®µæ‹¦æ‰â€”â€”è¡¨ç°å‡ºæ¥å°±æ˜¯
+            # "åº“é‡Œæœ‰è¿™æ¡çŸ¥è¯†å´æ£€ç´¢ä¸å‡ºæ¥"ã€‚è¿™æ—¶é€€å› topK åˆ‡ç‰‡ï¼šè‡³å°‘ä¿ä½è°ƒç”¨æ–¹è¦çš„é‚£å‡ æ¡ï¼Œ
+            # ä¸ä¼šæ¯”æ”¹åŠ¨å‰ï¼ˆå›ºå®šç”¨ candidates[:topk]ï¼‰æ›´å·®ã€‚
+            if not evidence_pool and candidates:
+                evidence_pool = candidates[:topk]
+        else:
+            context, citations = "", []
+            evidence_pool = candidates[:topk]
+        selected_context = [
+            {
+                "id": c.get("id"),
+                "title": c.get("title"),
+                "channel": c.get("channel"),
+                "score": c.get("score"),
+                "rerankScore": c.get("rerankScore"),
+                "objectType": (c.get("metadata") or {}).get("object_type"),
+                "contentUnitId": (c.get("metadata") or {}).get("content_unit_id"),
+                "sourceName": (c.get("metadata") or {}).get("source_name"),
+                "pageNo": (c.get("metadata") or {}).get("page_no"),
+                "fusionRank": c.get("fusionRank"),
+                "rerankRank": c.get("rerankRank"),
+                "rankDelta": c.get("rankDelta"),
+                "channelRanks": c.get("channelRanks"),
+                "scoreBreakdown": c.get("scoreBreakdown"),
+            }
+            for c in evidence_pool
+        ]
+
+        if progress is not None:
+            await progress({
+                "type": "stage",
+                "stage": {
+                    "key": "context",
+                    "label": "ä¸Šä¸‹æ–‡è£…é…",
+                    "status": "done",
+                    "latencyMs": None,
+                    "inputCount": len(candidates),
+                    "outputCount": len(selected_context),
+                    "detail": {"chars": len(context), "maxChars": policy.answer.contextMaxChars},
+                },
+            })
+        llm_started = time.perf_counter()
+        if not generate:
+            # Gates stay in the payload as explicit "not run" rather than absent keys, so a
+            # consumer can tell "skipped" apart from "passed" without guessing.
+            answer = ""
+            model = "none"
+            verification = {"gateStatus": "NOT_RUN", "reason": "retrieval-only"}
+            structured_verification = {"gateStatus": "NOT_RUN", "reason": "retrieval-only"}
+            qualification = {
+                "gateStatus": "NOT_RUN",
+                "policyVersion": policy.answer.policyVersion,
+                "claims": [],
+                "deliveredAnswer": "",
+            }
+            llm_ms = 0
+        elif not candidates:
+            answer = policy.answer.noAnswerText
+            model = "none"
+            verification = {"gateStatus": "NO_EVIDENCE", "reason": "no candidate"}
+            structured_verification = {"gateStatus": "NO_EVIDENCE", "reason": "no candidate"}
+            qualification = {
+                "gateStatus": "NO_EVIDENCE",
+                "policyVersion": policy.answer.policyVersion,
+                "claims": [],
+                "deliveredAnswer": answer,
+            }
+            llm_ms = int((time.perf_counter() - llm_started) * 1000)
+        else:
+            llm = get_llm_provider()
+            if progress is None:
+                answer = await llm.generate(self._prompt(q, context))
+            else:
+                answer = await self._generate_streaming(llm, self._prompt(q, context), progress)
+            model = llm.name
+            verification = AnswerEvidenceGate(policy.answer.faithfulnessMin).verify(
+                answer, citations, evidence_pool
+            )
+            structured_verification = StructuredAnswerGate(policy.answer.entailmentMin).verify(
+                answer, citations, evidence_pool
+            )
+            qualification = AnswerQualification(policy.answer.policyVersion).qualify(
+                answer, verification, structured_verification, policy.answer.evidenceGateEnabled, model
+            )
+            answer = qualification.pop("deliveredAnswer")
+            llm_ms = int((time.perf_counter() - llm_started) * 1000)
+        if progress is not None:
+            await progress({
+                "type": "stage",
+                "stage": {
+                    "key": "llm",
+                    "label": "ç­”æ¡ˆç”Ÿæˆ",
+                    "status": "done",
+                    "latencyMs": llm_ms,
+                    "inputCount": len(selected_context),
+                    "outputCount": 1 if candidates else 0,
+                    "detail": {"model": model},
+                },
+            })
+            await progress({
+                "type": "stage",
+                "stage": {
+                    "key": "citation",
+                    "label": "å¼•ç”¨æ ¡éªŒ",
+                    "status": "done",
+                    "latencyMs": None,
+                    "inputCount": len(evidence_pool),
+                    "outputCount": len(citations),
+                    "detail": {
+                        "evidenceGate": verification.get("gateStatus"),
+                        "structuredGate": structured_verification.get("gateStatus"),
+                        "finalGate": qualification.get("gateStatus"),
+                        "policyVersion": qualification.get("policyVersion"),
+                    },
+                },
+            })
+        total_ms = int((time.perf_counter() - total_started) * 1000)
+
+        recall_counts = {name: len(items) for name, items in result_sets.items()}
+        # llmwiki-style presentation payload: everything the answer card badges and chips need.
+        supporting_claims = self._supporting_claims(evidence_pool)
+        confidence = self._confidence(evidence_pool, citations, supporting_claims, qualification)
+        question_type = route.get("questionType") or "DEFAULT"
+        type_label = QUESTION_TYPE_LABELS.get(question_type, question_type)
+        router_note = "%sï½œ%s%s" % (
+            type_label,
+            " + ".join(strategies),
+            "ï½œ%s" % route["reason"] if route.get("reason") else "",
+        )
+        retrieval_providers = {
+            name: sorted(
+                {
+                    str(
+                        (item.get("metadata") or {}).get("retrieval_provider")
+                        or ("neo4j" if name == "graph" else "unknown")
+                    )
+                    for item in items
+                }
+            )
+            for name, items in result_sets.items()
+        }
+        # Design Â§12.5: the trace is a timeline, not a bag of latencies. Every stage
+        # reports what went in, what came out, how long it took, and what failed, so the
+        # console can answer "why did this answer look like that" without a log dive.
+        channel_latency = retrieval_diagnostics.get("channelLatencyMs", {}) or {}
+        recall_errors = retrieval_diagnostics.get("errors", {}) or {}
+        stages = [
+            {
+                "key": "rewrite",
+                "label": "æŸ¥è¯¢æ”¹å†™",
+                "latencyMs": rewrite_ms,
+                "inputCount": 1,
+                "outputCount": len(rewritten),
+                "detail": {
+                    "variants": rewritten,
+                    "used": used_rewrite or normalized,
+                    "enabled": bool(getattr(policy.rewrite, "enabled", True)),
+                },
+                "errors": [],
+            },
+            {
+                "key": "route",
+                "label": "æ„å›¾è·¯ç”±",
+                "latencyMs": None,
+                "inputCount": 1,
+                "outputCount": len(strategies),
+                "detail": {
+                    "questionType": question_type,
+                    "strategies": strategies,
+                    "reason": route.get("reason"),
+                    "enabled": bool(getattr(policy.route, "enabled", False)),
+                },
+                "errors": [],
+            },
+            {
+                "key": "recall",
+                "label": "å¤šé€šé“å¬å›",
+                "latencyMs": retrieval_ms,
+                "inputCount": 1,
+                "outputCount": sum(recall_counts.values()),
+                "detail": {
+                    "sizes": recall_sizes(policy, topk),
+                    "providers": retrieval_providers,
+                    "channels": [
+                        {
+                            "channel": name,
+                            "count": count,
+                            "latencyMs": channel_latency.get(name),
+                            "provider": (retrieval_providers.get(name) or ["local"])[0],
+                        }
+                        for name, count in recall_counts.items()
+                    ],
+                },
+                "errors": recall_errors,
+            },
+            {
+                "key": "acl_filter",
+                "label": "ACL ä¸çŠ¶æ€è¿‡æ»¤",
+                "latencyMs": None,
+                "inputCount": None,
+                "outputCount": sum(recall_counts.values()),
+                "detail": retrieval_diagnostics.get("filters", {}),
+                "errors": [],
+            },
+            {
+                "key": "fusion",
+                "label": "RRF èåˆ",
+                "latencyMs": fusion_ms,
+                "inputCount": sum(recall_counts.values()),
+                "outputCount": len(fused_snapshot),
+                "detail": {
+                    "algorithm": "weighted_rrf",
+                    "k": policy.fusion.rrfK,
+                    "weights": fusion_weights,
+                    "qualitySignals": signal_weights,
+                },
+                "errors": [],
+            },
+            {
+                "key": "rerank",
+                "label": "é‡æ’",
+                "latencyMs": rerank_ms,
+                "inputCount": rerank_input_count,
+                "outputCount": rerank_output_count,
+                "detail": {
+                    "reranker": reranker.name,
+                    "enabled": bool(policy.rerank.enabled),
+                    "topN": policy.rerank.topN,
+                        "effectiveTopN": rerank_depth,
+                },
+                "errors": rerank_errors,
+            },
+            {
+                "key": "context",
+                "label": "ä¸Šä¸‹æ–‡è£…é…",
+                "latencyMs": None,
+                "inputCount": len(candidates),
+                "outputCount": len(selected_context),
+                "detail": {"chars": len(context), "maxChars": policy.answer.contextMaxChars},
+                "errors": [],
+            },
+            {
+                "key": "llm",
+                "label": "ç­”æ¡ˆç”Ÿæˆ",
+                "latencyMs": llm_ms,
+                "inputCount": len(selected_context),
+                "outputCount": 1 if candidates else 0,
+                "detail": {"model": model},
+                "errors": [],
+            },
+            {
+                "key": "citation",
+                "label": "å¼•ç”¨æ ¡éªŒ",
+                "latencyMs": None,
+                "inputCount": len(evidence_pool),
+                "outputCount": len(citations),
+                "detail": {
+                    "evidenceGate": verification.get("gateStatus"),
+                    "structuredGate": structured_verification.get("gateStatus"),
+                    "finalGate": qualification.get("gateStatus"),
+                    "policyVersion": qualification.get("policyVersion"),
+                },
+                "errors": [],
+            },
+        ]
+
+        conclusion_source = self._conclusion_source(candidates, citations)
+
+        return {
+            "queryId": qid,
+            "traceId": qid,
+            "question": q,
+            "questionType": question_type,
+            "questionTypeLabel": type_label,
+            "conclusionSource": conclusion_source,
+            "rewrittenQuery": used_rewrite or normalized,
+            "routerNote": router_note,
+            "channels": strategies,
+            "contextChars": len(context),
+            "durationMs": total_ms,
+            "reranked": bool(policy.rerank.enabled and candidates),
+            "confidence": confidence,
+            "claims": supporting_claims,
+            "rewrittenQueries": rewritten,
+            "rewrite": {"variants": rewritten, "used": used_rewrite, "latencyMs": rewrite_ms},
+            "router": {**route, "configuredStrategies": route["strategies"]},
+            "strategies": strategies,
+            "recall": self._slim_recall(result_sets, include_recall_content),
+            "fusion": {
+                "algorithm": "weighted_rrf",
+                "k": policy.fusion.rrfK,
+                "weights": fusion_weights,
+                "qualitySignals": signal_weights,
+                "qualitySample": quality_sample,
+                "latencyMs": fusion_ms,
+            },
+            "candidates": candidates,
+            # æ£€ç´¢æ¥å£è¦èƒ½å›ç­”â€œç»™äº†å¤šå°‘ã€å¤Ÿæ ¼çš„æœ‰å¤šå°‘â€ï¼štopK æ˜¯è¯·æ±‚è¦çš„æ•°é‡ï¼Œ
+            # returned æ˜¯è¿‡æ»¤åçœŸçš„è¿”å›çš„æ•°é‡ï¼Œä¸¤è€…ä¸ä¸€è‡´æ—¶è°ƒç”¨æ–¹æ‰çŸ¥é“æ˜¯é˜ˆå€¼å¡æ‰äº†ç»“æœï¼Œ
+            # è€Œä¸æ˜¯åº“é‡Œæ²¡æœ‰ã€‚
+            "topK": topk,
+            "returned": len(candidates),
+            "minScore": min_score,
+            "reranker": {
+                "name": reranker.name,
+                "enabled": policy.rerank.enabled,
+                "topN": policy.rerank.topN,
+                "effectiveTopN": rerank_depth,
+                "latencyMs": rerank_ms,
+            },
+            "selectedContext": selected_context,
+            "context": context,
+            "citations": citations,
+            # æ ¼å¼åœ¨æ‰€æœ‰é—¨æ§ä¹‹åæ‰æ¸²æŸ“ï¼šé—¨æ§è¯„åˆ¤çš„æ˜¯æ¨¡å‹äº§å‡ºçš„åŸæ–‡ï¼Œ
+            # å…ˆæ‹¼ä¸Šå¼•ç”¨ç« èŠ‚ä¼šè®©ç« èŠ‚é‡Œçš„å­—è¢«å½“æˆç­”æ¡ˆè‡ªå·±è¯´çš„è¯ã€‚
+            "answer": render_answer(answer, citations, answer_format),
+            "answerFormat": normalize_answer_format(answer_format),
+            "answerVerification": verification,
+            # structured çš„ claim æ˜ç»†ä¸ answerQualification.claims æ˜¯åŒä¸€ä»½ï¼šåè€…ç”±å‰è€…çš„å‰¯æœ¬
+            # åŠ  policyVersion / includedInFinalAnswer æ„æˆï¼ˆè§ answer_qualification.qualifyï¼‰ï¼Œ
+            # æ˜¯å®ƒçš„è¶…é›†ã€‚ä¸¤å¤„éƒ½å‘ç­‰äºæŠŠæ¯æ¡åˆ¤å®šç»“æœå‘ä¸¤éã€‚è¿™é‡Œåªç•™ç»Ÿè®¡å£å¾„ï¼Œæ˜ç»†ç»Ÿä¸€è¯»
+            # answerQualification.claimsâ€”â€”é‚£ä¹Ÿæ˜¯è½åº“ç”¨çš„é‚£ä»½ï¼Œå£å¾„ä¸ä¼šåˆ†å‰ã€‚
+            "structuredAnswerVerification": _without_claims(structured_verification),
+            "answerQualification": qualification,
+            "model": model,
+            "tokenUsage": {"promptTokens": None, "completionTokens": None, "totalTokens": None},
             "trace": {
                 "rewriteLatencyMs": rewrite_ms,
                 "questionType": route.get("questionType"),
