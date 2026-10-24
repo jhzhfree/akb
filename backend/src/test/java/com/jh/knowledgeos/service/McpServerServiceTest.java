@@ -157,6 +157,36 @@ class McpServerServiceTest {
     }
 
     @Test
+    void protocolContractHandlesInitializeNotificationsAndErrors() {
+        McpServerService service = new McpServerService(null, null, new ObjectMapper());
+        Map<String, Object> initializeParams = new LinkedHashMap<String, Object>();
+        initializeParams.put("protocolVersion", McpServerService.PROTOCOL_VERSION);
+        initializeParams.put("capabilities", new LinkedHashMap<String, Object>());
+        initializeParams.put("clientInfo", row("name", "contract-test", "version", "1"));
+        Map<String, Object> initialized = service.handle(rpc("initialize", 7, initializeParams), null);
+        assertEquals(7, initialized.get("id"));
+        assertEquals(McpServerService.PROTOCOL_VERSION, ((Map<?, ?>) initialized.get("result")).get("protocolVersion"));
+
+        assertEquals(null, service.handle(rpc("notifications/initialized", null, null), null));
+        assertEquals(-32600, ((Map<?, ?>) service.handle(rpc("notifications/initialized", 8, null), null).get("error")).get("code"));
+        assertEquals(-32600, ((Map<?, ?>) service.handle(row("jsonrpc", "2.0", "method", "ping"), null).get("error")).get("code"));
+        assertEquals(-32601, ((Map<?, ?>) service.handle(rpc("unknown/method", 9, null), null).get("error")).get("code"));
+    }
+
+    private Map<String, Object> rpc(String method, Object id, Map<String, Object> params) {
+        Map<String, Object> request = row("jsonrpc", "2.0", "method", method);
+        if (id != null) { request.put("id", id); }
+        if (params != null) { request.put("params", params); }
+        return request;
+    }
+
+    private Map<String, Object> row(Object... values) {
+        Map<String, Object> result = new LinkedHashMap<String, Object>();
+        for (int i = 0; i < values.length; i += 2) { result.put((String) values[i], values[i + 1]); }
+        return result;
+    }
+
+    @Test
     void searchPassesTagsAndMcpAttributionThroughTheGovernedFacade() throws Exception {
         ExternalAccessService access = mock(ExternalAccessService.class);
         ExternalKnowledgeFacade facade = mock(ExternalKnowledgeFacade.class);

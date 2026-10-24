@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.jh.knowledgeos.mapper.ExtractionPostStageMapper">
+  <insert id="insertStage" parameterType="com.jh.knowledgeos.domain.ExtractionPostStage" useGeneratedKeys="true" keyProperty="id">
+    INSERT INTO t_extraction_post_stage(stage_code,document_id,knowledge_base_id,run_id,status,attempt_count,manual_replay_count,
+      max_attempts,idempotency_key,payload_json,next_attempt_at)
+    VALUES(#{stageCode},#{documentId},#{knowledgeBaseId},#{runId},#{status},0,0,#{maxAttempts},#{idempotencyKey},
+      CAST(#{payloadJson} AS JSON),CURRENT_TIMESTAMP)
+  </insert>
+
+  <select id="selectDueStages" resultType="com.jh.knowledgeos.domain.ExtractionPostStage">
+    SELECT s.* FROM t_extraction_post_stage s
+    JOIN t_document d ON d.id=s.document_id
+    WHERE s.status IN ('PENDING','RETRY') AND s.next_attempt_at&lt;=CURRENT_TIMESTAMP
+      AND JSON_UNQUOTE(JSON_EXTRACT(d.extraction_summary_json,'$.runId'))=s.run_id
+      AND NOT EXISTS (SELECT 1 FROM t_extraction_post_stage prior WHERE prior.document_id=s.document_id AND prior.run_id=s.run_id
+        AND prior.id&lt;s.id AND prior.status NOT IN ('SUCCEEDED','SKIPPED'))
+    ORDER BY s.id LIMIT #{limit} FOR UPDATE SKIP LOCKED
+  </select>
+
+  <select id="selectDueStagesByRun" resultType="com.jh.knowledgeos.domain.ExtractionPostStage">
+    SELECT s.* FROM t_extraction_post_stage s
+    JOIN t_document d ON d.id=s.document_id
+    WHERE s.run_id=#{runId} AND s.status IN ('PENDING','RETRY') AND s.next_attempt_at&lt;=CURRENT_TIMESTAMP
+      AND JSON_UNQUOTE(JSON_EXTRACT(d.extraction_summary_json,'$.runId'))=s.run_id
+      AND NOT EXISTS (SELECT 1 FROM t_extraction_post_stage prior WHERE prior.document_id=s.document_id AND prior.run_id=s.run_id
+        AND prior.id&lt;s.id AND prior.status NOT IN ('SUCCEEDED','SKIPPED'))
+    ORDER BY s.id LIMIT #{limit} FOR UPDATE SKIP LOCKED
+  </select>
+
+  <select id="findStage" resultType="com.jh.knowledgeos.domain.ExtractionPostStage">
+    SELECT * FROM t_extraction_post_stage WHERE id=#{id}
+  </select>
+
+  <update id="claimStage">
+    UPDATE t_extraction_post_stage SET status='PROCESSING',attempt_count=attempt_count+1,locked_by=#{workerId},locked_at=CURRENT_TIMESTAMP
+    WHERE id=#{id} AND status IN ('PENDING','RETRY') AND next_attempt_at&lt;=CURRENT_TIMESTAMP
+  </update>
+
+  <update id="markStageSucceeded">
+    UPDATE t_extraction_post_stage SET status='SUCCEEDED',last_error=NULL,locked_by=NULL,locked_at=NULL,updated_time=CURRENT_TIMESTAMP
+    WHERE id=#{id} AND status='PROCESSING'
+  </update>
+
+  <update id="markStageSkipped">
+    UPDATE t_extraction_post_stage SET status='SKIPPED',last_error=#{reason},locked_by=NULL,locked_at=NULL,updated_time=CURRENT_TIMESTAMP
+    WHERE id=#{id} AND status IN ('PENDING','RETRY','PROCESSING')
+  </update>
+
+  <update id="markStageRetry">
+    UPDATE t_extraction_post_stage SET status=#{status},last_error=#{error},next_attempt_at=#{nextAttemptAt},locked_by=NULL,locked_at=NULL,
+      updated_time=CURRENT_TIMESTAMP WHERE id=#{id} AND status='PROCESSING'
+  </update>
+
+  <update id="recoverStaleStages">
+    UPDATE t_extraction_post_stage SET status='RETRY',next_attempt_at=CURRENT_TIMESTAMP,locked_by=NULL,locked_at=NULL,
+      last_error=CONCAT('Recovered stale worker lock; ',COALESCE(last_error,'')),updated_time=CURRENT_TIMESTAMP
+    WHERE status='PROCESSING' AND locked_at&lt;#{threshold}
+  </update>
+
+  <select id="listStagesForRun" resultType="com.jh.knowledgeos.domain.ExtractionPostStage">
+    SELECT * FROM t_extraction_post_stage WHERE document_id=#{documentId} AND run_id=#{runId} ORDER BY id
+  </select>
+
+  <update id="replayFailedStages">
+    UPDATE t_extraction_post_stage SET status='PENDING',attempt_count=0,manual_replay_count=manual_replay_count+1,last_error=NULL,
+      next_attempt_at=CURRENT_TIMESTAMP,locked_by=NULL,locked_at=NULL,updated_time=CURRENT_TIMESTAMP
+    WHERE document_id=#{documentId} AND run_id=#{runId} AND status IN ('RETRY','DEAD')
+  </update>
+</mapper>

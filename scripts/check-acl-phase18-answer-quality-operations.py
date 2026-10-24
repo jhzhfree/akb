@@ -2,12 +2,12 @@
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-mapper_java = (ROOT / "backend/src/main/java/com/jh/knowledgeos/mapper/KnowledgeMapper.java").read_text()
-mapper_xml = (ROOT / "backend/src/main/resources/mapper/KnowledgeMapper.xml").read_text()
+mapper_java = (ROOT / "backend/src/main/java/com/jh/knowledgeos/mapper/TraceMapper.java").read_text()
+mapper_xml = (ROOT / "backend/src/main/resources/mapper/TraceMapper.xml").read_text()
 read_service = (ROOT / "backend/src/main/java/com/jh/knowledgeos/service/KnowledgeReadService.java").read_text()
-controller = (ROOT / "backend/src/main/java/com/jh/knowledgeos/controller/KnowledgeController.java").read_text()
+controller = (ROOT / "backend/src/main/java/com/jh/knowledgeos/controller/KnowledgeQueryController.java").read_text()
 frontend = (ROOT / "frontend/src/components/QueryTracePanel.vue").read_text()
-api = (ROOT / "frontend/src/api/knowledge.ts").read_text()
+api = (ROOT / "frontend/src/api/knowledge-impl.ts").read_text()
 
 checks = {
     "qualification detail query": "getAnswerQualification" in mapper_java

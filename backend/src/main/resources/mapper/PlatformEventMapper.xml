@@ -7,6 +7,8 @@ VALUES(#{eventId},#{eventTime},#{eventType},#{knowledgeBaseId},#{source},#{actor
 
 <select id="getPlatformEventByEventId" resultType="com.jh.knowledgeos.domain.PlatformEvent">SELECT * FROM t_platform_event WHERE event_id=#{eventId} LIMIT 1</select>
 
+<select id="getPlatformEventByIdempotencyKey" resultType="com.jh.knowledgeos.domain.PlatformEvent">SELECT * FROM t_platform_event WHERE idempotency_key=#{idempotencyKey} ORDER BY id LIMIT 1</select>
+
 <!-- One statement serves both directions: replays walk forward from the last delivered id,
      console views walk backwards from the newest row. -->
 <select id="listPlatformEvents" resultType="com.jh.knowledgeos.domain.PlatformEvent">SELECT * FROM t_platform_event

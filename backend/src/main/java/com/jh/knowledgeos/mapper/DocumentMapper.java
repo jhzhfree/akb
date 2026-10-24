@@ -57,6 +57,7 @@ public interface DocumentMapper {
      * 带上错误的可见范围。
      */
     Map<String, Object> findReextractContext(@Param("documentId") Long documentId);
+    Map<String, Object> getExtractionSummary(@Param("documentId") Long documentId);
 
     /**
      * 这篇文档已经入库的标准单元，连同每条单元的证据编码。

@@ -121,6 +121,31 @@ public class PlatformEventPublisher {
         if (type == null || type.isEmpty()) {
             return;
         }
+        PlatformEvent event = buildEvent(type, kb, source, targetType, targetCode, summary, detail, actorType, actorId, actorName, task);
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new AfterCommit(event));
+        } else {
+            dispatch(event);
+        }
+    }
+
+    /** Persist an idempotent event synchronously so a durable worker can safely retry publication. */
+    public void emitIdempotent(String idempotencyKey, String type, Long kb, String source, String targetType, String targetCode,
+        String summary, Map<String, Object> detail, String actorType, String actorId, String actorName) {
+        if (idempotencyKey == null || idempotencyKey.trim().isEmpty() || type == null || type.isEmpty()) {
+            throw new IllegalArgumentException("A stable event key and type are required");
+        }
+        PlatformEvent event = store.findByIdempotencyKey(idempotencyKey);
+        if (event == null) {
+            event = buildEvent(type, kb, source, targetType, targetCode, summary, detail, actorType, actorId, actorName, null);
+            event.setIdempotencyKey(idempotencyKey);
+            event = store.save(event);
+        }
+        hub.publish(event);
+    }
+
+    private PlatformEvent buildEvent(String type, Long kb, String source, String targetType, String targetCode, String summary,
+        Map<String, Object> detail, String actorType, String actorId, String actorName, EventTaskContext task) {
         PlatformEvent event = new PlatformEvent();
         event.setEventId(ids.next("EV_"));
         event.setEventTime(LocalDateTime.now());
@@ -146,11 +171,7 @@ public class PlatformEventPublisher {
             // and leaving it null would lose the event instead of storing it.
             event.setRetryCount(0);
         }
-        if (TransactionSynchronizationManager.isSynchronizationActive()) {
-            TransactionSynchronizationManager.registerSynchronization(new AfterCommit(event));
-        } else {
-            dispatch(event);
-        }
+        return event;
     }
 
     private void dispatch(PlatformEvent event) {

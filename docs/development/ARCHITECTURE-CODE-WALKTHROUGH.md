@@ -181,6 +181,8 @@ AI indexing endpoint
 Elasticsearch / Milvus / Neo4j
 ```
 
+文档抽取还有独立的后处理检查点：写入 Card/Claim 的同一个 MySQL 事务会创建图谱投递、冲突检测、实体消歧和完成事件发布阶段（迁移 V68）。同步流程立即按序处理以保持原响应；进程退出或阶段失败时，`ExtractionPostStageWorker` 只重做失败阶段，并阻止后置阶段越过未完成的前置阶段。文档摘要以 `runId` 隔离旧运行。支持 `POST /api/knowledge/documents/{id}/replay-post-processing` 手动重放失败阶段，不会重新调用 `/ai/extract`。
+
 ### 7.1 为什么 aggregate version 必须存在
 
 假设：

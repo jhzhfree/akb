@@ -1,9 +1,11 @@
 from pathlib import Path
 
 R = Path(__file__).resolve().parents[1]
-xml = (R / "backend/src/main/resources/mapper/KnowledgeMapper.xml").read_text()
+xml = "\n".join((R / "backend/src/main/resources/mapper" / name).read_text()
+    for name in ["CardClaimMapper.xml", "DocumentMapper.xml"])
 resolver = (R / "backend/src/main/java/com/jh/knowledgeos/service/AclContextResolver.java").read_text()
-controller = (R / "backend/src/main/java/com/jh/knowledgeos/controller/KnowledgeController.java").read_text()
+controller = "\n".join((R / "backend/src/main/java/com/jh/knowledgeos/controller" / name).read_text()
+    for name in ["KnowledgeGovernanceController.java", "KnowledgeReadController.java"])
 migration = (R / "backend/src/main/resources/db/migration/V11__acl_identity_rbac_abac.sql").read_text()
 for table in [
     "t_acl_subject",

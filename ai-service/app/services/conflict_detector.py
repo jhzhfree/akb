@@ -1,7 +1,7 @@
 """Deterministic claim-conflict candidate detection used before AI/human adjudication."""
 
-import re
 import json
+import re
 from collections import defaultdict
 from collections.abc import Iterable
 from datetime import datetime

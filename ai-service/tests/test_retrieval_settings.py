@@ -11,6 +11,7 @@ from app.core import retrieval_settings as rs
 from app.core.config import settings as env_settings
 from app.services.retrieval.elasticsearch_provider import get_elasticsearch_provider
 from app.services.retrieval.milvus_provider import get_milvus_provider
+from pydantic import ValidationError
 
 
 @pytest.fixture(autouse=True)
@@ -92,5 +93,5 @@ def test_persisted_file_survives_reload_and_is_reapplied():
 
 
 def test_invalid_mode_is_rejected():
-    with pytest.raises(Exception):
+    with pytest.raises(ValidationError):
         rs.save_retrieval_settings({"mode": "sometimes"})

@@ -19,12 +19,46 @@ class KnowledgeExtractionQualityTest {
     final TransactionRunner tx = mock(TransactionRunner.class);
     final AiClient ai = mock(AiClient.class);
     final IndexOutboxService outbox = mock(IndexOutboxService.class);
+    final ExtractionPostStageMapper postStages = mock(ExtractionPostStageMapper.class);
+    final Map<Long, com.jh.knowledgeos.domain.ExtractionPostStage> stageRows = new HashMap<Long,
+        com.jh.knowledgeos.domain.ExtractionPostStage>();
     final KnowledgeExtractionService service;
 
     @SuppressWarnings("unchecked")
     KnowledgeExtractionQualityTest() {
         when(tx.retryingOnDeadlock(any(Supplier.class))).thenAnswer(inv -> ((Supplier<?>) inv.getArgument(0)).get());
         when(tx.required(any(Supplier.class))).thenAnswer(inv -> ((Supplier<?>) inv.getArgument(0)).get());
+        final long[] stageId = {0L};
+        when(postStages.insertStage(any())).thenAnswer(inv -> {
+            com.jh.knowledgeos.domain.ExtractionPostStage stage = inv.getArgument(0);
+            stage.setId(++stageId[0]);
+            stageRows.put(stage.getId(), stage);
+            return 1;
+        });
+        when(postStages.listStagesForRun(anyLong(), anyString())).thenAnswer(inv -> {
+            List<com.jh.knowledgeos.domain.ExtractionPostStage> matching = new ArrayList<>();
+            for (com.jh.knowledgeos.domain.ExtractionPostStage stage : stageRows.values()) {
+                if (stage.getRunId().equals(inv.getArgument(1))) { matching.add(stage); }
+            }
+            return matching;
+        });
+        when(postStages.claimStage(anyLong(), anyString())).thenAnswer(inv -> {
+            com.jh.knowledgeos.domain.ExtractionPostStage stage = stageRows.get(inv.getArgument(0));
+            if (stage == null || !"PENDING".equals(stage.getStatus())) { return 0; }
+            stage.setStatus("PROCESSING");
+            stage.setAttemptCount((stage.getAttemptCount() == null ? 0 : stage.getAttemptCount()) + 1);
+            return 1;
+        });
+        when(postStages.findStage(anyLong())).thenAnswer(inv -> stageRows.get(inv.getArgument(0)));
+        when(postStages.markStageSucceeded(anyLong())).thenAnswer(inv -> {
+            stageRows.get(inv.getArgument(0)).setStatus("SUCCEEDED");
+            return 1;
+        });
+        when(postStages.markStageRetry(anyLong(), anyString(), anyString(), any())).thenAnswer(inv -> {
+            stageRows.get(inv.getArgument(0)).setStatus(inv.getArgument(1));
+            stageRows.get(inv.getArgument(0)).setLastError(inv.getArgument(2));
+            return 1;
+        });
         when(scenarios.extraction(1L)).thenReturn(row("claims", true));
         when(documents.findReextractContext(9L)).thenReturn(row("knowledgeBaseId", 1L, "permissionTags", "[]"));
         when(documents.lockDocumentForExtraction(9L, 1L)).thenReturn(9L);
@@ -36,7 +70,8 @@ class KnowledgeExtractionQualityTest {
         when(ids.next(anyString())).thenAnswer(inv -> "K_TEST_" + UUID.randomUUID().toString().replace("-", ""));
         service = new KnowledgeExtractionService(mapper, ai, new ObjectMapper(), ids, tx, outbox,
             mock(EntityResolutionService.class), mock(PlatformEventPublisher.class), mock(EvidenceMapper.class),
-            mock(GovernanceMapper.class), mock(GraphMapper.class), mock(IndexMapper.class), cards, scenarios, documents, gate);
+            mock(GovernanceMapper.class), mock(GraphMapper.class), mock(IndexMapper.class), cards, scenarios, documents, gate,
+            postStages);
     }
 
     static Map<String, Object> row(Object... entries) {
@@ -119,5 +154,24 @@ class KnowledgeExtractionQualityTest {
         Map<String, Object> result = service.extract(row("knowledgeBaseId", 1L, "documentId", 9L));
         assertEquals("PARTIAL", result.get("extractionStatus"));
         assertEquals(1, ((List<?>) result.get("claims")).size());
+    }
+
+    @Test
+    void documentExtractionRegistersAllPostStagesWithStableRunKeys() {
+        extract(Arrays.asList(card("年假应提前三个工作日申请。")));
+        org.mockito.ArgumentCaptor<com.jh.knowledgeos.domain.ExtractionPostStage> captor =
+            org.mockito.ArgumentCaptor.forClass(com.jh.knowledgeos.domain.ExtractionPostStage.class);
+        verify(postStages, times(4)).insertStage(captor.capture());
+        Set<String> codes = new HashSet<String>();
+        Set<String> keys = new HashSet<String>();
+        for (com.jh.knowledgeos.domain.ExtractionPostStage stage : captor.getAllValues()) {
+            codes.add(stage.getStageCode());
+            keys.add(stage.getIdempotencyKey());
+            assertEquals(9L, stage.getDocumentId());
+            assertNotNull(stage.getRunId());
+            assertTrue(stage.getIdempotencyKey().startsWith("EXTRACT_POST:" + stage.getRunId() + ":"));
+        }
+        assertEquals(new HashSet<String>(Arrays.asList("GRAPH_INDEX", "CONFLICT_DETECTION", "ENTITY_RESOLUTION", "EVENT_PUBLISHED")), codes);
+        assertEquals(3, keys.size());
     }
 }

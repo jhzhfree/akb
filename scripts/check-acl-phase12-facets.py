@@ -9,7 +9,7 @@ checks = {
     "relation facet persistence": "upsertRelationFacet"
     in (ROOT / "backend/src/main/java/com/jh/knowledgeos/service/KnowledgeExtractionService.java").read_text(),
     "authoritative facet snapshot": "ENTITY_FACET"
-    in (ROOT / "backend/src/main/resources/mapper/KnowledgeMapper.xml").read_text(),
+    in (ROOT / "backend/src/main/resources/mapper/GraphMapper.xml").read_text(),
     "facet manifest persisted": "insertGraphFacetManifest"
     in (ROOT / "backend/src/main/java/com/jh/knowledgeos/service/AuthoritativeGraphGenerationService.java").read_text(),
     "neo4j entity facet": "EntityFacetGen" in (ROOT / "ai-service/app/services/graph_provider.py").read_text(),

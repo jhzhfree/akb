@@ -1,8 +1,8 @@
 from pathlib import Path
 
 R = Path(__file__).resolve().parents[1]
-controller = (R / "backend/src/main/java/com/jh/knowledgeos/controller/KnowledgeController.java").read_text()
-mapper = (R / "backend/src/main/resources/mapper/KnowledgeMapper.xml").read_text()
+controller = (R / "backend/src/main/java/com/jh/knowledgeos/controller/KnowledgeReadController.java").read_text()
+mapper = (R / "backend/src/main/resources/mapper/EvidenceMapper.xml").read_text()
 app = (R / "frontend/src/App.vue").read_text()
 detail = (R / "frontend/src/components/KnowledgeDetailWorkspace.vue").read_text()
 query = (R / "frontend/src/components/QueryPanel.vue").read_text()

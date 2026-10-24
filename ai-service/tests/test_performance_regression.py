@@ -43,11 +43,11 @@ def test_index_store_snapshot_cache():
 
 
 def test_retrieval_status_filter():
-    assert allowed({"id": "chunk", "permission_tags": []}, [])
     assert allowed({"id": "card", "status": "APPROVED", "permission_tags": []}, [])
     assert allowed({"id": "card", "status": "EFFECTIVE", "permission_tags": []}, [])
-    assert allowed({"id": "card", "status": "DRAFT", "permission_tags": []}, [])
-    assert allowed({"id": "claim", "status": "UNCERTAIN", "permission_tags": []}, [])
+    assert not allowed({"id": "chunk", "permission_tags": []}, [])
+    assert not allowed({"id": "card", "status": "DRAFT", "permission_tags": []}, [])
+    assert not allowed({"id": "claim", "status": "UNCERTAIN", "permission_tags": []}, [])
     for status in ("PENDING_REVIEW", "CONFLICTED", "REJECTED"):
         assert not allowed({"id": "candidate", "status": status, "permission_tags": []}, [])
 

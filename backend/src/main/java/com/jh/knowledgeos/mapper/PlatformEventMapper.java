@@ -14,6 +14,8 @@ public interface PlatformEventMapper {
 
     PlatformEvent getPlatformEventByEventId(@Param("eventId") String eventId);
 
+    PlatformEvent getPlatformEventByIdempotencyKey(@Param("idempotencyKey") String idempotencyKey);
+
     /**
      * Newest-first unless the caller asks for {@code ascending}, which is what SSE replay uses so
      * reconnected clients receive missed events in the original order.

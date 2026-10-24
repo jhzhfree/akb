@@ -4,11 +4,10 @@ import logging
 import os
 import time
 import uuid
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
-
-from contextlib import asynccontextmanager
 
 from app.core.config import settings
 from app.core.retrieval_settings import apply_retrieval_settings

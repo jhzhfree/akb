@@ -78,6 +78,8 @@ public class McpController {
                 ? memoryAuditResponse(auditedMethod, responseData) : responseData;
             if (rpcError != null) {
                 auditedResponse = rpcFailureBody(auditedResponse, rpcError);
+            } else {
+                auditedResponse = rpcSuccessBody(auditedResponse);
             }
             String rpcMessage = rpcError == null ? null : String.valueOf(rpcError.get("message"));
             int transportStatus = notification && response == null ? 202 : 200;
@@ -145,6 +147,14 @@ public class McpController {
         payload.put("rpcSuccess", Boolean.FALSE);
         payload.put("rpcErrorCode", error.get("code"));
         payload.put("rpcErrorMessage", error.get("message"));
+        payload.put("response", responseData);
+        return payload;
+    }
+
+    private Map<String, Object> rpcSuccessBody(Object responseData) {
+        Map<String, Object> payload = new LinkedHashMap<String, Object>();
+        payload.put("rpcSuccess", Boolean.TRUE);
+        payload.put("rpcErrorCode", null);
         payload.put("response", responseData);
         return payload;
     }

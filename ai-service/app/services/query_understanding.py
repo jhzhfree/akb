@@ -1,7 +1,11 @@
 """Query normalization, intent routing, and rewrite policy helpers."""
-import re
+import logging
+
 from app.core.query_policy import DEFAULT_SYNONYMS, load_policy
 from app.services.llm_provider import get_llm_provider
+
+logger = logging.getLogger(__name__)
+
 
 class QueryRouter:
     """Map query intent to the minimum useful set of retrieval channels.

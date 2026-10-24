@@ -11,6 +11,9 @@ import com.jh.knowledgeos.domain.QueryTraceRecord;
 import com.jh.knowledgeos.mapper.TraceMapper;
 import javax.sql.DataSource;
 import com.jh.knowledgeos.mapper.DocumentMapper;
+import com.jh.knowledgeos.mapper.ExtractionPostStageMapper;
+import com.jh.knowledgeos.domain.ExtractionPostStage;
+import com.jh.knowledgeos.mapper.IndexMapper;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.annotation.Transactional;
 import org.junit.jupiter.api.Test;
@@ -50,6 +53,12 @@ public class DatabaseMigrationIT {
 
     @Autowired
     private DocumentMapper documents;
+
+    @Autowired
+    private ExtractionPostStageMapper extractionStages;
+
+    @Autowired
+    private IndexMapper indexMapper;
 
     @Autowired
     private JdbcTemplate jdbc;
@@ -103,11 +112,13 @@ public class DatabaseMigrationIT {
             assertTrue(tableExists(st, "t_api_key_principal_audit"));
             assertTrue(tableExists(st, "t_principal_identity_link"));
             assertTrue(tableExists(st, "t_principal_identity_audit"));
+            assertTrue(tableExists(st, "t_extraction_post_stage"));
             assertTrue(columnExists(st, "t_document", "extraction_status"));
             assertTrue(columnExists(st, "t_document", "index_status"));
             assertTrue(columnExists(st, "t_document", "extraction_summary_json"));
             assertTrue(columnExists(st, "t_derivation_run", "execution_summary_json"));
             assertTrue(columnExists(st, "t_knowledge_card", "dedup_key"));
+            assertTrue(columnExists(st, "t_extraction_post_stage", "idempotency_key"));
             assertTrue(columnExists(st, "t_claim", "claim_fingerprint"));
             assertTrue(columnExists(st, "t_principal", "principal_type"));
             assertTrue(columnExists(st, "t_api_key", "principal_id"));
@@ -140,6 +151,91 @@ public class DatabaseMigrationIT {
                 assertTrue(rs.getInt(1) >= 6);
             }
         }
+    }
+
+    @Test
+    @Transactional
+    void extractionPostStagesAreScopedToCurrentRunAndCanBeReplayed() {
+        long id = 910021L;
+        jdbc.update("INSERT INTO t_knowledge_base(id,base_code,name) VALUES(?, 'KB_STAGE_IT','阶段恢复验证')", id);
+        jdbc.update("INSERT INTO t_source(id,source_code,knowledge_base_id,name) VALUES(?,'SRC_STAGE_IT',?,'policy')", id, id);
+        jdbc.update("INSERT INTO t_source_version(id,source_id,version_no) VALUES(?,?,1)", id, id);
+        jdbc.update("INSERT INTO t_document(id,source_version_id,document_code,extraction_summary_json) VALUES(?,?,?,'{\"runId\":\"run-current\"}')",
+            id, id, "DOC_STAGE_IT");
+
+        ExtractionPostStage current = postStage(id, "run-current", "CONFLICT_DETECTION", "EXTRACT_POST:run-current:CONFLICT_DETECTION");
+        ExtractionPostStage stale = postStage(id, "run-stale", "ENTITY_RESOLUTION", "EXTRACT_POST:run-stale:ENTITY_RESOLUTION");
+        extractionStages.insertStage(current);
+        extractionStages.insertStage(stale);
+
+        assertEquals(1, extractionStages.selectDueStages(10).size());
+        assertEquals(current.getId(), extractionStages.selectDueStages(10).get(0).getId());
+        assertEquals(1, extractionStages.claimStage(current.getId(), "integration-test"));
+        assertEquals(1, extractionStages.markStageRetry(current.getId(), "DEAD", "injected", java.time.LocalDateTime.now()));
+        assertEquals(1, extractionStages.replayFailedStages(id, "run-current"));
+        ExtractionPostStage replayed = extractionStages.findStage(current.getId());
+        assertEquals("PENDING", replayed.getStatus());
+        assertEquals(0, replayed.getAttemptCount());
+        assertEquals(1, replayed.getManualReplayCount());
+        assertNull(replayed.getLastError());
+    }
+
+    @Test
+    @Transactional
+    void extractionPostStagesWaitForEarlierStageToComplete() {
+        long id = 910022L;
+        jdbc.update("INSERT INTO t_knowledge_base(id,base_code,name) VALUES(?, 'KB_STAGE_ORDER_IT','阶段顺序验证')", id);
+        jdbc.update("INSERT INTO t_source(id,source_code,knowledge_base_id,name) VALUES(?,'SRC_STAGE_ORDER_IT',?,'policy')", id, id);
+        jdbc.update("INSERT INTO t_source_version(id,source_id,version_no) VALUES(?,?,1)", id, id);
+        jdbc.update("INSERT INTO t_document(id,source_version_id,document_code,extraction_summary_json) VALUES(?,?,?,'{\"runId\":\"run-ordered\"}')",
+            id, id, "DOC_STAGE_ORDER_IT");
+
+        ExtractionPostStage graph = postStage(id, "run-ordered", "GRAPH_INDEX", "EXTRACT_POST:run-ordered:GRAPH_INDEX");
+        ExtractionPostStage conflict = postStage(id, "run-ordered", "CONFLICT_DETECTION", "EXTRACT_POST:run-ordered:CONFLICT_DETECTION");
+        extractionStages.insertStage(graph);
+        extractionStages.insertStage(conflict);
+
+        java.util.List<ExtractionPostStage> due = extractionStages.selectDueStages(10);
+        assertEquals(1, due.size());
+        assertEquals(graph.getId(), due.get(0).getId());
+        assertEquals(1, extractionStages.claimStage(graph.getId(), "ordered-worker"));
+        assertEquals(1, extractionStages.markStageSucceeded(graph.getId()));
+        due = extractionStages.selectDueStages(10);
+        assertEquals(1, due.size());
+        assertEquals(conflict.getId(), due.get(0).getId());
+    }
+
+    @Test
+    @Transactional
+    void outboxDoesNotReleaseNewerAggregateVersionBeforeOlderEventCompletes() {
+        long kb = 910031L;
+        String aggregate = "KB:" + kb + ":CARD:VERSION_IT";
+        jdbc.update("INSERT INTO t_index_outbox(event_id,idempotency_key,knowledge_base_id,aggregate_type,aggregate_key,event_type,"
+            + "object_version,target_path,payload_json,status) VALUES"
+            + "('EV_VERSION_1','IDEM_VERSION_1',?,'CARD',?,'UPSERT',1,'/test','{}','PENDING'),"
+            + "('EV_VERSION_2','IDEM_VERSION_2',?,'CARD',?,'UPSERT',2,'/test','{}','PENDING')", kb, aggregate, kb, aggregate);
+
+        java.util.List<com.jh.knowledgeos.domain.IndexOutboxEvent> due = indexMapper.selectDueIndexOutbox(10);
+        assertEquals(1, due.size());
+        assertEquals("EV_VERSION_1", due.get(0).getEventId());
+        assertEquals(1, indexMapper.claimIndexOutbox(due.get(0).getId(), "version-test"));
+        indexMapper.markIndexOutboxSucceeded(due.get(0).getId(), "{}");
+        due = indexMapper.selectDueIndexOutbox(10);
+        assertEquals(1, due.size());
+        assertEquals("EV_VERSION_2", due.get(0).getEventId());
+    }
+
+    private ExtractionPostStage postStage(long documentId, String runId, String code, String key) {
+        ExtractionPostStage stage = new ExtractionPostStage();
+        stage.setStageCode(code);
+        stage.setDocumentId(documentId);
+        stage.setKnowledgeBaseId(documentId);
+        stage.setRunId(runId);
+        stage.setStatus("PENDING");
+        stage.setMaxAttempts(2);
+        stage.setIdempotencyKey(key);
+        stage.setPayloadJson("{}");
+        return stage;
     }
 
     @Test

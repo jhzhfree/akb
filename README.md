@@ -24,6 +24,7 @@ GitHub 仓库：`https://github.com/jhzhfree/akb`
 - Weighted RRF + Reranker + Context Assembly
 - Query Trace / Citation / Provider observability
 - Transactional Outbox + Index Worker + Retry/Dead Letter/Replay
+- Durable extraction post-processing stages with bounded retry and manual replay
 - 索引蓝绿发布、MySQL 权威快照、Checksum/High-Watermark 校验
 - Prometheus/Grafana SLO
 - 运维 RBAC
@@ -89,11 +90,13 @@ Python AI Service
 MySQL
   = authoritative state
 
-Elasticsearch / Milvus / Neo4j / Local JSON
+Elasticsearch / Milvus / Neo4j / Local JSON (development/recovery fallback)
   = rebuildable retrieval views
 ```
 
 **Knowledge cannot exist without evidence.** 召回状态白名单由 `RETRIEVAL_STATUS_POLICY` 控制：默认 `standard`，仅召回 `APPROVED`、`EFFECTIVE`；`permissive` 可显式启用并额外召回 `DRAFT`、`UNCERTAIN`；`custom` 可通过 `RETRIEVAL_ALLOWED_STATUSES` 指定知识状态。正式问答建议保持 `standard`，预览草稿时应显式配置并控制访问范围。
+
+抽取完成后，图谱索引登记、冲突检测、实体消歧和完成事件发布按 `runId` 持久化到 `t_extraction_post_stage`；阶段按依赖顺序执行，失败会置为 `PARTIAL` 并由后台工作器退避重试。完成事件使用稳定幂等键写入平台事件日志，重试会复用已有事件。可通过 `POST /api/knowledge/documents/{id}/replay-post-processing` 重放当前抽取运行中失败的阶段，无需重新调用抽取模型。旧运行的待处理任务不会覆盖文档当前状态。
 
 ## 开发检查
 

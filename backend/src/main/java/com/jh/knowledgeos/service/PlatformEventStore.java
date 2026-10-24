@@ -44,6 +44,14 @@ public class PlatformEventStore {
         return event;
     }
 
+    @Transactional(propagation = Propagation.SUPPORTS, readOnly = true)
+    public PlatformEvent findByIdempotencyKey(String idempotencyKey) {
+        if (idempotencyKey == null || idempotencyKey.trim().isEmpty()) {
+            return null;
+        }
+        return mapper.getPlatformEventByIdempotencyKey(idempotencyKey);
+    }
+
     /**
      * Replay for reconnecting clients: strictly what happened after the last delivered row.
      */

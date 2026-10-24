@@ -1,8 +1,8 @@
 """Regression cases for source-grounded extraction, negative rules, comparison scope and evidence presentation."""
 import pytest
 from app.core.query_policy import QueryPolicy
-from app.services.extractor import KnowledgeExtractor
 from app.services.conflict_detector import ConflictDetector
+from app.services.extractor import KnowledgeExtractor
 from app.services.query_engine import QueryEngine
 
 

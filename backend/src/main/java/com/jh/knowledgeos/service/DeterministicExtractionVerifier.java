@@ -11,6 +11,7 @@ import java.util.regex.Pattern;
  * A derivation label is a claim from the extractor, not proof by itself.
  */
 public class DeterministicExtractionVerifier {
+    public static final String VERSION = "DV1";
     private static final Pattern CLAUSE_FIELD = Pattern.compile("^\\s*([^:：]{1,28})\\s*[:：]\\s*(.+?)\\s*$");
 
     public boolean verifyCard(Map<String, Object> candidate, List<Map<String, Object>> evidencePool) {
@@ -44,6 +45,44 @@ public class DeterministicExtractionVerifier {
             if (containsClauseRow(evidence.get("content"), subject, predicate, object)) { return true; }
         }
         return false;
+    }
+
+    /** Compact, persisted explanation for the server-side approval decision. */
+    public Map<String, Object> auditCard(Map<String, Object> candidate, List<Map<String, Object>> evidencePool) {
+        return audit("CARD", candidate, evidencePool, verifyCard(candidate, evidencePool));
+    }
+
+    /** Compact, persisted explanation for the server-side approval decision. */
+    public Map<String, Object> auditClaim(Map<String, Object> candidate, List<Map<String, Object>> evidencePool) {
+        return audit("CLAIM", candidate, evidencePool, verifyClaim(candidate, evidencePool));
+    }
+
+    private Map<String, Object> audit(String type, Map<String, Object> candidate, List<Map<String, Object>> evidencePool,
+        boolean verified) {
+        Map<String, Object> result = new java.util.LinkedHashMap<String, Object>();
+        result.put("verifierVersion", VERSION);
+        result.put("verified", verified);
+        boolean marked = markedDeterministic(candidate);
+        result.put("reasonCodes", Collections.singletonList(!marked ? "MARKER_ABSENT" : verified ? "DIRECT_EVIDENCE_MATCH"
+            : "EVIDENCE_OR_CONTENT_MISMATCH"));
+        List<Map<String, Object>> anchors = new java.util.ArrayList<Map<String, Object>>();
+        if (verified && candidate != null && candidate.get("evidence_ids") instanceof List && evidencePool != null) {
+            for (Object id : (List<?>) candidate.get("evidence_ids")) {
+                for (Map<String, Object> evidence : evidencePool) {
+                    if (id != null && String.valueOf(id).equals(String.valueOf(evidence.get("evidence_code")))) {
+                        Map<String, Object> anchor = new java.util.LinkedHashMap<String, Object>();
+                        anchor.put("objectType", type);
+                        anchor.put("evidenceCode", id);
+                        anchor.put("unitId", evidence.get("unit_id"));
+                        anchor.put("headingPath", evidence.get("heading_path"));
+                        anchors.add(anchor);
+                        break;
+                    }
+                }
+            }
+        }
+        result.put("evidenceAnchors", anchors);
+        return result;
     }
 
     /** Mirror the extractor's narrow key/value row parser instead of matching unrelated text. */

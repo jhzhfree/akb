@@ -1,6 +1,7 @@
 """Ranking quality and presentation score helpers."""
 from datetime import datetime
 
+
 def _clamp01(value, default):
     """Coerce a numeric signal into [0,1] and fall back when the index lacks the field."""
     try:

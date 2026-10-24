@@ -13,7 +13,7 @@ checks = {
     "card entity": "t_card_entity"
     in (r / "backend/src/main/resources/db/migration/V16__authoritative_graph_generation.sql").read_text(),
     "authoritative mapper": "listAuthoritativeGraphSnapshot"
-    in (r / "backend/src/main/resources/mapper/KnowledgeMapper.xml").read_text(),
+    in (r / "backend/src/main/resources/mapper/GraphMapper.xml").read_text(),
     "graph service": (
         r / "backend/src/main/java/com/jh/knowledgeos/service/AuthoritativeGraphGenerationService.java"
     ).exists(),

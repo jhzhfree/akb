@@ -6,7 +6,7 @@ AKB 可作为 Octop 的企业知识来源，通过 AKB MCP Server 让 Agent 使�
 
 | 参数 | 值 |
 | --- | --- |
-| Transport | MCP Streamable HTTP, stateless JSON response mode |
+| Transport | MCP JSON-RPC over stateless Streamable HTTP (POST JSON; no session or SSE stream) |
 | MCP URL | `https://<AKB 域名>/api/mcp` |
 | Header | `X-API-Key: <AKB API Key>` |
 | 建议权限 | 按需 `SEARCH`、`QUERY`；需要列出知识库时增加 `LIST`，读取卡片/证据时增加 `READ_OBJECT` |
@@ -44,4 +44,4 @@ AKB 可作为 Octop 的企业知识来源，通过 AKB MCP Server 让 Agent 使�
 
 AKB 的版本化 REST 接口也提供 `POST /api/v1/external/search` 与 `POST /api/v1/external/query`。需要客户端直接管理检索流程时，可使用 REST；Octop Agent 运行时集成优先使用 MCP，以复用 Octop 已有的凭据加密、连接探测和 Agent 工具选择能力。
 
-当前 MCP 端点使用 JSON 响应，不建立会话、不推送 SSE 事件；HTTP GET 按 Streamable HTTP 约定返回 405。带 JSON-RPC `id` 的请求返回 JSON-RPC 响应；不带 `id` 的 `notifications/*` 通知返回 HTTP 202 和空响应体。协议初始化协商版本 `2025-06-18`。服务端工具与资源列表不提供订阅或变更通知。
+当前 MCP 端点接受 `Content-Type: application/json` 的 POST，并返回 JSON-RPC JSON 响应；不建立会话、不推送 SSE 事件，HTTP GET 返回 405。带 JSON-RPC `id` 的请求返回 JSON-RPC 响应；不带 `id` 的 `notifications/*` 通知返回 HTTP 202 和空响应体。协议初始化协商版本 `2025-06-18`。服务端工具与资源列表不提供订阅或变更通知。后端契约测试覆盖初始化、通知、缺失 ID、未知方法、工具 scope 过滤及 RPC 失败审计；Octop 部署联调仍需在目标 Octop 环境按上方步骤执行。

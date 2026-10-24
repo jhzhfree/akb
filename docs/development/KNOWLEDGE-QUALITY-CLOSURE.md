@@ -29,7 +29,7 @@
 
 `cards/claims` 代表本次新建对象，不代表模型候选数；复用不重复计入新增。`extractionStats` 保存候选、复用和拒绝等诊断，`extraction_summary_json` 保存摘要。衍生扫描数只代表实际取到的合格输入，不代表全库总行数；必须结合 inputUnit 和扫描上限理解。图诊断为图上下文诊断，不能当作某条规则精确匹配失败数量。
 
-`postProcessingStages` 分别记录 `GRAPH_INDEX`、`CONFLICT_DETECTION`、`ENTITY_RESOLUTION`、`ANNOUNCE` 的状态；失败项带有限长、敏感字段脱敏后的 `lastError`。`GRAPH_INDEX=OUTBOX_ENQUEUED` 只表示图索引事件已可靠登记，最终投递状态仍以 Outbox 为准。当前该字段用于定位失败阶段；独立的按阶段补偿执行器仍需在后续 S3 工作中实现。
+`postProcessingStages` 分别记录 `GRAPH_INDEX`、`CONFLICT_DETECTION`、`ENTITY_RESOLUTION`、`EVENT_PUBLISHED` 的状态；失败项带有限长、敏感字段脱敏后的 `lastError`。阶段按注册顺序执行，前置阶段未完成时后续阶段不会启动。`GRAPH_INDEX=OUTBOX_ENQUEUED` 只表示图索引事件已可靠登记，最终投递状态仍以 Outbox 为准。完成事件会先按阶段幂等键写入平台事件日志，再广播；重试时复用原事件。`ExtractionPostStageWorker` 会退避重试失败阶段；`POST /api/knowledge/documents/{id}/replay-post-processing` 可人工重放 RETRY/DEAD 阶段，不会重新调用抽取模型。
 
 模型槽只包住抽取请求，不覆盖解析、数据库写入和索引。配置 `knowledge.extraction.concurrency` 默认 1、`knowledge.extraction.queue-timeout-seconds` 默认 300。信号量作用于单个后端实例，多副本部署仍需共享队列或模型网关统一限流。`RERANKER_AUTO_TOP_N` 默认 50，配置范围限制为 1–200，显式正数 topN 优先。
 

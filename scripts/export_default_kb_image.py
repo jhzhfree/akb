@@ -75,10 +75,11 @@ def main():
     low, high = min(kbs), max(kbs)
     os.makedirs(OUT, exist_ok=True)
     sql_path = os.path.join(OUT, "knowledge_data.sql")
-    open(sql_path, "w", encoding="utf-8").write(
-        "-- Default knowledge data: five scenario knowledge bases built from\n"
-        "-- dataset/enterprise_kb_validation_5sets (synthetic, non-production).\n"
-        "-- Loaded by load.sh; indexes are rebuilt after loading, not copied.\n")
+    with open(sql_path, "w", encoding="utf-8") as sql_file:
+        sql_file.write(
+            "-- Default knowledge data: five scenario knowledge bases built from\n"
+            "-- dataset/enterprise_kb_validation_5sets (synthetic, non-production).\n"
+            "-- Loaded by load.sh; indexes are rebuilt after loading, not copied.\n")
     # The workspace table is keyed by id, every derived table by knowledge_base_id.
     dump("t_knowledge_base", "id between %d and %d" % (low, high), sql_path)
     for table in KB_TABLES:

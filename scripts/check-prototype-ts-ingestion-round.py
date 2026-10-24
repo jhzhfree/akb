@@ -2,7 +2,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 assert (ROOT / "backend/src/main/resources/db/migration/V8__knowledge_base_and_ingestion_observability.sql").exists()
-controller = (ROOT / "backend/src/main/java/com/jh/knowledgeos/controller/KnowledgeController.java").read_text()
+controller = (ROOT / "backend/src/main/java/com/jh/knowledgeos/controller/KnowledgeIngestionController.java").read_text()
 for token in ["/bases", "/ingestion/{kb}/runs", "/ingestion/runs/{runId}"]:
     assert token in controller, token
 ingestion = (ROOT / "backend/src/main/java/com/jh/knowledgeos/service/DocumentIngestionService.java").read_text()

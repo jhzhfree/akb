@@ -15,7 +15,7 @@ checks = {
     "change closure": "updateAclChangePropagation"
     in (root / "backend/src/main/java/com/jh/knowledgeos/service/AclRebuildOrchestrator.java").read_text(),
     "controller": "/acl/rebuild/{jobCode}/activate"
-    in (root / "backend/src/main/java/com/jh/knowledgeos/controller/KnowledgeController.java").read_text(),
+    in (root / "backend/src/main/java/com/jh/knowledgeos/controller/KnowledgeIndexOperationsController.java").read_text(),
 }
 failed = [k for k, v in checks.items() if not v]
 if failed:

@@ -238,6 +238,12 @@ public class KnowledgeIngestionController {
         return ApiResponse.ok(ingestionService.reextract(id));
     }
 
+    @PostMapping("/documents/{id}/replay-post-processing")
+    @Operation(summary = "只重放抽取失败的后处理阶段，不重新调用抽取模型")
+    public ApiResponse<Object> replayPostProcessing(@PathVariable Long id) {
+        return ApiResponse.ok(ingestionService.replayExtractionPostProcessing(id));
+    }
+
 
     @PostMapping("/documents/batch/{batchCode}/cancel")
     @Operation(summary = "取消批次：排队中的文件不再启动，已在解析的文件跑完后即停")

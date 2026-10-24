@@ -31,7 +31,7 @@ require(
 require("ai-service/app/routes.py", ["/ai/okf/inspect", "asyncio.to_thread(okf_inspector.inspect"])
 require("backend/src/main/java/com/jh/knowledgeos/service/AiClient.java", ["inspectOkf", "INSPECT_OKF"])
 require(
-    "backend/src/main/java/com/jh/knowledgeos/controller/KnowledgeController.java",
+    "backend/src/main/java/com/jh/knowledgeos/controller/KnowledgeIngestionController.java",
     [
         '"/okf/inspect"',
         "aiClient.inspectOkf(file)",

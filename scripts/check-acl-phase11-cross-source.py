@@ -9,11 +9,11 @@ checks = {
     "relation contribution persistence": "insertRelationAclScope"
     in (R / "backend/src/main/java/com/jh/knowledgeos/service/KnowledgeExtractionService.java").read_text(),
     "non broadening sentinel": "__evidence_scoped__"
-    in (R / "backend/src/main/resources/mapper/KnowledgeMapper.xml").read_text(),
+    in (R / "backend/src/main/resources/mapper/GraphMapper.xml").read_text(),
     "entity merge policy": "recomputeEntityAclMergePolicy"
-    in (R / "backend/src/main/resources/mapper/KnowledgeMapper.xml").read_text(),
+    in (R / "backend/src/main/resources/mapper/GraphMapper.xml").read_text(),
     "relation merge policy": "recomputeRelationAclMergePolicy"
-    in (R / "backend/src/main/resources/mapper/KnowledgeMapper.xml").read_text(),
+    in (R / "backend/src/main/resources/mapper/GraphMapper.xml").read_text(),
     "stable scope hash": "aclScopeHash"
     in (R / "backend/src/main/java/com/jh/knowledgeos/service/KnowledgeExtractionService.java").read_text(),
 }

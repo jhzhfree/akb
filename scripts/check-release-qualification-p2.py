@@ -22,6 +22,6 @@ for script in [
 ]:
     assert (ROOT / "scripts" / script).exists(), "missing " + script
 bench = (ROOT / "scripts/release-qualification-benchmark.py").read_text()
-assert "for start in range(0,args.documents,args.batch)" in bench
+assert "for start in range(0, args.documents, args.batch)" in bench
 assert "p99Ms" in bench
 print("Release Qualification P2 contract passed")

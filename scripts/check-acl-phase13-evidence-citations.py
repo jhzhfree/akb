@@ -5,7 +5,7 @@ checks = {
     "V20 migration": "t_index_graph_evidence_manifest"
     in (root / "backend/src/main/resources/db/migration/V20__immutable_evidence_graph_binding.sql").read_text(),
     "authoritative binding mapper": "listAuthoritativeGraphEvidenceBindings"
-    in (root / "backend/src/main/resources/mapper/KnowledgeMapper.xml").read_text(),
+    in (root / "backend/src/main/resources/mapper/GraphMapper.xml").read_text(),
     "java manifest": "insertGraphEvidenceManifest"
     in (root / "backend/src/main/java/com/jh/knowledgeos/service/AuthoritativeGraphGenerationService.java").read_text(),
     "EvidenceGen": "EvidenceGen" in (root / "ai-service/app/services/graph_provider.py").read_text(),

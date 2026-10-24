@@ -14,7 +14,6 @@
 理由，不是用例失败的理由。
 """
 import argparse
-import json
 import mimetypes
 import pathlib
 import subprocess
@@ -22,7 +21,6 @@ import sys
 import time
 
 import requests
-
 
 BASE = "http://127.0.0.1:8080/api"
 DOC = pathlib.Path("dataset/enterprise_kb_validation_5sets/01_综合知识库/01_企业知识管理办法_V1.0.docx")
@@ -41,7 +39,7 @@ def rows(query: str) -> list:
     if len(out) < 2:
         return []
     header = out[0].split("\t")
-    return [dict(zip(header, line.split("\t"))) for line in out[1:]]
+    return [dict(zip(header, line.split("\t"), strict=True)) for line in out[1:]]
 
 
 def main() -> int:

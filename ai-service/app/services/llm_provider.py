@@ -4,11 +4,11 @@ import json
 import logging
 import re
 import time
+from collections.abc import AsyncIterator
 from functools import lru_cache
 from typing import Any
 
 import httpx
-from typing import AsyncIterator
 
 from app.core.runtime_settings import LlmSettings, load_model_settings
 
@@ -103,25 +103,24 @@ class OllamaProvider(LlmProvider):
         options: dict[str, Any] = {"temperature": self._config.temperature}
         if max_tokens:
             options["num_predict"] = int(max_tokens)
-        async with httpx.AsyncClient(timeout=self._config.timeout) as client:
-            async with client.stream(
-                "POST",
-                self._config.base_url.rstrip("/") + "/api/generate",
-                json={"model": self._config.model, "prompt": prompt, "stream": True, "options": options},
-            ) as response:
-                response.raise_for_status()
-                async for line in response.aiter_lines():
-                    if not line.strip():
-                        continue
-                    try:
-                        payload = json.loads(line)
-                    except ValueError:
-                        continue
-                    piece = payload.get("response") or ""
-                    if piece:
-                        yield piece
-                    if payload.get("done"):
-                        break
+        async with httpx.AsyncClient(timeout=self._config.timeout) as client, client.stream(
+            "POST",
+            self._config.base_url.rstrip("/") + "/api/generate",
+            json={"model": self._config.model, "prompt": prompt, "stream": True, "options": options},
+        ) as response:
+            response.raise_for_status()
+            async for line in response.aiter_lines():
+                if not line.strip():
+                    continue
+                try:
+                    payload = json.loads(line)
+                except ValueError:
+                    continue
+                piece = payload.get("response") or ""
+                if piece:
+                    yield piece
+                if payload.get("done"):
+                    break
 
 
 class OpenAICompatibleProvider(LlmProvider):
@@ -184,38 +183,37 @@ class OpenAICompatibleProvider(LlmProvider):
         the answer gates judge text the reader never sees.
         """
         budget = int(max_tokens or min(self._config.max_tokens, _MAX_OUTPUT_TOKENS))
-        async with httpx.AsyncClient(timeout=self._config.timeout, headers=self._headers) as client:
-            async with client.stream(
-                "POST",
-                self._url,
-                json={
-                    "model": self._config.model,
-                    "messages": [{"role": "user", "content": prompt}],
-                    "temperature": self._config.temperature,
-                    "max_tokens": min(budget, _MAX_OUTPUT_TOKENS),
-                    "stream": True,
-                },
-            ) as response:
-                response.raise_for_status()
-                async for line in response.aiter_lines():
-                    if not line.startswith("data:"):
-                        continue
-                    data = line[5:].strip()
-                    if not data or data == "[DONE]":
-                        if data == "[DONE]":
-                            break
-                        continue
-                    try:
-                        chunk = json.loads(data)
-                    except ValueError:
-                        continue
-                    choices = chunk.get("choices") or []
-                    if not choices:
-                        continue
-                    delta = choices[0].get("delta") or {}
-                    piece = delta.get("content") or ""
-                    if piece:
-                        yield piece
+        async with httpx.AsyncClient(timeout=self._config.timeout, headers=self._headers) as client, client.stream(
+            "POST",
+            self._url,
+            json={
+                "model": self._config.model,
+                "messages": [{"role": "user", "content": prompt}],
+                "temperature": self._config.temperature,
+                "max_tokens": min(budget, _MAX_OUTPUT_TOKENS),
+                "stream": True,
+            },
+        ) as response:
+            response.raise_for_status()
+            async for line in response.aiter_lines():
+                if not line.startswith("data:"):
+                    continue
+                data = line[5:].strip()
+                if not data or data == "[DONE]":
+                    if data == "[DONE]":
+                        break
+                    continue
+                try:
+                    chunk = json.loads(data)
+                except ValueError:
+                    continue
+                choices = chunk.get("choices") or []
+                if not choices:
+                    continue
+                delta = choices[0].get("delta") or {}
+                piece = delta.get("content") or ""
+                if piece:
+                    yield piece
 
 
 def _completion_url(base_url: str) -> str:

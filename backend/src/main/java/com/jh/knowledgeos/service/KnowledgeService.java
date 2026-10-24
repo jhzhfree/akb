@@ -9,13 +9,13 @@ import java.util.Map;
 /** Thin compatibility facade delegating knowledge operations to focused application services. */
 @Service
 public class KnowledgeService {
-    private final IngestionOrchestrator ingestionService;
-    private final KnowledgeGenerationOrchestrator extractionService;
+    private final DocumentIngestionService ingestionService;
+    private final KnowledgeExtractionService extractionService;
     private final KnowledgeQueryService queryService;
     private final KnowledgeGovernanceService governanceService;
     private final KnowledgeReadService readService;
     private final SourcePreviewService previewService;
-    public KnowledgeService(IngestionOrchestrator ingestionService, KnowledgeGenerationOrchestrator extractionService, KnowledgeQueryService
+    public KnowledgeService(DocumentIngestionService ingestionService, KnowledgeExtractionService extractionService, KnowledgeQueryService
         queryService, KnowledgeGovernanceService governanceService, KnowledgeReadService readService, SourcePreviewService previewService) {
         this.ingestionService = ingestionService;
         this.extractionService = extractionService;

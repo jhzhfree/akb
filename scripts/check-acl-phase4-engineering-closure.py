@@ -5,7 +5,7 @@ from pathlib import Path
 
 R = Path(__file__).resolve().parents[1]
 worker = (R / "backend/src/main/java/com/jh/knowledgeos/service/IndexOutboxWorker.java").read_text()
-mapper = (R / "backend/src/main/resources/mapper/KnowledgeMapper.xml").read_text()
+mapper = (R / "backend/src/main/resources/mapper/AclPersistenceMapper.xml").read_text()
 audit = (R / "backend/src/main/java/com/jh/knowledgeos/service/AclAuditService.java").read_text()
 ui = (R / "frontend/src/components/AclAdministrationPanel.vue").read_text()
 migration = (R / "backend/src/main/resources/db/migration/V13__acl_propagation_state.sql").read_text()
