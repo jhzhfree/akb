@@ -67,8 +67,18 @@ public class McpController {
             Map<String, Object> response = mcpServerService.handle(body == null ? new java.util.LinkedHashMap<String, Object>() : body, key);
             // 协议层错误（鉴权、限流）由全局异常处理，这里只审计进入协议之后的结果。
             Object responseData = auditService.mcpResponseData(response);
-            auditService.record(key, ApiCallAudit.CHANNEL_MCP, auditedMethod, knowledgeBaseId, 200, System.currentTimeMillis() - start, null, params,
-                isMemoryTool(auditedMethod) ? memoryAuditResponse(auditedMethod, responseData) : responseData);
+            // JSON-RPC 的失败装在 200 响应体的 error 对象里：传输确实成功，业务是失败的。一律
+            // 记 200 的话，这些失败会混进"成功工具调用"的统计，看数字的人分不出来。所以传输
+            // 状态保持 200（真实情况，也不破坏协议），另把 RPC 成败单独标出来，两者独立。
+            Map<String, Object> rpcError = rpcError(response);
+            Object auditedResponse = isMemoryTool(auditedMethod)
+                ? memoryAuditResponse(auditedMethod, responseData) : responseData;
+            if (rpcError != null) {
+                auditedResponse = rpcFailureBody(auditedResponse, rpcError);
+            }
+            String rpcMessage = rpcError == null ? null : String.valueOf(rpcError.get("message"));
+            auditService.record(key, ApiCallAudit.CHANNEL_MCP, auditedMethod, knowledgeBaseId, 200, System.currentTimeMillis() - start, rpcMessage, params,
+                auditedResponse);
             // 通知类消息（无 id）协议上不返回结果，这里回空对象保持 HTTP 200。
             return response == null ? new LinkedHashMap<String, Object>() : response;
         } catch (UnauthorizedException e) {
@@ -102,6 +112,31 @@ public class McpController {
             }
         }
         return "unknown";
+    }
+
+    /**
+     * The JSON-RPC error carried by an otherwise successful HTTP response, or null when the call
+     * really did succeed. Method-not-found, invalid params and tool-level denials all arrive this
+     * way — the envelope says 200, the business result says otherwise.
+     */
+    private Map<String, Object> rpcError(Map<String, Object> response) {
+        Object error = response == null ? null : response.get("error");
+        return error instanceof Map ? (Map<String, Object>) error : null;
+    }
+
+    /**
+     * Marks the audit row as a failed RPC without touching the transport status: the HTTP call
+     * genuinely returned 200, the failure lives inside the envelope. Recording these as plain 200
+     * rows with no error message folds them into "successful tool calls" where nobody can tell
+     * them apart from the real ones.
+     */
+    private Map<String, Object> rpcFailureBody(Object responseData, Map<String, Object> error) {
+        Map<String, Object> payload = new LinkedHashMap<String, Object>();
+        payload.put("rpcSuccess", Boolean.FALSE);
+        payload.put("rpcErrorCode", error.get("code"));
+        payload.put("rpcErrorMessage", error.get("message"));
+        payload.put("response", responseData);
+        return payload;
     }
 
     /**

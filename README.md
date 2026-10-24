@@ -1,6 +1,6 @@
 # AI 原生企业知识库平台 1.1.0
 
-GitHub 仓库：`https://github.com/jhzhfree/llmkb`
+GitHub 仓库：`https://github.com/jhzhfree/akb`
 
 企业知识全生命周期平台：以 MySQL 保存权威知识状态，以 Elasticsearch、Milvus、Neo4j 提供可重建检索视图，并通过 Transactional Outbox 保证索引最终一致。
 
