@@ -71,7 +71,7 @@ class KnowledgeExtractionQualityTest {
         service = new KnowledgeExtractionService(mapper, ai, new ObjectMapper(), ids, tx, outbox,
             mock(EntityResolutionService.class), mock(PlatformEventPublisher.class), mock(EvidenceMapper.class),
             mock(GovernanceMapper.class), mock(GraphMapper.class), mock(IndexMapper.class), cards, scenarios, documents, gate,
-            postStages);
+            postStages, new com.jh.knowledgeos.config.KnowledgeProperties());
     }
 
     static Map<String, Object> row(Object... entries) {

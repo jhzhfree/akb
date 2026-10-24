@@ -28,6 +28,8 @@ public class KnowledgeProperties {
 
     private External external = new External();
 
+    private Extraction extraction = new Extraction();
+
     private boolean startupFailFast = false;
 
     private boolean opsRbacEnabled = false;
@@ -128,6 +130,14 @@ public class KnowledgeProperties {
         return external;
     }
 
+    public Extraction extraction() {
+        return extraction;
+    }
+
+    public void setExtraction(Extraction extraction) {
+        this.extraction = extraction == null ? new Extraction() : extraction;
+    }
+
     public void setExternal(External external) {
         this.external = external == null ? new External() : external;
     }
@@ -139,6 +149,33 @@ public class KnowledgeProperties {
      * {@code allowAnonymous=true} lets unauthenticated callers keep working in read-only
      * fashion while the console still requires a real login.</p>
      */
+    /**
+     * 抽取产出的默认处置策略。
+     *
+     * <p>宽松（lenient，默认）：卡片与断言抽出来就直接置为 APPROVED。知识进不来，后面的
+     * 检索、问答、衍生全是空的——这个代价远大于"多审一遍"，何况状态随时可以改回去，
+     * 抽不进来却什么都没有。</p>
+     *
+     * <p>收紧（strict）：只有确定性来源（DETERMINISTIC 规则抽取）才自动批准，其余留给人工
+     * 裁决。这条路径的代码始终保留，切回只需改配置，不必重新实现。</p>
+     */
+    public static class Extraction {
+        private String approvalMode = "lenient";
+
+        public String getApprovalMode() {
+            return approvalMode;
+        }
+
+        public void setApprovalMode(String approvalMode) {
+            this.approvalMode = approvalMode;
+        }
+
+        /** 非确定性来源是否直接批准。 */
+        public boolean autoApprove() {
+            return !"strict".equalsIgnoreCase(approvalMode);
+        }
+    }
+
     public static class Auth {
 
         private boolean enabled = true;

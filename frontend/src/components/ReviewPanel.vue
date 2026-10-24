@@ -155,6 +155,9 @@
             <div class="judge-actions">
               <el-button size="small" type="success" :disabled="!selectedReviewCode" @click="submitReview('APPROVED')">批准生效</el-button>
               <el-button size="small" type="danger" :disabled="!selectedReviewCode" @click="submitReview('REJECTED')">驳回</el-button>
+              <!-- 自动批准的对象也要能退回来：宽松模式下知识是先进库再看的，发现不对就得有
+                   办法退回人工确认，否则界面上只有批准和驳回，改不回待审。 -->
+              <el-button size="small" type="warning" plain :disabled="!selectedReviewCode" @click="submitReview('UNCERTAIN')">退回待审</el-button>
               <el-button size="small" type="warning" :disabled="!selectedReviewCode" @click="submitReview('PENDING_REVIEW')">要求补充证据</el-button>
             </div>
           </template>

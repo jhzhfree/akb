@@ -2,6 +2,7 @@ package com.jh.knowledgeos.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.jh.knowledgeos.common.KnowledgeStatus;
+import com.jh.knowledgeos.config.KnowledgeProperties;
 import com.jh.knowledgeos.common.PlatformEventTypes;
 import com.jh.knowledgeos.domain.Claim;
 import com.jh.knowledgeos.domain.KnowledgeCard;
@@ -85,13 +86,15 @@ public class KnowledgeExtractionService {
 
     private final ExtractionPostStageMapper postStageMapper;
 
+    private final KnowledgeProperties properties;
+
     private final DeterministicExtractionVerifier deterministicVerifier = new DeterministicExtractionVerifier();
 
     public KnowledgeExtractionService(KnowledgeMapper mapper, AiClient aiClient, ObjectMapper objectMapper, IdGenerator idGenerator, TransactionRunner
         transactionRunner, IndexOutboxService outboxService, EntityResolutionService entityResolutionService, PlatformEventPublisher publisher,
         EvidenceMapper evidenceMapper, GovernanceMapper governanceMapper, GraphMapper graphMapper, IndexMapper indexMapper, CardClaimMapper cardClaimMapper,
         KbScenarioService scenarios, DocumentMapper documentMapper, ExtractionModelGate modelGate,
-        ExtractionPostStageMapper postStageMapper) {
+        ExtractionPostStageMapper postStageMapper, KnowledgeProperties properties) {
         this.cardClaimMapper = cardClaimMapper;
         this.evidenceMapper = evidenceMapper;
         this.governanceMapper = governanceMapper;
@@ -109,6 +112,7 @@ public class KnowledgeExtractionService {
         this.documentMapper = documentMapper;
         this.modelGate = modelGate;
         this.postStageMapper = postStageMapper;
+        this.properties = properties;
     }
 
     /** Graph step skipped because the library's scenario builds no graph. */
@@ -486,7 +490,7 @@ public class KnowledgeExtractionService {
                 card.setStatus(KnowledgeStatus.UNCERTAIN.name());
                 stats.lowInformation++;
             } else {
-                card.setStatus(deterministic ? KnowledgeStatus.APPROVED.name() : KnowledgeStatus.DRAFT.name());
+                card.setStatus(cardStatus(deterministic));
             }
             cardClaimMapper.insertCard(card);
             stats.created++;
@@ -583,7 +587,7 @@ public class KnowledgeExtractionService {
                 stats.evidenceLinked += linkEvidence("CLAIM", existingCode, evidence, knowledgeBaseId);
                 continue;
             }
-            claim.setStatus(deterministic ? KnowledgeStatus.APPROVED.name() : KnowledgeStatus.UNCERTAIN.name());
+            claim.setStatus(claimStatus(deterministic));
             cardClaimMapper.insertClaim(claim);
             stats.created++;
             recordDuplicates(knowledgeBaseId, "CLAIM", claim.getClaimCode(), fingerprint, permissionTags, stats);
@@ -1149,6 +1153,25 @@ public class KnowledgeExtractionService {
         stage.setIdempotencyKey("EXTRACT_POST:" + runId + ":" + code);
         stage.setPayloadJson(jsonOrDefault(payload, "{}"));
         postStageMapper.insertStage(stage);
+    }
+
+    /**
+     * 抽取产出的卡片初始状态。宽松模式（默认）直接批准；收紧模式下只有确定性来源才批准，
+     * 其余留 DRAFT 等人工确认——收紧这条路径一直保留，靠配置切换，不靠删代码。
+     */
+    private String cardStatus(boolean deterministic) {
+        if (deterministic || properties == null || properties.extraction().autoApprove()) {
+            return KnowledgeStatus.APPROVED.name();
+        }
+        return KnowledgeStatus.DRAFT.name();
+    }
+
+    /** 同 {@link #cardStatus(boolean)}，断言在收紧模式下留 UNCERTAIN 待裁决。 */
+    private String claimStatus(boolean deterministic) {
+        if (deterministic || properties == null || properties.extraction().autoApprove()) {
+            return KnowledgeStatus.APPROVED.name();
+        }
+        return KnowledgeStatus.UNCERTAIN.name();
     }
 
     private Object runPostStage(Long documentId, String runId, String code) {

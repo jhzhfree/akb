@@ -326,7 +326,9 @@ public final class DerivationRuleCatalog {
         presets.add(preset("CLAIM_SENTENCE", "断言成句", KnowledgeDerivationService.TYPE_TEMPLATE,
             "把已通过审核的断言整理成一句可直接引用的话，供检索与问答复用。",
             "断言（主体 / 谓词 / 客体）→ 一句完整陈述",
-            claimDefinition(0.7, 100, "{subject} 的 {predicate} 为 {object}")));
+            // 门槛落在 0.6：抽取实际给出的置信度普遍就在 0.6，设成 0.7 的话这条预设永远
+            // 拿不到输入，界面上看到的就是"规则在、扫描恒为 0"。
+            claimDefinition(0.6, 100, "{subject} 的 {predicate} 为 {object}")));
         presets.add(preset("AI_CONCLUSION", "模型归纳结论", KnowledgeDerivationService.TYPE_AI,
             "让模型从已有断言中归纳没人直接写下的结论；无论是否配置模型，产出都是待审候选，批准后才成为知识。",
             "多条断言 → 模型归纳的新结论（需人工批准）",
