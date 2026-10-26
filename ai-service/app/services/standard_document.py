@@ -978,7 +978,8 @@ def _units_fixed(blocks: list[dict[str, Any]], policy: dict[str, Any]) -> list[d
             )
         if end >= len(text):
             break
-        start = max(end - gap, start + 1)
+        # 回退 overlap 之后要向前对齐到边界，否则下一块从半句话开始。
+        start = _align_forward(text, max(end - gap, start + 1), end)
     return units
 
 
@@ -1108,6 +1109,25 @@ def _units_parent_child(blocks: list[dict[str, Any]], policy: dict[str, Any]) ->
     return units
 
 
+_BOUNDARY = re.compile(r"[。！？!？；;\n]")
+
+
+def _align_forward(text: str, position: int, limit: int) -> int:
+    """Move an overlap start forward to the first boundary so it never opens mid-sentence.
+
+    The tail of a cut is snapped to a boundary, but the next window then steps back by
+    the overlap and lands in the middle of a sentence. Card titles and claim subjects
+    are read off the head of a chunk, so every chunk but the first opened with a
+    fragment — 「期内）」「0 分（不合格）员工」「和市场响应速度」.
+    """
+    if position <= 0:
+        return 0
+    match = _BOUNDARY.search(text, position)
+    if match and match.end() <= limit:
+        return match.end()
+    return min(position, limit)
+
+
 def _hard_split(content: str, window: int, policy: dict[str, Any]) -> list[str]:
     """Split an oversized piece at sentence boundaries when the policy asks for it."""
     pieces: list[str] = []
@@ -1120,7 +1140,8 @@ def _hard_split(content: str, window: int, policy: dict[str, Any]) -> list[str]:
             pieces.append(piece)
         if end >= len(content):
             break
-        start = max(end - gap, start + 1)
+        # 回退 overlap 之后要向前对齐到边界，否则下一块从半句话开始。
+        start = _align_forward(content, max(end - gap, start + 1), end)
     return pieces
 
 
