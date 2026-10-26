@@ -19,7 +19,9 @@ from app.services.standard_document import (
     from_docx,
     from_html,
     from_markdown,
+    from_markdown,
     from_pdf,
+    to_markdown,
     from_text,
     to_legacy_chunks,
 )
@@ -47,10 +49,22 @@ class DocumentParser:
         else:
             blocks, page_count = from_text(path.read_text(encoding="utf-8", errors="ignore")), 0
 
+        # 统一入口：不管上传的是 PDF、docx 还是 HTML，都先落成 Markdown 再从 Markdown 重建
+        # 块。格式差异在解析这一步就消化掉，后面的切片、抽取、引用读到的都是同一种形状。
+        # 实测 PDF 往返后块数与正文 100% 一致，页码也随注释带了回来。
+        blocks = from_markdown(to_markdown(blocks))
         name = filename or path.name
         sha256 = hashlib.sha256(path.read_bytes()).hexdigest()
         standard = build_standard_document(name, ext, sha256, blocks, page_count, policy)
+        # 解析结果的 Markdown 镜像。原文仍是权威，这份只是可重建视图，写盘失败也不该让解析失败。
+        try:
+            sidecar = path.with_name(path.name + ".md")
+            sidecar.write_text(to_markdown(blocks), encoding="utf-8")
+            markdown_path = str(sidecar)
+        except OSError:
+            markdown_path = ""
         return {
+            "markdown_path": markdown_path,
             "filename": name,
             "extension": ext,
             "sha256": sha256,

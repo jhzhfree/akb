@@ -25,7 +25,7 @@
 
 文档 READY 表示解析就绪，与知识抽取及索引状态分开。抽取结果为 EXTRACTED、EMPTY、QUALITY_REJECTED、PARTIAL 或 FAILED；零产出不假装已经形成知识。重抽取入口可用于解析已完成但无知识的文档。
 
-`derivation=DETERMINISTIC` 只是候选来源提示，不能单独触发自动批准。服务端必须确认所有证据 ID 属于当前文档，再检查卡片正文、摘要和标题，或断言的主体、谓语和值与同一证据单元吻合。无法通过窄范围校验、包含额外条件/限定或有效期的候选进入待审状态。正式检索默认使用 `standard`（仅 `APPROVED`、`EFFECTIVE`）；只有受控预览才显式配置 `permissive`。
+`derivation=DETERMINISTIC` 只是候选来源提示，不能单独触发自动批准——是否由确定性来源产出，由服务端校验器判定（`verified`），结论记入治理快照（`DETERMINISTIC_VERIFIED` / `DETERMINISTIC_VERIFICATION_FAILED` / `AI_EXTRACTION`）。服务端会确认所有证据 ID 属于当前文档，再检查卡片正文、摘要和标题，或断言的主体、谓语和值与同一证据单元吻合。宽松口径（默认 `knowledge.extraction.approval-mode=lenient`）下，未通过窄范围校验、包含额外条件/限定或有效期的候选也直接置 `APPROVED` 先入库，校验结论与治理痕迹完整保留，状态可随时由人工改回；切到 `strict` 才让这类候选进入 `UNCERTAIN` 待审。正式检索默认使用 `standard`（仅 `APPROVED`、`EFFECTIVE`）；只有受控预览才显式配置 `permissive`。
 
 `cards/claims` 代表本次新建对象，不代表模型候选数；复用不重复计入新增。`extractionStats` 保存候选、复用和拒绝等诊断，`extraction_summary_json` 保存摘要。衍生扫描数只代表实际取到的合格输入，不代表全库总行数；必须结合 inputUnit 和扫描上限理解。图诊断为图上下文诊断，不能当作某条规则精确匹配失败数量。
 

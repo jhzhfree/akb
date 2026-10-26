@@ -231,10 +231,16 @@ public final class KbScenarioTemplates {
         templates.put(POLICY, template(POLICY, "制度条款知识库", "条款与条件问法为主：断言优先、原文必须可引用，图谱参与少，答案默认附引用章节便于核对。",
             "规章制度、管理办法、合同条款、合规要求",
             Arrays.asList("规章制度", "管理办法", "合同条款", "合规要求"),
-            profile(chunk("STRUCTURE", 1100, 150, 120, "CHAR", true, true, true), extract(true, false, true),
+            // 制度以“条”为单位，条文通常一两百字。1100 的块会把好几条塞进一张卡片：检索命中
+            // 整个块、引用定位不到具体条款，标题和断言还会从句子中间被切开——实测制度库里
+            // 卡片标题出现「展AI开发工作」「等工作」，断言出现「和市场响 / 速度」这类残句，
+            // 而同为 900 块的综合库标题是完整的。收到 600 让卡片回到条款级，重叠按比例降到
+            // 80，下限 100 与运维场景对齐。
+            profile(chunk("STRUCTURE", 600, 80, 100, "CHAR", true, true, true), extract(true, false, true),
                 derivation(false, Arrays.asList("CLAIM_SENTENCE", "AI_CONCLUSION")),
+                // 制度问法常常要跨好几条才答得全（“什么情况下可以调休”），召回倍数提到 4。
                 query(Arrays.asList("claim", "card", "bm25"), weights(1.15D, 1.00D, 1.20D, 1.30D, 0.90D),
-                    3, 20, true, 0, 60, true, true, "markdown", 5, 10000))));
+                    4, 20, true, 0, 60, true, true, "markdown", 5, 10000))));
         templates.put(BUSINESS, template(BUSINESS, "公司业务（人员关系）知识库", "关系与归属问法为主：图谱优先、实体消歧必开，短片段足以回答“谁负责什么”。",
             "组织架构、岗位与人员、项目与客户、产品归属",
             Arrays.asList("组织架构", "岗位说明", "项目档案", "客户与产品资料"),

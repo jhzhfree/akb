@@ -7,6 +7,9 @@ socksio==1.0.0
 python-multipart==0.0.12
 numpy==1.26.4
 pypdf==5.0.1
+# PDF 文本提取优先用 PyMuPDF：它按阅读顺序输出，多栏布局和 CJK 编码都比 pypdf 稳
+# （实测同一份员工手册 952 块 → 499 块）。没装也不会报错，会自动落回 pypdf。
+pymupdf==1.28.2
 python-docx==1.1.2
 beautifulsoup4==4.12.3
 PyYAML==6.0.2

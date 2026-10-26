@@ -167,9 +167,20 @@ def render_table_text(header: list[str], rows: list[list[str]]) -> str:
     return "\n".join(lines)
 
 
+_PAGE_COMMENT = re.compile(r"^<!--\s*page\s*=\s*(\d+)\s*-->$")
+
+
 def from_markdown(raw: str) -> list[dict[str, Any]]:
     """Convert markdown to blocks, dropping fences, rules and table alignment."""
     text = _FRONT_MATTER.sub("", raw or "")
+    # 页码是 to_markdown 写成 HTML 注释带进来的，而下面会把注释整个删掉；先按行号记下来，
+    # 删注释只清空内容、不动换行，行号对得上，可以在遍历时回放。没有这一步，Markdown 化
+    # 之后引用就再也说不出「第几页」了。
+    page_marks: dict[int, int] = {}
+    for line_index, source_line in enumerate(text.split("\n")):
+        mark = _PAGE_COMMENT.match(source_line.strip())
+        if mark:
+            page_marks[line_index] = int(mark.group(1))
     text = _HTML_COMMENT.sub("", text)
     lines = text.split("\n")
     blocks: list[dict[str, Any]] = []
@@ -177,6 +188,7 @@ def from_markdown(raw: str) -> list[dict[str, Any]]:
     paragraph: list[str] = []
     seq = 0
     index = 0
+    current_page: int | None = None
 
     def flush_paragraph() -> None:
         nonlocal paragraph, seq
@@ -186,12 +198,14 @@ def from_markdown(raw: str) -> list[dict[str, Any]]:
         paragraph = []
         if has_content(joined):
             seq += 1
-            blocks.append(block("B%d" % seq, seq, BLOCK_PARAGRAPH, joined, heading_path()))
+            blocks.append(block("B%d" % seq, seq, BLOCK_PARAGRAPH, joined, heading_path(), 0, current_page))
 
     def heading_path() -> str:
         return " / ".join(title for _, title in heading_stack)
 
     while index < len(lines):
+        if index in page_marks:
+            current_page = page_marks[index]
         line = lines[index]
         stripped = line.strip()
         fence = _FENCE.match(line)
@@ -410,13 +424,55 @@ def _pdf_page_lines(pages: list[str]) -> tuple[list[list[str]], set]:
     return all_lines, noise
 
 
+_HEADING_LIKE = re.compile(r"^(第[一二三四五六七八九十百千]+[章节条款项]|附件|附录|[0-9０-９]+[.、)）]|[(（][0-9０-９]+[)）]|[一二三四五六七八九十]+[、.])")
+
+
+def _looks_like_heading(line: str) -> bool:
+    """A short labelled line that opens an item instead of continuing a sentence.
+
+    「第五条」「1)」「附件1」这类行自己就是一块；它们不因为短而成段，成段是因为它们
+    带着编号标签，看上去就是新条目的开头。
+    """
+    stripped = line.strip()
+    if not stripped or len(stripped) > 30:
+        return False
+    return bool(_HEADING_LIKE.match(stripped))
+
+
+def _pdf_pages(path: str) -> tuple[list[str], int]:
+    """Extract per-page text, preferring PyMuPDF.
+
+    PyMuPDF returns text in reading order (``sort=True``) and keeps multi-column
+    layouts and CJK encodings intact. pypdf emits the content stream in whatever
+    order the producer happened to write it, which is what left the policy
+    documents cut mid-sentence. pypdf stays as the fallback so a missing optional
+    package cannot take the whole parser down with it.
+    """
+    try:
+        import pymupdf
+    except ImportError:
+        pymupdf = None
+    if pymupdf is not None:
+        try:
+            with pymupdf.open(path) as document:
+                pages = [page.get_text("text", sort=True).strip() for page in document]
+                return pages, document.page_count
+        except Exception:
+            pass  # 取不到就落回 pypdf
+    reader = PdfReader(path)
+    return [(page.extract_text() or "").strip() for page in reader.pages], len(reader.pages)
+
+
 def from_pdf(path: str) -> tuple[list[dict[str, Any]], int]:
     """Convert a PDF to blocks, removing page numbers and running headers/footers."""
-    reader = PdfReader(path)
-    pages = [(page.extract_text() or "").strip() for page in reader.pages]
+    pages, page_count = _pdf_pages(path)
     page_lines, noise = _pdf_page_lines(pages)
     blocks: list[dict[str, Any]] = []
     seq = 0
+    # 上一页末尾没成段的残留。PDF 是分页的，一个句子常常横跨页边界：页尾是前半句、页首是
+    # 后半句。逐页 flush 会把后半句变成新块开头，后面卡片标题和断言主语就是这么被劈成
+    # 「和市场响应速度」「)硬件授权申请流程」的，所以要带到下一页接着拼。
+    carry: list[str] = []
     for page_no, lines in enumerate(page_lines, start=1):
         kept: list[str] = []
         for line in lines:
@@ -424,13 +480,18 @@ def from_pdf(path: str) -> tuple[list[dict[str, Any]], int]:
                 continue
             if _PAGE_MARKER.match(line) and not has_content(line.replace("页", "").replace("page", "")):
                 continue
-            kept.append(line)
+            kept.append(_strip_dot_leaders(line))
         # Soft-wrapped PDF lines are re-joined; a line ending in terminal punctuation
         # or a short heading-like line starts a new paragraph.
-        paragraph: list[str] = []
+        paragraph: list[str] = list(carry)
+        carry = []
         for line in kept:
             paragraph.append(line)
-            ends_paragraph = len(line) < 40 or line.rstrip().endswith(("。", "；", "！", "？", ".", ":", "："))
+            # 中文 PDF 的一行常常只是排版折行，不是一句话的结束。实测制度类 PDF 一页里
+            # 行长小于 40 的比例是 100%，所以「行长 < 40 即成段」等于把每一行都切成一块，
+            # 句子被逐行切碎，后面的切块和断言只能拿到半句话。只有真正以句末标点收尾、或
+            # 像编号标题那样的短行才算一段结束。
+            ends_paragraph = line.rstrip().endswith(("。", "；", "！", "？", ".", ":", "：")) or _looks_like_heading(line)
             if not ends_paragraph:
                 continue
             text = normalize_whitespace(clean_inline(_join_lines(paragraph)))
@@ -439,11 +500,71 @@ def from_pdf(path: str) -> tuple[list[dict[str, Any]], int]:
                 seq += 1
                 blocks.append(block("B%d" % seq, seq, BLOCK_PARAGRAPH, text, "", 0, page_no))
         if paragraph:
+            # 段落还没收尾：非最后一页就留到下一页接着拼，最后一页才落块。
+            if page_no < len(page_lines):
+                carry = paragraph
+                continue
             text = normalize_whitespace(clean_inline(_join_lines(paragraph)))
             if has_content(text):
                 seq += 1
                 blocks.append(block("B%d" % seq, seq, BLOCK_PARAGRAPH, text, "", 0, page_no))
-    return blocks, len(pages)
+    return blocks, page_count
+
+
+_DOT_LEADERS = re.compile(r"[.．·・]{3,}")
+
+
+def _strip_dot_leaders(line: str) -> str:
+    """Remove the dotted leader between a table-of-contents entry and its page number.
+
+    ``第一章总则..........8`` still carries the heading, so the row cannot simply be
+    dropped — only the run of dots goes, leaving ``第一章总则 8``.
+    """
+    return _DOT_LEADERS.sub(" ", line).strip()
+
+
+def to_markdown(blocks: list[dict[str, Any]]) -> str:
+    """Serialize canonical blocks back to Markdown.
+
+    Every format converges on this text so that chunking, extraction and citation
+    all read one shape, whether the upload was a PDF, a docx or an HTML page.
+    Page numbers survive as HTML comments: a citation can still name the page it
+    came from, which plain Markdown would otherwise throw away.
+    """
+    lines: list[str] = []
+    current_page: object = None
+    for item in blocks:
+        page = item.get("page_no")
+        if page and page != current_page:
+            lines.append("<!-- page=%s -->" % page)
+            current_page = page
+        block_type = item.get("block_type") or BLOCK_PARAGRAPH
+        text = (item.get("text") or "").strip()
+        if block_type == BLOCK_HEADING:
+            level = max(1, min(6, int(item.get("level") or 1)))
+            lines.append("%s %s" % ("#" * level, text))
+        elif block_type == BLOCK_TABLE:
+            table = item.get("table") or {}
+            header = list(table.get("header") or [])
+            rows = list(table.get("rows") or [])
+            if header:
+                lines.append("| " + " | ".join(_md_cell(cell) for cell in header) + " |")
+                lines.append("|" + "|".join("---" for _ in header) + "|")
+            for row in rows:
+                lines.append("| " + " | ".join(_md_cell(cell) for cell in row) + " |")
+            if not header and not rows and text:
+                lines.append(text)
+        elif block_type == BLOCK_CODE:
+            lines.extend(["```", text, "```"])
+        elif text:
+            lines.append(text)
+        lines.append("")
+    return "\n".join(lines).strip() + "\n"
+
+
+def _md_cell(value: object) -> str:
+    """Escape a cell so it cannot break out of the Markdown table it sits in."""
+    return str(value or "").replace("|", "\\|").replace("\n", " ").strip()
 
 
 def _join_lines(lines: list[str]) -> str:
@@ -608,8 +729,12 @@ def _snap_to_boundary(text: str, limit: int) -> int:
     best = 0
     for match in re.finditer(r"[。！？!？；;\n]", window):
         best = match.end()
-    # Only honour the boundary when it does not throw away most of the window.
-    return best if best >= int(limit * 0.6) else limit
+    if best >= int(limit * 0.6):
+        return best
+    # 制度文档常见整段没有句末标点（长列表项、跨页残句续进来之后），窗口里根本没有靠后的
+    # 边界，按原逻辑就硬切，把下一块开头劈成残句，连带带坏卡片标题和断言主语。宁可少切
+    # 一点退到更靠前的边界，连一个边界都没有才硬切。
+    return best if best >= int(limit * 0.3) else limit
 
 
 def _next_cut(text: str, start: int, budget: int, policy: dict[str, Any]) -> int:
