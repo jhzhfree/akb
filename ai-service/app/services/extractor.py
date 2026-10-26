@@ -298,6 +298,7 @@ class KnowledgeExtractor:
                         policy_claims,
                         policy_cards,
                         vocabulary,
+                        material,
                     )
             except Exception as exc:
                 # Extraction must remain usable offline. Log why fallback was
@@ -311,6 +312,7 @@ class KnowledgeExtractor:
         policy_claims: list[dict[str, Any]],
         policy_cards: list[dict[str, Any]],
         vocabulary: tuple | None = None,
+        sources: list | None = None,
     ) -> dict[str, Any]:
         """Combine parsed clauses with model output, parsed clauses first."""
         cards = [dict(card) for card in policy_cards]
@@ -354,6 +356,12 @@ class KnowledgeExtractor:
         relations = self._dedupe_relations(
             self._claim_relations(claims, index, vocabulary) + structured.get("relations", [])
         )
+        # 置信度在这里统一重算：规则解析、模型抽取、兜底三路来源过的是同一把尺子，
+        # 不再各写各的固定值。
+        for card in cards:
+            card["confidence"], card["confidence_breakdown"] = self._blend(card, sources or [], "card")
+        for claim in claims:
+            claim["confidence"], claim["confidence_breakdown"] = self._blend(claim, sources or [], "claim")
         return {
             "cards": cards,
             "claims": claims,
@@ -894,6 +902,93 @@ class KnowledgeExtractor:
         except (TypeError, ValueError):
             return default
         return round(min(0.95, max(0.05, score)), 2)
+
+    # 置信度合成权重。模型自评普遍偏高且不自洽（实测 deepseek-chat 只给得出 0.9 和 0.95
+    # 两个值），单独采信等于没有区分度；证据对齐度和来源类型是客观信号，模型不给出
+    # 自评时靠它们照样能算出分数。
+    _W_ALIGNMENT = 0.45
+    _W_MODEL = 0.35
+    _W_SOURCE = 0.20
+
+    _SOURCE_SCORE = {
+        "DETERMINISTIC": 1.0,     # 服务端按规则解析出来的，原文写得明白
+        "AI_EXTRACTION": 0.75,    # 模型从表述里读出来的
+        "RULE_FALLBACK": 0.45,    # 模型不可用时的兜底，可信度最低
+    }
+
+    @staticmethod
+    def _evidence_text(item: dict[str, Any], sources: list[dict[str, Any]]) -> str:
+        """Turn the evidence ids back into source text so alignment can be measured."""
+        wanted = {str(code) for code in (item.get("evidence_ids") or []) if code}
+        matched = [
+            str(source.get("content") or "")
+            for source in sources
+            if wanted and str(source.get("evidence_code") or "") in wanted
+        ]
+        if not matched:
+            # 要么模型没填 evidence_ids（小模型常见），要么填的编号对不上切片的证据
+            # 编号。两种情况都退回整篇正文：对齐度问的是「原文里找不找得到」，拿到空
+            # 文本会把忠实于原文的抽取也算成 0。
+            return "\n".join(str(source.get("content") or "") for source in sources)
+        return "\n".join(matched)
+        return "\n".join(
+            str(source.get("content") or "")
+            for source in sources
+            if str(source.get("evidence_code") or "") in wanted
+        )
+
+    @staticmethod
+    def _alignment(parts: list[str], evidence: str) -> float:
+        """Share of the triple (or card body) that is literally present in the evidence."""
+        if not evidence:
+            return 0.0
+        filled = [part for part in parts if part]
+        if not filled:
+            return 0.0
+        # 归一化后再比：模型输出与原文常常只差一个空格或全半角标点，逐字严格比对会把
+        # 忠实于原文的抽取误判成编造。
+        haystack = re.sub(r"[\s，。；：（）()\[\]、,.;:！？!?]", "", evidence)
+        hits = sum(1 for part in filled if re.sub(r"[\s，。；：（）()\[\]、,.;:！？!?]", "", part) in haystack)
+        return hits / len(filled)
+
+    def _blend(self, item: dict[str, Any], sources: list[dict[str, Any]], kind: str) -> tuple[float, dict]:
+        """Confidence from evidence alignment, source type and the model's own estimate.
+
+        Returns the score together with its breakdown, so a later calibration pass can
+        see which signal moved it instead of guessing from the number alone.
+        """
+        evidence = self._evidence_text(item, sources)
+        if kind == "card":
+            parts = [str(item.get("title") or ""), str(item.get("summary") or "")[:120]]
+        else:
+            parts = [
+                str(item.get("subject") or ""),
+                str(item.get("predicate") or ""),
+                str(item.get("object") or ""),
+            ]
+        alignment = self._alignment(parts, evidence)
+        try:
+            model_score = float(item.get("confidence"))
+        except (TypeError, ValueError):
+            model_score = None
+        source = self._SOURCE_SCORE.get(str(item.get("derivation") or "").upper(), 0.75)
+        if model_score is None:
+            # 模型没给自评（小模型常见）：把它的权重按比例摊回客观信号，
+            # 不能让一个空缺把分数拖到 0。
+            weight = self._W_ALIGNMENT + self._W_SOURCE
+            score = (self._W_ALIGNMENT * alignment + self._W_SOURCE * source) / weight
+        else:
+            score = (
+                self._W_ALIGNMENT * alignment
+                + self._W_MODEL * model_score
+                + self._W_SOURCE * source
+            )
+        breakdown = {
+            "alignment": round(alignment, 2),
+            "model": model_score,
+            "source": source,
+        }
+        return round(min(0.95, max(0.05, score)), 2), breakdown
 
     @classmethod
     def _claim_relations(
