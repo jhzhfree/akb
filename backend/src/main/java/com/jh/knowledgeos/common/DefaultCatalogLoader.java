@@ -49,6 +49,13 @@ public final class DefaultCatalogLoader {
 
     /** Mount point for the editable copy; unset means "only use what is in the jar". */
     static final String CONFIG_DIR_ENV = "KNOWLEDGE_CONFIG_DIR";
+
+    /**
+     * Fallback directory when nothing is configured: ./config, resolved against the working
+     * directory. Keeps a plain `mvn spring-boot:run` or IDE launch usable — with no directory
+     * at all the console's "restore defaults" could only ever restore the AI service half.
+     */
+    private static final File DEFAULT_CONFIG_DIR = new File("config").getAbsoluteFile();
     private static final String SCENARIO_FILE = "scenario-templates.json";
     private static final String DERIVATION_FILE = "derivation-rules.json";
     private static final String BUILT_IN = "built-in";
@@ -59,6 +66,9 @@ public final class DefaultCatalogLoader {
     private static String scenarioSource = BUILT_IN;
     private static String derivationSource = BUILT_IN;
     private static boolean loaded;
+
+    /** True when the directory came from configuration rather than the ./config fallback. */
+    private static boolean explicitConfigDir;
 
     private DefaultCatalogLoader() {
     }
@@ -72,12 +82,11 @@ public final class DefaultCatalogLoader {
     public static void prepare() {
         synchronized (LOCK) {
             File dir = configDir();
-            if (dir == null) {
-                log.info("{} is not set, default catalogs come from the jar", CONFIG_DIR_ENV);
-            } else {
-                seed(dir, SCENARIO_FILE);
-                seed(dir, DERIVATION_FILE);
+            if (!explicitConfigDir) {
+                log.info("{} is not set, using {} for the editable default catalogs", CONFIG_DIR_ENV, dir.getPath());
             }
+            seed(dir, SCENARIO_FILE);
+            seed(dir, DERIVATION_FILE);
             reloadLocked();
         }
     }
@@ -97,7 +106,8 @@ public final class DefaultCatalogLoader {
             }
             File dir = configDir();
             Map<String, Object> out = new LinkedHashMap<String, Object>();
-            out.put("configDir", dir == null ? null : dir.getPath());
+            out.put("configDir", dir.getPath());
+            out.put("configDirDefaulted", !explicitConfigDir);
             out.put("scenarioTemplates", describe(scenarioSource, scenarioCache));
             out.put("derivationRules", describe(derivationSource, derivationCache));
             return out;
@@ -226,10 +236,9 @@ public final class DefaultCatalogLoader {
      * fills in what is missing, restoring replaces what is there. Replacing is the point —
      * it is how an operator gets back from a file they edited or that got corrupted.
      *
-     * <p>Reports what it did instead of throwing: with no directory configured there is
-     * nothing outside the jar to restore, which is a fact to show the operator, not a
-     * failure. Any file that could not be written is listed so a read-only mount does not
-     * look like a success.
+     * <p>Reports what it did instead of throwing: a read-only mount is a fact to show the
+     * operator, not a startup failure. Any file that could not be written is listed, so a
+     * failed restore never looks like a successful one.
      */
     public static Map<String, Object> restore() {
         synchronized (LOCK) {
@@ -237,17 +246,14 @@ public final class DefaultCatalogLoader {
             List<String> written = new ArrayList<String>();
             List<String> failed = new ArrayList<String>();
             Map<String, Object> out = new LinkedHashMap<String, Object>();
-            out.put("configured", dir != null);
-            if (dir == null) {
-                out.put("message", CONFIG_DIR_ENV + " is not set: nothing outside the jar to restore");
-            } else {
-                String[] names = new String[] {SCENARIO_FILE, DERIVATION_FILE};
-                for (String fileName : names) {
-                    if (copyShipped(dir, fileName)) {
-                        written.add(new File(dir, fileName).getPath());
-                    } else {
-                        failed.add(fileName);
-                    }
+            out.put("configured", true);
+            out.put("configDirDefaulted", !explicitConfigDir);
+            String[] names = new String[] {SCENARIO_FILE, DERIVATION_FILE};
+            for (String fileName : names) {
+                if (copyShipped(dir, fileName)) {
+                    written.add(new File(dir, fileName).getPath());
+                } else {
+                    failed.add(fileName);
                 }
             }
             reloadLocked();
@@ -299,11 +305,24 @@ public final class DefaultCatalogLoader {
         return out;
     }
 
+    /**
+     * Where the catalogs are read from and restored into.
+     *
+     * <p>Order: {@code -DKNOWLEDGE_CONFIG_DIR}, then the environment variable, then
+     * {@code ./config}. The last one is what makes a plain {@code mvn spring-boot:run} work:
+     * the console can only restore files that live outside the jar, so a launch without a
+     * directory would always answer "nothing to restore".
+     */
     private static File configDir() {
-        String configured = System.getenv(CONFIG_DIR_ENV);
+        String configured = System.getProperty(CONFIG_DIR_ENV);
         if (configured == null || configured.trim().isEmpty()) {
-            return null;
+            configured = System.getenv(CONFIG_DIR_ENV);
         }
+        if (configured == null || configured.trim().isEmpty()) {
+            explicitConfigDir = false;
+            return DEFAULT_CONFIG_DIR;
+        }
+        explicitConfigDir = true;
         return new File(configured.trim());
     }
 

@@ -44,5 +44,8 @@ data/
 application-local.yml
 application-local.yaml
 
+# 后端本地运行时的默认配置目录（KNOWLEDGE_CONFIG_DIR 的 ./config 兜底，启动时自动播种）
+backend/config/
+
 # Build / release artifacts
 dist/

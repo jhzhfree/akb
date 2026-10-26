@@ -48,8 +48,10 @@ export const resetRoleMenu = (role:string):Promise<ApiResponse<{role:string; vis
 export interface DefaultCatalogSource { source:string; count:number }
 
 export interface DefaultCatalogStatus {
-  /** 配置目录；为 null 说明没配 KNOWLEDGE_CONFIG_DIR，默认配置只来自镜像。 */
-  configDir:string|null
+  /** 配置目录：后端按 -D 参数 → 环境变量 → ./config 依次解析，总有值。 */
+  configDir:string
+  /** true 表示用的是兜底目录 ./config，没有显式配置 KNOWLEDGE_CONFIG_DIR。 */
+  configDirDefaulted:boolean
   scenarioTemplates:DefaultCatalogSource
   derivationRules:DefaultCatalogSource
 }
@@ -57,6 +59,8 @@ export interface DefaultCatalogStatus {
 export interface DefaultRestoreResult {
   backend:{
     configured:boolean
+    /** true 表示写回的是兜底目录 ./config。 */
+    configDirDefaulted:boolean
     written:string[]
     failed:string[]
     message?:string

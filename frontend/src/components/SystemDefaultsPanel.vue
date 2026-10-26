@@ -27,9 +27,9 @@
       </div>
     </div>
 
-    <p v-if="status?.configDir===null" class="sd-warn">
-      后端未配置 KNOWLEDGE_CONFIG_DIR：默认配置直接读镜像内那份，没有可恢复的外部文件。
-      本地开发想验证恢复功能，可用 <code>KNOWLEDGE_CONFIG_DIR=/tmp/kos-config</code> 启动后端（目录需可写）。
+    <p v-if="status?.configDirDefaulted" class="sd-warn">
+      后端未显式配置 KNOWLEDGE_CONFIG_DIR，当前使用兜底目录 <code>{{status.configDir}}</code>。
+      直接改这里的文件即可生效（点刷新或重启），恢复会把出厂内容写回该目录。
     </p>
   </template>
 
@@ -155,10 +155,11 @@ async function restore() {
     }
     const backend = result.backend
     const parts: string[] = []
-    if (!backend.configured) {
-      parts.push('后端未配置配置目录（KNOWLEDGE_CONFIG_DIR），默认配置直接读镜像内那份，没有外部文件可恢复')
-    } else if (backend.failed.length) {
+    if (backend.failed.length) {
       parts.push(`后端 ${backend.failed.length} 个文件写入失败（配置目录可能是只读挂载）：${backend.failed.join('、')}`)
+    } else if (backend.configDirDefaulted) {
+      parts.push(`后端恢复到兜底目录（未显式配置 KNOWLEDGE_CONFIG_DIR）：${backend.written.length} 个文件`
+        + `（场景 ${backend.scenarioTemplates.count} 条、规则 ${backend.derivationRules.count} 条）`)
     } else {
       parts.push(`后端恢复 ${backend.written.length} 个文件`
         + `（场景 ${backend.scenarioTemplates.count} 条、规则 ${backend.derivationRules.count} 条）`)
