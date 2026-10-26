@@ -13,6 +13,9 @@ FROM eclipse-temurin:8-jre
 RUN apt-get update && apt-get install -y --no-install-recommends curl default-mysql-client && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY --from=build /workspace/target/*.jar app.jar
+# 出厂默认配置。bind/named volume 首次创建时 docker 会把镜像里这个目录的内容带进卷，
+# 所以新部署拿到的是一份可编辑的文件；已有卷则靠 DefaultCatalogLoader 启动时播种补齐。
+COPY --from=build /workspace/src/main/resources/defaults /app/config
 # 演示快照：由 scripts/demo/export-snapshot.py 产出，可在部署后直接演示
 COPY demo-seed /opt/demo-seed
 COPY entrypoint.sh /app/entrypoint.sh
