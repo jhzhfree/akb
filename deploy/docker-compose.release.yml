@@ -247,6 +247,10 @@ services:
       SERVER_PORT: '8081'
       # 与 backend 同一镜像：只跑索引任务，不参与演示数据恢复，避免与 backend 同时写同一批库。
       DEMO_SEED: 'false'
+      KNOWLEDGE_CONFIG_DIR: /app/config
+    volumes:
+      # 只读：与 backend 共用同一份配置，播种与写入由 backend 负责，避免两个容器同时写。
+    - backend_config:/app/config:ro
     depends_on:
       mysql:
         condition: service_healthy
@@ -301,6 +305,8 @@ services:
         condition: service_healthy
 
 volumes:
+  # 后端默认配置（场景模板、衍生规则）。放在卷里是为了能直接改，改完重启生效。
+  backend_config:
   mysql_data:
   redis_data:
   elasticsearch_data:

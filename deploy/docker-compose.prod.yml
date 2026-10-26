@@ -63,6 +63,9 @@ services:
     volumes:
     - neo4j_data:/data
   ai-service:
+    # 与 release compose 同名同 tag：本地构建出来的镜像可以直接被安装包复用、导出，
+    # 不必再 docker tag 一次。
+    image: ${IMAGE_PREFIX:-knowledge-os}/ai-service:${VERSION:-1.1.0}
     build:
       context: ../ai-service
       args:
@@ -89,6 +92,7 @@ services:
     - milvus
     - neo4j
   backend:
+    image: ${IMAGE_PREFIX:-knowledge-os}/backend:${VERSION:-1.1.0}
     build: ../backend
     restart: unless-stopped
     env_file: ../.env.production
@@ -126,6 +130,7 @@ services:
       ai-service:
         condition: service_healthy
   index-worker:
+    image: ${IMAGE_PREFIX:-knowledge-os}/backend:${VERSION:-1.1.0}
     build: ../backend
     restart: unless-stopped
     env_file: ../.env.production
@@ -159,6 +164,7 @@ services:
     - backend
     - index-worker
   frontend:
+    image: ${IMAGE_PREFIX:-knowledge-os}/frontend:${VERSION:-1.1.0}
     build: ../frontend
     restart: unless-stopped
     ports:
