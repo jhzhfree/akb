@@ -175,6 +175,12 @@ services:
       REDIS_PASSWORD: ${REDIS_PASSWORD:-}
       AI_SERVICE_BASE_URL: http://ai-service:12000
       TZ: Asia/Shanghai
+      # 默认配置目录：直接挂仓库里的那份，改完 docker restart 即生效，不用重打镜像。
+      KNOWLEDGE_CONFIG_DIR: /app/config
+    volumes:
+      # 只读挂进容器：文件就在仓库里（backend/src/main/resources/defaults），
+      # 想让容器写请改成可写挂载，或改用命名卷。
+      - ./backend/src/main/resources/defaults:/app/config:ro
     ports:
       - "8080:8080"
     networks:

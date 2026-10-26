@@ -6,11 +6,12 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.core.io.ClassPathResource;
 
+import java.io.ByteArrayOutputStream;
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.io.ByteArrayOutputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -24,16 +25,17 @@ import java.util.Map;
  * <p>Lookup order, and why each step exists:
  * <ol>
  *   <li>{@code $KNOWLEDGE_CONFIG_DIR/scenario-templates.json} — the copy an operator can
- *       edit and mount. Read once at startup, so changing it needs a restart, not a rebuild.</li>
+ *       edit and mount.</li>
  *   <li>{@code classpath:defaults/scenario-templates.json} — the copy baked into the jar.
  *       Used when the volume is empty or the mounted file is broken.</li>
  *   <li>built-in constants — returned as null here; callers fall back. Keeps the system
  *       bootable with a usable catalog no matter what happens to the files.</li>
  * </ol>
  *
- * <p>On startup {@link #prepare()} also seeds the directory: a mounted volume that is
- * empty gets the shipped files written into it, so there is something to edit. Seeding
- * never overwrites an existing file — the operator's edits are the whole point.
+ * <p>Read once at startup by {@link #prepare()}, which also seeds an empty directory so
+ * there is something to edit. {@link #reload()} re-reads without a restart, which is what
+ * the admin endpoint calls; the source of each catalog is kept so a reload can be
+ * confirmed from the response instead of by guessing.
  *
  * <p>These files only supply defaults. Whatever a knowledge base already stored stays
  * untouched; seeding stays idempotent through the preset code.
@@ -49,10 +51,13 @@ public final class DefaultCatalogLoader {
     static final String CONFIG_DIR_ENV = "KNOWLEDGE_CONFIG_DIR";
     private static final String SCENARIO_FILE = "scenario-templates.json";
     private static final String DERIVATION_FILE = "derivation-rules.json";
+    private static final String BUILT_IN = "built-in";
 
     private static final Object LOCK = new Object();
     private static List<Map<String, Object>> scenarioCache;
     private static List<Map<String, Object>> derivationCache;
+    private static String scenarioSource = BUILT_IN;
+    private static String derivationSource = BUILT_IN;
     private static boolean loaded;
 
     private DefaultCatalogLoader() {
@@ -77,10 +82,25 @@ public final class DefaultCatalogLoader {
         }
     }
 
-    /** Re-read the catalogs, discarding the cache. */
+    /** Re-read the catalogs, discarding the cache. Safe to call while requests are running. */
     public static void reload() {
         synchronized (LOCK) {
             reloadLocked();
+        }
+    }
+
+    /** What is currently in effect: where each catalog came from and how many rows it has. */
+    public static Map<String, Object> status() {
+        synchronized (LOCK) {
+            if (!loaded) {
+                reloadLocked();
+            }
+            File dir = configDir();
+            Map<String, Object> out = new LinkedHashMap<String, Object>();
+            out.put("configDir", dir == null ? null : dir.getPath());
+            out.put("scenarioTemplates", describe(scenarioSource, scenarioCache));
+            out.put("derivationRules", describe(derivationSource, derivationCache));
+            return out;
         }
     }
 
@@ -105,19 +125,23 @@ public final class DefaultCatalogLoader {
     }
 
     private static void reloadLocked() {
-        scenarioCache = read(SCENARIO_FILE, "scenario templates");
-        derivationCache = read(DERIVATION_FILE, "derivation rule presets");
+        Loaded scenarios = load(SCENARIO_FILE, "scenario templates");
+        scenarioCache = scenarios.rows;
+        scenarioSource = scenarios.source;
+        Loaded presets = load(DERIVATION_FILE, "derivation rule presets");
+        derivationCache = presets.rows;
+        derivationSource = presets.source;
         loaded = true;
     }
 
-    private static List<Map<String, Object>> read(String fileName, String what) {
+    private static Loaded load(String fileName, String what) {
         File dir = configDir();
         if (dir != null) {
             File file = new File(dir, fileName);
             if (file.isFile()) {
                 List<Map<String, Object>> rows = parse(readFile(file), what, file.getPath());
                 if (rows != null) {
-                    return rows;
+                    return new Loaded(rows, file.getPath());
                 }
                 log.warn("falling back to the copy in the jar for {}", what);
             }
@@ -125,24 +149,27 @@ public final class DefaultCatalogLoader {
         ClassPathResource resource = new ClassPathResource("defaults/" + fileName);
         if (!resource.exists()) {
             log.info("no {} default file in the jar, using built-in constants", what);
-            return null;
+            return new Loaded(null, BUILT_IN);
         }
         try {
             InputStream stream = resource.getInputStream();
             try {
-                return parse(new String(readAll(stream), StandardCharsets.UTF_8), what,
-                    "classpath:defaults/" + fileName);
+                String source = "classpath:defaults/" + fileName;
+                return new Loaded(parse(new String(readAll(stream), StandardCharsets.UTF_8), what, source), source);
             } finally {
                 stream.close();
             }
         } catch (Exception exc) {
             log.warn("{} default file in the jar is unreadable, using built-in constants: {}",
                 what, exc.toString());
-            return null;
+            return new Loaded(null, BUILT_IN);
         }
     }
 
     private static List<Map<String, Object>> parse(String text, String what, String source) {
+        if (text == null) {
+            return null;
+        }
         try {
             List<Map<String, Object>> rows = MAPPER.readValue(text, ROWS);
             if (rows == null || rows.isEmpty()) {
@@ -192,6 +219,13 @@ public final class DefaultCatalogLoader {
         }
     }
 
+    private static Map<String, Object> describe(String source, List<Map<String, Object>> rows) {
+        Map<String, Object> out = new LinkedHashMap<String, Object>();
+        out.put("source", BUILT_IN.equals(source) ? BUILT_IN : source);
+        out.put("count", rows == null ? 0 : rows.size());
+        return out;
+    }
+
     private static File configDir() {
         String configured = System.getenv(CONFIG_DIR_ENV);
         if (configured == null || configured.trim().isEmpty()) {
@@ -202,7 +236,7 @@ public final class DefaultCatalogLoader {
 
     private static String readFile(File file) {
         try {
-            InputStream stream = new java.io.FileInputStream(file);
+            InputStream stream = new FileInputStream(file);
             try {
                 return new String(readAll(stream), StandardCharsets.UTF_8);
             } finally {
@@ -234,5 +268,18 @@ public final class DefaultCatalogLoader {
             copies.add(new LinkedHashMap<String, Object>(row));
         }
         return copies;
+    }
+
+    /** A catalog plus the place it came from, so status can report it. */
+    private static final class Loaded {
+
+        private final List<Map<String, Object>> rows;
+
+        private final String source;
+
+        private Loaded(List<Map<String, Object>> rows, String source) {
+            this.rows = rows;
+            this.source = source;
+        }
     }
 }
