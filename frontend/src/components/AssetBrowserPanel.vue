@@ -82,6 +82,9 @@
             <el-table-column v-if="type==='assertion'" prop="subject" label="主体" min-width="140" show-overflow-tooltip />
             <el-table-column v-if="type==='assertion'" prop="predicate" label="谓词" width="110" />
             <el-table-column v-if="type==='assertion'" prop="objectValue" label="客体" min-width="160" show-overflow-tooltip />
+            <el-table-column v-if="type==='assertion'" prop="confidence" label="可信度" width="90">
+              <template #default="{ row }">{{ row.confidence == null ? '—' : Number(row.confidence).toFixed(2) }}</template>
+            </el-table-column>
             <el-table-column v-if="type==='assertion'" prop="status" label="状态" width="120" />
 
             <el-table-column v-if="type==='entity'" prop="entityCode" label="编码" width="180" show-overflow-tooltip>
