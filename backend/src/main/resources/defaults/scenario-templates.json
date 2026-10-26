@@ -1,0 +1,401 @@
+[
+  {
+    "code": "GENERAL",
+    "label": "综合知识库",
+    "summary": "内容杂、问法杂时的稳妥选择：各通道均衡参与，不偏向任何一种问法。",
+    "suitedFor": "资料类型不固定、既有说明也有流程的通用库",
+    "docTypes": [
+      "说明文档",
+      "会议纪要",
+      "零散资料"
+    ],
+    "default": {
+      "generation": {
+        "chunk": {
+          "strategy": "SEMANTIC",
+          "chunkSize": 900,
+          "chunkOverlap": 120,
+          "minChunkSize": 120,
+          "measure": "CHAR",
+          "keepStructure": true,
+          "respectSentence": true,
+          "parentChild": false
+        },
+        "extract": {
+          "claims": true,
+          "entityResolution": true,
+          "conflictDetection": true
+        }
+      },
+      "derivation": {
+        "graphEnabled": true,
+        "presets": [
+          "DEPLOY_CHAIN",
+          "IMPACT_CHAIN",
+          "OWNER_CHAIN",
+          "CAUSE_CHAIN",
+          "CLAIM_SENTENCE"
+        ]
+      },
+      "query": {
+        "defaultStrategies": [
+          "card",
+          "vector",
+          "bm25",
+          "claim"
+        ],
+        "channels": {
+          "bm25": {
+            "enabled": true,
+            "weight": 1.15
+          },
+          "vector": {
+            "enabled": true,
+            "weight": 1.15
+          },
+          "card": {
+            "enabled": true,
+            "weight": 1.1
+          },
+          "claim": {
+            "enabled": true,
+            "weight": 1.1
+          },
+          "graph": {
+            "enabled": true,
+            "weight": 1.05
+          }
+        },
+        "recallMultiplier": 3,
+        "minRecallCandidates": 20,
+        "rerankEnabled": true,
+        "rerankTopN": 0,
+        "rrfK": 60,
+        "qualitySignalsEnabled": true,
+        "chunkBoostEnabled": true,
+        "answerFormat": "default",
+        "minChunkEvidence": 3,
+        "contextMaxChars": 8000
+      }
+    }
+  },
+  {
+    "code": "OPS",
+    "label": "运维知识库",
+    "summary": "故障与操作问法为主：错误码靠精确命中，处置步骤要能原样引用，父子分块让步骤可单独命中。",
+    "suitedFor": "故障处置手册、巡检规程、变更与告警记录、SOP",
+    "docTypes": [
+      "故障处置手册",
+      "巡检规程",
+      "变更记录",
+      "告警处置 SOP"
+    ],
+    "default": {
+      "generation": {
+        "chunk": {
+          "strategy": "STRUCTURE",
+          "chunkSize": 700,
+          "chunkOverlap": 90,
+          "minChunkSize": 100,
+          "measure": "CHAR",
+          "keepStructure": true,
+          "respectSentence": true,
+          "parentChild": true
+        },
+        "extract": {
+          "claims": true,
+          "entityResolution": true,
+          "conflictDetection": true
+        }
+      },
+      "derivation": {
+        "graphEnabled": true,
+        "presets": [
+          "DEPLOY_CHAIN",
+          "IMPACT_CHAIN",
+          "OWNER_CHAIN",
+          "CAUSE_CHAIN",
+          "CLAIM_SENTENCE"
+        ]
+      },
+      "query": {
+        "defaultStrategies": [
+          "bm25",
+          "card",
+          "vector"
+        ],
+        "channels": {
+          "bm25": {
+            "enabled": true,
+            "weight": 1.25
+          },
+          "vector": {
+            "enabled": true,
+            "weight": 1.05
+          },
+          "card": {
+            "enabled": true,
+            "weight": 1.15
+          },
+          "claim": {
+            "enabled": true,
+            "weight": 1.0
+          },
+          "graph": {
+            "enabled": true,
+            "weight": 1.05
+          }
+        },
+        "recallMultiplier": 4,
+        "minRecallCandidates": 24,
+        "rerankEnabled": true,
+        "rerankTopN": 0,
+        "rrfK": 40,
+        "qualitySignalsEnabled": true,
+        "chunkBoostEnabled": true,
+        "answerFormat": "default",
+        "minChunkEvidence": 4,
+        "contextMaxChars": 8000
+      }
+    }
+  },
+  {
+    "code": "POLICY",
+    "label": "制度条款知识库",
+    "summary": "条款与条件问法为主：断言优先、原文必须可引用，图谱参与少，答案默认附引用章节便于核对。",
+    "suitedFor": "规章制度、管理办法、合同条款、合规要求",
+    "docTypes": [
+      "规章制度",
+      "管理办法",
+      "合同条款",
+      "合规要求"
+    ],
+    "default": {
+      "generation": {
+        "chunk": {
+          "strategy": "STRUCTURE",
+          "chunkSize": 600,
+          "chunkOverlap": 80,
+          "minChunkSize": 100,
+          "measure": "CHAR",
+          "keepStructure": true,
+          "respectSentence": true,
+          "parentChild": true
+        },
+        "extract": {
+          "claims": true,
+          "entityResolution": false,
+          "conflictDetection": true
+        }
+      },
+      "derivation": {
+        "graphEnabled": false,
+        "presets": [
+          "CLAIM_SENTENCE",
+          "AI_CONCLUSION"
+        ]
+      },
+      "query": {
+        "defaultStrategies": [
+          "claim",
+          "card",
+          "bm25"
+        ],
+        "channels": {
+          "bm25": {
+            "enabled": true,
+            "weight": 1.15
+          },
+          "vector": {
+            "enabled": true,
+            "weight": 1.0
+          },
+          "card": {
+            "enabled": true,
+            "weight": 1.2
+          },
+          "claim": {
+            "enabled": true,
+            "weight": 1.3
+          },
+          "graph": {
+            "enabled": false,
+            "weight": 0.9
+          }
+        },
+        "recallMultiplier": 4,
+        "minRecallCandidates": 20,
+        "rerankEnabled": true,
+        "rerankTopN": 0,
+        "rrfK": 60,
+        "qualitySignalsEnabled": true,
+        "chunkBoostEnabled": true,
+        "answerFormat": "markdown",
+        "minChunkEvidence": 5,
+        "contextMaxChars": 10000
+      }
+    }
+  },
+  {
+    "code": "BUSINESS",
+    "label": "公司业务（人员关系）知识库",
+    "summary": "关系与归属问法为主：图谱优先、实体消歧必开，短片段足以回答“谁负责什么”。",
+    "suitedFor": "组织架构、岗位与人员、项目与客户、产品归属",
+    "docTypes": [
+      "组织架构",
+      "岗位说明",
+      "项目档案",
+      "客户与产品资料"
+    ],
+    "default": {
+      "generation": {
+        "chunk": {
+          "strategy": "SEMANTIC",
+          "chunkSize": 600,
+          "chunkOverlap": 100,
+          "minChunkSize": 100,
+          "measure": "CHAR",
+          "keepStructure": true,
+          "respectSentence": true,
+          "parentChild": false
+        },
+        "extract": {
+          "claims": true,
+          "entityResolution": true,
+          "conflictDetection": false
+        }
+      },
+      "derivation": {
+        "graphEnabled": true,
+        "presets": [
+          "DEPLOY_CHAIN",
+          "OWNER_CHAIN",
+          "CONTAINS_CHAIN",
+          "RESOURCE_CHAIN",
+          "CLAIM_SENTENCE",
+          "AI_CONCLUSION"
+        ]
+      },
+      "query": {
+        "defaultStrategies": [
+          "card",
+          "vector",
+          "bm25",
+          "graph"
+        ],
+        "channels": {
+          "bm25": {
+            "enabled": true,
+            "weight": 1.15
+          },
+          "vector": {
+            "enabled": true,
+            "weight": 1.15
+          },
+          "card": {
+            "enabled": true,
+            "weight": 1.2
+          },
+          "claim": {
+            "enabled": true,
+            "weight": 1.0
+          },
+          "graph": {
+            "enabled": true,
+            "weight": 1.2
+          }
+        },
+        "recallMultiplier": 4,
+        "minRecallCandidates": 24,
+        "rerankEnabled": true,
+        "rerankTopN": 0,
+        "rrfK": 30,
+        "qualitySignalsEnabled": true,
+        "chunkBoostEnabled": true,
+        "answerFormat": "default",
+        "minChunkEvidence": 3,
+        "contextMaxChars": 8000
+      }
+    }
+  },
+  {
+    "code": "VULN",
+    "label": "漏洞库知识库",
+    "summary": "编号与影响面问法并重：CVE 编号精确命中，影响版本与修复状态靠断言，图谱回答“影响到谁”。",
+    "suitedFor": "漏洞通报、CVE 明细、受影响版本与修复方案",
+    "docTypes": [
+      "漏洞通报",
+      "CVE 明细",
+      "组件清单",
+      "修复方案"
+    ],
+    "default": {
+      "generation": {
+        "chunk": {
+          "strategy": "STRUCTURE",
+          "chunkSize": 900,
+          "chunkOverlap": 120,
+          "minChunkSize": 120,
+          "measure": "CHAR",
+          "keepStructure": true,
+          "respectSentence": true,
+          "parentChild": false
+        },
+        "extract": {
+          "claims": true,
+          "entityResolution": true,
+          "conflictDetection": true
+        }
+      },
+      "derivation": {
+        "graphEnabled": true,
+        "presets": [
+          "IMPACT_SCOPE",
+          "IMPACT_CHAIN",
+          "DEPLOY_CHAIN",
+          "CAUSE_CHAIN",
+          "CLAIM_SENTENCE"
+        ]
+      },
+      "query": {
+        "defaultStrategies": [
+          "bm25",
+          "claim",
+          "vector"
+        ],
+        "channels": {
+          "bm25": {
+            "enabled": true,
+            "weight": 1.3
+          },
+          "vector": {
+            "enabled": true,
+            "weight": 1.15
+          },
+          "card": {
+            "enabled": true,
+            "weight": 1.0
+          },
+          "claim": {
+            "enabled": true,
+            "weight": 1.25
+          },
+          "graph": {
+            "enabled": true,
+            "weight": 1.1
+          }
+        },
+        "recallMultiplier": 4,
+        "minRecallCandidates": 24,
+        "rerankEnabled": true,
+        "rerankTopN": 0,
+        "rrfK": 50,
+        "qualitySignalsEnabled": true,
+        "chunkBoostEnabled": true,
+        "answerFormat": "markdown",
+        "minChunkEvidence": 3,
+        "contextMaxChars": 9000
+      }
+    }
+  }
+]

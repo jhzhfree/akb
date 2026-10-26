@@ -1,0 +1,933 @@
+{
+  "active": "default",
+  "profiles": {
+    "default": {
+      "label": "默认策略",
+      "updatedAt": "",
+      "policy": {}
+    },
+    "运维知识库": {
+      "label": "运维场景：命令与故障精确定位优先",
+      "updatedAt": "2026-10-08T12:16:31Z",
+      "policy": {
+        "version": "query-policy-v1",
+        "route": {
+          "enabled": true,
+          "rules": [
+            {
+              "questionType": "EXACT",
+              "enabled": true,
+              "keywords": [
+                "错误码",
+                "命令",
+                "主机名",
+                "主机",
+                "工号",
+                "会话号",
+                "归档编号",
+                "工单号",
+                "端口",
+                "进程",
+                "L1",
+                "L2",
+                "L3",
+                "rm -rf",
+                "kubectl",
+                "redis-cli",
+                "参数名",
+                "配置项"
+              ],
+              "strategies": [
+                "bm25",
+                "card",
+                "vector"
+              ],
+              "priority": 95,
+              "reason": "运维专有名词/命令/编号：BM25 精确命中命令与编号，卡片给出处置步骤，向量兜底语义变体。"
+            },
+            {
+              "questionType": "PROCEDURE",
+              "enabled": true,
+              "keywords": [
+                "怎么",
+                "如何",
+                "步骤",
+                "排查",
+                "处置",
+                "恢复",
+                "回滚",
+                "清理",
+                "扩容",
+                "重启",
+                "迁移",
+                "发布",
+                "限流",
+                "止损"
+              ],
+              "strategies": [
+                "card",
+                "bm25",
+                "vector"
+              ],
+              "priority": 88,
+              "reason": "操作类问题：以手册与 SOP 卡片为主，命令片段用 BM25 精确定位。"
+            },
+            {
+              "questionType": "FACT",
+              "enabled": true,
+              "keywords": [
+                "阈值",
+                "时限",
+                "多少",
+                "多久",
+                "标准",
+                "等级",
+                "首响",
+                "MTTR",
+                "保留",
+                "有效期",
+                "天数",
+                "比例"
+              ],
+              "strategies": [
+                "card",
+                "claim",
+                "bm25"
+              ],
+              "priority": 85,
+              "reason": "指标与阈值：卡片给出结构化口径，断言处理版本与时效差异。"
+            },
+            {
+              "questionType": "CONFLICT",
+              "enabled": true,
+              "keywords": [
+                "冲突",
+                "不一致",
+                "以哪个为准",
+                "失效",
+                "新口径",
+                "调整后",
+                "9月",
+                "过渡期",
+                "哪个版本"
+              ],
+              "strategies": [
+                "claim",
+                "card",
+                "bm25"
+              ],
+              "priority": 92,
+              "reason": "口径冲突：优先版本化断言与变更通知，答案须同时给出新旧口径与生效日期。"
+            },
+            {
+              "questionType": "RELATION",
+              "enabled": true,
+              "keywords": [
+                "依赖",
+                "上游",
+                "下游",
+                "影响",
+                "关联",
+                "涉及",
+                "所属",
+                "谁负责"
+              ],
+              "strategies": [
+                "graph",
+                "card",
+                "vector"
+              ],
+              "priority": 70,
+              "reason": "影响面与依赖关系：走图谱邻域，卡片补充实体属性。"
+            },
+            {
+              "questionType": "MULTIHOP",
+              "enabled": true,
+              "keywords": [
+                "为什么",
+                "根因",
+                "追根溯源",
+                "导致",
+                "最终",
+                "间接",
+                "链条"
+              ],
+              "strategies": [
+                "graph",
+                "card",
+                "vector"
+              ],
+              "priority": 72,
+              "reason": "根因追问：图谱多跳 + 复盘卡片，避免只给结论不给链路。"
+            },
+            {
+              "questionType": "CONDITION",
+              "enabled": true,
+              "keywords": [
+                "是否",
+                "能否",
+                "可以吗",
+                "要不要",
+                "需要审批吗",
+                "允许"
+              ],
+              "strategies": [
+                "card",
+                "claim",
+                "bm25"
+              ],
+              "priority": 68,
+              "reason": "条件判断：卡片条款 + 断言，答案须给出适用条件与例外。"
+            },
+            {
+              "questionType": "GLOBAL",
+              "enabled": true,
+              "keywords": [
+                "有哪些",
+                "总览",
+                "清单",
+                "汇总",
+                "全部",
+                "概览",
+                "统计"
+              ],
+              "strategies": [
+                "card",
+                "vector"
+              ],
+              "priority": 60,
+              "reason": "汇总类：卡片概览为主，向量补充语义相近条目。"
+            }
+          ],
+          "defaultStrategies": [
+            "card",
+            "bm25",
+            "vector",
+            "claim"
+          ]
+        },
+        "rewrite": {
+          "enabled": true,
+          "llmEnabled": false,
+          "maxVariants": 4,
+          "maxRecallRounds": 2,
+          "synonyms": {
+            "报错": [
+              "失败",
+              "异常",
+              "error",
+              "5xx"
+            ],
+            "怎么": [
+              "如何",
+              "步骤",
+              "流程"
+            ],
+            "是啥": [
+              "是什么",
+              "含义",
+              "定义"
+            ],
+            "配置": [
+              "参数",
+              "设置",
+              "配置项"
+            ],
+            "版本": [
+              "生效日期",
+              "有效期",
+              "修订"
+            ],
+            "清理": [
+              "删除",
+              "归档",
+              "释放"
+            ],
+            "处置": [
+              "处理",
+              "恢复",
+              "止损"
+            ],
+            "告警": [
+              "报警",
+              "预警",
+              "阈值"
+            ]
+          }
+        },
+        "recall": {
+          "channels": {
+            "bm25": {
+              "enabled": true,
+              "weight": 1.3,
+              "scale": 1.0
+            },
+            "vector": {
+              "enabled": true,
+              "weight": 1.0,
+              "scale": 1.0
+            },
+            "card": {
+              "enabled": true,
+              "weight": 1.25,
+              "scale": 1.0
+            },
+            "claim": {
+              "enabled": true,
+              "weight": 1.15,
+              "scale": 1.0
+            },
+            "graph": {
+              "enabled": true,
+              "weight": 1.0,
+              "scale": 1.0
+            }
+          },
+          "recallMultiplier": 4,
+          "minRecallCandidates": 30
+        },
+        "fusion": {
+          "rrfK": 50,
+          "qualitySignalsEnabled": true,
+          "qualityWeights": {
+            "authority": 0.2,
+            "freshness": 0.15,
+            "confidence": 0.1,
+            "evidence": 0.15
+          },
+          "chunkBoost": {
+            "enabled": true,
+            "base": 1.25,
+            "headingHit": 0.18,
+            "coverage": 0.15
+          }
+        },
+        "rerank": {
+          "enabled": true,
+          "topN": 0
+        },
+        "answer": {
+          "contextMaxChars": 9000,
+          "minChunkEvidence": 3,
+          "evidenceGateEnabled": true,
+          "faithfulnessMin": 0.06,
+          "entailmentMin": 0.1,
+          "policyVersion": "answer-policy-v1",
+          "noAnswerText": "现有运维知识库中未检索到足够证据（命令、手册或操作记录），暂无法确认，请补充工单号或主机信息后再问。"
+        }
+      }
+    },
+    "公司制度": {
+      "label": "制度场景：条款原文与时效口径优先",
+      "updatedAt": "2026-10-16T09:56:44Z",
+      "policy": {
+        "version": "query-policy-v1",
+        "route": {
+          "enabled": true,
+          "rules": [
+            {
+              "questionType": "EXACT",
+              "enabled": true,
+              "keywords": [
+                "年假",
+                "病假",
+                "事假",
+                "调休",
+                "报销",
+                "住宿标准",
+                "差旅",
+                "公积金",
+                "五险一金",
+                "职级",
+                "工号",
+                "文件编号",
+                "P4",
+                "P5",
+                "P6",
+                "P7"
+              ],
+              "strategies": [
+                "bm25",
+                "card",
+                "vector"
+              ],
+              "priority": 92,
+              "reason": "制度专有名词与编号：BM25 精确命中条款，卡片给出标准与额度。"
+            },
+            {
+              "questionType": "FACT",
+              "enabled": true,
+              "keywords": [
+                "多少天",
+                "多少钱",
+                "多久",
+                "标准",
+                "额度",
+                "比例",
+                "上限",
+                "下限",
+                "带宽",
+                "时限",
+                "有效期",
+                "几天"
+              ],
+              "strategies": [
+                "card",
+                "claim",
+                "bm25"
+              ],
+              "priority": 90,
+              "reason": "额度与天数：卡片给结构化标准，断言处理修订通知带来的口径差异。"
+            },
+            {
+              "questionType": "CONFLICT",
+              "enabled": true,
+              "keywords": [
+                "冲突",
+                "不一致",
+                "以哪个为准",
+                "新规定",
+                "调整后",
+                "9月起",
+                "修订通知",
+                "过渡期",
+                "失效",
+                "哪个版本"
+              ],
+              "strategies": [
+                "claim",
+                "card",
+                "bm25"
+              ],
+              "priority": 96,
+              "reason": "制度冲突：优先版本化断言与修订通知，答案须同时给出新口径、原条款与生效日期。"
+            },
+            {
+              "questionType": "PROCEDURE",
+              "enabled": true,
+              "keywords": [
+                "流程",
+                "怎么申请",
+                "如何办",
+                "步骤",
+                "审批",
+                "提交",
+                "需要什么材料",
+                "销假",
+                "交接"
+              ],
+              "strategies": [
+                "card",
+                "bm25",
+                "vector"
+              ],
+              "priority": 86,
+              "reason": "流程类：卡片步骤与审批链为主，BM25 命中 OA 系统名称与表单。"
+            },
+            {
+              "questionType": "CONDITION",
+              "enabled": true,
+              "keywords": [
+                "是否",
+                "能否",
+                "可以吗",
+                "要不要",
+                "能不能报",
+                "算不算",
+                "是否享受",
+                "是否违规"
+              ],
+              "strategies": [
+                "card",
+                "claim",
+                "bm25"
+              ],
+              "priority": 82,
+              "reason": "条件判断：条款 + 断言，答案须给出适用条件、例外与违规定性。"
+            },
+            {
+              "questionType": "RELATION",
+              "enabled": true,
+              "keywords": [
+                "归口",
+                "负责",
+                "审批链",
+                "哪个部门",
+                "谁审批",
+                "所属",
+                "对接"
+              ],
+              "strategies": [
+                "graph",
+                "card",
+                "vector"
+              ],
+              "priority": 66,
+              "reason": "归口与职责：走图谱关系，卡片补充部门职责说明。"
+            },
+            {
+              "questionType": "MULTIHOP",
+              "enabled": true,
+              "keywords": [
+                "为什么",
+                "依据",
+                "根据什么",
+                "连带",
+                "导致",
+                "影响"
+              ],
+              "strategies": [
+                "graph",
+                "card",
+                "vector"
+              ],
+              "priority": 64,
+              "reason": "依据追问：图谱关联制度与部门，卡片给出条款出处。"
+            },
+            {
+              "questionType": "GLOBAL",
+              "enabled": true,
+              "keywords": [
+                "有哪些",
+                "清单",
+                "总览",
+                "全部",
+                "汇总",
+                "福利有哪些",
+                "制度有哪些"
+              ],
+              "strategies": [
+                "card",
+                "vector"
+              ],
+              "priority": 60,
+              "reason": "汇总类：卡片清单为主，向量补充语义相近条目。"
+            }
+          ],
+          "defaultStrategies": [
+            "card",
+            "claim",
+            "bm25",
+            "vector"
+          ]
+        },
+        "rewrite": {
+          "enabled": true,
+          "llmEnabled": false,
+          "maxVariants": 4,
+          "maxRecallRounds": 2,
+          "synonyms": {
+            "报错": [
+              "错误",
+              "异常",
+              "故障"
+            ],
+            "怎么": [
+              "如何",
+              "流程",
+              "步骤"
+            ],
+            "是啥": [
+              "是什么",
+              "含义",
+              "定义"
+            ],
+            "配置": [
+              "标准",
+              "规则",
+              "口径"
+            ],
+            "版本": [
+              "生效日期",
+              "修订",
+              "新规定"
+            ],
+            "年假": [
+              "年休假",
+              "带薪年假",
+              "休假"
+            ],
+            "报销": [
+              "费用报销",
+              "报销单",
+              "发票"
+            ],
+            "离职": [
+              "辞职",
+              "解除劳动合同",
+              "交接"
+            ],
+            "绩效": [
+              "考核",
+              "评级",
+              "KPI"
+            ]
+          }
+        },
+        "recall": {
+          "channels": {
+            "bm25": {
+              "enabled": true,
+              "weight": 1.15,
+              "scale": 1.0
+            },
+            "vector": {
+              "enabled": true,
+              "weight": 1.0,
+              "scale": 1.0
+            },
+            "card": {
+              "enabled": true,
+              "weight": 1.3,
+              "scale": 1.0
+            },
+            "claim": {
+              "enabled": true,
+              "weight": 1.25,
+              "scale": 1.0
+            },
+            "graph": {
+              "enabled": true,
+              "weight": 0.95,
+              "scale": 1.0
+            }
+          },
+          "recallMultiplier": 4,
+          "minRecallCandidates": 28
+        },
+        "fusion": {
+          "rrfK": 55,
+          "qualitySignalsEnabled": true,
+          "qualityWeights": {
+            "authority": 0.25,
+            "freshness": 0.2,
+            "confidence": 0.1,
+            "evidence": 0.1
+          },
+          "chunkBoost": {
+            "enabled": true,
+            "base": 1.25,
+            "headingHit": 0.2,
+            "coverage": 0.15
+          }
+        },
+        "rerank": {
+          "enabled": true,
+          "topN": 0
+        },
+        "answer": {
+          "contextMaxChars": 8600,
+          "minChunkEvidence": 4,
+          "evidenceGateEnabled": true,
+          "faithfulnessMin": 0.05,
+          "entailmentMin": 0.1,
+          "policyVersion": "answer-policy-v1",
+          "noAnswerText": "现有制度知识库中未检索到足够证据，暂无法确认；涉及口径冲突时请以生效日期较晚的修订通知为准，或咨询人力资源部 HRBP。"
+        }
+      }
+    },
+    "工程协同": {
+      "label": "研发协同场景：问题单可追溯与时效优先",
+      "updatedAt": "2026-10-08T12:30:34Z",
+      "policy": {
+        "version": "query-policy-v1",
+        "route": {
+          "enabled": true,
+          "rules": [
+            {
+              "questionType": "EXACT",
+              "enabled": true,
+              "keywords": [
+                "PAY-",
+                "KOS-",
+                "ITSM-",
+                "CHG-",
+                "OA-",
+                "Jira",
+                "issue",
+                "接口",
+                "字段",
+                "错误码",
+                "版本号",
+                "分支",
+                "PR",
+                "Sprint"
+              ],
+              "strategies": [
+                "bm25",
+                "card",
+                "vector"
+              ],
+              "priority": 96,
+              "reason": "编号与接口字段：BM25 精确命中 issue Key、工单号与字段名，卡片给出上下文字段表。"
+            },
+            {
+              "questionType": "RELATION",
+              "enabled": true,
+              "keywords": [
+                "依赖",
+                "影响",
+                "关联",
+                "阻塞",
+                "谁负责",
+                "经办人",
+                "负责人",
+                "归属",
+                "上游",
+                "下游",
+                "对接"
+              ],
+              "strategies": [
+                "graph",
+                "card",
+                "vector"
+              ],
+              "priority": 86,
+              "reason": "责任与依赖：图谱走人员—模块—问题单关系，卡片补充表格字段。"
+            },
+            {
+              "questionType": "MULTIHOP",
+              "enabled": true,
+              "keywords": [
+                "为什么",
+                "根因",
+                "追根溯源",
+                "导致",
+                "最终",
+                "引发",
+                "链条",
+                "复盘"
+              ],
+              "strategies": [
+                "graph",
+                "claim",
+                "card"
+              ],
+              "priority": 84,
+              "reason": "根因追问：图谱多跳 + 复盘断言，答案须给出时间线与改进项。"
+            },
+            {
+              "questionType": "FACT",
+              "enabled": true,
+              "keywords": [
+                "进度",
+                "点数",
+                "状态",
+                "覆盖率",
+                "达成率",
+                "时长",
+                "MTTR",
+                "多少",
+                "什么时候",
+                "截止"
+              ],
+              "strategies": [
+                "card",
+                "claim",
+                "bm25"
+              ],
+              "priority": 88,
+              "reason": "进度与指标：卡片表格与断言为主，注意日报周报的统计周期。"
+            },
+            {
+              "questionType": "PROCEDURE",
+              "enabled": true,
+              "keywords": [
+                "流程",
+                "怎么上线",
+                "发布",
+                "检查清单",
+                "门禁",
+                "回滚",
+                "提测",
+                "评审",
+                "如何申请"
+              ],
+              "strategies": [
+                "card",
+                "bm25",
+                "vector"
+              ],
+              "priority": 80,
+              "reason": "流程类：发布检查清单与协作流程卡片，BM25 命中命令与门禁项。"
+            },
+            {
+              "questionType": "CONFLICT",
+              "enabled": true,
+              "keywords": [
+                "冲突",
+                "不一致",
+                "以哪个为准",
+                "哪个版本",
+                "文档与实现",
+                "失效",
+                "最新"
+              ],
+              "strategies": [
+                "claim",
+                "card",
+                "bm25"
+              ],
+              "priority": 78,
+              "reason": "文档与实现差异：优先断言与最新文档，答案须标注文档版本与日期。"
+            },
+            {
+              "questionType": "CONDITION",
+              "enabled": true,
+              "keywords": [
+                "是否",
+                "能否",
+                "可以吗",
+                "要不要",
+                "达标了吗",
+                "通过了吗"
+              ],
+              "strategies": [
+                "card",
+                "claim",
+                "bm25"
+              ],
+              "priority": 70,
+              "reason": "判断类：卡片阈值与门禁项，答案须给出判定依据。"
+            },
+            {
+              "questionType": "GLOBAL",
+              "enabled": true,
+              "keywords": [
+                "有哪些",
+                "清单",
+                "总览",
+                "汇总",
+                "全部",
+                "统计",
+                "本周",
+                "本迭代"
+              ],
+              "strategies": [
+                "card",
+                "vector"
+              ],
+              "priority": 62,
+              "reason": "汇总类（含周报/月报）：卡片清单为主，按时间倒序取最近周期。"
+            }
+          ],
+          "defaultStrategies": [
+            "card",
+            "bm25",
+            "graph",
+            "vector"
+          ]
+        },
+        "rewrite": {
+          "enabled": true,
+          "llmEnabled": false,
+          "maxVariants": 4,
+          "maxRecallRounds": 2,
+          "synonyms": {
+            "报错": [
+              "失败",
+              "异常",
+              "缺陷",
+              "Bug"
+            ],
+            "怎么": [
+              "如何",
+              "流程",
+              "步骤"
+            ],
+            "是啥": [
+              "是什么",
+              "含义",
+              "定义"
+            ],
+            "配置": [
+              "参数",
+              "设置",
+              "开关"
+            ],
+            "版本": [
+              "迭代",
+              "Sprint",
+              "发布版本"
+            ],
+            "进度": [
+              "完成情况",
+              "达成",
+              "状态"
+            ],
+            "负责人": [
+              "经办人",
+              "Owner",
+              "对接人"
+            ],
+            "复盘": [
+              "回顾",
+              "Retro",
+              "总结"
+            ]
+          }
+        },
+        "recall": {
+          "channels": {
+            "bm25": {
+              "enabled": true,
+              "weight": 1.25,
+              "scale": 1.0
+            },
+            "vector": {
+              "enabled": true,
+              "weight": 1.15,
+              "scale": 1.0
+            },
+            "card": {
+              "enabled": true,
+              "weight": 1.2,
+              "scale": 1.0
+            },
+            "claim": {
+              "enabled": true,
+              "weight": 1.15,
+              "scale": 1.0
+            },
+            "graph": {
+              "enabled": true,
+              "weight": 1.15,
+              "scale": 1.0
+            }
+          },
+          "recallMultiplier": 4,
+          "minRecallCandidates": 32
+        },
+        "fusion": {
+          "rrfK": 55,
+          "qualitySignalsEnabled": true,
+          "qualityWeights": {
+            "authority": 0.1,
+            "freshness": 0.25,
+            "confidence": 0.15,
+            "evidence": 0.15
+          },
+          "chunkBoost": {
+            "enabled": true,
+            "base": 1.25,
+            "headingHit": 0.16,
+            "coverage": 0.18
+          }
+        },
+        "rerank": {
+          "enabled": true,
+          "topN": 0
+        },
+        "answer": {
+          "contextMaxChars": 9000,
+          "minChunkEvidence": 3,
+          "evidenceGateEnabled": true,
+          "faithfulnessMin": 0.05,
+          "entailmentMin": 0.09,
+          "policyVersion": "answer-policy-v1",
+          "noAnswerText": "现有工程协同知识库中未检索到足够证据（Jira/Confluence/OA 或日报周报），暂无法确认，请补充 issue Key、工单号或时间范围。"
+        }
+      }
+    }
+  }
+}

@@ -1,5 +1,7 @@
 package com.jh.knowledgeos.service;
 
+import com.jh.knowledgeos.common.DefaultCatalogLoader;
+
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -103,6 +105,11 @@ public final class DerivationRuleCatalog {
      * The catalog: what the rule is for, and the definition it starts from.
      */
     public static List<Map<String, Object>> presets() {
+        // 出厂默认从文件读；读不到就用内置常量，行为和加文件之前完全一致。
+        List<Map<String, Object>> fromFile = DefaultCatalogLoader.derivationPresets();
+        if (fromFile != null) {
+            return fromFile;
+        }
         List<Map<String, Object>> copies = new ArrayList<Map<String, Object>>();
         for (Map<String, Object> preset : PRESETS) {
             copies.add(copy(preset));

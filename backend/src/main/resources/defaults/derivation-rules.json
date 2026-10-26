@@ -1,0 +1,134 @@
+[
+  {
+    "presetCode": "DEPLOY_CHAIN",
+    "name": "部署链路推导",
+    "derivationType": "GRAPH_PATH",
+    "description": "组件属于某服务、服务部署在某集群，推出组件最终的部署位置——没人写下这条，但它决定了故障影响谁。",
+    "scene": "A 属于 B、B 部署在 C → A 部署在 C",
+    "scheduleType": "MANUAL",
+    "definition": {
+      "firstType": "PART_OF",
+      "secondType": "LOCATED_IN",
+      "minConfidence": 0.6,
+      "limit": 100,
+      "template": "{head} 经由 {mid} 部署于 {tail}"
+    }
+  },
+  {
+    "presetCode": "IMPACT_CHAIN",
+    "name": "依赖影响面推导",
+    "derivationType": "GRAPH_PATH",
+    "description": "沿依赖走两跳，把间接依赖显式化：改一个组件之前，先知道谁会被牵连。",
+    "scene": "A 依赖 B、B 依赖 C → A 间接依赖 C",
+    "scheduleType": "MANUAL",
+    "definition": {
+      "firstType": "DEPENDS_ON",
+      "secondType": "DEPENDS_ON",
+      "minConfidence": 0.6,
+      "limit": 100,
+      "template": "{head} 经 {mid} 间接依赖 {tail}"
+    }
+  },
+  {
+    "presetCode": "IMPACT_SCOPE",
+    "name": "漏洞影响面推导",
+    "derivationType": "GRAPH_PATH",
+    "description": "漏洞影响组件、产品依赖该组件、产品部署在项目、项目属于客户：把“这个漏洞影响到谁”的整条链路显式化，四跳之外没人会手写这条结论，但它正是安全公告之后第一个被问到的问题。",
+    "scene": "漏洞 ←受影响← 组件 ←依赖← 产品 ←部署← 项目 →属于→ 客户",
+    "scheduleType": "MANUAL",
+    "definition": {
+      "firstType": "AFFECTS",
+      "secondType": "DEPENDS_ON",
+      "minConfidence": 0.5,
+      "limit": 50,
+      "template": "{head} 可能影响 {tail}",
+      "pathTypes": "AFFECTS>DEPENDS_ON:REV>DEPLOYED_IN:REV>BELONGS_TO"
+    }
+  },
+  {
+    "presetCode": "OWNER_CHAIN",
+    "name": "归属与责任推导",
+    "derivationType": "GRAPH_PATH",
+    "description": "组件所属系统由谁管理，推出该组件的负责方——问题来了该找谁，往往没写下来。",
+    "scene": "A 属于 B、B 由 C 管理 → A 由 C 负责",
+    "scheduleType": "MANUAL",
+    "definition": {
+      "firstType": "PART_OF",
+      "secondType": "MANAGES",
+      "minConfidence": 0.55,
+      "limit": 100,
+      "template": "{head} 所属 {mid} 由 {tail} 负责"
+    }
+  },
+  {
+    "presetCode": "CAUSE_CHAIN",
+    "name": "因果链推导",
+    "derivationType": "GRAPH_PATH",
+    "description": "原因之上还有原因，把两跳因果连成链，用于根因分析与风险预判。",
+    "scene": "A 导致 B、B 导致 C → A 间接导致 C",
+    "scheduleType": "MANUAL",
+    "definition": {
+      "firstType": "CAUSES",
+      "secondType": "CAUSES",
+      "minConfidence": 0.6,
+      "limit": 80,
+      "template": "{head} 经 {mid} 间接导致 {tail}"
+    }
+  },
+  {
+    "presetCode": "CONTAINS_CHAIN",
+    "name": "内容归属推导",
+    "derivationType": "GRAPH_PATH",
+    "description": "容器里有什么、这些内容又归属哪个体系，用于目录与知识域的归并。",
+    "scene": "A 包含 B、B 属于 C → A 的内容归属 C",
+    "scheduleType": "MANUAL",
+    "definition": {
+      "firstType": "CONTAINS",
+      "secondType": "PART_OF",
+      "minConfidence": 0.6,
+      "limit": 100,
+      "template": "{head} 包含 {mid}，{mid} 归属 {tail}"
+    }
+  },
+  {
+    "presetCode": "RESOURCE_CHAIN",
+    "name": "资源占用推导",
+    "derivationType": "GRAPH_PATH",
+    "description": "谁用了什么资源、这些资源在哪里，推出资源的实际落点。",
+    "scene": "A 使用 B、B 位于 C → A 使用的资源位于 C",
+    "scheduleType": "MANUAL",
+    "definition": {
+      "firstType": "USES",
+      "secondType": "LOCATED_IN",
+      "minConfidence": 0.6,
+      "limit": 100,
+      "template": "{head} 使用的 {mid} 位于 {tail}"
+    }
+  },
+  {
+    "presetCode": "CLAIM_SENTENCE",
+    "name": "断言成句",
+    "derivationType": "TEMPLATE",
+    "description": "把已通过审核的断言整理成一句可直接引用的话，供检索与问答复用。",
+    "scene": "断言（主体 / 谓词 / 客体）→ 一句完整陈述",
+    "scheduleType": "MANUAL",
+    "definition": {
+      "template": "{subject} 的 {predicate} 为 {object}",
+      "minConfidence": 0.6,
+      "limit": 100
+    }
+  },
+  {
+    "presetCode": "AI_CONCLUSION",
+    "name": "模型归纳结论",
+    "derivationType": "AI",
+    "description": "让模型从已有断言中归纳没人直接写下的结论；无论是否配置模型，产出都是待审候选，批准后才成为知识。",
+    "scene": "多条断言 → 模型归纳的新结论（需人工批准）",
+    "scheduleType": "MANUAL",
+    "definition": {
+      "prompt": "从下列断言中归纳尚未直接写明的结论，只输出有把握的候选",
+      "minConfidence": 0.7,
+      "limit": 50
+    }
+  }
+]

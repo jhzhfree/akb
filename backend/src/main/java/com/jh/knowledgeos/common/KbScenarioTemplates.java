@@ -72,6 +72,11 @@ public final class KbScenarioTemplates {
      * so choosing one is an informed choice and not a guess at a code word.
      */
     public static List<Map<String, Object>> catalog() {
+        // 出厂默认从文件读；读不到就用内置常量，行为和加文件之前完全一致。
+        List<Map<String, Object>> fromFile = DefaultCatalogLoader.scenarioTemplates();
+        if (fromFile != null) {
+            return fromFile;
+        }
         List<Map<String, Object>> items = new ArrayList<Map<String, Object>>();
         for (String code : SCENARIO_CODES) {
             Map<String, Object> template = TEMPLATES.get(code);

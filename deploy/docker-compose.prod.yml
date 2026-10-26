@@ -76,6 +76,14 @@ services:
       MILVUS_URL: http://milvus:19530
     volumes:
     - ai_data:/app/data
+    # 出厂默认（检索策略等）在镜像的 /app/config 里，首次启动由服务自己播种到 data 卷。
+    # 卷一旦创建就不会被新镜像覆盖，所以改默认配置靠的是播种逻辑，不是重新打镜像。
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:12000/health', timeout=3).status==200 else 1)"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 40s
     depends_on:
     - elasticsearch
     - milvus
@@ -106,9 +114,13 @@ services:
       NEO4J_USER: ${NEO4J_USER:-neo4j}
       NEO4J_PASSWORD: ${NEO4J_PASSWORD:-}
     depends_on:
-    - mysql
-    - redis
-    - ai-service
+      mysql:
+        condition: service_started
+      redis:
+        condition: service_started
+      # 等 AI 服务真正能响应再启动后端：启动即校验配置，早于它就绪会 fail-fast 退出。
+      ai-service:
+        condition: service_healthy
   index-worker:
     build: ../backend
     restart: unless-stopped

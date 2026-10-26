@@ -30,10 +30,13 @@ from typing import Any
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
-from app.core.config import DATA_DIR
+from app.core.config import BASE_DIR, DATA_DIR
 from app.core.config import settings as env_settings
 
 POLICY_FILE = DATA_DIR / "query_policy.json"
+# 出厂默认随代码发布、进版本库；运行时的那份在 DATA_DIR 里（通常是个持久卷，已经存在的
+# 卷不会被新镜像覆盖）。所以只在镜像里放文件是不够的，首次启动要从这里播种一次。
+DEFAULT_POLICY_FILE = BASE_DIR / "config" / "query_policy.defaults.json"
 POLICY_FILE_MODE = 0o600
 POLICY_VERSION = "query-policy-v1"
 
@@ -490,8 +493,34 @@ def _coerce_name(raw: str) -> str:
     return _profile_name(text)
 
 
+def _seed_defaults() -> None:
+    """Copy the shipped defaults into the data directory on first start.
+
+    The data directory is normally a persistent volume, and a volume that already
+    exists is never refreshed from a newer image. A deployment that only ships the
+    file inside the image therefore keeps running on whatever happened to be there
+    at first start — which is how a production box ends up showing a single default
+    strategy. Seeding here is what gets the shipped defaults to actually arrive.
+    """
+    if POLICY_FILE.exists() or not DEFAULT_POLICY_FILE.exists():
+        return
+    try:
+        raw = json.loads(DEFAULT_POLICY_FILE.read_text(encoding="utf-8"))
+    except Exception as exc:
+        logger.warning("shipped query policy defaults unreadable: %s", exc)
+        return
+    if not (isinstance(raw, dict) and isinstance(raw.get("profiles"), dict) and raw["profiles"]):
+        return
+    try:
+        _write_store(raw)
+        logger.info("seeded query policy with %d shipped profiles", len(raw["profiles"]))
+    except Exception as exc:
+        logger.warning("could not seed query policy defaults: %s", exc)
+
+
 def _read_store() -> dict[str, Any]:
     """Read the persisted policy store, promoting a legacy single-policy file on the fly."""
+    _seed_defaults()
     store: dict[str, Any] = {"active": DEFAULT_PROFILE, "profiles": {}}
     if POLICY_FILE.exists():
         try:
