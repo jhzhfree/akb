@@ -40,3 +40,37 @@ export const saveRoleMenu = (role:string, visible:string[]):Promise<ApiResponse<
 /** 恢复该角色的内置默认菜单。 */
 export const resetRoleMenu = (role:string):Promise<ApiResponse<{role:string; visible:string[]; configured:boolean}>> =>
   axios.post('/api/system/role-menu/reset', null, {params:{role}})
+
+/**
+ * 一类默认配置的来源与条数。
+ * source 有三种可能：配置目录里的文件路径、classpath:defaults/...（jar 内）、built-in（内置常量）。
+ */
+export interface DefaultCatalogSource { source:string; count:number }
+
+export interface DefaultCatalogStatus {
+  /** 配置目录；为 null 说明没配 KNOWLEDGE_CONFIG_DIR，默认配置只来自镜像。 */
+  configDir:string|null
+  scenarioTemplates:DefaultCatalogSource
+  derivationRules:DefaultCatalogSource
+}
+
+export interface DefaultRestoreResult {
+  backend:{
+    configured:boolean
+    written:string[]
+    failed:string[]
+    message?:string
+    scenarioTemplates:DefaultCatalogSource
+    derivationRules:DefaultCatalogSource
+  }
+  aiService:{ ok:boolean; result?:{profiles?:string[]; active?:string; source?:string}; error?:string }
+  /** 两侧都恢复成功才为 true。 */
+  allRestored:boolean
+}
+
+/** 默认配置当前生效的来源。 */
+export const getDefaultCatalog = ():Promise<ApiResponse<DefaultCatalogStatus>> => axios.get('/api/admin/defaults')
+
+/** 用镜像内的出厂配置覆盖配置目录，并让 AI 服务恢复检索策略。 */
+export const restoreDefaultCatalog = ():Promise<ApiResponse<DefaultRestoreResult>> =>
+  axios.post('/api/admin/defaults/restore')

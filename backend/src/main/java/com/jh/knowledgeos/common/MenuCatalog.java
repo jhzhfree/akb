@@ -109,6 +109,8 @@ public final class MenuCatalog {
         add("system.tasks", Permissions.SYSTEM_TASK, false);
         add("system.audit", Permissions.SYSTEM_AUDIT, false);
         add("system.space", Permissions.SYSTEM_SPACE, false);
+        // 系统初始化：恢复出厂默认配置，只在管理员可见。
+        add("system.defaults", Permissions.SYSTEM_DEFAULTS, true);
         // 角色菜单配置本身：管理员在这里裁剪各角色可见的模块功能菜单。
         add("system.menu", Permissions.SYSTEM_ACL, false);
     }

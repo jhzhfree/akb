@@ -219,6 +219,79 @@ public final class DefaultCatalogLoader {
         }
     }
 
+    /**
+     * Overwrite the mounted files with the copies shipped in the jar.
+     *
+     * <p>This is the restore path, and the opposite of {@link #prepare()}: seeding only
+     * fills in what is missing, restoring replaces what is there. Replacing is the point —
+     * it is how an operator gets back from a file they edited or that got corrupted.
+     *
+     * <p>Reports what it did instead of throwing: with no directory configured there is
+     * nothing outside the jar to restore, which is a fact to show the operator, not a
+     * failure. Any file that could not be written is listed so a read-only mount does not
+     * look like a success.
+     */
+    public static Map<String, Object> restore() {
+        synchronized (LOCK) {
+            File dir = configDir();
+            List<String> written = new ArrayList<String>();
+            List<String> failed = new ArrayList<String>();
+            Map<String, Object> out = new LinkedHashMap<String, Object>();
+            out.put("configured", dir != null);
+            if (dir == null) {
+                out.put("message", CONFIG_DIR_ENV + " is not set: nothing outside the jar to restore");
+            } else {
+                String[] names = new String[] {SCENARIO_FILE, DERIVATION_FILE};
+                for (String fileName : names) {
+                    if (copyShipped(dir, fileName)) {
+                        written.add(new File(dir, fileName).getPath());
+                    } else {
+                        failed.add(fileName);
+                    }
+                }
+            }
+            reloadLocked();
+            out.put("written", written);
+            out.put("failed", failed);
+            out.put("scenarioTemplates", describe(scenarioSource, scenarioCache));
+            out.put("derivationRules", describe(derivationSource, derivationCache));
+            return out;
+        }
+    }
+
+    /** Copy one shipped file over the mounted one, replacing whatever is there. */
+    private static boolean copyShipped(File dir, String fileName) {
+        ClassPathResource resource = new ClassPathResource("defaults/" + fileName);
+        if (!resource.exists()) {
+            log.warn("no shipped {} in the jar, nothing to restore", fileName);
+            return false;
+        }
+        try {
+            if (!dir.isDirectory() && !dir.mkdirs()) {
+                log.warn("could not create {}", dir.getPath());
+                return false;
+            }
+            byte[] bytes;
+            InputStream stream = resource.getInputStream();
+            try {
+                bytes = readAll(stream);
+            } finally {
+                stream.close();
+            }
+            OutputStream out = new FileOutputStream(new File(dir, fileName));
+            try {
+                out.write(bytes);
+            } finally {
+                out.close();
+            }
+            log.info("restored {} from the jar into {}", fileName, dir.getPath());
+            return true;
+        } catch (Exception exc) {
+            log.warn("could not restore {} into {}: {}", fileName, dir.getPath(), exc.toString());
+            return false;
+        }
+    }
+
     private static Map<String, Object> describe(String source, List<Map<String, Object>> rows) {
         Map<String, Object> out = new LinkedHashMap<String, Object>();
         out.put("source", BUILT_IN.equals(source) ? BUILT_IN : source);

@@ -19,6 +19,7 @@ export const PERM = {
   SYSTEM_TASK: 'system:task',
   SYSTEM_AUDIT: 'system:audit',
   SYSTEM_SPACE: 'system:space',
+  SYSTEM_DEFAULTS: 'system:defaults',
   WORKBENCH_VIEW: 'workbench:view',
   WORKBENCH_ASSET: 'workbench:asset',
   GENERATE_IMPORT: 'generate:import',

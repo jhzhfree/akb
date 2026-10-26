@@ -655,6 +655,35 @@ def reset_policy() -> QueryPolicy:
         return policy
 
 
+def restore_shipped_defaults() -> dict[str, Any]:
+    """Put the shipped default store back: same strategies, same active one.
+
+    Different from reset_policy(), which only resets the active profile to the built-in
+    policy and keeps every other profile as it was. This one restores the whole set from
+    config/query_policy.defaults.json — the way back from a store that lost strategies or
+    accumulated edits. Used by "restore defaults" in the console.
+    """
+    global _cache
+    if not DEFAULT_POLICY_FILE.exists():
+        raise FileNotFoundError("shipped defaults file missing: %s" % DEFAULT_POLICY_FILE)
+    try:
+        raw = json.loads(DEFAULT_POLICY_FILE.read_text(encoding="utf-8"))
+    except Exception as exc:
+        raise ValueError("shipped defaults file is unreadable: %s" % exc) from exc
+    if not (isinstance(raw, dict) and isinstance(raw.get("profiles"), dict) and raw["profiles"]):
+        raise ValueError("shipped defaults file has no profiles")
+    with _lock:
+        _write_store(raw)
+        _cache = None
+    logger.info("restored query policy from shipped defaults: %d profiles", len(raw["profiles"]))
+    return {
+        "restored": True,
+        "source": str(DEFAULT_POLICY_FILE),
+        "active": raw.get("active"),
+        "profiles": list(raw["profiles"].keys()),
+    }
+
+
 def list_profiles() -> dict[str, Any]:
     """Every saved strategy with the fingerprint the console compares them by."""
     with _lock:

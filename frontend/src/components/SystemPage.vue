@@ -57,6 +57,9 @@
 
   <!-- 角色菜单：每个角色可见的模块功能菜单在这里配置（取代原先的用户/管理视图切换）。 -->
   <RoleMenuPanel v-else-if="active==='system.menu'" />
+
+  <!-- 系统初始化：三类出厂默认配置的来源，以及恢复到配置目录的操作。 -->
+  <SystemDefaultsPanel v-else-if="active==='system.defaults'" />
 </template>
 <script setup lang="ts">
 import { computed } from 'vue'
@@ -71,6 +74,7 @@ import SpacePanel from './SpacePanel.vue'
 import SchemaPanel from './SchemaPanel.vue'
 import TaskAlertPanel from './TaskAlertPanel.vue'
 import RoleMenuPanel from './RoleMenuPanel.vue'
+import SystemDefaultsPanel from './SystemDefaultsPanel.vue'
 
 const props = defineProps<{
   active: string
@@ -116,6 +120,7 @@ const modules = computed(() => {
     'system.tasks': '异步任务、告警与通知',
     'system.audit': '登录、检索、变更与调用审计',
     'system.space': '知识库空间与成员配置',
+    'system.defaults': '默认配置来源与恢复出厂',
   }
   return leaves.value
     .filter(tab => tab.key !== 'system')

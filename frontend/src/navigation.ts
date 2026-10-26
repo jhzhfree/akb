@@ -189,6 +189,8 @@ export const NAV_SECTIONS: NavSection[] = [
       { key: 'system.tasks', label: '任务与告警', icon: 'checks', permission: PERM.SYSTEM_TASK },
       { key: 'system.audit', label: '审计日志', icon: 'doc', permission: PERM.SYSTEM_AUDIT },
       { key: 'system.space', label: '知识空间', icon: 'folder', permission: PERM.SYSTEM_SPACE },
+      /** 系统初始化：查看默认配置的来源，必要时用镜像内的出厂配置覆盖。 */
+      { key: 'system.defaults', label: '系统初始化', icon: 'settings', adminOnly: true, permission: PERM.SYSTEM_DEFAULTS },
       /** 角色菜单：每个角色可见的模块功能菜单在这里配置，取代原先的用户/管理视图切换。 */
       { key: 'system.menu', label: '角色菜单', icon: 'sliders', permission: PERM.SYSTEM_ACL },
     ],

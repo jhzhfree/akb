@@ -23,6 +23,7 @@ from app.core.query_policy import (
     public_policy,
     rename_profile,
     reset_policy,
+    restore_shipped_defaults,
     save_policy,
     update_profile,
 )
@@ -72,6 +73,21 @@ def update_query_policy(payload: dict[str, Any]) -> dict[str, Any]:
 def reset_query_policy() -> dict[str, Any]:
     """Restore the built-in defaults and discard console customizations."""
     return public_policy(reset_policy())
+
+
+@router.post("/ai/settings/query-policy/restore-defaults")
+def restore_query_policy_defaults() -> dict[str, Any]:
+    """Replace the stored strategies with the shipped defaults file.
+
+    Unlike /reset, which resets the active profile to the built-in policy and keeps the
+    others, this restores the whole set — including strategies that were deleted.
+    """
+    try:
+        return restore_shipped_defaults()
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @router.get("/ai/settings/query-policy/schema")

@@ -63,6 +63,11 @@ public final class Permissions {
     public static final String SYSTEM_SPACE = "system:space";
 
     /**
+     * 系统配置：系统初始化（把出厂默认配置恢复到配置目录）。
+     */
+    public static final String SYSTEM_DEFAULTS = "system:defaults";
+
+    /**
      * 知识工作台：总览、版本、质量。
      */
     public static final String WORKBENCH_VIEW = "workbench:view";
@@ -123,7 +128,8 @@ public final class Permissions {
     public static final String INTEGRATION_VIEW = "integration:view";
 
     public static final List<String> ALL = Collections.unmodifiableList(Arrays.asList(SYSTEM_VIEW, SYSTEM_USER, SYSTEM_ACL, SYSTEM_MODEL,
-        SYSTEM_SCHEMA, SYSTEM_INDEX, SYSTEM_TASK, SYSTEM_AUDIT, SYSTEM_SPACE, WORKBENCH_VIEW, WORKBENCH_ASSET, GENERATE_IMPORT, GENERATE_CONNECTOR,
+        SYSTEM_SCHEMA, SYSTEM_INDEX, SYSTEM_TASK, SYSTEM_AUDIT, SYSTEM_SPACE, SYSTEM_DEFAULTS, WORKBENCH_VIEW, WORKBENCH_ASSET, GENERATE_IMPORT,
+        GENERATE_CONNECTOR,
         GENERATE_JUDGE, GENERATE_DERIVE, SEARCH_QUERY, SEARCH_GRAPH, SEARCH_TEST, SEARCH_POLICY, SEARCH_EVALUATE, INTEGRATION_VIEW));
 
     private static final Map<String, String> LABELS = new LinkedHashMap<String, String>();
@@ -138,6 +144,7 @@ public final class Permissions {
         LABELS.put(SYSTEM_TASK, "任务与告警");
         LABELS.put(SYSTEM_AUDIT, "审计日志");
         LABELS.put(SYSTEM_SPACE, "知识空间");
+        LABELS.put(SYSTEM_DEFAULTS, "系统初始化");
         LABELS.put(WORKBENCH_VIEW, "知识工作台");
         LABELS.put(WORKBENCH_ASSET, "资产浏览");
         LABELS.put(GENERATE_IMPORT, "文档导入与生成");
