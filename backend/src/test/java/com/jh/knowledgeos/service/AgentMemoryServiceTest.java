@@ -53,7 +53,7 @@ class AgentMemoryServiceTest {
         verify(access).assertScope(key, ApiKey.SCOPE_MEMORY_WRITE);
         verify(mapper).insert(any(String.class), eq("octop-prod"), eq("agent-ops"), eq("AGENT"), eq("agent-ops"), eq("L3"),
             eq("Agent should cite verified sources"), eq("[\"preference\",\"workflow\"]"), eq("USER_CONFIRMED"), eq(null), eq(0.7d), eq(3),
-            any(java.time.LocalDateTime.class), eq(41L), eq("profile-capture-1"));
+            any(java.time.LocalDateTime.class), eq(41L), eq("profile-capture-1"), any(String.class));
         verify(mapper).findByIdempotency("octop-prod", "agent-ops", "profile-capture-1");
     }
 
@@ -146,6 +146,44 @@ class AgentMemoryServiceTest {
 
         assertThrows(SecurityException.class, () -> service.forget(key, "MEMORY_PRIVATE"));
         verify(mapper, never()).forget("octop-prod", "MEMORY_PRIVATE", "agent-ops");
+    }
+
+    @Test
+    void idempotencyRejectsChangedPayloadFingerprintEvenWhenCoreTextIsUnchanged() {
+        ApiKey key = key();
+        MemoryCaptureRequest request = new MemoryCaptureRequest();
+        request.setMemoryLevel("L1");
+        request.setScopeType("AGENT");
+        request.setContent("same memory text");
+        request.setTags(Collections.singletonList("current-tag"));
+        request.setImportance(Integer.valueOf(3));
+        request.setIdempotencyKey("memory-capture-7");
+        Map<String, Object> stored = new LinkedHashMap<String, Object>();
+        stored.put("memoryCode", "MEMORY_EXISTING");
+        stored.put("scopeType", "AGENT");
+        stored.put("scopeCode", "agent-ops");
+        stored.put("memoryLevel", "L1");
+        stored.put("content", "same memory text");
+        stored.put("payloadFingerprint", "0000000000000000000000000000000000000000000000000000000000000000");
+        when(mapper.findByIdempotency("octop-prod", "agent-ops", "memory-capture-7")).thenReturn(stored);
+
+        assertThrows(IllegalArgumentException.class, () -> service.capture(key, request));
+    }
+
+    @Test
+    void agentCanForgetItsSuspendedMemory() {
+        ApiKey key = key();
+        Map<String, Object> existing = new LinkedHashMap<String, Object>();
+        existing.put("scopeType", "AGENT");
+        existing.put("agentCode", "agent-ops");
+        existing.put("status", "SUSPENDED");
+        when(mapper.get("octop-prod", "MEMORY_SUSPENDED")).thenReturn(existing);
+        when(mapper.forget("octop-prod", "MEMORY_SUSPENDED", "agent-ops")).thenReturn(1);
+
+        Map<String, Object> result = service.forget(key, "MEMORY_SUSPENDED");
+
+        assertEquals(Boolean.TRUE, result.get("forgotten"));
+        verify(mapper).forget("octop-prod", "MEMORY_SUSPENDED", "agent-ops");
     }
 
     @Test

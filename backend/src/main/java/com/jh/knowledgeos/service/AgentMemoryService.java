@@ -7,6 +7,8 @@ import com.jh.knowledgeos.config.KnowledgeProperties;
 import com.jh.knowledgeos.dto.MemoryCaptureRequest;
 import com.jh.knowledgeos.dto.MemoryRecallRequest;
 import com.jh.knowledgeos.mapper.AgentMemoryMapper;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -128,12 +130,14 @@ public class AgentMemoryService {
         if (idempotencyKey != null && !idempotencyKey.matches("[A-Za-z0-9_.:-]{1,128}")) {
             throw new IllegalArgumentException("idempotencyKey 格式不合法");
         }
+        String payloadFingerprint = payloadFingerprint(namespace, agent, scopeType, scopeCode, level, content,
+            tags, sourceType, sourceRef, confidence, importance, ttl);
         LocalDateTime expiresAt = LocalDateTime.now().plusDays(ttl);
         String memoryCode = UUID.randomUUID().toString();
         try {
             mapper.insert(memoryCode, namespace, agent, scopeType, scopeCode, level, content,
                 objectMapper.writeValueAsString(tags), sourceType, sourceRef, confidence, importance, expiresAt,
-                key == null ? null : key.getId(), idempotencyKey);
+                key == null ? null : key.getId(), idempotencyKey, payloadFingerprint);
         } catch (JsonProcessingException e) {
             throw new IllegalStateException("记忆标签序列化失败", e);
         }
@@ -143,10 +147,15 @@ public class AgentMemoryService {
         if (idempotencyKey != null) {
             Map<String, Object> stored = mapper.findByIdempotency(namespace, agent, idempotencyKey);
             if (stored != null) {
-                if (!scopeType.equals(String.valueOf(stored.get("scopeType")))
-                    || !scopeCode.equals(String.valueOf(stored.get("scopeCode")))
-                    || !level.equals(String.valueOf(stored.get("memoryLevel")))
-                    || !content.equals(String.valueOf(stored.get("content")))) {
+                String storedFingerprint = stored.get("payloadFingerprint") == null ? null
+                    : String.valueOf(stored.get("payloadFingerprint"));
+                boolean payloadMismatch = storedFingerprint != null
+                    ? !payloadFingerprint.equals(storedFingerprint)
+                    : !scopeType.equals(String.valueOf(stored.get("scopeType")))
+                        || !scopeCode.equals(String.valueOf(stored.get("scopeCode")))
+                        || !level.equals(String.valueOf(stored.get("memoryLevel")))
+                        || !content.equals(String.valueOf(stored.get("content")));
+                if (payloadMismatch) {
                     throw new IllegalArgumentException("idempotencyKey 已被不同记忆内容使用");
                 }
                 memoryCode = String.valueOf(stored.get("memoryCode"));
@@ -159,6 +168,33 @@ public class AgentMemoryService {
         result.put("memoryLevel", level);
         result.put("expiresAt", storedExpiresAt == null ? expiresAt : storedExpiresAt);
         return result;
+    }
+
+    private String payloadFingerprint(String namespace, String agent, String scopeType, String scopeCode, String level,
+        String content, List<String> tags, String sourceType, String sourceRef, Double confidence, Integer importance, int ttl) {
+        Map<String, Object> payload = new LinkedHashMap<String, Object>();
+        payload.put("namespace", namespace);
+        payload.put("agent", agent);
+        payload.put("scopeType", scopeType);
+        payload.put("scopeCode", scopeCode);
+        payload.put("level", level);
+        payload.put("content", content);
+        payload.put("tags", tags);
+        payload.put("sourceType", sourceType);
+        payload.put("sourceRef", sourceRef);
+        payload.put("confidence", confidence);
+        payload.put("importance", importance);
+        payload.put("ttlDays", Integer.valueOf(ttl));
+        try {
+            byte[] digest = MessageDigest.getInstance("SHA-256").digest(objectMapper.writeValueAsBytes(payload));
+            StringBuilder hex = new StringBuilder(digest.length * 2);
+            for (byte value : digest) {
+                hex.append(String.format(java.util.Locale.ROOT, "%02x", Integer.valueOf(value & 0xff)));
+            }
+            return hex.toString();
+        } catch (JsonProcessingException | NoSuchAlgorithmException e) {
+            throw new IllegalStateException("记忆幂等指纹计算失败", e);
+        }
     }
 
     public Map<String, Object> recall(ApiKey key, MemoryRecallRequest request) {
@@ -195,8 +231,8 @@ public class AgentMemoryService {
      * 这里没有 Key：授权已由调用方保证——控制台有登录态，嵌入令牌在网关处已换成它背后的 Key。
      * 只取 AGENT 作用域，也就是这个身份自己的记忆。</p>
      *
-     * <p>召回是 SQL 的 {@code LIKE} 匹配，整句问题几乎命中不了任何记忆，所以分两步：
-     * 先拿问题去匹配（命中说明记忆里确实有这段上下文），一个都没命中就退回"最近的若干条"。
+     * <p>召回先用 MySQL ngram 全文相关度匹配正文，并兼容短语和标签匹配。整句问题仍可能
+     * 因措辞差异命中不到，所以分两步：先按问题检索，一个都没命中就退回"最近的若干条"。
      * 后者是有意的——宁可让模型看到几条可能相关的记忆自己判断，也不要因为措辞不同就
      * 一条都不给，那样"开了记忆"和没开看起来一样。</p>
      */

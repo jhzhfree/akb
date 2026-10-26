@@ -12,7 +12,8 @@ public interface AgentMemoryMapper {
         @Param("scopeType") String scopeType, @Param("scopeCode") String scopeCode, @Param("level") String level,
         @Param("content") String content, @Param("tagsJson") String tagsJson, @Param("sourceType") String sourceType,
         @Param("sourceRef") String sourceRef, @Param("confidence") Double confidence, @Param("importance") Integer importance,
-        @Param("expiresAt") LocalDateTime expiresAt, @Param("keyId") Long keyId, @Param("idempotencyKey") String idempotencyKey);
+        @Param("expiresAt") LocalDateTime expiresAt, @Param("keyId") Long keyId, @Param("idempotencyKey") String idempotencyKey,
+        @Param("payloadFingerprint") String payloadFingerprint);
 
     Map<String, Object> findByIdempotency(@Param("namespace") String namespace, @Param("agent") String agent,
         @Param("idempotencyKey") String idempotencyKey);

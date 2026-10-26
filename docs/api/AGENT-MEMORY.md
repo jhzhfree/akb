@@ -25,7 +25,8 @@ AKB 在既有知识服务之外提供独立的 Agent Memory Engine，供本系�
 - AKB Knowledge 保存经治理的企业事实、证据、卡片、断言和图谱；Memory 保存 Agent 在具体任务中的上下文、经验和经确认画像。两者不混表、不互相自动提升。
 - Memory 只在调用方显式启用并提交时写入，不会自动保存员工对话。L0 会话片段需显式 Capture，并使用较短 TTL。
 - `L1` 原子记忆、`L2` 团队/项目/任务/工作流场景记忆、`L3` Agent 画像分别有类型约束、来源和默认有效期。L3 只接受用户确认或管理员手工录入。
-- 当前版本的 Recall 是隔离作用域内的关键词匹配，并按重要度/更新时间排序。后续可在不改变 API 契约的情况下加入 BM25、向量召回和异步记忆归并。
+- 当前版本的 Recall 使用 MySQL ngram 全文相关度，并叠加正文短语、标签、重要度和更新时间排序；中文和其他 CJK 文本由 `WITH PARSER ngram` 索引支持。正文短语和标签条件保留为兼容召回路径，检索 SQL 同时执行 namespace、Agent/共享作用域、ACTIVE 状态和到期时间过滤。该版本尚未接入向量召回，不能把全文检索称为语义检索。
+- Capture 的幂等键按 namespace + Agent 唯一；新记录保存规范化请求载荷的 SHA-256 指纹，正文、标签、来源、置信度、重要度或 TTL 等字段发生变化时会拒绝复用同一幂等键。升级前已存在且没有指纹的记录继续按旧版核心字段兼容判断。
 
 ### 身份和隔离
 
@@ -38,7 +39,7 @@ AKB 在既有知识服务之外提供独立的 Agent Memory Engine，供本系�
 
 Agent 作用域的 owner 永远由 API Key 推导，忽略请求中的身份字段。TEAM / PROJECT / TASK / WORKFLOW / SESSION 共享作用域除 namespace 外，还必须由管理员对具体 API Key 显式授予读取和/或写入权限。只有 scope code 而没有授权记录时，Capture、Recall、Forget 都会被拒绝。`MEMORY_READ` / `MEMORY_WRITE` 是调用能力的上限，作用域授权不能扩大 Key 本身的能力。授权精确匹配 `scopeType + scopeCode`，比较区分大小写。
 
-API Key 撤销会立即阻止继续读写。旧记忆仍留在 namespace 中，可由同 namespace 中仍有效且单独获得该作用域授权的凭证继续访问。升级到按作用域授权后，原先仅凭相同 namespace 即可访问的共享作用域默认拒绝；管理员须补充精确授权。Forget 会立即物理删除单条记忆。L0 到期后由小时级清理任务删除；其他层级到期后不再召回，并在 30 天恢复窗口结束后清理。
+API Key 撤销会立即阻止继续读写。旧记忆仍留在 namespace 中，可由同 namespace 中仍有效且单独获得该作用域授权的凭证继续访问。升级到按作用域授权后，原先仅凭相同 namespace 即可访问的共享作用域默认拒绝；管理员须补充精确授权。Forget 会立即物理删除单条记忆，包括已暂停的记忆；读取暂停记忆仍会被状态过滤阻止。L0 到期后由小时级清理任务删除；其他层级到期后不再召回，并在 30 天恢复窗口结束后清理。
 
 当前 REST / MCP Key 代表 Agent 服务身份，不代表最终员工身份。因此本版实现 Agent、团队、项目、任务、工作流和会话作用域；最终用户个人记忆需要由下游身份提供方把可信 subject 映射进服务端凭证上下文，不能让模型从请求体自行声明 userId。
 
@@ -153,7 +154,7 @@ AKB 已实现文档接入与治理、知识卡片和断言、知识图谱、多�
 
 迁移 `V48__query_feedback_workflow.sql` 为 Query Trace 增加调用者归属，并创建持久化反馈工作流表。
 
-记忆 API 与 MCP 契约详见本文件；数据库迁移依次为 `V49__agent_memory_platform.sql`、`V51__agent_memory_scope_access.sql`、`V52__agent_memory_governance.sql`、`V53__agent_memory_key_policy.sql`。
+记忆 API 与 MCP 契约详见本文件；相关数据库迁移包括 `V49__agent_memory_platform.sql`、`V51__agent_memory_scope_access.sql`、`V52__agent_memory_governance.sql`、`V53__agent_memory_key_policy.sql`、`V70__agent_memory_fulltext_recall.sql`（CJK ngram 全文索引）和 `V71__agent_memory_idempotency_fingerprint.sql`（幂等载荷指纹）。
 
 ### 后续实施次序
 

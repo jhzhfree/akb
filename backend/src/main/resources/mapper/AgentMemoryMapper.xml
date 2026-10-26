@@ -3,15 +3,15 @@
 <mapper namespace="com.jh.knowledgeos.mapper.AgentMemoryMapper">
   <insert id="insert">
     INSERT INTO t_agent_memory(memory_code,namespace_code,agent_code,scope_type,scope_code,memory_level,content,tags_json,
-      source_type,source_ref,confidence,importance,expires_at,created_by_key_id,idempotency_key)
+      source_type,source_ref,confidence,importance,expires_at,created_by_key_id,idempotency_key,payload_fingerprint)
     VALUES(#{code},#{namespace},#{agent},#{scopeType},#{scopeCode},#{level},#{content},CAST(#{tagsJson} AS JSON),
-      #{sourceType},#{sourceRef},#{confidence},#{importance},#{expiresAt},#{keyId},#{idempotencyKey})
+      #{sourceType},#{sourceRef},#{confidence},#{importance},#{expiresAt},#{keyId},#{idempotencyKey},#{payloadFingerprint})
     ON DUPLICATE KEY UPDATE id=id
   </insert>
 
   <select id="findByIdempotency" resultType="map">
     SELECT memory_code memoryCode,expires_at expiresAt,scope_type scopeType,scope_code scopeCode,
-      memory_level memoryLevel,content
+      memory_level memoryLevel,content,payload_fingerprint payloadFingerprint
     FROM t_agent_memory
     WHERE namespace_code=#{namespace} AND agent_code=#{agent} AND idempotency_key=#{idempotencyKey} LIMIT 1
   </select>
@@ -20,15 +20,20 @@
     SELECT memory_code memoryCode,namespace_code namespaceCode,agent_code agentCode,scope_type scopeType,
       scope_code scopeCode,memory_level memoryLevel,content,tags_json tags,source_type sourceType,source_ref sourceRef,
       confidence,importance,expires_at expiresAt,created_time createdTime,updated_time updatedTime,
-      (CASE WHEN content LIKE CONCAT('%',#{query},'%') THEN 1 ELSE 0 END) * 10
+      (MATCH(content) AGAINST(#{query} IN NATURAL LANGUAGE MODE) * 10)
+        + CASE WHEN #{query} != '' AND content LIKE CONCAT('%',#{query},'%') THEN 10 ELSE 0 END
+        + CASE WHEN #{query} != '' AND CAST(tags_json AS CHAR) LIKE CONCAT('%',#{query},'%') THEN 4 ELSE 0 END
         + importance * confidence AS relevanceScore
     FROM t_agent_memory
     WHERE namespace_code=#{namespace} AND status='ACTIVE'
       AND (expires_at IS NULL OR expires_at &gt; CURRENT_TIMESTAMP)
       AND ((scope_type='AGENT' AND agent_code=#{agent}) OR
            (scope_type=#{scopeType} AND scope_code=#{scopeCode}))
-      AND (content LIKE CONCAT('%',#{query},'%') OR CAST(tags_json AS CHAR) LIKE CONCAT('%',#{query},'%'))
-    ORDER BY relevanceScore DESC,importance DESC,updated_time DESC
+      AND (#{query} = ''
+        OR MATCH(content) AGAINST(#{query} IN NATURAL LANGUAGE MODE) &gt; 0
+        OR content LIKE CONCAT('%',#{query},'%')
+        OR CAST(tags_json AS CHAR) LIKE CONCAT('%',#{query},'%'))
+    ORDER BY relevanceScore DESC,importance DESC,updated_time DESC,id DESC
     LIMIT #{limit}
   </select>
 
@@ -42,7 +47,7 @@
   <delete id="forget">
     DELETE FROM t_agent_memory
     WHERE namespace_code=#{namespace} AND memory_code=#{code}
-      AND (scope_type&lt;&gt;'AGENT' OR agent_code=#{agent}) AND status='ACTIVE'
+      AND (scope_type&lt;&gt;'AGENT' OR agent_code=#{agent})
   </delete>
 
   <select id="hasScopeAccess" resultType="boolean">

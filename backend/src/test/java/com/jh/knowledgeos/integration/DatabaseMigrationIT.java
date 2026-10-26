@@ -14,6 +14,7 @@ import javax.sql.DataSource;
 import com.jh.knowledgeos.mapper.DocumentMapper;
 import com.jh.knowledgeos.mapper.ExtractionPostStageMapper;
 import com.jh.knowledgeos.domain.ExtractionPostStage;
+import com.jh.knowledgeos.mapper.AgentMemoryMapper;
 import com.jh.knowledgeos.mapper.IndexMapper;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.annotation.Transactional;
@@ -57,6 +58,9 @@ public class DatabaseMigrationIT {
 
     @Autowired
     private ExtractionPostStageMapper extractionStages;
+
+    @Autowired
+    private AgentMemoryMapper agentMemories;
 
     @Autowired
     private IndexMapper indexMapper;
@@ -144,6 +148,7 @@ public class DatabaseMigrationIT {
             assertTrue(columnExists(st, "t_query_trace", "latency_ms"));
             assertTrue(indexExists(st, "t_claim", "idx_claim_lookup"));
             assertTrue(indexExists(st, "t_knowledge_card", "idx_card_updated"));
+            assertTrue(indexExists(st, "t_agent_memory", "ft_agent_memory_content"));
             assertTrue(indexExists(st, "t_evidence", "idx_evidence_source_status"));
             assertTrue(indexExists(st, "t_index_outbox", "idx_index_outbox_due"));
             assertTrue(indexExists(st, "t_index_outbox", "idx_index_outbox_aggregate"));
@@ -152,6 +157,44 @@ public class DatabaseMigrationIT {
                 assertTrue(rs.getInt(1) >= 6);
             }
         }
+    }
+
+    @Test
+    @Transactional
+    void agentMemoryRecallUsesNgramFulltextAndKeepsScopeFiltersBeforeLimit() {
+        long keyId = 910031L;
+        jdbc.update("INSERT INTO t_api_key(id,key_code,name,secret_hash,key_prefix,scopes) "
+            + "VALUES(?,?,?,?,?,'MEMORY_READ')", keyId, "AK_MEMORY_FT_IT", "memory fulltext test", "hash-memory-ft", "ft-test");
+        insertMemory("MEM_FT_DIRECT", "memory-ft-it", "agent-1", "AGENT", "agent-1",
+            "员工年假政策说明：年假申请流程如下。", "ACTIVE", java.time.LocalDateTime.now().plusDays(30), keyId, 3);
+        insertMemory("MEM_FT_PROJECT", "memory-ft-it", "agent-2", "PROJECT", "project-a",
+            "项目发布回滚操作手册。", "ACTIVE", java.time.LocalDateTime.now().plusDays(30), keyId, 3);
+        insertMemory("MEM_FT_OTHER_AGENT", "memory-ft-it", "agent-2", "AGENT", "agent-2",
+            "员工年假政策说明：跨 Agent 私有内容。", "ACTIVE", java.time.LocalDateTime.now().plusDays(30), keyId, 5);
+        insertMemory("MEM_FT_OTHER_PROJECT", "memory-ft-it", "agent-2", "PROJECT", "project-b",
+            "员工年假政策说明：其他项目内容。", "ACTIVE", java.time.LocalDateTime.now().plusDays(30), keyId, 5);
+        insertMemory("MEM_FT_SUSPENDED", "memory-ft-it", "agent-1", "AGENT", "agent-1",
+            "员工年假政策说明：已暂停内容。", "SUSPENDED", java.time.LocalDateTime.now().plusDays(30), keyId, 5);
+        insertMemory("MEM_FT_EXPIRED", "memory-ft-it", "agent-1", "AGENT", "agent-1",
+            "员工年假政策说明：已过期内容。", "ACTIVE", java.time.LocalDateTime.now().minusDays(1), keyId, 5);
+
+        java.util.List<Map<String, Object>> matches = agentMemories.recall(
+            "memory-ft-it", "agent-1", "PROJECT", "project-a", "员工年假政策", 10);
+
+        assertEquals(1, matches.size());
+        assertEquals("MEM_FT_DIRECT", matches.get(0).get("memoryCode"));
+        java.util.List<Map<String, Object>> projectMatches = agentMemories.recall(
+            "memory-ft-it", "agent-1", "PROJECT", "project-a", "项目发布回滚", 10);
+        assertEquals(1, projectMatches.size());
+        assertEquals("MEM_FT_PROJECT", projectMatches.get(0).get("memoryCode"));
+    }
+
+    private void insertMemory(String code, String namespace, String agent, String scopeType, String scopeCode,
+        String content, String status, java.time.LocalDateTime expiresAt, long keyId, int importance) {
+        jdbc.update("INSERT INTO t_agent_memory(memory_code,namespace_code,agent_code,scope_type,scope_code,memory_level,"
+                + "content,tags_json,confidence,importance,status,expires_at,created_by_key_id) "
+                + "VALUES(?,?,?,?,?,'L1',?,JSON_ARRAY(),0.9000,?,?,?,?)",
+            code, namespace, agent, scopeType, scopeCode, content, importance, status, expiresAt, keyId);
     }
 
     @Test
