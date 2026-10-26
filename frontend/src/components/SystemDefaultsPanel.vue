@@ -28,12 +28,13 @@
     </div>
 
     <p v-if="status?.configDir===null" class="sd-warn">
-      后端未配置 KNOWLEDGE_CONFIG_DIR，默认配置只来自镜像，没有可恢复的外部文件。
+      后端未配置 KNOWLEDGE_CONFIG_DIR：默认配置直接读镜像内那份，没有可恢复的外部文件。
+      本地开发想验证恢复功能，可用 <code>KNOWLEDGE_CONFIG_DIR=/tmp/kos-config</code> 启动后端（目录需可写）。
     </p>
   </template>
 
   <div class="sd-bar">
-    <el-button size="small" plain :loading="loading" :disabled="restoring" @click="load">刷新</el-button>
+    <el-button size="small" plain :loading="loading" :disabled="restoring" @click="load(true)">刷新</el-button>
     <span class="sd-grow"></span>
     <el-button size="small" type="danger" plain :loading="restoring" :disabled="loading" @click="restore">
       恢复出厂默认配置
@@ -45,7 +46,7 @@
 </template>
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
-import { ElMessageBox } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { getDefaultCatalog, restoreDefaultCatalog, type DefaultCatalogStatus } from '../api/system'
 import { listQueryPolicyProfiles } from '../api/knowledge-impl'
 
@@ -101,9 +102,13 @@ function sourceLabel(src: string): string {
   return src
 }
 
-async function load() {
+/**
+ * 刷新来源信息。clearMessage 只给「刷新」按钮用：恢复流程会自己写结果说明，
+ * 若把清空放在这里，恢复完再刷新就会把刚写的结果抹掉，看起来像什么都没发生。
+ */
+async function load(clearMessage = false) {
   loading.value = true
-  message.value = ''
+  if (clearMessage) message.value = ''
   try {
     const data = (await getDefaultCatalog()).data.data
     status.value = data ?? null
@@ -133,7 +138,10 @@ async function restore() {
       '恢复出厂默认配置',
       { type: 'warning', confirmButtonText: '恢复', cancelButtonText: '取消' },
     )
-  } catch {
+  } catch (action) {
+    // 只有取消/关闭才静默结束。其它异常若也吞掉，按钮看起来就是「点了没反应」。
+    if (action === 'cancel' || action === 'close') return
+    ElMessage.error('无法打开确认框：' + String(action))
     return
   }
   restoring.value = true
@@ -148,10 +156,11 @@ async function restore() {
     const backend = result.backend
     const parts: string[] = []
     if (!backend.configured) {
-      parts.push('后端未配置配置目录，只使用镜像内配置')
+      parts.push('后端未配置配置目录（KNOWLEDGE_CONFIG_DIR），默认配置直接读镜像内那份，没有外部文件可恢复')
+    } else if (backend.failed.length) {
+      parts.push(`后端 ${backend.failed.length} 个文件写入失败（配置目录可能是只读挂载）：${backend.failed.join('、')}`)
     } else {
       parts.push(`后端恢复 ${backend.written.length} 个文件`
-        + (backend.failed.length ? `，${backend.failed.length} 个写入失败` : '')
         + `（场景 ${backend.scenarioTemplates.count} 条、规则 ${backend.derivationRules.count} 条）`)
     }
     if (result.aiService.ok) {
@@ -162,10 +171,14 @@ async function restore() {
     }
     messageError.value = !result.allRestored
     message.value = (result.allRestored ? '已恢复出厂默认配置。' : '部分完成：') + parts.join('；') + '。'
+    // 面板底部的说明容易被忽略，结果再弹一次，避免「点了没反应」的错觉。
+    if (result.allRestored) ElMessage.success('已恢复出厂默认配置')
+    else ElMessage.warning('恢复未全部成功，详见面板底部说明')
     await load()
   } catch (e) {
     messageError.value = true
     message.value = '恢复失败：' + String(e)
+    ElMessage.error('恢复失败：' + String(e))
   } finally {
     restoring.value = false
   }
