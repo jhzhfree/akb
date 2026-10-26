@@ -6,10 +6,15 @@ more often than lower ones. This buckets claims and cards by the confidence the
 extractor assigned and reports how each bucket was ruled, so the weights in
 ``extractor._blend`` can be checked against reality instead of intuition.
 
+Set ``KB_ID`` to look at one library only. That matters: libraries built before
+the confidence rework all carry the old fixed values, and mixing them in buries
+the signal from the library that was actually built to be measured.
+
 Buckets with no human ruling at all (everything auto-approved) carry no signal:
 the script says so rather than reporting a meaningless approval rate.
 """
 
+import os
 import subprocess
 import sys
 from collections import defaultdict
@@ -19,6 +24,8 @@ MYSQL = [
     "-uknowledge", "-pknowledge123", "--default-character-set=utf8mb4",
     "-D", "knowledge_os", "-N", "-e",
 ]
+
+KB_ID = os.getenv("KB_ID", "").strip()
 
 # 自动批准（宽松模式）也会写 APPROVED，只有 REJECTED 一定是人工判的；UNCERTAIN 多数
 # 来自人工退回。所以"有没有人工信号"看这两者是否存在。
@@ -34,9 +41,10 @@ def query(sql: str) -> list[str]:
 
 
 def report(table: str, label: str) -> bool:
+    scope = f" AND knowledge_base_id={KB_ID}" if KB_ID else ""
     rows = query(
         f"SELECT ROUND(confidence, 1), status, COUNT(*) FROM {table} "
-        f"WHERE confidence IS NOT NULL GROUP BY ROUND(confidence, 1), status;"
+        f"WHERE confidence IS NOT NULL{scope} GROUP BY ROUND(confidence, 1), status;"
     )
     if not rows:
         print(f"{label}: 没有数据")
@@ -51,7 +59,7 @@ def report(table: str, label: str) -> bool:
         buckets[bucket][status] = buckets[bucket].get(status, 0) + count
 
     print(f"\n=== {label} ===")
-    print(f"{'置信度档':>8} {'总数':>6} {'批准':>6} {'驳回':>6} {'待审':>6} {'人工认可率':>10}")
+    print(f"{'置信度档':>8} {'总数':>6} {'批准':>6} {'驳回':>6} {'待审':>6} {'认可率':>8}")
     human_seen = False
     for bucket in sorted(buckets, key=lambda item: float(item)):
         counts = buckets[bucket]
@@ -65,7 +73,7 @@ def report(table: str, label: str) -> bool:
             rate = f"{approved / total * 100:.0f}%"
         else:
             rate = "—"
-        print(f"{bucket:>8} {total:>6} {approved:>6} {rejected:>6} {uncertain:>6} {rate:>10}")
+        print(f"{bucket:>8} {total:>6} {approved:>6} {rejected:>6} {uncertain:>6} {rate:>8}")
 
     if not human_seen:
         print("  没有人工驳回/退回记录：全是自动批准，这一批数据校准不出结论。")
@@ -74,6 +82,10 @@ def report(table: str, label: str) -> bool:
 
 
 def main() -> int:
+    if KB_ID:
+        print(f"范围：仅知识库 {KB_ID}（全库用 KB_ID= 运行）")
+    else:
+        print("范围：全部知识库（含修复前生成的旧数据，建议用 KB_ID 指定）")
     claim_ok = report("t_claim", "断言 t_claim")
     card_ok = report("t_knowledge_card", "卡片 t_knowledge_card")
     if not (claim_ok or card_ok):
