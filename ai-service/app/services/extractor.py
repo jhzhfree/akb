@@ -292,6 +292,11 @@ class KnowledgeExtractor:
                     result = await llm.extract_json(
                         self._strict_prompt(text[:8000], vocabulary, types), max_tokens=8192
                     )
+                if not isinstance(result, dict) and material:
+                    # 整篇一次问完，输出常常超出预算被截断（解析层现在能救回一部分，但尾部
+                    # 那些就丢了）。退一步按小批问：每批输出短得多，不容易断。代价是多次
+                    # 调用，所以只在整体拿不到结果时才付。
+                    result = await self._extract_in_batches(material, vocabulary, types, scenario)
                 if isinstance(result, dict):
                     return self._merge(
                         self._normalize(result, material, vocabulary, types),
@@ -305,6 +310,42 @@ class KnowledgeExtractor:
                 # selected instead of silently swallowing the model failure.
                 logger.warning("LLM knowledge extraction failed; using fallback: %s", exc)
         return self._merge(self._fallback(text, material), policy_claims, policy_cards, vocabulary)
+
+    async def _extract_in_batches(
+        self,
+        material: list[dict[str, Any]],
+        vocabulary: tuple | None,
+        types: list[str] | None,
+        scenario: str,
+        size: int = 3,
+    ) -> dict[str, Any]:
+        """Ask about the material a few units at a time.
+
+        Used when one request for the whole document comes back unusable — a long
+        document makes for a long answer, and a long answer is the one that gets cut
+        off. Several short answers cost more calls but each one fits.
+        """
+        from app.services.llm_provider import get_llm_provider
+
+        merged: dict[str, Any] = {"cards": [], "claims": [], "entities": [], "relations": []}
+        llm = get_llm_provider()
+        for start in range(0, len(material), size):
+            batch = material[start : start + size]
+            if not batch:
+                continue
+            text = "\n\n".join(str(item.get("content") or "") for item in batch)
+            try:
+                result = await llm.extract_json(
+                    self._prompt(text, batch, vocabulary, types, scenario), max_tokens=8192
+                )
+            except Exception:
+                continue  # 一批失败不该丢掉其它批的结果
+            if not isinstance(result, dict):
+                continue
+            part = self._normalize(result, batch, vocabulary, types)
+            for key in merged:
+                merged[key].extend(part.get(key) or [])
+        return merged
 
     def _merge(
         self,

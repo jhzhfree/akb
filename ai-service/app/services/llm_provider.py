@@ -46,8 +46,7 @@ class LlmProvider:
         empty even though the model did the work, and the caller cannot tell that from a refusal.
         """
         text = await self.generate(prompt, max_tokens=max_tokens)
-        match = re.search(r"\{.*\}", text, re.S)
-        return json.loads(match.group(0)) if match else None
+        return _parse_json_object(text)
 
     async def test(self) -> dict[str, Any]:
         """Probe connectivity with a tiny request and report latency."""
@@ -238,3 +237,71 @@ def _build_llm_provider(config_json: str) -> LlmProvider:
 def get_llm_provider() -> LlmProvider:
     """Return the provider matching the current model configuration."""
     return _build_llm_provider(load_model_settings().llm.model_dump_json())
+
+
+def _parse_json_object(text: str) -> dict[str, Any] | None:
+    """Pull a JSON object out of a model reply, surviving a truncated tail.
+
+    A long extraction can hit the output limit part-way through. The old greedy
+    ``{.*}`` match then stopped at the last closing brace it could find — usually an
+    inner one — so the reply was no longer valid JSON and the caller threw the whole
+    document away, falling back to rules that extract nothing useful.
+
+    Rather than trusting one match, this walks back from the last complete element
+    and closes whatever scopes are still open, keeping the first parse that succeeds.
+    A reply cut off mid-item therefore still yields the items that were written
+    before it, instead of losing the document.
+    """
+    if not text:
+        return None
+    block = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", text, re.S)
+    if block:
+        candidate = block.group(1)
+    else:
+        start = text.find("{")
+        if start < 0:
+            return None
+        candidate = text[start:]
+    try:
+        parsed = json.loads(candidate)
+    except json.JSONDecodeError:
+        parsed = None
+    if isinstance(parsed, dict):
+        return parsed
+    for index in range(len(candidate) - 1, -1, -1):
+        if candidate[index] != "}":
+            continue
+        attempt = candidate[: index + 1] + _missing_closers(candidate[: index + 1])
+        try:
+            parsed = json.loads(attempt)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(parsed, dict):
+            return parsed
+    return None
+
+
+def _missing_closers(text: str) -> str:
+    """Return the quote, brackets and braces needed to close a truncated object."""
+    stack: list[str] = []
+    in_string = False
+    escaped = False
+    for char in text:
+        if in_string:
+            if escaped:
+                escaped = False
+            elif char == "\\":
+                escaped = True
+            elif char == '"':
+                in_string = False
+            continue
+        if char == '"':
+            in_string = True
+        elif char in "{[":
+            stack.append(char)
+        elif char in "}]" and stack:
+            stack.pop()
+    closers = '"' if in_string else ""
+    for opening in reversed(stack):
+        closers += "]" if opening == "[" else "}"
+    return closers
