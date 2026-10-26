@@ -63,6 +63,7 @@
   <!-- 设计 §1：五个一级页面各自内部用 Tab 组织能力，App 只负责选择模块页面。 -->
   <WorkbenchPage
     v-if="activeSection==='workbench'"
+    :key="knowledgeBaseId"
     :active="active" :knowledge-base-id="knowledgeBaseId"
     :overview="overview" :capabilities="capabilities"
     :summary="dashboard" :lifecycle="lifecycle" :governance="governance"
@@ -71,6 +72,7 @@
 
   <GeneratePage
     v-else-if="activeSection==='create'"
+    :key="knowledgeBaseId"
     :active="active" :knowledge-base-id="knowledgeBaseId"
     :pending-reviews="pendingReviews" :conflicts="conflicts" :assessments="assessments"
     :adjudicating="adjudicating" :regenerating="regenerating"
@@ -89,6 +91,7 @@
 
   <SearchPage
     v-else-if="activeSection==='search'"
+    :key="knowledgeBaseId"
     :active="active" :knowledge-base-id="knowledgeBaseId"
     :default-query="activeBase?.defaultQuery||''"
     :query="q" @update:query="q=$event"
@@ -103,11 +106,13 @@
 
   <IntegrationPage
     v-else-if="activeSection==='integration'"
+    :key="knowledgeBaseId"
     :active="active" :knowledge-base-id="knowledgeBaseId" :bases="bases"
     @select="selectKey"/>
 
   <SystemPage
     v-else
+    :key="knowledgeBaseId"
     :active="active" :knowledge-base-id="knowledgeBaseId" :base-name="activeBase?.name||''"
     :bases="bases" :overview="overview"
     :acl-subjects="aclSubjects" :acl-roles="aclRoles" :acl-changes="aclChanges" :acl-audits="aclAudits"
@@ -125,7 +130,7 @@
   :visible="showBases" :bases="bases" :groups="groups" :active-id="knowledgeBaseId"
   :can-manage="canCreateBase" :current-user-id="me?.user?.id??null"
   @close="showBases=false" @select="selectBase" @create="createBase" @update="updateBase"/>
-<TaskCenterDrawer v-model:visible="taskCenterVisible" :knowledge-base-id="knowledgeBaseId"
+<TaskCenterDrawer v-model:visible="taskCenterVisible" :key="knowledgeBaseId" :knowledge-base-id="knowledgeBaseId"
   @navigate="navigate" @open-run="openRun"/>
 <KnowledgeDetailWorkspace
     :visible="detailVisible"
@@ -1093,6 +1098,12 @@ auditPage.value=1;changePage.value=1;
 void loadDashboard();
 void loadTasks();
 result.value=null;
+// 浮层里装的是上一个库的对象详情 / 证据 / 调用链，换库后它们指向的东西已经不存在了。
+// 继续展示等于把上一个库的内容当成新库的，所以一并关掉清空。
+detailVisible.value=false;knowledgeDetail.value=null;detailCode.value='';
+evidenceVisible.value=false;evidenceDetail.value=null;
+traceVisible.value=false;queryTrace.value=null;
+apiCallVisible.value=false;apiCallDetail.value=null;
 // 换库后旧库的图谱起点连同附加查询条件一起失效，不清会带着上一个库的条件去查新库。
 graphCode.value='';graphRelationType.value='';graphFocusNode.value='';
 runDetail.value=null;
