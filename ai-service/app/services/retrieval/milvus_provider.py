@@ -411,17 +411,71 @@ class MilvusProvider:
         return {"deleted": "submitted"}
 
     async def delete_knowledge_base(self, kb: int) -> dict[str, Any]:
-        """Delete every vector of one knowledge base, used by a knowledge-base purge."""
+        """Delete every vector generation of one knowledge base, used by a purge.
+
+        Mirrors the Elasticsearch purge: a blue/green release leaves the previous
+        generation's physical collection behind the alias, so deleting from the active
+        one alone strands the older generation, and a later rebuild answers from two
+        generations at once. A purge means the library is going away, so its collections
+        are dropped wholesale. Deletion is idempotent — a missing collection is reported
+        instead of raised, so a purge can simply be run again after a partial one.
+        """
         if not self.enabled:
             return {"deleted": 0, "skipped": True}
-        await self._post(
-            "/v2/vectordb/entities/delete",
-            {
-                "collectionName": await self.read_collection(),
-                "filter": "knowledge_base_id == %d" % kb,
-            },
-        )
-        return {"provider": "milvus", "deleted": "submitted"}
+        dropped = await self._drop_library_collections(kb)
+        # 库还没有自己的别名时会回退到共享的基础 collection，早期向量就写在那里。只删
+        # 分库 collection 会把它们留在原地，检索照样能查到。
+        purged = await self._delete_library_vectors(self.collection, kb)
+        alias = await self._drop_read_alias(kb)
+        return {
+            "provider": "milvus",
+            "droppedCollections": dropped,
+            "deletedFromSharedCollection": purged,
+            "droppedAlias": alias,
+        }
+
+    async def _drop_library_collections(self, kb: int) -> list[str]:
+        """Drop every collection of one library, whichever generation it is."""
+        marker = "__kb%s" % int(kb)
+        try:
+            payload = await self._post("/v2/vectordb/collections/list", {})
+        except Exception as exc:
+            logger.warning("Milvus collections not listed: %s", exc)
+            return []
+        dropped: list[str] = []
+        for entry in payload.get("data") or []:
+            name = entry if isinstance(entry, str) else str((entry or {}).get("collectionName") or "")
+            # 只动本服务自己的前缀，避免误删同一实例里别的应用的 collection。
+            if not name or marker not in name or not name.startswith(self.collection):
+                continue
+            try:
+                await self._post("/v2/vectordb/collections/drop", {"collectionName": name})
+                dropped.append(name)
+            except Exception as exc:
+                logger.warning("Milvus collection %s not dropped: %s", name, exc)
+        return dropped
+
+    async def _delete_library_vectors(self, collection: str, kb: int) -> str:
+        """Delete one library's vectors from a shared collection."""
+        try:
+            await self._post(
+                "/v2/vectordb/entities/delete",
+                {"collectionName": collection, "filter": "knowledge_base_id == %d" % kb},
+            )
+        except Exception as exc:
+            logger.warning("Milvus vectors of kb=%s not deleted: %s", kb, exc)
+            return "failed"
+        return "submitted"
+
+    async def _drop_read_alias(self, kb: int) -> bool:
+        """Drop the per-library read alias so it cannot resolve to a dropped collection."""
+        alias = self._read_alias_for(kb)
+        try:
+            await self._post("/v2/vectordb/aliases/drop", {"aliasName": alias})
+            return True
+        except Exception as exc:
+            logger.debug("Milvus alias %s not dropped: %s", alias, exc)
+            return False
 
     async def update_object_status(self, kb: int, object_id: str, status: str, index_version: int) -> dict[str, Any]:
         # Milvus upsert is used because scalar partial-update semantics vary by release.
