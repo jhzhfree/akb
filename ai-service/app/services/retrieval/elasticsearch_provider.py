@@ -582,19 +582,49 @@ class ElasticsearchProvider:
         return {"deleted": response.json().get("deleted", 0)}
 
     async def delete_knowledge_base(self, kb: int) -> dict[str, Any]:
-        """Delete all indexed objects of one knowledge base, used by a knowledge-base purge."""
+        """Delete every index generation of one knowledge base, used by a purge.
+
+        A blue/green release leaves the previous generation's physical index behind the
+        alias, so clearing only the active one strands the older generation. The next
+        rebuild then answers from two generations at once and retrieval refuses to mix
+        them. A purge means the whole library is going away, so every generation of it
+        is dropped outright — including when there is nothing to delete, because the
+        generation that causes the mismatch is exactly the one no longer active.
+        """
         if not self.enabled:
             return {"deleted": 0, "skipped": True}
-        query = {"query": {"bool": {"filter": [{"term": {"knowledge_base_id": kb}}]}}}
-        target = await self.read_index()
-        response = await self.client.post(
-            "/%s/_delete_by_query?refresh=true" % target,
-            json=query,
+        removed = await self._delete_knowledge_indices(kb)
+        await self._drop_read_alias(kb)
+        return {"provider": "elasticsearch", "deletedIndices": removed}
+
+    async def _delete_knowledge_indices(self, kb: int) -> list[str]:
+        """Drop every index belonging to one library, whichever generation it is."""
+        marker = "__kb%s" % int(kb)
+        listing = await self.client.get("/_cat/indices?format=json")
+        if listing.status_code != 200:
+            return []
+        removed: list[str] = []
+        for row in listing.json() or []:
+            name = str(row.get("index") or "")
+            if not name or marker not in name:
+                continue
+            # 只动本服务自己的索引前缀，避免误删同一集群里别的应用的索引。
+            if not name.startswith((self.index, self.read_alias)):
+                continue
+            response = await self.client.delete("/%s" % name)
+            if response.status_code in (200, 404):
+                removed.append(name)
+        return removed
+
+    async def _drop_read_alias(self, kb: int) -> None:
+        """Detach the per-library read alias so it cannot resolve to a dropped index."""
+        alias = self._read_alias_for(kb)
+        aliases = await self.client.get("/_alias/%s" % alias)
+        if aliases.status_code != 200:
+            return
+        await self.client.post(
+            "/_aliases", json={"actions": [{"remove": {"index": "*", "alias": alias}}]}
         )
-        if response.status_code == 404:
-            return {"deleted": 0}
-        response.raise_for_status()
-        return {"provider": "elasticsearch", "deleted": response.json().get("deleted", 0)}
 
     async def update_object_status(
         self,

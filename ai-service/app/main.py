@@ -68,6 +68,25 @@ async def request_context(request: Request, call_next):
     )
     try:
         response = await call_next(request)
+    except GenerationMismatchError as exc:
+        # 世代不一致不是内部故障，是状态问题，重建索引就能修。报 500 只能让人去翻日志，
+        # 所以单独回应，并把各引擎的世代号带出去——一眼能看出是哪一路没跟上。
+        logger.warning(
+            "trace_id=%s index generation mismatch path=%s generations=%s",
+            trace_id,
+            request.url.path,
+            exc.generations,
+        )
+        return JSONResponse(
+            status_code=409,
+            content={
+                "errorCode": ERROR_GENERATION_MISMATCH,
+                "message": "检索索引世代不一致，请重建该知识库的索引",
+                "generationIds": exc.generations,
+                "traceId": trace_id,
+            },
+            headers={"X-Trace-Id": trace_id},
+        )
     except Exception:
         logger.exception(
             "trace_id=%s unhandled request error path=%s",

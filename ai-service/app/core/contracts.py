@@ -3,6 +3,21 @@
 ERROR_INVALID_REQUEST = "AI-400-001"
 ERROR_UNSUPPORTED_DOCUMENT = "AI-400-002"
 ERROR_INTERNAL = "AI-500-001"
+# 检索的一致性屏障：ES / Milvus / 图库的结果必须同属一个索引世代，混了就拒绝返回。
+ERROR_GENERATION_MISMATCH = "AI-409-001"
+
+
+class GenerationMismatchError(RuntimeError):
+    """Raised when retrieval results span more than one index generation.
+
+    Carries the generation ids so the caller can name the engines that disagree
+    instead of reporting a bare internal error. The fix is to rebuild the index,
+    and whoever runs into this has to be told that without reading the logs.
+    """
+
+    def __init__(self, generations: list[str]) -> None:
+        super().__init__("CROSS_ENGINE_GENERATION_MISMATCH")
+        self.generations = sorted(generations)
 
 KNOWLEDGE_STATUSES = {
     "DRAFT",

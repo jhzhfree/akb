@@ -12,6 +12,8 @@ from typing import Any
 
 import numpy as np
 
+from app.core.contracts import GenerationMismatchError
+
 from app.core.config import settings
 from app.core.contracts import retrievable_statuses, statusless_objects_retrievable
 from app.services.embedding import get_embedding_provider
@@ -254,7 +256,7 @@ class HybridRetriever:
                 if settings.retrieval_external_required:
                     raise
         if len(external_generations) > 1 or (external_generations and external_missing_generation):
-            raise RuntimeError("CROSS_ENGINE_GENERATION_MISMATCH")
+            raise GenerationMismatchError(list(external_generations))
 
         diagnostics = {
             "channelLatencyMs": channel_latency_ms,
