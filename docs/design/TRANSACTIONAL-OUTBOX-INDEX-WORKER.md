@@ -45,7 +45,7 @@ DEAD/RETRY/PENDING -- operator skip --> SKIPPED
 
 ## 4. 多 Worker 并发
 
-领取 SQL 使用 MySQL 8 `FOR UPDATE SKIP LOCKED`。同时增加前序版本条件，因此不同 Worker 可以并发处理不同 aggregate，但同一 aggregate 保持版本顺序。
+领取 SQL 使用 MySQL 8 `FOR UPDATE SKIP LOCKED`。每次领取生成独立租约令牌，并把令牌保存在 `locked_by`；成功、重试和死信状态更新必须同时匹配该令牌。锁超时回收后，旧 Worker 即使晚返回，也不能覆盖新 Worker 的处理结果。前序版本条件保证不同 Worker 可以并发处理不同 aggregate，但同一 aggregate 保持版本顺序。
 
 ## 5. 幂等
 

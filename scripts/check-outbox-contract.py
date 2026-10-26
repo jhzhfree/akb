@@ -15,6 +15,10 @@ for token in ["idempotency_key", "object_version", "next_attempt_at", "locked_by
 assert "FOR UPDATE SKIP LOCKED" in mapper
 assert "older.status NOT IN ('SUCCEEDED','SKIPPED')" in mapper
 assert "markIndexOutboxDead" in mapper and "replayIndexOutbox" in mapper and "skipIndexOutbox" in mapper
+for statement in ["markIndexOutboxSucceeded", "markIndexOutboxRetry", "markIndexOutboxDead"]:
+    body = re.search(r'<(?:update) id="' + statement + r'">(.*?)</update>', mapper, re.S)
+    assert body and "locked_by=#{leaseToken}" in body.group(1), statement
+assert "newLeaseToken()" in worker and "event.setLockedBy(leaseToken)" in worker
 assert "@Scheduled" in worker and "recoverStaleLocks" in worker and "retryBaseSeconds" in worker
 assert "Propagation.MANDATORY" in outbox
 print("transactional outbox contract passed: tables=%d" % len(required_tables))

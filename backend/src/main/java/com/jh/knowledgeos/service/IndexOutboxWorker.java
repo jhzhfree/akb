@@ -94,10 +94,12 @@ public class IndexOutboxWorker {
             List<IndexOutboxEvent> due = indexMapper.selectDueIndexOutbox(batchSize);
             List<IndexOutboxEvent> claimed = new ArrayList<IndexOutboxEvent>(due.size());
             for (IndexOutboxEvent event : due) {
-                int updated = indexMapper.claimIndexOutbox(event.getId(), workerId);
+                String leaseToken = newLeaseToken();
+                int updated = indexMapper.claimIndexOutbox(event.getId(), leaseToken);
                 if (updated == 1) {
                     event.setStatus(IndexOutboxStatus.PROCESSING.name());
                     event.setAttemptCount((event.getAttemptCount() == null ? 0 : event.getAttemptCount()) + 1);
+                    event.setLockedBy(leaseToken);
                     claimed.add(event);
                 }
             }
@@ -113,7 +115,11 @@ public class IndexOutboxWorker {
             long duration = System.currentTimeMillis() - started;
             String responseJson = objectMapper.writeValueAsString(response);
             transactionRunner.required(() -> {
-                indexMapper.markIndexOutboxSucceeded(event.getId(), responseJson);
+                int updated = indexMapper.markIndexOutboxSucceeded(event.getId(), responseJson, event.getLockedBy());
+                if (updated != 1) {
+                    log.warn("Ignoring stale index outbox success eventId={} leaseToken={}", event.getEventId(), event.getLockedBy());
+                    return;
+                }
                 refreshDocuments(event);
                 updateAclPropagationAfterSuccess(event, response, responseJson);
                 indexMapper.insertIndexDeliveryAttempt(event.getEventId(), event.getAttemptCount(), "SUCCEEDED", duration, responseJson, null);
@@ -133,15 +139,24 @@ public class IndexOutboxWorker {
         LocalDateTime nextAttempt = LocalDateTime.now().plusSeconds(delay);
         String message = abbreviate(ex.getMessage(), 4000);
         transactionRunner.required(() -> {
+            int updated;
             if (dead) {
-                indexMapper.markIndexOutboxDead(event.getId(), message);
+                updated = indexMapper.markIndexOutboxDead(event.getId(), message, event.getLockedBy());
+                if (updated != 1) {
+                    log.warn("Ignoring stale index outbox dead-letter eventId={} leaseToken={}", event.getEventId(), event.getLockedBy());
+                    return;
+                }
                 updateAclPropagation(event, "FAILED", null, message);
                 // An index failure must not touch the authoritative model: the document is only
                 // flagged DIRTY so a rebuild can pick it up, and the knowledge it produced stays
                 // queryable from the relational store (design §16.3).
                 markDocumentDirty(event, message);
             } else {
-                indexMapper.markIndexOutboxRetry(event.getId(), message, nextAttempt);
+                updated = indexMapper.markIndexOutboxRetry(event.getId(), message, nextAttempt, event.getLockedBy());
+                if (updated != 1) {
+                    log.warn("Ignoring stale index outbox retry eventId={} leaseToken={}", event.getEventId(), event.getLockedBy());
+                    return;
+                }
             }
             refreshDocuments(event);
             indexMapper.insertIndexDeliveryAttempt(event.getEventId(), attempt, dead ? "DEAD" : "RETRY", duration, null, message);
@@ -235,6 +250,12 @@ public class IndexOutboxWorker {
         } catch (Exception ex) {
             return "worker:" + UUID.randomUUID().toString().substring(0, 8);
         }
+    }
+
+    private String newLeaseToken() {
+        String suffix = UUID.randomUUID().toString();
+        int prefixLength = Math.min(workerId.length(), 127 - suffix.length());
+        return workerId.substring(0, prefixLength) + ":" + suffix;
     }
 
     private String abbreviate(String value, int max) {

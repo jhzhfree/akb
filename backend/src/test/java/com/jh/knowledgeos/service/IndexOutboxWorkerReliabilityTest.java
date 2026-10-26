@@ -53,6 +53,7 @@ class IndexOutboxWorkerReliabilityTest {
             events.add("claim");
             return 1;
         });
+        when(index.markIndexOutboxSucceeded(eq(1L), anyString(), anyString())).thenReturn(1);
         when(outbox.payload(event)).thenReturn(Collections.<String, Object>singletonMap("idempotencyKey", "idem-1"));
         when(ai.post(eq("/index"), any(Map.class))).thenAnswer(invocation -> {
             events.add("remote-delivery");
@@ -66,8 +67,58 @@ class IndexOutboxWorkerReliabilityTest {
 
         assertTrue(events.indexOf("transaction-commit") < events.indexOf("remote-delivery"));
         assertTrue(events.lastIndexOf("remote-delivery") < events.lastIndexOf("transaction-start"));
-        verify(index).markIndexOutboxSucceeded(eq(1L), anyString());
+        verify(index).markIndexOutboxSucceeded(eq(1L), anyString(), anyString());
         verify(index).insertIndexDeliveryAttempt(eq("OUT_1"), eq(1), eq("SUCCEEDED"), anyLong(), anyString(), eq(null));
+    }
+
+    @Test
+    void staleLeaseCannotMarkAnEventSucceededAfterAnotherWorkerReclaimsIt() {
+        IndexMapper index = mock(IndexMapper.class);
+        KnowledgeMapper knowledge = mock(KnowledgeMapper.class);
+        DocumentMapper documents = mock(DocumentMapper.class);
+        IndexOutboxService outbox = mock(IndexOutboxService.class);
+        AiClient ai = mock(AiClient.class);
+        IndexOutboxMetrics metrics = mock(IndexOutboxMetrics.class);
+        TransactionRunner transactions = directTransactions();
+        IndexOutboxEvent event = event(1, 8);
+        when(index.selectDueIndexOutbox(10)).thenReturn(Collections.singletonList(event));
+        when(index.claimIndexOutbox(eq(1L), anyString())).thenReturn(1);
+        when(index.markIndexOutboxSucceeded(eq(1L), anyString(), anyString())).thenReturn(0);
+        when(outbox.payload(event)).thenReturn(Collections.<String, Object>singletonMap("idempotencyKey", "idem-1"));
+        when(ai.post(eq("/index"), any(Map.class))).thenReturn(new LinkedHashMap<String, Object>());
+        IndexOutboxWorker worker = new IndexOutboxWorker(knowledge, outbox, ai, new ObjectMapper(), transactions, metrics,
+            true, 10, 300, 2, index, documents);
+
+        worker.poll();
+
+        verify(index).markIndexOutboxSucceeded(eq(1L), anyString(), anyString());
+        verify(documents, org.mockito.Mockito.never()).documentsForIndexAggregate(anyLong(), anyString());
+        verify(index, org.mockito.Mockito.never()).insertIndexDeliveryAttempt(anyString(), anyInt(), anyString(), anyLong(), any(), any());
+    }
+
+    @Test
+    void staleLeaseCannotScheduleRetryAfterAnotherWorkerReclaimsIt() {
+        IndexMapper index = mock(IndexMapper.class);
+        KnowledgeMapper knowledge = mock(KnowledgeMapper.class);
+        DocumentMapper documents = mock(DocumentMapper.class);
+        IndexOutboxService outbox = mock(IndexOutboxService.class);
+        AiClient ai = mock(AiClient.class);
+        IndexOutboxMetrics metrics = mock(IndexOutboxMetrics.class);
+        TransactionRunner transactions = directTransactions();
+        IndexOutboxEvent event = event(1, 8);
+        when(index.selectDueIndexOutbox(10)).thenReturn(Collections.singletonList(event));
+        when(index.claimIndexOutbox(eq(1L), anyString())).thenReturn(1);
+        when(index.markIndexOutboxRetry(eq(1L), anyString(), any(), anyString())).thenReturn(0);
+        when(outbox.payload(event)).thenReturn(Collections.<String, Object>singletonMap("idempotencyKey", "idem-1"));
+        when(ai.post(eq("/index"), any(Map.class))).thenThrow(new IllegalStateException("temporary failure"));
+        IndexOutboxWorker worker = new IndexOutboxWorker(knowledge, outbox, ai, new ObjectMapper(), transactions, metrics,
+            true, 10, 300, 2, index, documents);
+
+        worker.poll();
+
+        verify(index).markIndexOutboxRetry(eq(1L), anyString(), any(), anyString());
+        verify(index, org.mockito.Mockito.never()).insertIndexDeliveryAttempt(anyString(), anyInt(), anyString(), anyLong(), any(), any());
+        verify(documents, org.mockito.Mockito.never()).documentsForIndexAggregate(anyLong(), anyString());
     }
 
     @Test
@@ -83,6 +134,8 @@ class IndexOutboxWorkerReliabilityTest {
             IndexOutboxEvent event = event(attempt, 2);
             when(index.selectDueIndexOutbox(10)).thenReturn(Collections.singletonList(event));
             when(index.claimIndexOutbox(eq(1L), anyString())).thenReturn(1);
+            when(index.markIndexOutboxRetry(eq(1L), anyString(), any(), anyString())).thenReturn(1);
+            when(index.markIndexOutboxDead(eq(1L), anyString(), anyString())).thenReturn(1);
             when(outbox.payload(event)).thenReturn(Collections.<String, Object>singletonMap("idempotencyKey", "idem-1"));
             when(ai.post(eq("/index"), any(Map.class))).thenReturn(Collections.<String, Object>singletonMap("result",
                 Collections.<String, Object>singletonMap("error", "partial indexing failure")));
@@ -93,10 +146,10 @@ class IndexOutboxWorkerReliabilityTest {
             worker.poll();
 
             if (attempt == 1) {
-                verify(index).markIndexOutboxRetry(eq(1L), anyString(), any());
+                verify(index).markIndexOutboxRetry(eq(1L), anyString(), any(), anyString());
                 verify(index).insertIndexDeliveryAttempt(eq("OUT_1"), eq(1), eq("RETRY"), anyLong(), eq(null), anyString());
             } else {
-                verify(index).markIndexOutboxDead(eq(1L), anyString());
+                verify(index).markIndexOutboxDead(eq(1L), anyString(), anyString());
                 verify(index).insertIndexDeliveryAttempt(eq("OUT_1"), eq(2), eq("DEAD"), anyLong(), eq(null), anyString());
             }
         }

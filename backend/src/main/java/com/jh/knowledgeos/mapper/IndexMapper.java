@@ -23,13 +23,15 @@ public interface IndexMapper {
 
     List<IndexOutboxEvent> selectDueIndexOutbox(@Param("limit") Integer limit);
 
-    int claimIndexOutbox(@Param("id") Long id, @Param("workerId") String workerId);
+    int claimIndexOutbox(@Param("id") Long id, @Param("leaseToken") String leaseToken);
 
-    int markIndexOutboxSucceeded(@Param("id") Long id, @Param("resultJson") String resultJson);
+    int markIndexOutboxSucceeded(@Param("id") Long id, @Param("resultJson") String resultJson,
+        @Param("leaseToken") String leaseToken);
 
-    int markIndexOutboxRetry(@Param("id") Long id, @Param("error") String error, @Param("nextAttemptAt") java.time.LocalDateTime nextAttemptAt);
+    int markIndexOutboxRetry(@Param("id") Long id, @Param("error") String error,
+        @Param("nextAttemptAt") java.time.LocalDateTime nextAttemptAt, @Param("leaseToken") String leaseToken);
 
-    int markIndexOutboxDead(@Param("id") Long id, @Param("error") String error);
+    int markIndexOutboxDead(@Param("id") Long id, @Param("error") String error, @Param("leaseToken") String leaseToken);
 
     int recoverStaleIndexOutbox(@Param("threshold") java.time.LocalDateTime threshold);
 

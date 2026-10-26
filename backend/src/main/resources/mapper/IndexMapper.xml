@@ -43,26 +43,26 @@
 
 
 <update id="claimIndexOutbox">
-  UPDATE t_index_outbox SET status='PROCESSING',attempt_count=attempt_count+1,locked_by=#{workerId},locked_at=CURRENT_TIMESTAMP
+  UPDATE t_index_outbox SET status='PROCESSING',attempt_count=attempt_count+1,locked_by=#{leaseToken},locked_at=CURRENT_TIMESTAMP
   WHERE id=#{id} AND status IN ('PENDING','RETRY')
 </update>
 
 
 <update id="markIndexOutboxSucceeded">
   UPDATE t_index_outbox SET status='SUCCEEDED',result_json=CAST(#{resultJson} AS JSON),last_error=NULL,locked_by=NULL,locked_at=NULL,processed_time=CURRENT_TIMESTAMP
-  WHERE id=#{id} AND status='PROCESSING'
+  WHERE id=#{id} AND status='PROCESSING' AND locked_by=#{leaseToken}
 </update>
 
 
 <update id="markIndexOutboxRetry">
   UPDATE t_index_outbox SET status='RETRY',last_error=#{error},next_attempt_at=#{nextAttemptAt},locked_by=NULL,locked_at=NULL
-  WHERE id=#{id} AND status='PROCESSING'
+  WHERE id=#{id} AND status='PROCESSING' AND locked_by=#{leaseToken}
 </update>
 
 
 <update id="markIndexOutboxDead">
   UPDATE t_index_outbox SET status='DEAD',last_error=#{error},locked_by=NULL,locked_at=NULL,processed_time=CURRENT_TIMESTAMP
-  WHERE id=#{id} AND status='PROCESSING'
+  WHERE id=#{id} AND status='PROCESSING' AND locked_by=#{leaseToken}
 </update>
 
 

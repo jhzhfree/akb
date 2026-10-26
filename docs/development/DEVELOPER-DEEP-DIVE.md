@@ -204,7 +204,7 @@ Map<String,Object> indexEvent = outboxService.enqueue(
 
 | 机制 | 实现 | 位置 |
 |---|---|---|
-| 抢占 | `claimIndexOutbox(id, workerId)` 原子 UPDATE，`updated==1` 才算抢到 | `:92-106` |
+| 抢占与租约 | 每次领取使用唯一 lease token；成功、重试、死信更新都必须匹配当前 `locked_by`，过期 Worker 不能覆盖新租约 | `IndexOutboxWorker` / `IndexMapper.xml` |
 | 锁超时回收 | `recoverStaleIndexOutbox(threshold)`，默认 300s | `:199-206` |
 | 指数退避 | `delay = min(900, retryBase * 2^min(10, attempt-1))`，默认 base=2s | `:131` |
 | 死信 | `attempt >= maxAttempts(默认8)` → `markIndexOutboxDead` + 文档标 `DIRTY` | `:135-141` |

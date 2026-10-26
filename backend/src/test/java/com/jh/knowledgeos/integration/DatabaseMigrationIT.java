@@ -263,7 +263,8 @@ public class DatabaseMigrationIT {
         assertEquals(1, due.size());
         assertEquals("EV_VERSION_1", due.get(0).getEventId());
         assertEquals(1, indexMapper.claimIndexOutbox(due.get(0).getId(), "version-test"));
-        indexMapper.markIndexOutboxSucceeded(due.get(0).getId(), "{}");
+        assertEquals(0, indexMapper.markIndexOutboxSucceeded(due.get(0).getId(), "{}", "stale-lease"));
+        assertEquals(1, indexMapper.markIndexOutboxSucceeded(due.get(0).getId(), "{}", "version-test"));
         due = indexMapper.selectDueIndexOutbox(10);
         assertEquals(1, due.size());
         assertEquals("EV_VERSION_2", due.get(0).getEventId());
