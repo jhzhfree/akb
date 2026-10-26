@@ -494,28 +494,63 @@ def _coerce_name(raw: str) -> str:
 
 
 def _seed_defaults() -> None:
-    """Copy the shipped defaults into the data directory on first start.
+    """Bring the shipped default profiles into the data directory.
 
     The data directory is normally a persistent volume, and a volume that already
-    exists is never refreshed from a newer image. A deployment that only ships the
-    file inside the image therefore keeps running on whatever happened to be there
-    at first start — which is how a production box ends up showing a single default
-    strategy. Seeding here is what gets the shipped defaults to actually arrive.
+    exists is never refreshed from a newer image — a deployment that only ships the
+    file inside the image keeps running on whatever was there at first start.
+
+    Two situations, both of which have to end with the shipped profiles present:
+
+    - No file yet (fresh volume): write the shipped store as-is.
+    - File exists but lacks some shipped profiles: add only the missing ones. A
+      production box that has been running with a single ``default`` profile is
+      exactly this case — the file exists, so a create-if-missing seed would
+      silently do nothing and the console would keep showing one strategy.
+
+    Existing profiles are never overwritten: they may have been edited on purpose.
     """
-    if POLICY_FILE.exists() or not DEFAULT_POLICY_FILE.exists():
+    if not DEFAULT_POLICY_FILE.exists():
         return
     try:
-        raw = json.loads(DEFAULT_POLICY_FILE.read_text(encoding="utf-8"))
+        shipped = json.loads(DEFAULT_POLICY_FILE.read_text(encoding="utf-8"))
     except Exception as exc:
         logger.warning("shipped query policy defaults unreadable: %s", exc)
         return
-    if not (isinstance(raw, dict) and isinstance(raw.get("profiles"), dict) and raw["profiles"]):
+    if not (isinstance(shipped, dict) and isinstance(shipped.get("profiles"), dict) and shipped["profiles"]):
         return
+    shipped_profiles = shipped["profiles"]
+
+    if not POLICY_FILE.exists():
+        try:
+            _write_store(shipped)
+            logger.info("seeded query policy with %d shipped profiles", len(shipped_profiles))
+        except Exception as exc:
+            logger.warning("could not seed query policy defaults: %s", exc)
+        return
+
     try:
-        _write_store(raw)
-        logger.info("seeded query policy with %d shipped profiles", len(raw["profiles"]))
+        current = json.loads(POLICY_FILE.read_text(encoding="utf-8"))
     except Exception as exc:
-        logger.warning("could not seed query policy defaults: %s", exc)
+        logger.warning("existing query policy unreadable, leaving it untouched: %s", exc)
+        return
+    if not isinstance(current, dict):
+        return
+    profiles = current.get("profiles")
+    if not isinstance(profiles, dict) or not profiles:
+        # 旧版单策略文件：结构不同，交给读取逻辑按 legacy 处理，这里不动它。
+        logger.info("query policy uses the legacy single-policy layout, skipping profile top-up")
+        return
+    missing = [name for name in shipped_profiles if name not in profiles]
+    if not missing:
+        return
+    for name in missing:
+        profiles[name] = shipped_profiles[name]
+    try:
+        _write_store(current)
+        logger.info("added %d missing shipped profiles: %s", len(missing), ", ".join(missing))
+    except Exception as exc:
+        logger.warning("could not add missing policy profiles: %s", exc)
 
 
 def _read_store() -> dict[str, Any]:
