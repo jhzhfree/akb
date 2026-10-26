@@ -59,7 +59,11 @@ _LINK = re.compile(r"\[([^\]]*)\]\([^)]*\)")
 _FENCE = re.compile(r"^\s*(```|~~~)\s*(\S*)")
 _ATX_HEADING = re.compile(r"^\s{0,3}(#{1,6})\s+(.*?)\s*#*\s*$")
 _SETEXT = re.compile(r"^\s{0,3}(=+|-{2,})\s*$")
-_BULLET = re.compile(r"^\s{0,3}(?:[-*+•]|\d+[.)])\s+(.*)$")
+_BULLET = re.compile(r"^\s{0,3}(?:[-*+•◦●○▪■□‣·※]|\d+[.)])\s+(.*)$")
+
+# 项目符号是排版标记而不是正文。制度类 PDF 里通篇是「◦」「●」这类符号，留着会连累抽取：
+# 模型把符号一起抄进断言，主语就成了「◦ 监督绩效结果」。编号（1)、第五条）有语义，不删。
+_LEADING_BULLET = re.compile(r"(?m)^[ \t]*[•◦●○▪■□‣·※]+[ \t]*")
 _QUOTE = re.compile(r"^\s{0,3}>\s?(.*)$")
 _TABLE_SEPARATOR = re.compile(r"^\s*\|?[\s:|-]+\|[\s:|-]*$")
 _HTML_COMMENT = re.compile(r"<!--.*?-->", re.S)
@@ -96,6 +100,8 @@ def clean_inline(text: str) -> str:
         value = pattern.sub(r"\1", value)
     # Markdown escapes and stray backslashes in front of punctuation carry no meaning.
     value = re.sub(r"\\([\\`*_{}\[\]()#+\-.!|])", r"\1", value)
+    # 项目符号只清行首：正文里行中间的「•」可能是有意的，而行首那个一定是列表排版标记。
+    value = _LEADING_BULLET.sub("", value)
     value = _REPEATED_SPACES.sub(" ", value)
     return value.strip()
 
