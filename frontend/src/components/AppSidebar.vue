@@ -71,6 +71,19 @@
     </button>
   </div>
 </aside>
+<nav class="kos-mobile-nav" aria-label="主导航">
+  <button v-for="section in mobileSections" :key="section.key" class="kos-mobile-nav-item"
+    :class="{active:activeSection===section.key}" :aria-current="activeSection===section.key?'page':undefined"
+    :title="section.desc" @click="$emit('enter',section)">
+    <NavIcon :name="section.icon" :size="19"/>
+    <span>{{section.label}}</span>
+    <em v-if="badge(section)" class="kos-mobile-nav-dot">{{badge(section)}}</em>
+  </button>
+  <button class="kos-mobile-nav-item" :class="{active:systemActive}" :disabled="!canSystem"
+    :aria-current="systemActive?'page':undefined" :title="systemTitle" @click="enterSystem">
+    <NavIcon name="settings" :size="19"/><span>系统</span>
+  </button>
+</nav>
 </template>
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
@@ -105,6 +118,7 @@ const emit = defineEmits<{
 }>()
 
 const panel = ref(false)
+const mobileSections = computed(()=>props.groups.flatMap(group=>group.sections))
 const systemTitle = computed(()=>
   props.canSystem?'系统配置':(props.systemHint||'当前角色无权访问系统配置'))
 /**

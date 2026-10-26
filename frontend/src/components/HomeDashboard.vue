@@ -24,8 +24,8 @@
         <span class="hd-stat-sub">断言 {{total.claimCount}} · 已生效 {{total.effectiveCardCount}}</span>
       </div>
       <div class="hd-stat">
-        <span class="hd-stat-value">{{indexRate}}%</span>
-        <span class="hd-stat-label">内容索引完成度</span>
+        <span class="hd-stat-value">{{cardEffectiveness}}</span>
+        <span class="hd-stat-label">知识卡片生效率</span>
         <span class="hd-stat-sub" :class="{warn:total.pendingReviewCount>0}">
           {{total.pendingReviewCount?`${total.pendingReviewCount} 个待审核`:'暂无待审核'}}
         </span>
@@ -140,11 +140,10 @@ const total = computed(() => {
   return sum
 })
 
-/** 索引完成度：已生效卡片 / 卡片总数，无卡片时按 100% 展示（没有待索引内容）。 */
-const indexRate = computed(() => {
-  if (!total.value.cardCount) return 100
-  return Math.round((total.value.effectiveCardCount / total.value.cardCount) * 100)
-})
+/** 卡片生效率只在存在卡片时计算；无数据时显示 —，避免把空库误报为 100%。 */
+const cardEffectiveness = computed(() => total.value.cardCount
+  ? `${Math.round((total.value.effectiveCardCount / total.value.cardCount) * 100)}%`
+  : '—')
 
 function docCount(id: number) {
   return Number(props.baseStats[id]?.documentCount || 0)

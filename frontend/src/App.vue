@@ -7,6 +7,7 @@
 <LoginView v-else-if="needLogin" :hint="loginHint" @success="onLogin"/>
 <div v-else class="kos-shell">
 <AppHeader :base-name="activeBase?.name" :visibility="visibilityLabel(activeBase?.visibility)"
+  :show-base-switch="active==='home'"
   v-model:keyword="globalKeyword" :avatar="avatarText" :display-name="me?.user?.displayName||me?.user?.username"
   :role-title="roleTitle" :logged-in="!!me?.user" :role-accent="roleAccent"
   @switch-base="showBases=true" @search="globalSearch" @logout="doLogout"/>
@@ -25,7 +26,7 @@
   :environment="environmentLabel" :version="APP_VERSION"
   @enter="enterSection" @enter-system="enterSystem" @go="key=>goto(key)" @logout="doLogout"/>
 <main class="kos-main">
-  <div v-if="failure" class="mb-3 flex items-start gap-3 rounded-lg border px-4 py-3" style="background:var(--danger-bg);border-color:var(--danger)">
+  <div v-if="failure" role="alert" aria-live="assertive" class="mb-3 flex items-start gap-3 rounded-lg border px-4 py-3" style="background:var(--danger-bg);border-color:var(--danger)">
     <span class="text-[13px] leading-5 text-[color:var(--danger)]">⚠</span>
     <div class="min-w-0 flex-1">
       <b class="text-[12px] text-[color:var(--danger)]">操作失败</b>

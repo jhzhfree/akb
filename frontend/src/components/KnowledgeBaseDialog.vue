@@ -12,7 +12,9 @@
 
     <div class="kb-list">
       <div v-for="base in filteredBases" :key="base.id" class="kb-row" :class="{active:base.id===activeId}"
-        @click="$emit('select',base.id)">
+        role="button" tabindex="0" :aria-current="base.id===activeId?'true':undefined"
+        :aria-label="`切换到知识库：${base.name}`" @click="$emit('select',base.id)"
+        @keydown.enter.prevent="selectBaseRow($event,base.id)" @keydown.space.prevent="selectBaseRow($event,base.id)">
         <span class="kb-icon">📚</span>
         <span class="kb-copy">
           <b>{{base.name}}</b>
@@ -40,6 +42,7 @@
       <span class="kb-back-title">{{editing?'编辑知识库':'新建知识库'}}</span>
     </div>
 
+    <p class="kb-note kb-create-hint">只需填写基础信息即可创建，生成、衍生和查询策略可在创建后按需调整。</p>
     <el-collapse v-model="openSections" class="kb-collapse">
       <!-- 基础信息：与场景配置同屏，建库一次填完，不必先建再找设置页。 -->
       <el-collapse-item name="basic">
@@ -262,6 +265,9 @@ const viewMode=ref<'list'|'form'>('list')
 const keyword=ref('')
 /** 折叠面板：只展开基础信息，场景模板与生成 / 衍生 / 查询配置默认收起。 */
 const openSections=ref<string[]>(['basic'])
+function selectBaseRow(event:KeyboardEvent,id:number){
+  if(event.target===event.currentTarget)emit('select',id)
+}
 const name=ref('');const description=ref('')
 /** 默认检索语句：库自带的示例问句，留空时各端退回通用提示语。 */
 const defaultQuery=ref('')
@@ -570,6 +576,7 @@ text-align:left;
 cursor:pointer}
 .kb-row:last-child{border-bottom:0}
 .kb-row:hover,.kb-row.active{background:var(--bg-sub)}
+.kb-row:focus-visible{outline:none;box-shadow:inset 0 0 0 2px var(--brand-400)}
 .kb-icon{font-size:18px}
 .kb-copy{display:flex;
 flex-direction:column;

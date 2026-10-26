@@ -5,7 +5,7 @@
         <div class="kb-eyebrow">知识生成</div>
         <h1 class="kb-title mt-1">生成概览</h1>
         <p class="kb-muted mt-1">
-          从原始数据到可信知识资产：拖入资料即可走完「接入 → 解析 → 抽取 → 索引」，运行日志从文档行回看。
+          把资料导入知识库，系统会自动整理内容；需要时审核生成的知识，再到智能检索中验证结果。
         </p>
       </div>
       <!-- 抽取只在文档导入时跑一次，抽取逻辑改进后旧产物不会自动重算。
@@ -18,6 +18,18 @@
         </button>
       </div>
     </header>
+
+    <nav class="kb-flow" aria-label="知识生成步骤">
+      <button type="button" class="kb-flow-step" @click="shell.navigate('create.import')">
+        <span class="kb-flow-number">1</span><span><b>导入资料</b><small>上传文件并查看处理进度</small></span><span aria-hidden="true">→</span>
+      </button>
+      <button type="button" class="kb-flow-step" @click="shell.navigate('create.judgment')">
+        <span class="kb-flow-number">2</span><span><b>审核知识</b><small>处理待审核内容与冲突</small></span><span aria-hidden="true">→</span>
+      </button>
+      <button type="button" class="kb-flow-step" @click="shell.navigate('search.query')">
+        <span class="kb-flow-number">3</span><span><b>检索验证</b><small>提问并查看引用来源</small></span><span aria-hidden="true">↗</span>
+      </button>
+    </nav>
 
     <el-dialog v-model="regenerateDialog" title="重新生成知识" width="520px">
       <p class="kb-muted">
@@ -174,3 +186,16 @@ const runningRuns = computed(() =>
   props.runs.filter(v => ['RUNNING','PENDING','QUEUED'].includes(String(v.status || '').toUpperCase())).length)
 const pendingTotal = computed(() => props.pendingReviews.length + props.conflicts.length)
 </script>
+
+<style scoped>
+.kb-flow{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:14px 0 18px}
+.kb-flow-step{display:flex;align-items:center;gap:10px;min-width:0;padding:12px;border:1px solid var(--line-d);border-radius:10px;background:var(--bg-raised);color:var(--ink-2);text-align:left;cursor:pointer;font:inherit}
+.kb-flow-step:hover{border-color:var(--brand-400);background:var(--bg-sub)}
+.kb-flow-step:focus-visible{outline:none;box-shadow:var(--ring)}
+.kb-flow-step>span:nth-child(2){display:flex;flex:1;min-width:0;flex-direction:column;gap:3px}
+.kb-flow-step b{font-size:12px;color:var(--ink-1)}
+.kb-flow-step small{font-size:10px;color:var(--ink-3)}
+.kb-flow-step>span:last-child{color:var(--ink-3)}
+.kb-flow-number{display:grid;width:25px;height:25px;flex:none;place-items:center;border-radius:50%;background:var(--info-bg);color:var(--accent-text);font-size:12px;font-weight:700}
+@media(max-width:720px){.kb-flow{grid-template-columns:1fr}.kb-flow-step{padding:10px}}
+</style>

@@ -149,6 +149,7 @@ body{background:var(--bg-base);color:var(--ink-1)}
   background:var(--side-bg);
   border-right:1px solid var(--line-d);
 }
+.kos-mobile-nav{display:none}
 .kos-side-nav{flex:1;min-height:0;overflow:auto}
 .kos-nav-title{font-size:11px;color:var(--ink-3);letter-spacing:1px;margin:8px 10px 6px}
 /* 业务域分组标题（工作台 / 知识库 / 系统集成）：对齐原型侧栏的分组标签 */
@@ -370,6 +371,16 @@ body{background:var(--bg-base);color:var(--ink-1)}
 .kos-modnav-chip.active{background:rgba(79,140,247,.16);color:var(--accent-text);font-weight:600;border-color:var(--line-soft)}
 .kos-modnav-chip.planned,.kos-modnav-chip:disabled{color:var(--ink-3);cursor:not-allowed}
 .kos-modnav-chip.planned:hover,.kos-modnav-chip:disabled:hover{background:transparent}
+.kos-modnav-more{position:relative;align-self:center}
+.kos-modnav-more>summary{display:inline-flex;align-items:center;gap:6px;padding:5px 9px;border:1px solid var(--line-d);border-radius:8px;color:var(--ink-2);font-size:12px;cursor:pointer;list-style:none}
+.kos-modnav-more>summary::-webkit-details-marker{display:none}
+.kos-modnav-more.active>summary{color:var(--accent-text);font-weight:600;background:rgba(79,140,247,.12)}
+.kos-modnav-menu{position:absolute;top:calc(100% + 8px);right:0;z-index:25;display:grid;grid-template-columns:repeat(2,minmax(150px,1fr));gap:10px;min-width:330px;max-height:min(65vh,520px);overflow:auto;padding:12px;border:1px solid var(--line-d);border-radius:11px;background:var(--bg-raised);box-shadow:var(--sd-3)}
+.kos-modnav-menu-group{display:flex;flex-direction:column;gap:3px;min-width:0}
+.kos-modnav-menu-group>b{padding:2px 8px 5px;color:var(--ink-3);font-size:10px;letter-spacing:.06em}
+.kos-modnav-menu-group button{display:flex;align-items:center;gap:7px;padding:7px 8px;border:0;border-radius:7px;background:transparent;color:var(--ink-2);text-align:left;font:inherit;font-size:12px;cursor:pointer}
+.kos-modnav-menu-group button:hover,.kos-modnav-menu-group button.active{background:var(--bg-sub);color:var(--accent-text)}
+.kos-modnav-menu-group button:disabled{opacity:.5;cursor:not-allowed}
 
 /* ---------- shared page language ---------- */
 .hero{display:flex;justify-content:space-between;align-items:end;margin-bottom:20px}
@@ -597,7 +608,24 @@ body{background:var(--bg-base);color:var(--ink-1)}
 @media(max-width:720px){
   .metric-grid,.overview-grid,.config-grid{grid-template-columns:1fr}
   .kos-side{display:none}
-  .kos-main{padding:16px 14px 40px}
+  .kos-main{padding:16px 14px 96px}
+  .kos-mobile-nav{
+    position:fixed;z-index:50;left:0;right:0;bottom:0;display:flex;justify-content:space-around;gap:4px;
+    padding:7px max(8px,env(safe-area-inset-left)) calc(7px + env(safe-area-inset-bottom));
+    background:var(--bg-raised);border-top:1px solid var(--line-d);box-shadow:0 -5px 20px rgba(20,35,60,.08)
+  }
+  .kos-mobile-nav-item{
+    position:relative;min-width:0;flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;
+    padding:5px 2px;border:0;border-radius:9px;background:transparent;color:var(--ink-3);font:inherit;font-size:10px;cursor:pointer
+  }
+  .kos-mobile-nav-item.active{background:var(--bg-sub);color:var(--accent-text);font-weight:650}
+  .kos-mobile-nav-item:focus-visible{outline:none;box-shadow:var(--ring)}
+  .kos-mobile-nav-dot{position:absolute;top:0;right:calc(50% - 24px);min-width:15px;height:15px;padding:0 4px;border-radius:999px;background:var(--danger);color:#fff;font-size:9px;font-style:normal;line-height:15px}
+  .kos-topbar{gap:8px;padding-left:12px;padding-right:12px}
+  .kos-brand-copy{display:none}
+  .kos-user-name,.kos-logout{display:none}
+  .kos-search{min-width:0;flex:1}
+  .kos-search-input{width:100%;min-width:0}
 }
 
 /* 无障碍：减少动态效果 */

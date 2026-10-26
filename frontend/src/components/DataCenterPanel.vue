@@ -4,7 +4,7 @@
 <div>
 <div class="kb-eyebrow">知识生成</div>
 <h2 class="kb-title mt-1">文档导入</h2>
-<p class="kb-muted mt-1">文档状态机：解析失败与索引失效可重跑，Chunk 与 revision 全程可追溯。</p>
+<p class="kb-muted mt-1">查看资料处理进度；解析失败或索引异常时可重新处理，并随时查看原文与处理记录。</p>
 </div>
 </div>
 
