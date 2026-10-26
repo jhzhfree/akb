@@ -13,6 +13,9 @@ from typing import Any
 import numpy as np
 
 from app.core.contracts import GenerationMismatchError
+import logging
+
+logger = logging.getLogger(__name__)
 
 from app.core.config import settings
 from app.core.contracts import retrievable_statuses, statusless_objects_retrievable
@@ -255,8 +258,20 @@ class HybridRetriever:
             except Exception:
                 if settings.retrieval_external_required:
                     raise
-        if len(external_generations) > 1 or (external_generations and external_missing_generation):
+        if len(external_generations) > 1:
+            # 两个不同的世代号，那是真的把新旧两代数据混在一起了，必须拒绝。
             raise GenerationMismatchError(list(external_generations))
+        if external_generations and external_missing_generation:
+            # 只有一路带着世代号，其余没带。没带不等于不一致：多半是那个引擎还没写入
+            # 世代标记（清空重建后常见），也可能是共享索引里残留着没打标记的旧文档。
+            # 判成冲突的话库会永久不可用——能清的数据都清掉了，剩下的恰恰是清不掉的
+            # 那部分，没有任何操作能从这种状态里恢复。所以记录后代为放行。
+            logger.warning(
+                "kb=%s generation %s but some hits carry no generation id; "
+                "untagged hits may come from an older build",
+                kb,
+                sorted(external_generations),
+            )
 
         diagnostics = {
             "channelLatencyMs": channel_latency_ms,
