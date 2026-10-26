@@ -30,6 +30,7 @@
 | 文档 | 内容 |
 |---|---|
 | [`ARCHITECTURE-CODE-WALKTHROUGH.md`](development/ARCHITECTURE-CODE-WALKTHROUGH.md) | **先读这篇**：按代码走一遍的架构导读（入门） |
+| [`KNOWLEDGE-BASE-MAP.md`](development/KNOWLEDGE-BASE-MAP.md) | **全局知识地图**：知识对象、生命周期、检索、治理、权限、索引和代码入口 |
 | [`DEVELOPER-DEEP-DIVE.md`](development/DEVELOPER-DEEP-DIVE.md) | **主培训件**：按场景递进的核心开发文档（47 KB，覆盖最全） |
 | [`DEVELOPER-GUIDE.md`](development/DEVELOPER-GUIDE.md) | 环境搭建、日常操作与运维式问答 |
 | [`CODE-STANDARDS.md`](development/CODE-STANDARDS.md) | 强制研发规范（行宽、事务边界、ACL、Outbox 等强约束） |

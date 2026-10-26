@@ -47,7 +47,7 @@ make up
 
 ## 研发文档
 
-第一次参与开发建议按以下顺序阅读：
+第一次了解平台知识模型和全链路建议先读[全局知识地图](docs/development/KNOWLEDGE-BASE-MAP.md)，研发入门再按以下顺序阅读：
 
 1. [研发工程师详细开发手册](docs/development/DEVELOPER-GUIDE.md)
 2. [代码架构导读](docs/development/ARCHITECTURE-CODE-WALKTHROUGH.md)
