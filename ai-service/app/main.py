@@ -10,6 +10,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
 from app.core.config import settings
+from app.core.contracts import ERROR_GENERATION_MISMATCH, GenerationMismatchError
 from app.core.retrieval_settings import apply_retrieval_settings
 from app.core.runtime_settings import load_model_settings
 from app.derivation_routes import router as derivation_router

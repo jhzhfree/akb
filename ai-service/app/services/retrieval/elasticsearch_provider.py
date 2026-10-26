@@ -595,7 +595,26 @@ class ElasticsearchProvider:
             return {"deleted": 0, "skipped": True}
         removed = await self._delete_knowledge_indices(kb)
         await self._drop_read_alias(kb)
-        return {"provider": "elasticsearch", "deletedIndices": removed}
+        # 分库索引是后来才有的，早期数据都写在共享的基础索引里。只删分库索引会把那些老
+        # 文档留在原地，而库一旦没有自己的别名就会回退到基础索引，照样把它们查出来，
+        # 世代号仍然不一致。所以基础索引里属于这个库的文档也要清掉。
+        purged = await self._delete_library_documents(self.index, kb)
+        return {
+            "provider": "elasticsearch",
+            "deletedIndices": removed,
+            "deletedFromSharedIndex": purged,
+        }
+
+    async def _delete_library_documents(self, index: str, kb: int) -> int:
+        """Delete one library's documents from a shared index."""
+        response = await self.client.post(
+            "/%s/_delete_by_query?refresh=true" % index,
+            json={"query": {"bool": {"filter": [{"term": {"knowledge_base_id": kb}}]}}},
+        )
+        if response.status_code == 404:
+            return 0
+        response.raise_for_status()
+        return int(response.json().get("deleted", 0) or 0)
 
     async def _delete_knowledge_indices(self, kb: int) -> list[str]:
         """Drop every index belonging to one library, whichever generation it is."""
