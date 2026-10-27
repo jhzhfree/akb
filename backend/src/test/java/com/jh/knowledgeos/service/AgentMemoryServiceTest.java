@@ -85,7 +85,7 @@ class AgentMemoryServiceTest {
         verify(mapper).hasScopeAccess(41L, "octop-prod", "PROJECT", "release-2026", "WRITE");
         verify(mapper, never()).insert(any(String.class), any(String.class), any(String.class), any(String.class), any(String.class),
             any(String.class), any(String.class), any(String.class), any(String.class), any(String.class), any(Double.class),
-            any(Integer.class), any(java.time.LocalDateTime.class), any(Long.class), any(String.class));
+            any(Integer.class), any(java.time.LocalDateTime.class), any(Long.class), any(String.class), any(String.class));
 
         MemoryRecallRequest recall = new MemoryRecallRequest();
         recall.setScopeType("PROJECT"); recall.setScopeCode("other-project"); recall.setQuery("rollback");
@@ -115,7 +115,7 @@ class AgentMemoryServiceTest {
         assertThrows(IllegalArgumentException.class, () -> service.capture(key, request));
         verify(mapper, never()).insert(any(String.class), any(String.class), any(String.class), any(String.class), any(String.class),
             any(String.class), any(String.class), any(String.class), any(String.class), any(String.class), any(Double.class),
-            any(Integer.class), any(java.time.LocalDateTime.class), any(Long.class), any(String.class));
+            any(Integer.class), any(java.time.LocalDateTime.class), any(Long.class), any(String.class), any(String.class));
     }
 
     @Test
