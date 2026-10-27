@@ -381,6 +381,7 @@ body{background:var(--bg-base);color:var(--ink-1)}
 .kos-modnav-menu-group button{display:flex;align-items:center;gap:7px;padding:7px 8px;border:0;border-radius:7px;background:transparent;color:var(--ink-2);text-align:left;font:inherit;font-size:12px;cursor:pointer}
 .kos-modnav-menu-group button:hover,.kos-modnav-menu-group button.active{background:var(--bg-sub);color:var(--accent-text)}
 .kos-modnav-menu-group button:disabled{opacity:.5;cursor:not-allowed}
+@media(max-width:480px){.kos-modnav-menu{min-width:min(330px,calc(100vw - 44px));grid-template-columns:1fr}}
 
 /* ---------- shared page language ---------- */
 .hero{display:flex;justify-content:space-between;align-items:end;margin-bottom:20px}

@@ -1,6 +1,6 @@
 <template>
   <!-- 设计 §6：接口服务 = 用知识。协议配置与凭证管理都在本页 Tab 内，不占左侧菜单。 -->
-  <ModuleTabs label="接口服务" :leaves="tabs" :active="active" @select="$emit('select',$event)" />
+  <ModuleTabs label="接口服务" section-key="integration" :leaves="tabs" :active="active" @select="$emit('select',$event)" />
 
   <IntegrationOverviewPanel
     v-if="active==='integration.overview'"

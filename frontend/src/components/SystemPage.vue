@@ -1,7 +1,7 @@
 <template>
   <!-- 设计 §7：系统配置 = 低频平台配置，卡片宫格进入，模块间用 Tab 横向切换，不占业务导航。 -->
   <ModuleTabs
-    label="系统配置" :leaves="leaves" :active="active"
+    label="系统配置" section-key="system" :leaves="leaves" :active="active"
     @select="$emit('select',$event)" />
 
   <!-- 配置总览：入口宫格。标题口径与其它 Tab 一致——eyebrow 写所属模块，主标题写菜单名。 -->

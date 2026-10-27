@@ -1,10 +1,10 @@
 <template>
   <!-- 设计 §4：知识生成 = 建知识。入口统一走顶部 Tab，这里不再重复一排动作卡——同样的能力只保留一处入口。
-       Tab 由外壳按角色下发：管理员是「生成概览 / 生成配置 / 文档导入 / 连接器 / 外部知识 / 知识裁决 / 知识衍生」，
-       普通成员精简为「生成配置 / 文档导入（默认进入）/ 知识裁决 / 知识衍生」——生成配置管的是本库怎么产出知识，
+       Tab 由外壳按角色下发：管理员可见概览、配置、文档导入、连接器、外部知识、知识台账、裁决和衍生；
+       普通成员看到有权限的配置、文档导入、裁决和衍生入口——生成配置管的是本库怎么产出知识，
        与「能把资料接进来」同一级权限，不随运维类 Tab 一起收起。本页不重复判断角色。 -->
   <ModuleTabs
-    label="知识生成" :leaves="tabs" :active="active" :badges="badges"
+    label="知识生成" section-key="create" :leaves="tabs" :active="active" :badges="badges"
     @select="$emit('select',$event)" />
 
   <GenerateHomePanel
