@@ -11,22 +11,22 @@
     <p class="kb-note">共 {{filteredBases.length}} 个知识库<template v-if="keyword">（自 {{bases.length}} 个中筛选）</template> · 点击行切换当前知识库</p>
 
     <div class="kb-list">
-      <div v-for="base in filteredBases" :key="base.id" class="kb-row" :class="{active:base.id===activeId}"
-        role="button" tabindex="0" :aria-current="base.id===activeId?'true':undefined"
-        :aria-label="`切换到知识库：${base.name}`" @click="$emit('select',base.id)"
-        @keydown.enter.prevent="selectBaseRow($event,base.id)" @keydown.space.prevent="selectBaseRow($event,base.id)">
-        <span class="kb-icon">📚</span>
-        <span class="kb-copy">
-          <b>{{base.name}}</b>
-          <small>{{base.description||base.baseCode}}</small>
-        </span>
-        <span class="kb-meta">
-          <em class="kb-owner">创建人：{{base.createdByName||'—'}}</em>
-          <el-tag v-if="base.scenario" size="small" effect="plain" type="success">{{scenarioLabel(base.scenario)}}</el-tag>
-          <el-tag size="small" effect="plain">{{visibilityLabel(base.visibility)}}</el-tag>
-        </span>
-        <el-tag v-if="base.id===activeId" size="small">当前</el-tag>
-        <span class="kb-code">{{base.baseCode}}</span>
+      <div v-for="base in filteredBases" :key="base.id" class="kb-row" :class="{active:base.id===activeId}">
+        <button type="button" class="kb-row-main" :aria-current="base.id===activeId?'true':undefined"
+          :aria-label="`切换到知识库：${base.name}`" @click="$emit('select',base.id)">
+          <span class="kb-icon">📚</span>
+          <span class="kb-copy">
+            <b>{{base.name}}</b>
+            <small>{{base.description||base.baseCode}}</small>
+          </span>
+          <span class="kb-meta">
+            <em class="kb-owner">创建人：{{base.createdByName||'—'}}</em>
+            <el-tag v-if="base.scenario" size="small" effect="plain" type="success">{{scenarioLabel(base.scenario)}}</el-tag>
+            <el-tag size="small" effect="plain">{{visibilityLabel(base.visibility)}}</el-tag>
+          </span>
+          <el-tag v-if="base.id===activeId" size="small">当前</el-tag>
+          <span class="kb-code">{{base.baseCode}}</span>
+        </button>
         <el-button v-if="canEdit(base)" size="small" text type="primary" class="kb-edit" @click.stop="startEdit(base)">编辑</el-button>
       </div>
       <p v-if="!filteredBases.length" class="kb-empty">
@@ -265,9 +265,6 @@ const viewMode=ref<'list'|'form'>('list')
 const keyword=ref('')
 /** 折叠面板：只展开基础信息，场景模板与生成 / 衍生 / 查询配置默认收起。 */
 const openSections=ref<string[]>(['basic'])
-function selectBaseRow(event:KeyboardEvent,id:number){
-  if(event.target===event.currentTarget)emit('select',id)
-}
 const name=ref('');const description=ref('')
 /** 默认检索语句：库自带的示例问句，留空时各端退回通用提示语。 */
 const defaultQuery=ref('')
@@ -568,15 +565,15 @@ overflow:hidden}
 border:0;
 border-bottom:1px solid var(--line-d);
 background:var(--bg-raised);
-padding:11px 14px;
+padding:0 10px 0 0;
 display:flex;
 align-items:center;
-gap:10px;
-text-align:left;
-cursor:pointer}
+gap:8px}
+.kb-row-main{width:100%;min-width:0;flex:1;border:0;background:transparent;padding:11px 4px 11px 14px;
+display:flex;align-items:center;gap:10px;text-align:left;color:inherit;font:inherit;cursor:pointer}
 .kb-row:last-child{border-bottom:0}
 .kb-row:hover,.kb-row.active{background:var(--bg-sub)}
-.kb-row:focus-visible{outline:none;box-shadow:inset 0 0 0 2px var(--brand-400)}
+.kb-row-main:focus-visible{outline:none;box-shadow:inset 0 0 0 2px var(--brand-400)}
 .kb-icon{font-size:18px}
 .kb-copy{display:flex;
 flex-direction:column;

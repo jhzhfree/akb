@@ -1,23 +1,17 @@
 <template>
   <section class="kb-page">
-    <header class="kb-section-head">
-      <div>
-        <div class="kb-eyebrow">知识生成</div>
-        <h1 class="kb-title mt-1">生成概览</h1>
-        <p class="kb-muted mt-1">
-          把资料导入知识库，系统会自动整理内容；需要时审核生成的知识，再到智能检索中验证结果。
-        </p>
-      </div>
+    <PageHeader eyebrow="知识生成" title="生成概览"
+      description="把资料导入知识库，系统会自动整理内容；需要时审核生成的知识，再到智能检索中验证结果。">
       <!-- 抽取只在文档导入时跑一次，抽取逻辑改进后旧产物不会自动重算。
            这里提供整库重跑的入口，用已入库的正文重新抽取，不必再上传一次文件。 -->
-      <div class="shrink-0">
+      <template #actions>
         <button class="kb-btn kb-btn-outline" :disabled="regenerating || !documents.length"
           :title="documents.length ? '' : '当前知识库还没有文档'"
           @click="regenerateDialog = true">
           {{ regenerating ? '重新生成中…' : '重新生成知识' }}
         </button>
-      </div>
-    </header>
+      </template>
+    </PageHeader>
 
     <nav class="kb-flow" aria-label="知识生成步骤">
       <button type="button" class="kb-flow-step" @click="shell.navigate('create.import')">
@@ -115,6 +109,7 @@ import type {
   KnowledgeDocument, ReviewRow, SourcePreview,
 } from '../types'
 import { useShell } from '../shell'
+import PageHeader from './PageHeader.vue'
 import DocumentIngestPanel from './DocumentIngestPanel.vue'
 
 const shell = useShell()

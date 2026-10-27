@@ -1,12 +1,7 @@
 <template>
 <section class="kb-page">
-<div class="kb-section-head">
-<div>
-<div class="kb-eyebrow">知识生成</div>
-<h2 class="kb-title mt-1">文档导入</h2>
-<p class="kb-muted mt-1">查看资料处理进度；解析失败或索引异常时可重新处理，并随时查看原文与处理记录。</p>
-</div>
-</div>
+<PageHeader eyebrow="知识生成" title="文档导入"
+description="查看资料处理进度；解析失败或索引异常时可重新处理，并随时查看原文与处理记录。" />
 
 <!-- 与「生成概览」共用 DocumentIngestPanel：拖入资料 + 已解析文档是同一套结构，
      同一条摄入链路只保留一份实现，本页只负责页面外壳（标题与说明）。 -->
@@ -35,6 +30,7 @@ import type {
   BatchIngestStatus, IngestionRun, IngestionRunDetail, KnowledgeDocument, SourcePreview,
 } from '../types'
 import DocumentIngestPanel from './DocumentIngestPanel.vue'
+import PageHeader from './PageHeader.vue'
 
 defineProps<{
   knowledgeBaseId:number

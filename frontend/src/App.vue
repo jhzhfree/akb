@@ -223,6 +223,7 @@ import {
 } from './api/auth'
 import { visibilityLabel } from './types'
 import { errorMessage } from './utils/feedback'
+import { createRequestGate } from './utils/request-gate.mjs'
 /**
  * 当前视图：取 IA 二级入口 key（见 navigation.ts），旧的 tab 值会自动归一化。
  * 初值留空——登录前拿不到角色权限，不能沿用上次会话的页面（可能是当前角色无权访问的页面），
@@ -230,6 +231,8 @@ import { errorMessage } from './utils/feedback'
  */
 const active=ref<string>('')
 const knowledgeBaseId=ref(Number(localStorage.getItem('llmkb.kbId')||1));
+/** 页面数据按知识库隔离；同一数据域只允许最后一次请求提交结果。 */
+const requestGate=createRequestGate()
 const showBases=ref(false);
 const bases=ref<KnowledgeBase[]>([])
 const file=ref<File|null>(null);
@@ -347,13 +350,16 @@ async function loadEnvironment(){
 }
 /** 索引状态：漂移来自一致性检测，积压与死信来自 Outbox 统计，任一缺失都不阻塞页面。 */
 async function loadSpaceContext(){
+  const baseId=knowledgeBaseId.value
+  const request=requestGate.begin('space-context',baseId)
   contextLoading.value=true
   indexState.value={...indexState.value,loading:true}
   try{
     const [stats,drift]=await Promise.all([
-      getOutboxStats(knowledgeBaseId.value).catch(()=>null),
-      getIndexDrift(knowledgeBaseId.value).catch(()=>null),
+      getOutboxStats(baseId).catch(()=>null),
+      getIndexDrift(baseId).catch(()=>null),
     ])
+    if(!requestGate.isCurrent(request,knowledgeBaseId.value))return
     const s=stats?unwrap(stats,{} as OutboxStats):{}
     const d=drift?unwrap(drift,{} as DriftResult):{}
     indexState.value={
@@ -363,8 +369,10 @@ async function loadSpaceContext(){
       loading:false,
     }
   }finally{
-    contextLoading.value=false
-    indexState.value={...indexState.value,loading:false}
+    if(requestGate.isCurrent(request,knowledgeBaseId.value)){
+      contextLoading.value=false
+      indexState.value={...indexState.value,loading:false}
+    }
   }
 }
 /** 登录态：后端关闭认证或允许匿名访问时 me.user 为 null，页面照常可用。 */
@@ -653,30 +661,38 @@ async function changeAcl(p:{
     await loadAcl()
   }catch(e){err(e)}
 }
-async function loadOverview(){const[o,c]=await Promise.allSettled([getOverview(knowledgeBaseId.value),getCapabilities()]);
+async function loadOverview(){
+const baseId=knowledgeBaseId.value,request=requestGate.begin('overview',baseId)
+const[o,c]=await Promise.allSettled([getOverview(baseId),getCapabilities()]);
+if(!requestGate.isCurrent(request,knowledgeBaseId.value))return
 if(o.status==='fulfilled')overview.value=unwrap(o.value,overview.value);
 if(c.status==='fulfilled')capabilities.value=unwrap(c.value,null)}
 /** 工作台聚合：三块数据相互独立，任一失败只影响对应卡片，不阻塞整页。 */
 async function loadDashboard(){
+  const baseId=knowledgeBaseId.value,request=requestGate.begin('dashboard',baseId)
   const[s,l,g]=await Promise.allSettled([
-    getDashboardSummary(knowledgeBaseId.value),
-    getDashboardLifecycle(knowledgeBaseId.value),
-    getDashboardGovernance(knowledgeBaseId.value),
+    getDashboardSummary(baseId),
+    getDashboardLifecycle(baseId),
+    getDashboardGovernance(baseId),
   ]);
+if(!requestGate.isCurrent(request,knowledgeBaseId.value))return
 if(s.status==='fulfilled')dashboard.value=unwrap(s.value,null as DashboardSummary|null);
 if(l.status==='fulfilled')lifecycle.value=unwrap(l.value,null as DashboardLifecycle|null);
 if(g.status==='fulfilled')governance.value=unwrap(g.value,null as DashboardGovernance|null)}
 /** 任务列表：顶栏红点需要失败任务数，因此登录后即加载一次。 */
 async function loadTasks(){
-  try{runs.value=unwrap(await getIngestionRuns(knowledgeBaseId.value),runs.value)}catch{/* 任务列表失败不影响主流程 */}}
-async function loadData(){const r=await Promise.allSettled([getSources(knowledgeBaseId.value),
-    getDocuments(knowledgeBaseId.value),
-    getIngestionRuns(knowledgeBaseId.value)]);
+  const baseId=knowledgeBaseId.value,request=requestGate.begin('tasks',baseId)
+  try{const result=await getIngestionRuns(baseId);if(requestGate.isCurrent(request,knowledgeBaseId.value))runs.value=unwrap(result,runs.value)}catch{/* 任务列表失败不影响主流程 */}}
+async function loadData(){
+const baseId=knowledgeBaseId.value,request=requestGate.begin('resources',baseId)
+const runsRequest=requestGate.begin('tasks',baseId)
+const r=await Promise.allSettled([getSources(baseId),getDocuments(baseId),getIngestionRuns(baseId)]);
+if(!requestGate.isCurrent(request,knowledgeBaseId.value))return
 if(r[0].status==='fulfilled')sources.value=unwrap(r[0].value,
     []);
 if(r[1].status==='fulfilled')documents.value=unwrap(r[1].value,
     []);
-if(r[2].status==='fulfilled'){runs.value=unwrap(r[2].value,[]);
+if(requestGate.isCurrent(runsRequest,knowledgeBaseId.value)&&r[2].status==='fulfilled'){runs.value=unwrap(r[2].value,[]);
 if(runs.value.length&&!selectedRunId.value)await selectRun(runs.value[0].id)}
 void resumeBatch()}
 /**
@@ -685,15 +701,24 @@ void resumeBatch()}
  */
 async function resumeBatch(){
   if(batchStatus.value||batchTimer!==undefined)return
+  const baseId=knowledgeBaseId.value,request=requestGate.begin('resume-batch',baseId)
   try{
-    const running=unwrap(await listBatches(knowledgeBaseId.value,5),[]).find(item=>item.status==='RUNNING')
+    const response=await listBatches(baseId,5)
+    if(!requestGate.isCurrent(request,knowledgeBaseId.value))return
+    const running=unwrap(response,[]).find(item=>item.status==='RUNNING')
     if(!running)return
     batchStatus.value=running
     startBatchWatch()
   }catch{/* 恢复监视只是增强：拿不到批次回归普通使用，不该弹错打扰 */}
 }
-async function selectRun(id:number){selectedRunId.value=id;
-try{runDetail.value=unwrap(await getIngestionRun(id),null)}catch(e){err(e)}}
+async function selectRun(id:number){
+selectedRunId.value=id
+const request=requestGate.begin('run-detail',knowledgeBaseId.value)
+try{
+  const detail=await getIngestionRun(id)
+  if(requestGate.isCurrent(request,knowledgeBaseId.value)&&selectedRunId.value===id)
+    runDetail.value=unwrap(detail,null)
+}catch(e){if(requestGate.isCurrent(request,knowledgeBaseId.value))err(e)}}
 /** 文档重跑结束后：状态、Chunk revision 与运行日志都已变化，一并刷新。 */
 async function reloadAfterRetry(){try{await Promise.all([loadData(),loadOverview()])}catch(e){err(e,'刷新失败')}}
 /** 拉取最新一次运行的阶段与事件；基线之前的运行属于历史，不参与跟踪。 */
@@ -739,10 +764,11 @@ function resetPreview(){previewId.value=null;
 preview.value=null;
 previewError.value=''}
 async function loadReview(){
+const baseId=knowledgeBaseId.value,request=requestGate.begin('reviews',baseId)
 const r=await Promise.allSettled([
-  getPendingReviews(knowledgeBaseId.value), getOpenConflicts(knowledgeBaseId.value),
-  getAssessments(knowledgeBaseId.value),
+  getPendingReviews(baseId), getOpenConflicts(baseId), getAssessments(baseId),
 ]);
+if(!requestGate.isCurrent(request,knowledgeBaseId.value))return
 if(r[0].status==='fulfilled')pendingReviews.value=unwrap(r[0].value,[]);
 if(r[1].status==='fulfilled')conflicts.value=unwrap(r[1].value,[]);
 if(r[2].status==='fulfilled')assessments.value=unwrap(r[2].value,[])}
@@ -870,13 +896,16 @@ if((type==='CARD'||type==='CLAIM'||type==='CHUNK')&&code){
 ElMessage.info('该引用暂未返回证据/对象定位标识')
 }
 async function loadQueryHistory(){
+const baseId=knowledgeBaseId.value,request=requestGate.begin('query-history',baseId)
 historyLoading.value=true
 try{
   // 问答面板只摆最近 5 条，完整记录去「检索链路追踪」翻页看
-  const page=unwrap(await getQueryHistory(knowledgeBaseId.value,1,5),{items:[],total:0,page:1,pageSize:5})
+  const response=await getQueryHistory(baseId,1,5)
+  if(!requestGate.isCurrent(request,knowledgeBaseId.value))return
+  const page=unwrap(response,{items:[],total:0,page:1,pageSize:5})
   queryHistory.value=page.items||[]
-}catch(e){err(e)}
-finally{historyLoading.value=false}}
+}catch(e){if(requestGate.isCurrent(request,knowledgeBaseId.value))err(e)}
+finally{if(requestGate.isCurrent(request,knowledgeBaseId.value))historyLoading.value=false}}
 /** 历史面板的「更多」：切到检索链路追踪。没有该页权限时给一句明确提示，
  *  而不是静默不跳——点了没反应比说清楚更让人困惑。 */
 function openTraceCenter(){
@@ -1094,8 +1123,15 @@ localStorage.setItem('kos.activeView',v);
 void loadSpaceContext();
 void loadActive()});
 watch(knowledgeBaseId,
-    v=>{localStorage.setItem('llmkb.kbId',String(v));
+    v=>{requestGate.invalidate();
+localStorage.setItem('llmkb.kbId',String(v));
 auditPage.value=1;changePage.value=1;
+// 清除旧库列表和摘要，避免新库页面短暂展示之前的知识库数据。
+sources.value=[];documents.value=[];pendingReviews.value=[];conflicts.value=[];assessments.value=[];
+runs.value=[];queryHistory.value=[];historyLoading.value=false;
+overview.value={knowledgeBaseId:v,sourceCount:0,documentCount:0,chunkCount:0,cardCount:0,effectiveCardCount:0,claimCount:0,pendingReviewCount:0,openConflictCount:0,assessmentCount:0};
+dashboard.value=null;lifecycle.value=null;governance.value=null;
+indexState.value={drift:0,pending:0,dead:0,loading:true};contextLoading.value=true;
 void loadDashboard();
 void loadTasks();
 result.value=null;

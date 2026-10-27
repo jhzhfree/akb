@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "test": "node --test",
     "typecheck": "vue-tsc --noEmit",
     "check:answer-style": "node scripts/check-answer-style.mjs",
     "lint": "eslint .",
