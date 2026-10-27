@@ -6,6 +6,7 @@
       :key="leaf.key"
       class="kos-modnav-chip"
       :class="{ active: active === leaf.key, planned: leaf.planned }"
+      :aria-current="active === leaf.key ? 'page' : undefined"
       :disabled="leaf.planned"
       :title="leaf.planned ? '规划中：该能力尚未实现' : ''"
       @click="select(leaf)">
@@ -15,11 +16,12 @@
       <em v-else-if="leaf.planned" class="kos-nav-planned">规划</em>
     </button>
     <details v-if="overflowGroups.length" ref="overflowMenu" class="kos-modnav-more" :class="{active:hasActiveOverflow}">
-      <summary>更多能力 <span aria-hidden="true">⌄</span></summary>
+      <summary :aria-label="hasActiveOverflow ? `更多能力，当前：${activeOverflowLabel}` : '更多能力'">更多能力 <span aria-hidden="true">⌄</span></summary>
       <div class="kos-modnav-menu">
         <section v-for="group in overflowGroups" :key="group.label" class="kos-modnav-menu-group">
           <b>{{group.label}}</b>
           <button v-for="leaf in group.leaves" :key="leaf.key" :class="{active:active===leaf.key}"
+            :aria-current="active===leaf.key?'page':undefined"
             :disabled="leaf.planned" @click="select(leaf)">
             <NavIcon :name="leaf.icon" :size="14"/><span>{{leaf.label}}</span>
             <em v-if="badges?.[leaf.key]" class="kos-nav-dot">{{badges[leaf.key]}}</em>
@@ -99,6 +101,7 @@ const overflowGroups=computed(()=>{
   return groups
 })
 const hasActiveOverflow=computed(()=>overflowGroups.value.some(group=>group.leaves.some(leaf=>leaf.key===props.active)))
+const activeOverflowLabel=computed(()=>overflowGroups.value.flatMap(group=>group.leaves).find(leaf=>leaf.key===props.active)?.label||'')
 const emit = defineEmits<{ select: [key: string] }>()
 
 function select(leaf: NavLeaf) {
