@@ -1,6 +1,6 @@
 <template>
   <!-- 设计 §5：知识检索 = 找知识。知识图谱整体归入检索（V2.1 基线变更②）。 -->
-  <ModuleTabs label="知识检索" :leaves="tabs" :active="active" @select="$emit('select',$event)" />
+  <ModuleTabs label="知识检索" section-key="search" :leaves="tabs" :active="active" @select="$emit('select',$event)" />
 
   <QueryPanel
     v-if="active==='search.query'"

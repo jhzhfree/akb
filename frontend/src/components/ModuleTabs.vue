@@ -37,7 +37,7 @@ import NavIcon from './NavIcon.vue'
 const props=defineProps<{
   label:string
   /** 明确模块类型，避免通过展示文案猜测菜单分组。未知模块默认展示全部入口。 */
-  sectionKey?:'create'|'system'|'integration'
+  sectionKey?:'create'|'search'|'system'|'integration'
   leaves:NavLeaf[]
   active:string
   badges?:Record<string,number|string>
@@ -49,6 +49,13 @@ const NAV_GROUPS:Record<NonNullable<typeof props.sectionKey>,{primary:string[];g
     groups:[
       {label:'数据接入与治理',keys:['create.connectorCatalog','create.ledger']},
       {label:'知识处理',keys:['create.judgment','create.derive']},
+    ],
+  },
+  search:{
+    primary:['search.query','search.test','search.profile','search.graph'],
+    groups:[
+      {label:'链路排查',keys:['search.trace']},
+      {label:'质量评估',keys:['search.feedback','search.benchmark']},
     ],
   },
   system:{
