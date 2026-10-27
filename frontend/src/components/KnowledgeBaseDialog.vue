@@ -42,11 +42,10 @@
       <span class="kb-back-title">{{editing?'编辑知识库':'新建知识库'}}</span>
     </div>
 
-    <p class="kb-note kb-create-hint">只需填写基础信息即可创建，生成、衍生和查询策略可在创建后按需调整。</p>
-    <el-collapse v-model="openSections" class="kb-collapse">
-      <!-- 基础信息：与场景配置同屏，建库一次填完，不必先建再找设置页。 -->
-      <el-collapse-item name="basic">
-        <template #title><span class="kb-title">基础信息<em>名称、可见范围与场景</em></span></template>
+    <p class="kb-note kb-create-hint">只需填写基本信息即可创建，场景模板、生成、衍生与查询策略在「高级配置」页签按需调整。</p>
+    <el-tabs v-model="activeTab" class="kb-tabs">
+      <!-- 基本信息：建库必填。生成 / 衍生 / 查询属于调优项，收进高级配置按需再改。 -->
+      <el-tab-pane label="基本信息" name="basic">
         <div class="kb-grid kb-grid-4">
           <label class="kb-field kb-span-2">
             <span>名称</span>
@@ -98,131 +97,135 @@
             <el-input v-model="defaultQuery" :maxlength="500" show-word-limit placeholder="如：这份合同有哪些交付范围？"/>
           </label>
         </div>
-      </el-collapse-item>
+      </el-tab-pane>
 
-      <!-- 场景模板：给出推荐默认值，选完下面三段自动带出，不必从零调参。 -->
-      <el-collapse-item name="scenario">
-        <template #title><span class="kb-title">场景模板<em>决定生成、衍生与查询的默认策略</em></span></template>
-        <div class="kb-templates">
-          <button v-for="item in templates" :key="item.code" type="button" class="kb-tpl"
-            :class="{active:scenario===item.code}" @click="pickTemplate(item.code)">
-            <b>{{item.label}}</b>
-            <small>{{item.summary}}</small>
-            <span class="kb-tpl-docs">{{(item.docTypes||[]).join(' / ')}}</span>
-          </button>
-        </div>
-      </el-collapse-item>
-
-      <el-collapse-item name="generation">
-        <template #title><span class="kb-title">生成配置<em>文档如何切分与抽取</em></span></template>
-        <div class="kb-grid kb-grid-4">
-          <label class="kb-field">
-            <span>切片策略</span>
-            <el-select v-model="profile.generation.chunk.strategy">
-              <el-option v-for="s in chunkStrategies" :key="s.name" :value="s.name" :label="s.label"/>
-            </el-select>
-          </label>
-          <label class="kb-field">
-            <span>窗口大小</span>
-            <el-input-number v-model="profile.generation.chunk.chunkSize" :min="range('chunkSize').min"
-              :max="range('chunkSize').max" :step="50"/>
-          </label>
-          <label class="kb-field">
-            <span>重叠长度</span>
-            <el-input-number v-model="profile.generation.chunk.chunkOverlap" :min="range('chunkOverlap').min"
-              :max="range('chunkOverlap').max" :step="10"/>
-          </label>
-          <label class="kb-field">
-            <span>最小片段</span>
-            <el-input-number v-model="profile.generation.chunk.minChunkSize" :min="range('minChunkSize').min"
-              :max="range('minChunkSize').max" :step="10"/>
-          </label>
-        </div>
-        <p class="kb-note">{{strategyHint}}</p>
-        <div class="kb-switches">
-          <el-checkbox v-model="profile.generation.chunk.keepStructure">保留章节结构</el-checkbox>
-          <el-checkbox v-model="profile.generation.chunk.respectSentence">切分落在句末</el-checkbox>
-          <el-checkbox v-model="profile.generation.chunk.parentChild">父子分块</el-checkbox>
-          <el-checkbox v-model="profile.generation.extract.claims">抽取断言</el-checkbox>
-          <el-checkbox v-model="profile.generation.extract.entityResolution">实体消歧</el-checkbox>
-          <el-checkbox v-model="profile.generation.extract.conflictDetection">冲突检测</el-checkbox>
-        </div>
-      </el-collapse-item>
-
-      <el-collapse-item name="derivation">
-        <template #title><span class="kb-title">衍生配置<em>从已有内容推导出什么</em></span></template>
-        <div class="kb-switches">
-          <el-checkbox v-model="profile.derivation.graphEnabled">构建并使用知识图谱</el-checkbox>
-        </div>
-        <p class="kb-note">关闭后不再抽取实体关系，检索也不走图谱通道，适合以条款、流程为主的知识库。</p>
-        <div class="kb-presets">
-          <el-checkbox v-for="p in derivationPresets" :key="p.code" :model-value="hasPreset(p.code)"
-            :disabled="!profile.derivation.graphEnabled && p.code!=='CLAIM_SENTENCE' && p.code!=='AI_CONCLUSION'"
-            @change="(v:unknown)=>togglePreset(p.code,!!v)">{{p.label}}</el-checkbox>
-        </div>
-      </el-collapse-item>
-
-      <el-collapse-item name="query">
-        <template #title><span class="kb-title">查询配置<em>默认检索策略与答案形态</em></span></template>
-        <div class="kb-field kb-block-inline">
-          <span>默认召回通道（按勾选顺序优先）</span>
-          <div class="kb-channels">
-            <el-checkbox v-for="c in channelVocabulary" :key="c.name" :model-value="hasChannel(c.name)"
-              @change="(v:unknown)=>toggleChannel(c.name,!!v)">{{c.label}}</el-checkbox>
-          </div>
-        </div>
-        <div class="kb-weights">
-          <div v-for="c in channelVocabulary" :key="c.name" class="kb-weight" :class="{off:!channel(c.name).enabled}">
-            <span>{{c.label}}</span>
-            <el-slider v-model="channel(c.name).weight" :min="range('weight').min" :max="range('weight').max"
-              :step="0.05" :disabled="!channel(c.name).enabled"/>
-            <b>{{channel(c.name).weight.toFixed(2)}}</b>
-          </div>
-        </div>
-        <div class="kb-grid kb-grid-4">
-          <label class="kb-field">
-            <span>召回倍数</span>
-            <el-input-number v-model="profile.query.recallMultiplier" :min="range('recallMultiplier').min"
-              :max="range('recallMultiplier').max"/>
-          </label>
-          <label class="kb-field">
-            <span>最少候选数</span>
-            <el-input-number v-model="profile.query.minRecallCandidates" :min="range('minRecallCandidates').min"
-              :max="range('minRecallCandidates').max" :step="2"/>
-          </label>
-          <label class="kb-field">
-            <span>融合 RRF K</span>
-            <el-input-number v-model="profile.query.rrfK" :min="range('rrfK').min" :max="range('rrfK').max" :step="10"/>
-          </label>
-          <label class="kb-field">
-            <span>默认答案格式</span>
-            <el-select v-model="profile.query.answerFormat">
-              <el-option v-for="f in answerFormats" :key="f.name" :value="f.name" :label="f.label"/>
-            </el-select>
-          </label>
-          <label class="kb-field">
-            <span>最少原文证据</span>
-            <el-input-number v-model="profile.query.minChunkEvidence" :min="range('minChunkEvidence').min"
-              :max="range('minChunkEvidence').max"/>
-          </label>
-          <label class="kb-field">
-            <span>上下文上限（字符）</span>
-            <el-input-number v-model="profile.query.contextMaxChars" :min="range('contextMaxChars').min"
-              :max="range('contextMaxChars').max" :step="500"/>
-          </label>
-          <label class="kb-field">
-            <span>精排条数（0 为全部）</span>
-            <el-input-number v-model="profile.query.rerankTopN" :min="range('rerankTopN').min"
-              :max="range('rerankTopN').max" :step="5" :disabled="!profile.query.rerankEnabled"/>
-          </label>
-        </div>
-        <div class="kb-switches">
-          <el-checkbox v-model="profile.query.rerankEnabled">启用精排</el-checkbox>
-          <el-checkbox v-model="profile.query.qualitySignalsEnabled">质量信号加权</el-checkbox>
-          <el-checkbox v-model="profile.query.chunkBoostEnabled">原文片段加权</el-checkbox>
-        </div>
-      </el-collapse-item>
-    </el-collapse>
+      <el-tab-pane label="高级配置" name="advanced">
+        <el-collapse v-model="openSections" class="kb-collapse">
+          <!-- 场景模板：给出推荐默认值，选完下面三段自动带出，不必从零调参。 -->
+          <el-collapse-item name="scenario">
+            <template #title><span class="kb-title">场景模板<em>决定生成、衍生与查询的默认策略</em></span></template>
+            <div class="kb-templates">
+              <button v-for="item in templates" :key="item.code" type="button" class="kb-tpl"
+                :class="{active:scenario===item.code}" @click="pickTemplate(item.code)">
+                <b>{{item.label}}</b>
+                <small>{{item.summary}}</small>
+                <span class="kb-tpl-docs">{{(item.docTypes||[]).join(' / ')}}</span>
+              </button>
+            </div>
+          </el-collapse-item>
+    
+          <el-collapse-item name="generation">
+            <template #title><span class="kb-title">生成配置<em>文档如何切分与抽取</em></span></template>
+            <div class="kb-grid kb-grid-4">
+              <label class="kb-field">
+                <span>切片策略</span>
+                <el-select v-model="profile.generation.chunk.strategy">
+                  <el-option v-for="s in chunkStrategies" :key="s.name" :value="s.name" :label="s.label"/>
+                </el-select>
+              </label>
+              <label class="kb-field">
+                <span>窗口大小</span>
+                <el-input-number v-model="profile.generation.chunk.chunkSize" :min="range('chunkSize').min"
+                  :max="range('chunkSize').max" :step="50"/>
+              </label>
+              <label class="kb-field">
+                <span>重叠长度</span>
+                <el-input-number v-model="profile.generation.chunk.chunkOverlap" :min="range('chunkOverlap').min"
+                  :max="range('chunkOverlap').max" :step="10"/>
+              </label>
+              <label class="kb-field">
+                <span>最小片段</span>
+                <el-input-number v-model="profile.generation.chunk.minChunkSize" :min="range('minChunkSize').min"
+                  :max="range('minChunkSize').max" :step="10"/>
+              </label>
+            </div>
+            <p class="kb-note">{{strategyHint}}</p>
+            <div class="kb-switches">
+              <el-checkbox v-model="profile.generation.chunk.keepStructure">保留章节结构</el-checkbox>
+              <el-checkbox v-model="profile.generation.chunk.respectSentence">切分落在句末</el-checkbox>
+              <el-checkbox v-model="profile.generation.chunk.parentChild">父子分块</el-checkbox>
+              <el-checkbox v-model="profile.generation.extract.claims">抽取断言</el-checkbox>
+              <el-checkbox v-model="profile.generation.extract.entityResolution">实体消歧</el-checkbox>
+              <el-checkbox v-model="profile.generation.extract.conflictDetection">冲突检测</el-checkbox>
+            </div>
+          </el-collapse-item>
+    
+          <el-collapse-item name="derivation">
+            <template #title><span class="kb-title">衍生配置<em>从已有内容推导出什么</em></span></template>
+            <div class="kb-switches">
+              <el-checkbox v-model="profile.derivation.graphEnabled">构建并使用知识图谱</el-checkbox>
+            </div>
+            <p class="kb-note">关闭后不再抽取实体关系，检索也不走图谱通道，适合以条款、流程为主的知识库。</p>
+            <div class="kb-presets">
+              <el-checkbox v-for="p in derivationPresets" :key="p.code" :model-value="hasPreset(p.code)"
+                :disabled="!profile.derivation.graphEnabled && p.code!=='CLAIM_SENTENCE' && p.code!=='AI_CONCLUSION'"
+                @change="(v:unknown)=>togglePreset(p.code,!!v)">{{p.label}}</el-checkbox>
+            </div>
+          </el-collapse-item>
+    
+          <el-collapse-item name="query">
+            <template #title><span class="kb-title">查询配置<em>默认检索策略与答案形态</em></span></template>
+            <div class="kb-field kb-block-inline">
+              <span>默认召回通道（按勾选顺序优先）</span>
+              <div class="kb-channels">
+                <el-checkbox v-for="c in channelVocabulary" :key="c.name" :model-value="hasChannel(c.name)"
+                  @change="(v:unknown)=>toggleChannel(c.name,!!v)">{{c.label}}</el-checkbox>
+              </div>
+            </div>
+            <div class="kb-weights">
+              <div v-for="c in channelVocabulary" :key="c.name" class="kb-weight" :class="{off:!channel(c.name).enabled}">
+                <span>{{c.label}}</span>
+                <el-slider v-model="channel(c.name).weight" :min="range('weight').min" :max="range('weight').max"
+                  :step="0.05" :disabled="!channel(c.name).enabled"/>
+                <b>{{channel(c.name).weight.toFixed(2)}}</b>
+              </div>
+            </div>
+            <div class="kb-grid kb-grid-4">
+              <label class="kb-field">
+                <span>召回倍数</span>
+                <el-input-number v-model="profile.query.recallMultiplier" :min="range('recallMultiplier').min"
+                  :max="range('recallMultiplier').max"/>
+              </label>
+              <label class="kb-field">
+                <span>最少候选数</span>
+                <el-input-number v-model="profile.query.minRecallCandidates" :min="range('minRecallCandidates').min"
+                  :max="range('minRecallCandidates').max" :step="2"/>
+              </label>
+              <label class="kb-field">
+                <span>融合 RRF K</span>
+                <el-input-number v-model="profile.query.rrfK" :min="range('rrfK').min" :max="range('rrfK').max" :step="10"/>
+              </label>
+              <label class="kb-field">
+                <span>默认答案格式</span>
+                <el-select v-model="profile.query.answerFormat">
+                  <el-option v-for="f in answerFormats" :key="f.name" :value="f.name" :label="f.label"/>
+                </el-select>
+              </label>
+              <label class="kb-field">
+                <span>最少原文证据</span>
+                <el-input-number v-model="profile.query.minChunkEvidence" :min="range('minChunkEvidence').min"
+                  :max="range('minChunkEvidence').max"/>
+              </label>
+              <label class="kb-field">
+                <span>上下文上限（字符）</span>
+                <el-input-number v-model="profile.query.contextMaxChars" :min="range('contextMaxChars').min"
+                  :max="range('contextMaxChars').max" :step="500"/>
+              </label>
+              <label class="kb-field">
+                <span>精排条数（0 为全部）</span>
+                <el-input-number v-model="profile.query.rerankTopN" :min="range('rerankTopN').min"
+                  :max="range('rerankTopN').max" :step="5" :disabled="!profile.query.rerankEnabled"/>
+              </label>
+            </div>
+            <div class="kb-switches">
+              <el-checkbox v-model="profile.query.rerankEnabled">启用精排</el-checkbox>
+              <el-checkbox v-model="profile.query.qualitySignalsEnabled">质量信号加权</el-checkbox>
+              <el-checkbox v-model="profile.query.chunkBoostEnabled">原文片段加权</el-checkbox>
+            </div>
+          </el-collapse-item>
+        </el-collapse>
+      </el-tab-pane>
+    </el-tabs>
 
     <div class="kb-actions">
       <el-button @click="backToList">取消</el-button>
@@ -263,8 +266,10 @@ const emit=defineEmits<{
 const viewMode=ref<'list'|'form'>('list')
 /** 列表关键字：后端列表接口不带检索参数，库数量有限，前端过滤即可。 */
 const keyword=ref('')
-/** 折叠面板：只展开基础信息，场景模板与生成 / 衍生 / 查询配置默认收起。 */
-const openSections=ref<string[]>(['basic'])
+/** 表单分区：基本信息必填，高级配置（场景模板 / 生成 / 衍生 / 查询）属于调优项。 */
+const activeTab=ref<'basic'|'advanced'>('basic')
+/** 高级配置内的折叠面板：默认只展开场景模板，一次铺开四段会把表单拉得很长。 */
+const openSections=ref<string[]>(['scenario'])
 function selectBaseRow(event:KeyboardEvent,id:number){
   if(event.target===event.currentTarget)emit('select',id)
 }
@@ -614,6 +619,12 @@ gap:10px;
 margin-bottom:10px}
 .kb-back-title{font-size:12px;
 color:var(--ink-3)}
+/* 分区标签：基本信息 / 高级配置。底部操作按钮在标签之外，切页签不影响按钮位置。 */
+.kb-tabs{margin-top:10px}
+.kb-tabs :deep(.el-tabs__header){margin:0 0 12px}
+.kb-tabs :deep(.el-tabs__content){overflow:visible}
+/* 基本信息原先躺在折叠面板里，自带 14/16 内边距；移进页签后补一点，避免顶到边框。 */
+.kb-tabs :deep(.el-tab-pane){padding:0 2px}
 /* 折叠容器：分区默认收起，标题沿用原有 kb-title 风格 */
 .kb-collapse{border:1px solid var(--line-d);
 border-radius:10px;
