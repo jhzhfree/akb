@@ -10,6 +10,7 @@ import com.jh.knowledgeos.dto.ExternalKnowledgeBaseGrantRequest;
 import com.jh.knowledgeos.mapper.ExternalApiMapper;
 import com.jh.knowledgeos.mapper.AclPersistenceMapper;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -64,9 +65,14 @@ public class ApiKeyService {
         this(mapper, ids, objectMapper, null, null);
     }
 
+    /**
+     * KnowledgeMapper 聚合继承了 AclPersistenceMapper，于是 knowledgeMapper 也是这个类型的
+     * 候选 bean。这里要的是带自己 XML 命名空间的 aclPersistenceMapper，按名指定。
+     */
     @Autowired
     public ApiKeyService(ExternalApiMapper mapper, IdGenerator ids, ObjectMapper objectMapper,
-        KnowledgeBaseAccessService knowledgeBaseAccess, AclPersistenceMapper aclMapper) {
+        KnowledgeBaseAccessService knowledgeBaseAccess,
+        @Qualifier("aclPersistenceMapper") AclPersistenceMapper aclMapper) {
         this.mapper = mapper;
         this.ids = ids;
         this.objectMapper = objectMapper;
