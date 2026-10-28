@@ -184,6 +184,17 @@ public class ExternalServiceAdminController {
             request.getAllowedOrigins(), operator.getId()));
     }
 
+    @PostMapping("/keys/{id}/rotate")
+    @Operation(summary = "轮换 Service Key：换发新明文并立即撤销旧 Key，主体、授权与记忆身份不变")
+    public ApiResponse<Object> rotateKey(@PathVariable Long id, @RequestBody(required = false) Map<String, Object> body) {
+        User operator = requireManager();
+        Map<String, Object> request = body == null ? Collections.<String, Object>emptyMap() : body;
+        String expiry = request.get("expiresAt") == null ? null : String.valueOf(request.get("expiresAt"));
+        LocalDateTime expiresAt = parseExpiresAt(expiry, properties.isServiceKeyExpiryRequired());
+        validateServiceKeyExpiry(expiresAt);
+        return ApiResponse.ok(apiKeyService.rotateServiceKey(id, expiresAt, operator.getId()));
+    }
+
     @GetMapping("/identity-bindings/octop")
     @Operation(summary = "查询 AKB 管理的 Octop 用户 ID 绑定")
     public ApiResponse<Object> listOctopIdentityBindings(@RequestParam(required = false) String providerInstanceId,

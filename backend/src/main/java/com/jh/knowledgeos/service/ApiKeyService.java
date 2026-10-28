@@ -322,6 +322,101 @@ public class ApiKeyService {
     }
 
     /**
+     * Replaces a personal token's secret, revoking the old row in the same transaction.
+     *
+     * <p>Rotation is the only way to give a token a new lifetime: editing the existing row would
+     * keep the old secret valid. Everything that defines identity and authorization — principal,
+     * owner, scopes, grants — is carried over untouched, so a rotation can never widen access.
+     */
+    @Transactional
+    public Map<String, Object> rotatePersonalAccessToken(Long userId, Long tokenId, LocalDateTime expiresAt) {
+        ApiKey existing = mapper.getApiKey(tokenId);
+        if (existing == null || !ApiKey.CREDENTIAL_USER_PAT.equalsIgnoreCase(existing.getCredentialType())
+            || existing.getOwnerUserId() == null || !existing.getOwnerUserId().equals(userId)) {
+            throw new IllegalArgumentException("个人访问令牌不存在");
+        }
+        if (!ApiKey.STATUS_ACTIVE.equalsIgnoreCase(existing.getStatus())) {
+            throw new IllegalArgumentException("已撤销的个人访问令牌不能轮换");
+        }
+        LocalDateTime now = LocalDateTime.now();
+        if (expiresAt == null || !expiresAt.isAfter(now)) throw new IllegalArgumentException("轮换后的令牌必须设置未来到期时间");
+        if (expiresAt.isAfter(now.plusDays(PAT_MAX_LIFETIME_DAYS))) {
+            throw new IllegalArgumentException("个人访问令牌最长有效期为 " + PAT_MAX_LIFETIME_DAYS + " 天");
+        }
+        String secret = newSecret();
+        ApiKey key = new ApiKey();
+        key.setKeyCode(ids.next("PAT_"));
+        key.setName(existing.getName());
+        key.setSecretHash(hash(secret));
+        key.setKeyPrefix(secret.substring(0, SECRET_PREFIX.length() + 6));
+        key.setCredentialType(ApiKey.CREDENTIAL_USER_PAT);
+        key.setOwnerUserId(userId);
+        key.setPrincipalId(existing.getPrincipalId());
+        key.setScopes(existing.getScopes());
+        key.setRateLimitPerMinute(existing.getRateLimitPerMinute());
+        key.setStatus(ApiKey.STATUS_ACTIVE);
+        key.setExpiresAt(expiresAt);
+        key.setCreatedBy(userId);
+        mapper.insertApiKey(key);
+        mapper.updateApiKeyStatus(tokenId, ApiKey.STATUS_REVOKED);
+        Map<String, Object> result = profile(mapper.getApiKey(key.getId()));
+        result.put("secret", secret);
+        result.put("expiresAt", expiresAt);
+        result.put("rotatedFrom", tokenId);
+        return result;
+    }
+
+    /**
+     * Replaces a Service Key's secret for the same principal.
+     *
+     * <p>The whole point is changing the credential without touching identity: principal, scopes,
+     * knowledge grants and the memory profile all stay put, so rotating a key never moves a
+     * principal's namespace or agent identity. Without an explicit new expiry the old one is
+     * kept — rotation must not silently turn a short-lived key into a long-lived one.
+     */
+    @Transactional
+    public Map<String, Object> rotateServiceKey(Long keyId, LocalDateTime expiresAt, Long operatorId) {
+        ApiKey existing = mapper.getApiKey(keyId);
+        if (existing == null) throw new IllegalArgumentException("API Key 不存在");
+        if (ApiKey.CREDENTIAL_USER_PAT.equalsIgnoreCase(existing.getCredentialType())) {
+            throw new IllegalArgumentException("个人访问令牌请通过个人令牌接口轮换");
+        }
+        if (!ApiKey.STATUS_ACTIVE.equalsIgnoreCase(existing.getStatus())) {
+            throw new IllegalArgumentException("已撤销的 API Key 不能轮换");
+        }
+        if (expiresAt != null && !expiresAt.isAfter(LocalDateTime.now())) throw new IllegalArgumentException("到期时间必须晚于当前时间");
+        String secret = newSecret();
+        ApiKey key = new ApiKey();
+        key.setKeyCode(ids.next("AK_"));
+        key.setName(existing.getName());
+        key.setSecretHash(hash(secret));
+        key.setKeyPrefix(secret.substring(0, SECRET_PREFIX.length() + 6));
+        key.setCredentialType(existing.getCredentialType() == null ? ApiKey.CREDENTIAL_SERVICE_KEY : existing.getCredentialType());
+        key.setPrincipalId(existing.getPrincipalId());
+        key.setOwnerUserId(existing.getOwnerUserId());
+        key.setKnowledgeBaseId(existing.getKnowledgeBaseId());
+        key.setScopes(existing.getScopes());
+        key.setRateLimitPerMinute(existing.getRateLimitPerMinute());
+        key.setStatus(ApiKey.STATUS_ACTIVE);
+        key.setExpiresAt(expiresAt != null ? expiresAt : existing.getExpiresAt());
+        key.setCreatedBy(operatorId);
+        key.setAllowedOrigins(existing.getAllowedOrigins());
+        // Memory 字段一并带走：namespace 取的是 COALESCE(主体 profile, Key 旧列)，主体还没有
+        // profile 时靠旧列兜底，轮换丢掉它们会让记忆身份漂到 key:<新 id>。
+        key.setMemoryNamespace(existing.getMemoryNamespace());
+        key.setMemoryAgentCode(existing.getMemoryAgentCode());
+        key.setMemoryReadEnabled(existing.getMemoryReadEnabled());
+        key.setMemoryWriteEnabled(existing.getMemoryWriteEnabled());
+        key.setPermissionTags(existing.getPermissionTags());
+        mapper.insertApiKey(key);
+        mapper.updateApiKeyStatus(keyId, ApiKey.STATUS_REVOKED);
+        Map<String, Object> result = profile(mapper.getApiKey(key.getId()));
+        result.put("secret", secret);
+        result.put("rotatedFrom", keyId);
+        return result;
+    }
+
+    /**
      * Turns existing memory capabilities off or on without changing the key's knowledge scopes.
      * A policy can disable a granted capability, but cannot grant a capability absent from scopes.
      */

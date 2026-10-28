@@ -54,6 +54,14 @@ public class PersonalAccessTokenController {
         return ApiResponse.ok(apiKeyService.revokePersonalAccessToken(requireUser().getId(), id));
     }
 
+    @PostMapping("/{id}/rotate")
+    @Operation(summary = "轮换个人访问令牌：换发新明文并立即撤销旧令牌，主体与授权不变")
+    public ApiResponse<Object> rotate(@PathVariable Long id, @RequestBody(required = false) Map<String, Object> body) {
+        User user = requireUser();
+        String expiry = body == null ? null : string(body.get("expiresAt"));
+        return ApiResponse.ok(apiKeyService.rotatePersonalAccessToken(user.getId(), id, parseExpiry(expiry)));
+    }
+
     private User requireUser() {
         User user = AuthContext.get();
         if (user == null || user.getId() == null) throw new SecurityException("请先登录");
