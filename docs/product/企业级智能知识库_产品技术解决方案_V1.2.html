@@ -115,10 +115,10 @@ Python Knowledge Intelligence Engine
 
 <h4>2.4.3 构建与交付</h4>
 <p>Vite 构建为静态资源，由 Nginx 容器提供；前端、后端、AI 服务统一打同一版本标签，与编排文件一起交付（见第 10 章）。主题、样式与前端资源全部打包进镜像，运行环境无需额外构建。</p>
-<h4>2.4.4 视图与入口裁剪（前端呈现层）</h4>
-<p>呈现层在角色之上增加一层<b>视图</b>（用户视图 / 管理视图）：角色决定“能不能操作”，视图决定“看到多少入口”。外壳统一计算 <code>adminView = 管理员角色 && 视图模式='admin'</code> 并通过依赖注入下发，模块页面与面板不再重复判定角色；导航叶子以 <code>adminOnly</code> 声明运维与测评类入口（生成概览 / 生成配置 / 连接器 / 外部知识 / 知识台账、检索链路追踪 / 回答反馈 / 检索评测、接口服务的协议配置 / 凭证 / 事件总线 / 嵌入组件 / 调用日志、用户与组织），用户视图下直接不渲染。视图选择写入本地存储；切换后若当前页在目标视图不可见，回落到该模块的默认页，避免停留在无权页面而触发一批 403。</p>
-<div class="note"><strong>视图只是呈现层裁剪，不是权限边界。</strong>被视图隐藏的入口，其写接口仍由后端权限码校验（与 <code>/api/auth/me</code> 下发的 permissions 同源）。前端裁剪的目标是“界面上看不到的操作不会成为日常路径”，而不是替代后端鉴权。</div>
-<p>顶栏收敛为<b>视图切换 / 知识库切换 / 全局搜索 / 主题 / 用户</b>：异步任务不再以顶栏红点承载，统一在“知识生成 · 生成配置”页内跟踪，平台级任务在“系统配置 · 任务与告警”查看（列表、阶段、重试），避免同一任务状态两处维护；服务连接状态由页面内空态、错误提示与 Trace 表达。产品版本与授权信息统一显示在主内容底部页脚：产品版本来自前端构建常量，服务版本与运行环境来自 <code>/api/knowledge/env</code>，版本详情弹窗在打开时实时核对一次——这与 10.4 的“版本由镜像标签管理”一致，前端不提供自动更新能力。</p><div class="note ok"><b>登录页与导航分组（对齐当前实现）：</b>登录是全站唯一的无框架页（不渲染顶栏 / 侧栏 / 页脚），左右分栏：左品牌区（主标题“让知识随时被 AI 调用” + 副标题 + 三条价值点），右表单区（账号、密码、记住账号、忘记密码、登录）。<b>不提供第三方登录</b>（企业微信 / SSO 入口已移除）。左侧导航按业务域分组——工作台（知识概览）、知识库（知识生成、知识检索）、系统集成（接口服务）；系统配置为低频平台配置，不进业务分组，收在侧栏底部工具区与用户区同行的设置图标中。</div>
+<h4>2.4.4 入口裁剪与可见性（前端呈现层）</h4>
+<p>呈现层<b>不做“视图”这层抽象，也不提供手动切换</b>：菜单可见性由<b>登录人角色 + 后端角色菜单配置</b>共同决定。外壳用 <code>visibleLeaves(section, can, role, menu)</code> 计算每个模块的可见 Tab，优先级为 <b>后端下发的角色菜单（<code>t_role_menu</code>）&gt; <code>adminOnly</code> 标记 &gt; 权限码（<code>permission</code>）</b>；导航叶子以 <code>adminOnly</code> 声明运维与测评类入口（生成概览 / 连接器 / 外部知识 / 知识台账、检索链路追踪 / 回答反馈 / 检索评测、接口服务的接口概览 / API / MCP / SSE / 事件总线 / 凭证 / 主体 / 嵌入组件 / 调用日志、用户与组织 / 系统初始化），非管理员角色下直接不渲染。进入模块时落在第一个可见 Tab；旧书签落到不可见页面时回落到模块默认页，避免停留而触发一批 403。未知角色降级为 <code>VIEWER</code>（最小权限集）。</p>
+<div class="note"><strong>裁剪只是呈现层收敛，不是权限边界。</strong>被隐藏的入口，其接口仍由后端权限码校验（与 <code>/api/auth/me</code> 下发的 permissions 同源，且权限码本身由 <code>t_role_menu</code> 派生——<b>菜单即权限面</b>，改菜单即改权限）。前端裁剪的目标是“界面上看不到的操作不会成为日常路径”，而不是替代后端鉴权。</div>
+<p>顶栏收敛为<b>品牌 / 知识库切换 / 全局搜索 / 主题 / 用户</b>（<b>已移除原有的“视图切换”分段控件</b>）：异步任务不再以顶栏红点承载，统一在“知识生成 · 生成配置”页内跟踪，平台级任务在“系统配置 · 任务与告警”查看（列表、阶段、重试），避免同一任务状态两处维护；服务连接状态由页面内空态、错误提示与 Trace 表达。产品版本与授权信息统一显示在主内容底部页脚：产品版本来自前端构建常量，服务版本与运行环境来自 <code>/api/knowledge/env</code>，版本详情弹窗在打开时实时核对一次——这与 10.4 的“版本由镜像标签管理”一致，前端不提供自动更新能力。</p><div class="note ok"><b>登录页与导航分组（对齐当前实现）：</b>登录是全站唯一的无框架页（不渲染顶栏 / 侧栏 / 页脚），左右分栏：左品牌区（主标题“让知识随时被 AI 调用” + 副标题 + 三条价值点），右表单区（账号、密码、记住账号、忘记密码、登录）。<b>不提供第三方登录</b>（企业微信 / SSO 入口已移除）。左侧导航按业务域分组——工作台（知识概览）、知识库（知识生成、知识检索）、系统集成（接口服务）；系统配置为低频平台配置，不进业务分组，收在侧栏底部工具区与用户区同行的设置图标中。</div>
 </section>
 
 <section id="a3"><h2>3. 知识全生命周期技术设计</h2>
@@ -277,7 +277,7 @@ entityIds, relationIds, assertionIds
 sourceIds, evidenceIds
 confidence, authorityScore, qualityScore
 validFrom, validTo, supersededBy, status
-permissionTags, tenantId
+permissionTags, tenantId（预留，当前单租户未启用）
 generationTrace, judgmentId, createdAt, updatedAt</div>
 </section>
 
@@ -406,8 +406,8 @@ Derived Knowledge 发布</div>
 <section id="a10"><h2>10. 部署、容量与实施路线</h2>
 <h3>10.1 推荐部署形态</h3>
 <table><thead><tr><th>阶段</th><th>部署建议</th><th>重点</th></tr></thead><tbody>
-<tr><td>开发/MVP</td><td>Docker Compose；Spring Boot + Python + MySQL + MinIO + OpenSearch（BM25，可选向量）+ Redis；Neo4j 按图谱需求启用</td><td>先减少组件数量，跑通知识生产—检索—引用闭环</td></tr>
-<tr><td>试点</td><td>容器化分服务；Redis + MQ；OpenSearch +（Milvus 或 pgvector，按容量/过滤特征选型）；Neo4j</td><td>异步化、ACL、版本、评测、索引一致性</td></tr>
+<tr><td>开发/MVP</td><td>Docker Compose；Spring Boot + Python + MySQL 8.0 + MinIO + Elasticsearch（BM25 / 全文）+ Milvus（向量）+ Redis；Neo4j 按图谱需求启用</td><td>与生产保持同一套检索语义，避免 Demo 与生产行为不一致</td></tr>
+<tr><td>试点</td><td>容器化分服务；Redis + MQ；Elasticsearch + Milvus（两路独立扩缩与重建，取舍见 12.6）；Neo4j</td><td>异步化、ACL、版本、评测、索引一致性</td></tr>
 <tr><td>生产</td><td>K8s/容器平台；数据库/对象存储/索引高可用；模型独立 GPU 节点</td><td>扩缩容、灾备、观测、SLA</td></tr>
 <tr><td>规模化</td><td>生产链与查询链独立扩容；图计算离线/在线分层</td><td>成本、吞吐、增量索引、知识运营</td></tr></tbody></table>
 
@@ -443,7 +443,7 @@ Derived Knowledge 发布</div>
 <p class="lead">V1.2 在 V1.1 的知识全生命周期基础上，进一步把技术方案与产品 MVP、企业级治理和 Agentic Retrieval 演进路线对齐。核心不是增加更多组件，而是建立“可验证知识对象 + 可观测生产流水线 + 可解释查询计划 + 可量化评测”的工程闭环。</p>
 <h3>11.1 控制面、数据面与智能面的边界</h3>
 <table><tr><th>平面</th><th>职责</th><th>核心组件</th><th>设计约束</th></tr>
-<tr><td>Control Plane</td><td>租户、空间、权限、策略、版本、审核、任务与模型配置</td><td>Spring Boot / MySQL / Redis</td><td>所有权威状态可审计；AI 服务不得直接修改已发布知识</td></tr>
+<tr><td>Control Plane</td><td>空间、权限、策略、版本、审核、任务与模型配置（<b>租户为预留维度，当前单租户、无 tenant_id 列</b>）</td><td>Spring Boot / MySQL / Redis</td><td>所有权威状态可审计；AI 服务不得直接修改已发布知识</td></tr>
 <tr><td>Knowledge Data Plane</td><td>Source、Document、ContentUnit、Assertion、Evidence、Card、Entity、Graph</td><td>MySQL + MinIO + Search/Vector/Graph</td><td>统一 Knowledge ID、Version、ACL、Provenance；索引均可重建</td></tr>
 <tr><td>Intelligence Plane</td><td>解析、抽取、派生、检索规划、重排、回答与评测</td><td>Python AI Service + Model Gateway</td><td>模型调用版本化、可回放；输出先形成 Candidate，再经策略发布</td></tr></table>
 <h3>11.2 Document Understanding Engine</h3>
@@ -511,7 +511,7 @@ Answer + Citation + Retrieval Trace</div>
 <table><tr><th>层级</th><th>指标</th><th>发布门禁</th></tr><tr><td>解析</td><td>Parsing Success、结构完整率、表格/图片识别率</td><td>解析失败不得进入正式索引</td></tr><tr><td>检索</td><td>Recall@K、MRR、NDCG、Hit Rate、Rerank Gain</td><td>策略变更必须通过基准问题集回归</td></tr><tr><td>回答</td><td>Faithfulness、Answer Relevance、Context Precision、Citation Accuracy</td><td>无证据或引用不一致触发降级/拒答</td></tr><tr><td>知识</td><td>Coverage、Conflict Rate、Evidence Coverage、Trusted Knowledge Coverage</td><td>高风险知识必须完成裁决</td></tr></table>
 <h3>11.8 权限感知检索</h3>
 <p>ACL 采用“索引前继承 + 召回时过滤 + 图遍历约束 + 上下文再次校验”的多层防护。权限对象至少覆盖 space/source/document/card/entity/assertion；主体覆盖 user/role/department/group。禁止仅在答案展示阶段做权限过滤。</p>
-<div class="note"><b>外部调用主体的授权（对齐当前实现）：</b>外部系统不是“一个 API Key 绑死一个知识库”，而是<b>主体（Principal）→ 知识库授权（Grant）</b>两层：一个主体可持有多个 Key，也可被授予多个知识库；授权带状态、有效期与知识库级标签上限（留空继承该主体 Key 的策略，设为空数组则仅可访问公开资料）。主体分应用主体与委托员工身份（显式绑定 IdP subject）；授权的授予 / 变更 / 撤销与凭证换绑均落审计，换绑凭证不删除仍持有共享授权的主体。存量 Key 升级时自动转成独立主体，原单库绑定迁移为等价授权。外部调用与内部用户走同一套权限感知检索，不在接口层另开一条通路。</div>
+<div class="note"><b>外部调用主体的授权（对齐当前实现）：</b>外部系统不是“一个 API Key 绑死一个知识库”，而是<b>主体（Principal）→ 知识库授权（Grant）</b>两层：一个主体可持有多个 Key，也可被授予多个知识库；授权带状态、有效期与知识库级标签上限（留空继承该主体 Key 的策略，设为空数组则仅可访问公开资料）。主体分应用主体与委托员工身份（显式绑定 IdP subject）；授权的授予 / 变更 / 撤销与凭证换绑均落审计，换绑凭证不删除仍持有共享授权的主体。存量 Key 升级时自动转成独立主体，原单库绑定迁移为等价授权。外部调用与内部用户走同一套权限感知检索，不在接口层另开一条通路。<br><b>凭证与身份（V72 起的实现）：</b>主体是授权与身份的载体，凭证只是主体的一种凭据——<code>t_api_key</code> 以 <code>credential_type</code> 区分 <b>Service Key</b>（管理员为应用主体签发）与 <b>PAT</b>（用户自助创建）两类，并记录 <code>owner_user_id</code>；<b>没有第三种凭据类型</b>。轮换凭证只更换密钥内容、<b>保持同一 <code>principal_id</code></b>，因此知识库授权、库级标签上限与记忆身份全部不变；PAT 的 scope 变更单独落 <code>t_personal_access_token_scope_audit</code>。Agent 记忆的命名空间、Agent code 与作用域授权也挂在主体上（<code>t_principal_memory_profile</code> / <code>t_principal_memory_scope_grant</code>，作用域为 AGENT / TEAM / PROJECT / TASK / WORKFLOW / SESSION，可分别授予读、写），不再随 Key 轮换而丢失。外部用户到 USER 主体的绑定由管理员显式维护、不按邮箱或名称自动合并，绑定与撤销均落审计。吊销后的凭证做<b>软删除</b>（<code>deleted_at</code>），因为记忆与 scope 审计表对 <code>api_key_id</code> 的外键不可物理删除；凭证列表为服务端分页（默认 20、上限 200）。</div>
 <div class="note"><b>调用方可观测（对齐当前实现）：</b>调用日志与检索链路都落库<b>调用方 IP</b>（按 <code>X-Forwarded-For</code> → <code>X-Real-IP</code> → 直连地址解析，取不到记为空），与 traceId 一起构成“谁在什么时候、从哪个来源调用了什么”的最小追溯面。检索链路列表按时间倒序<b>分页</b>返回（带总数与页码），排序在时间戳之外补 <code>id DESC</code>，否则同一秒的多条记录翻页会重复或漏行。</div>
 <h3>11.9 事件驱动增量更新</h3>
 <div class="flow">Source Changed → SourceVersion Created → Parse Job
@@ -533,7 +533,7 @@ Answer + Citation + Retrieval Trace</div>
 <tr><td>BM25 + Vector + Graph 多路召回</td><td><span class="kpi">可行</span></td><td>不要所有 Query 都开启全部通道；由 Retrieval Profile / Query Planner 路由，控制延迟和成本。</td></tr>
 <tr><td>RRF + Reranker</td><td><span class="kpi">可行</span></td><td>RRF 作为无标注阶段的稳定基线；生产权重必须通过 Benchmark / judgment set 校准。</td></tr>
 <tr><td>Neo4j 图谱 + Derived Knowledge</td><td><span class="kpi">可行</span></td><td>Neo4j 是图投影和关系计算层；派生结果先进入 Candidate，不直接成为 ACTIVE 企业事实。</td></tr>
-<tr><td>MySQL + 多索引 Projection</td><td><span class="kpi">可行</span></td><td>采用最终一致性；Outbox + 幂等 Consumer + Reconciler 保证可恢复，不做跨 MySQL/OpenSearch/Milvus/Neo4j 分布式事务。</td></tr>
+<tr><td>MySQL + 多索引 Projection</td><td><span class="kpi">可行</span></td><td>采用最终一致性；Outbox + 幂等 Consumer + Reconciler 保证可恢复，不做跨 MySQL/Elasticsearch/Milvus/Neo4j 分布式事务。</td></tr>
 <tr><td>Java + Python 双运行时</td><td><span class="kpi">可行</span></td><td>按职责拆分，不共享数据库表写权限；接口、事件 Schema、模型版本和 Trace 必须版本化。</td></tr>
 <tr><td>LLM 自动裁决</td><td>仅条件可行</td><td>LLM 只能输出 recommendation / rationale；高风险知识必须规则或人工确认，不把“模型置信度”当事实概率。</td></tr>
 <tr><td>Text2Cypher</td><td>仅受控可行</td><td>只读账号、Schema 白名单、AST/关键字校验、LIMIT、超时、最大跳数、成本预算；禁止模型生成任意写 Cypher。</td></tr>
@@ -548,17 +548,17 @@ Spring Boot Transaction
               ↓
         Event Publisher → MQ
               ↓
-   ┌──────────┼───────────┐
-   ▼          ▼           ▼
-OpenSearch  Vector DB    Neo4j
-Projection  Projection   Projection
+   ┌──────────────┼───────────┐
+   ▼              ▼           ▼
+Elasticsearch    Milvus      Neo4j
+Projection     Projection  Projection
    └──────────┴───────────┘
               ↓
       Projection Checkpoint
               ↓
       Reconciler / Repair Job</div>
 <p>推荐以 <code>aggregateId + aggregateVersion + eventId</code> 作为投影幂等键。检索结果必须携带 <code>knowledgeId / knowledgeVersion / projectionVersion</code>；当索引版本落后于权威版本时，可选择过滤、降级到权威查询或提示“索引更新中”。</p>
-<div class="warn note"><b>不建议：</b>为追求“强一致”引入 MySQL、OpenSearch、向量库、Neo4j 的跨库两阶段提交。检索投影天然适合最终一致性，关键是可检测、可重放、可修复。</div>
+<div class="warn note"><b>不建议：</b>为追求“强一致”引入 MySQL、Elasticsearch、Milvus、Neo4j 的跨库两阶段提交。检索投影天然适合最终一致性，关键是可检测、可重放、可修复。</div>
 
 <h3>12.3 知识对象的身份、版本与不可变性</h3>
 <table><thead><tr><th>对象</th><th>身份/版本规则</th><th>建议</th></tr></thead><tbody>
@@ -643,7 +643,7 @@ Answer + Citation + Trace</div>
 <p class="small">以上数值是工程起始目标，不是未经压测即可对外承诺的产品 SLA。正式指标必须基于文档规模、Chunk 数、向量维度、并发、TopK、ACL 基数、模型和硬件形成容量模型。</p>
 
 <h3>12.10 高可用、备份与灾备</h3>
-<p>权威恢复顺序应是：<strong>MySQL + MinIO → 事件/任务状态 → OpenSearch/Vector/Neo4j 重建</strong>。必须定期演练“删除索引后从权威数据重建”，以验证“索引是 Projection”这一架构假设。生产环境为 MySQL、对象存储、MQ 和关键检索集群分别定义 RPO/RTO；Redis 不作为不可恢复的唯一状态存储。</p>
+<p>权威恢复顺序应是：<strong>MySQL + MinIO → 事件/任务状态 → Elasticsearch / Milvus / Neo4j 重建</strong>。必须定期演练“删除索引后从权威数据重建”，以验证“索引是 Projection”这一架构假设。生产环境为 MySQL、对象存储、MQ 和关键检索集群分别定义 RPO/RTO；Redis 不作为不可恢复的唯一状态存储。</p>
 
 <h3>12.11 Evaluation Gate：从“能搜”到“可上线”</h3>
 <div class="flow">Code / Model / Prompt / Index / Retrieval Profile Change
@@ -663,7 +663,7 @@ Recall@K / NDCG   Citation Accuracy   ACL Leakage Test
 
 <h3>12.12 最终推荐技术基线</h3>
 <div class="ok note"><b>建议锁定：</b>
-Spring Boot 作为 Control Plane 与事务边界；Python 作为 Intelligence Plane；MySQL 为权威知识/治理状态；MinIO 为不可变源文件和解析产物；OpenSearch 作为首期全文+混合检索；Redis + MQ 支撑缓存和异步任务；Neo4j 承担图谱探索、路径和派生计算；Milvus 在向量规模和吞吐证明需要后再引入。所有 Projection 通过 Outbox/Event 增量更新并可全量重建。</div>
+Spring Boot 作为 Control Plane 与事务边界；Python 作为 Intelligence Plane；MySQL 为权威知识/治理状态；MinIO 为不可变源文件和解析产物；<b>Elasticsearch 与 Milvus 作为已落地的双路检索投影</b>（全文/BM25 与向量 ANN 拆开，可独立调优、独立扩缩、独立重建、独立降级，见 12.6）；Redis + MQ 支撑缓存和异步任务；Neo4j 承担图谱探索、路径和派生计算。所有 Projection 通过 Outbox/Event 增量更新并可全量重建。</div>
 <div class="risk"><b>必须避免的五类实现：</b>① AI 服务直接修改 ACTIVE 权威知识；② 仅在答案层做 ACL；③ 把 LLM confidence 当事实概率；④ 同时堆叠多套向量引擎却没有容量依据；⑤ 索引更新失败后没有重放、对账和修复机制。</div>
 </section>
 

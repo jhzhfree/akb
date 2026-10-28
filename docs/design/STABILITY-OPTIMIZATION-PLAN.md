@@ -53,6 +53,10 @@
 
 ### B2 通道权重调整（默认）
 
+> **读默认值前先看这里**：B2/B3/B4 描述的是**代码出厂默认**（`ai-service/app/core/query_policy.py` 中的 `DEFAULT_CHANNEL_WEIGHTS` / `ChunkBoostPolicy` / `minChunkEvidence`）。
+> 但进程启动时会从 `ai-service/config/query_policy.defaults.json` **播种 4 个 shipped profile**（含"运维"、"公司制度"、"工程协同"）；这些 profile 各有自己的一套取值，与本文的出厂默认**并不相同**（例如"运维" profile 为 bm25 1.3 / vector 1.0 / card 1.25 / claim 1.15 / graph 1.0，`headingHit` 0.18）。
+> 因此：**改 `query_policy.py` 里的常量只影响尚未被 profile 覆盖的新策略**；已绑定某个场景 profile 的知识库实际生效的是 profile 的值，只有 profile 为空对象 `{}` 时才继承出厂默认。调参前先确认目标库当前绑定的 profile。
+
 | 通道 | 现在 | 调整后 | 理由 |
 |---|---|---|---|
 | bm25（原文段落） | 1.0 | **1.15** | 精确术语/版本号的原文命中，引用最可追溯 |

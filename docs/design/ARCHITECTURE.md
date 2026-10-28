@@ -29,16 +29,28 @@ AI Service
 
 ## 2. Backend Application Services
 
+HTTP 入口在 P2.13 之后按领域物理拆分，`KnowledgeController` 仅保留 `@Deprecated` 空壳（无端点）；`KnowledgeService` 作为兼容门面保留 36 个委派方法，被下列 Controller 共同调用：
+
 ```text
-KnowledgeController
-       ↓
+领域 Controller
+  ├─ KnowledgeIngestionController     资料摄入、解析、重抽取
+  ├─ KnowledgeQueryController         检索与问答
+  ├─ KnowledgeReadController          知识对象读取
+  ├─ KnowledgeGovernanceController    治理、裁决、生命周期
+  ├─ KnowledgeGraphController         知识图谱
+  └─ KnowledgeIndexOperationsController  索引运营、蓝绿、重建
+            ↓
 KnowledgeService (compatibility facade)
-       ├─ DocumentIngestionService
-       ├─ KnowledgeExtractionService
-       ├─ KnowledgeQueryService
-       ├─ KnowledgeGovernanceService
-       └─ KnowledgeReadService
+  ├─ DocumentIngestionService
+  ├─ KnowledgeExtractionService
+  ├─ KnowledgeGovernanceService
+  ├─ KnowledgeLifecycleService
+  ├─ KnowledgeQueryService
+  ├─ KnowledgeReadService
+  └─ KnowledgeDerivationService
 ```
+
+> **注意**：新增端点请放在对应领域的 Controller 里，不要再向 `KnowledgeController` 添加内容——它已下线，只作架构演进留痕。
 
 事务原则：
 
@@ -85,12 +97,9 @@ Provider 使用进程级复用：
 - RerankProvider
 - GraphProvider
 
-V1.1 JSON IndexStore 是本地 fallback。生产规模扩大后应替换为：
+V1.1 的检索 Provider 已落地，不再是 JSON IndexStore fallback：`ai-service/app/services/retrieval/` 下的 `ElasticsearchProvider`（BM25 / 精确检索）与 `MilvusProvider`（COSINE ANN 向量检索）是生产实现，由 Flyway `V7__elasticsearch_milvus_retrieval.sql` 完成迁移（早期的 OpenSearch/Qdrant 选型已废弃）。JSON IndexStore 仅作为 Provider 全部禁用时的本机兜底。
 
-- VectorStoreProvider
-- FullTextSearchProvider
-
-候选实现：Milvus / Milvus / pgvector / Elasticsearch / Elasticsearch。
+选型与 ACL 过滤细节见 `docs/design/DUAL-RETRIEVAL-ELASTICSEARCH-MILVUS.md`。
 
 ## 4. Knowledge Governance Boundary
 
@@ -121,8 +130,8 @@ Source
 - 禁止 O(N²) 全知识冲突比较；
 - 禁止每 Chunk 多次 DB round-trip；
 - 同步 CPU/阻塞 I/O 不直接运行在 FastAPI event loop；
-- 大列表 API 必须向分页演进；
-- 生产向量检索必须向 ANN 索引演进。
+- 大列表 API 必须向分页演进（`GET /keys` 等已服务端分页）；
+- 生产向量检索必须走 ANN 索引（已由 Milvus COSINE 索引满足，新增通道不得退回线性扫描）。
 
 详细实现与后续路线见 `docs/design/CODE-ARCH-PERFORMANCE-OPTIMIZATION.md`。
 

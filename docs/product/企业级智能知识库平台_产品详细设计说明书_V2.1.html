@@ -42,8 +42,8 @@ footer{padding:28px;text-align:center;border-top:1px solid var(--line);color:#7a
 </div>
 <div class="note ok"><b>本次修订（对齐当前实现）：</b>
 ④ “知识集成”更名为 <b>接口服务</b>：对外交付的是 API / MCP / SSE 接口能力；
-⑤ 新增 <b>用户视图 / 管理视图</b>：顶栏提供切换，模块内 Tab 按视图裁剪（详见 2.3）；
-⑥ 顶栏去掉“任务”入口与服务连接状态，顶栏序列为 <b>视图切换 / 知识库 / 全局搜索 / 主题 / 用户</b>；
+⑤ 菜单可见性改为 <b>角色菜单驱动</b>：模块内 Tab 由后端 <code>t_role_menu</code> 与登录人权限共同裁剪，<b>取消「用户视图 / 管理视图」手动切换</b>（详见 2.3）；
+⑥ 顶栏去掉“任务”入口与服务连接状态，顶栏序列为 <b>品牌 / 知识库 / 全局搜索 / 主题 / 用户</b>（已移除视图切换控件）；
 ⑦ 版本与授权信息统一收进主内容底部页脚（2.4），侧栏底部不再显示版本号；
 ⑧ 左侧导航按业务域分组（工作台 / 知识库 / 系统集成），系统配置收在侧栏底部工具区的设置图标（2.1、7）；
 ⑨ 新增登录页（2.0）：左右分栏，<b>不提供第三方登录</b>；
@@ -52,7 +52,7 @@ footer{padding:28px;text-align:center;border-top:1px solid var(--line);color:#7a
 </div>
 
 <div class="toc"><strong>目录</strong><ol>
-<li><a href="#d1">设计基线与总体原则</a></li><li><a href="#d2">全局框架与导航</a></li><li><a href="#d2view">用户视图 / 管理视图</a></li>
+<li><a href="#d1">设计基线与总体原则</a></li><li><a href="#d2">全局框架与导航</a></li><li><a href="#d2view">角色菜单与可见性</a></li>
 <li><a href="#d2footer">底部页脚（版本与授权）</a></li><li><a href="#theme">主题与视觉规范（深浅双主题）</a></li>
 <li><a href="#d3">知识概览详细设计</a></li><li><a href="#d4">知识生成详细设计</a></li>
 <li><a href="#d5">知识检索详细设计</a></li><li><a href="#d6">接口服务详细设计</a></li>
@@ -75,16 +75,16 @@ footer{padding:28px;text-align:center;border-top:1px solid var(--line);color:#7a
 <tr><td>对象详情统一</td><td>Document/Card/Assertion/Entity 等统一使用 Detail Drawer/Page：概览、关系、证据、版本、权限、审计。</td></tr>
 <tr><td>高级参数后置</td><td>默认业务视图；Parser/Chunk/Embedding/RRF/Reranker 等放入“高级设置”。</td></tr>
 <tr><td>可信优先</td><td>所有知识结果都能查看 Source、Evidence、Version、Status；AI 生成内容不默认等同企业事实。</td></tr>
-<tr><td>按视图裁剪</td><td>同一页面两种视图：管理视图含运维与测评入口，用户视图只留“用知识”的 Tab；裁剪以模块内 Tab 为单位，不改一级菜单。</td></tr>
+<tr><td>按角色裁剪</td><td>同一页面按角色裁剪：管理员含运维与测评入口，其余角色只留“用知识”的 Tab；裁剪以模块内 Tab 为单位，不改一级菜单，也没有手动视图切换。</td></tr>
 </tbody></table>
 </section>
 
 <section id="d2"><h2>2. 全局框架与导航</h2>
-<div class="flow">┌ Logo | [用户视图|管理视图] | [知识库 ▼] | 全局搜索        | 主题 | 用户 ┐
+<div class="flow">┌ Logo | [知识库 ▼] | 全局搜索                            | 主题 | 用户 ┐
 ├──────────────────────────────────────────────────────────────────────┤
 │ 左侧导航（分组）│ 主内容区                                            │
 │ 工作台          │ 知识库上下文条（知识库 / 环境 / 索引状态）           │
-│   知识概览      │ 模块 Tab（按视图裁剪）                              │
+│   知识概览      │ 模块 Tab（按角色裁剪）                              │
 │ 知识库          │                                                     │
 │   知识生成      │ Page Content                                        │
 │   知识检索      │                                                     │
@@ -95,23 +95,23 @@ footer{padding:28px;text-align:center;border-top:1px solid var(--line);color:#7a
 └──────────────────────────────────────────────────────────────────────┘</div>
 <h3>2.1 顶栏</h3>
 <table><thead><tr><th>控件</th><th>行为</th></tr></thead><tbody>
-<tr><td>视图切换</td><td>分段控件“用户视图 / 管理视图”：管理员登录为管理视图，可随时切到用户视图核对普通成员界面；普通账号固定用户视图，两项禁用并在 hover 说明原因。选择写入本地存储；切换后若当前页在目标视图不可见，自动回落到该模块默认页。</td></tr>
 <tr><td>知识库选择器</td><td>显示知识库与可见范围；切换后刷新当前页面作用域；URL/本地存储保留 kbId。</td></tr>
 <tr><td>全局搜索</td><td>搜索 Card/Assertion/Document/Entity；Enter 进入“知识检索”并直接执行一次检索。</td></tr>
 <tr><td>用户区</td><td>头像（底色即角色身份色）+ 姓名 + 退出；角色名与职责说明收在侧栏底部用户面板，不占顶栏。</td></tr>
-<tr><td>主题切换</td><td>顶栏右侧切换深色 / 浅色；选择写入本地存储并在刷新后保持；未选择时跟随系统偏好。</td></tr>
+<tr><td>主题切换</td><td>顶栏右侧<b>三档循环</b>：浅色 → 深色 → 跟随系统（图标 ☀ / ☾ / ◐）；选择以 <code>kos.theme</code> 写入本地存储并在刷新后保持；未选择时默认浅色，跟随系统档实时响应 <code>prefers-color-scheme</code>。</td></tr>
 </tbody></table>
-<div class="note"><b>已移除：</b>顶栏不再放“任务”入口与“服务已连接”状态点。异步任务在“知识生成 · 生成配置”页内跟踪，平台级任务统一在“系统配置 · 任务与告警”查看（列表、阶段、重试），避免顶栏红点与页面内任务列表两处维护同一状态；服务可用性由页面内的空态、错误提示与 Trace 表达。</div>
-<h3 id="d2view">2.3 用户视图 / 管理视图</h3>
-<p>视图是角色之上的一层“信息密度开关”：角色决定能不能操作，视图决定看到多少入口。实现上由外壳统一计算当前视图（<code>adminView = 管理员角色 && 视图模式='admin'</code>），页面内 Tab 与区块按它裁剪，页面自身不重复判定角色。</p>
-<table><thead><tr><th>模块</th><th>用户视图</th><th>管理视图增量</th></tr></thead><tbody>
+<div class="note"><b>已移除：</b>顶栏不再有“用户视图 / 管理视图”分段控件（菜单可见性改由角色与角色菜单配置决定，见 2.3），也不再放“任务”入口与“服务已连接”状态点。异步任务在“知识生成 · 生成配置”页内跟踪，平台级任务统一在“系统配置 · 任务与告警”查看（列表、阶段、重试），避免顶栏红点与页面内任务列表两处维护同一状态；服务可用性由页面内的空态、错误提示与 Trace 表达。</div>
+<h3 id="d2view">2.3 角色菜单与可见性</h3>
+<p>角色决定“能不能做”，<b>角色菜单配置</b>决定“看得见多少”。实现上没有可手动切换的视图：前端外壳用 <code>visibleLeaves(section, can, role, menu)</code> 计算当前可见 Tab，优先级为 <b>后端下发的角色菜单（<code>t_role_menu</code>）&gt; 管理员专属标记（<code>adminOnly</code>）&gt; 权限码（<code>permission</code>）</b>。后端 <code>menu</code> 非空时它就是权威来源；为空才回落到内置规则，保证老会话与未登录场景不白屏。页面自身不重复判定角色。</p>
+<table><thead><tr><th>模块</th><th>全部角色（按权限码）</th><th>管理员增量（ADMIN / KNOWLEDGE_ADMIN）</th></tr></thead><tbody>
 <tr><td>知识概览</td><td>知识仪表盘 / 知识库工作台 / 知识资产 / 知识版本 / 知识质量</td><td>—</td></tr>
-<tr><td>知识生成</td><td>文档导入（默认进入）/ 知识裁决 / 知识衍生</td><td>生成概览、生成配置、连接器、外部知识、知识台账</td></tr>
-<tr><td>知识检索</td><td>智能检索 / 检索测试 / 检索策略 / 知识图谱</td><td>检索链路追踪、回答反馈、检索评测</td></tr>
-<tr><td>接口服务</td><td>服务（默认进入）</td><td>接口概览、API、MCP、SSE、事件总线、凭证、嵌入组件、调用日志</td></tr>
-<tr><td>系统配置</td><td>按权限可见的配置页</td><td>用户与组织等管理员入口</td></tr>
+<tr><td>知识生成</td><td>生成配置 / 文档导入 / 知识裁决 / 知识衍生</td><td>+ 生成概览、连接器、外部知识、知识台账</td></tr>
+<tr><td>知识检索</td><td>智能检索 / 检索测试 / 检索策略 / 知识图谱</td><td>+ 检索链路追踪、回答反馈、检索评测</td></tr>
+<tr><td>接口服务</td><td>服务</td><td>+ 接口概览、API、MCP、SSE、事件总线、凭证、主体、嵌入组件、调用日志</td></tr>
+<tr><td>系统配置</td><td>按权限码可见的配置页（不含用户与组织、系统初始化）</td><td>+ 用户与组织、系统初始化</td></tr>
 </tbody></table>
-<div class="note"><b>面板内区块也要跟着视图走：</b>接口服务的“服务”面板内「服务 / 凭证」两个区块切换中，「凭证」只在管理视图渲染，避免用户视图下通过面板内部按钮绕回凭证管理。</div>
+<div class="note"><b>面板内区块同样受菜单约束：</b>接口服务的“服务”面板内不再内嵌「凭证」区块——凭证与主体各自独立成 Tab 且均为管理员专属，避免从面板内部按钮绕回凭证 / 主体管理。</div>
+<div class="note"><b>落点规则：</b>进入模块时落在<b>第一个可见 Tab</b>（知识生成即「文档导入」、接口服务即「服务」），不需要额外配置默认页；旧书签落到不可见页面时自动回落到该模块默认页。未知角色一律降级为 <code>VIEWER</code>（最小权限集）。</div>
 <h3 id="d2footer">2.4 底部页脚（版本与授权）</h3>
 <p>主内容区最下方固定一条页脚，所有页面共用：左侧为产品名 + 产品版本徽标 + 运行环境/服务版本（取自 <code>/api/knowledge/env</code>，未取到时省略），右侧为授权说明「企业自部署 · 版本与授权由部署镜像管理」与「版本信息」入口（打开版本信息弹窗：服务版本、运行环境、核对时间、检查更新）。侧栏底部不再单独显示版本号。</p>
 </section>
@@ -213,7 +213,7 @@ footer{padding:28px;text-align:center;border-top:1px solid var(--line);color:#7a
 
 <section id="d4"><h2>4. 知识生成详细设计</h2>
 <p>路由：<code>/knowledge/generate</code>。页面顶部 Tab：<b>生成概览 / 生成配置 / 文档导入 / 连接器 / 外部知识 / 知识台账 / 知识裁决 / 知识衍生</b>。</p>
-<div class="note ok"><b>视图裁剪：</b>用户视图只渲染 <b>文档导入 / 知识裁决 / 知识衍生</b>，且默认落在「文档导入」；生成概览、生成配置、连接器、外部知识、知识台账仅管理视图可见。过滤后剩下的第一个可见 Tab 即用户视图的默认落点，不需要额外配置默认页。</div>
+<div class="note ok"><b>菜单裁剪：</b><b>生成概览 / 连接器 / 外部知识 / 知识台账</b>标记管理员专属；<b>生成配置</b>不按角色裁剪，只要求 <code>generate:import</code>（与「文档导入」同级）。<b>文档导入 / 知识裁决 / 知识衍生</b>对持有 <code>generate:import</code> / <code>generate:judge</code> / <code>generate:derive</code> 的角色开放；过滤后第一个可见 Tab 即该角色的默认落点（管理员之外通常就是「文档导入」）。</div>
 <h3>4.1 文档导入向导</h3>
 <div class="flow">Step 1 来源 → Step 2 文件/URL/文本 → Step 3 知识属性 → Step 4 处理策略 → Step 5 执行与结果</div>
 <table><thead><tr><th>步骤</th><th>字段</th><th>规则</th></tr></thead><tbody>
@@ -226,7 +226,7 @@ footer{padding:28px;text-align:center;border-top:1px solid var(--line);color:#7a
 <h3>4.2 连接器</h3>
 <p>连接器列表使用卡片+表格混合视图：类型、名称、同步状态、最后同步、对象数、权限策略。创建流程统一为“选择类型 → 认证 → 范围 → 字段/权限映射 → 同步策略 → 测试连接 → 创建”。</p>
 <h3>4.3 外部知识</h3>
-<p>按外部系统的类型与属性浏览连接器同步下来的原始条目，用于核对「同步进来了什么」。列表字段：条目、来源系统、类型、同步时间、状态（已同步 / 待确认 / 失败）。属于连接器的伴生视图，随连接器一起只对管理视图开放。</p>
+<p>按外部系统的类型与属性浏览连接器同步下来的原始条目，用于核对「同步进来了什么」。列表字段：条目、来源系统、类型、同步时间、状态（已同步 / 待确认 / 失败）。属于连接器的伴生视图，随连接器一起标记<b>管理员专属</b>。</p>
 <h3>4.4 解析/抽取结果</h3>
 <p>用户点击任务进入任务详情，展示 Document → Parse → Chunk → Extraction → Evidence → Candidate Knowledge。专业用户可打开“原文/结构/Chunk”三栏工作台。</p>
 <h3>4.5 知识裁决</h3>
@@ -245,7 +245,7 @@ footer{padding:28px;text-align:center;border-top:1px solid var(--line);color:#7a
 
 <section id="d5"><h2>5. 知识检索详细设计</h2>
 <p>路由：<code>/knowledge/search</code>，顶部 Tab：<b>智能检索｜检索测试｜检索策略｜检索链路追踪（Query Trace）｜知识图谱｜回答反馈｜检索评测（Benchmark）</b>。「检索测试」与「检索链路追踪」属于调试类页面：配置区 + 结果区 + Trace 抽屉。</p>
-<div class="note ok"><b>视图裁剪：</b>用户视图只渲染 <b>智能检索 / 检索测试 / 检索策略 / 知识图谱</b>；<b>检索链路追踪</b>、<b>回答反馈</b>与<b>检索评测</b>属于检索质量的调试与测评入口，仅管理视图可见——普通成员不需要用它们完成“找知识”。</div>
+<div class="note ok"><b>菜单裁剪：</b><b>智能检索 / 检索测试 / 检索策略 / 知识图谱</b>按各自权限码（<code>search:query</code> / <code>search:test</code> / <code>search:policy</code> / <code>search:graph</code>）开放；<b>检索链路追踪</b>、<b>回答反馈</b>与<b>检索评测</b>标记管理员专属——普通成员不需要用它们完成“找知识”。</div>
 <div class="note"><b>菜单去重：</b>智能检索页内不再重复一排与顶部 Tab 相同的导航菜单。检索模块的所有入口统一由页面顶部 Tab 承载；单次问答的链路详情从结果卡片的「查看完整链路」进入 Trace 抽屉，问答历史列同样可点开完整链路。</div>
 <h3>5.1 智能检索</h3>
 <div class="flow">[自然语言或关键词................................] [搜索]
@@ -302,20 +302,23 @@ footer{padding:28px;text-align:center;border-top:1px solid var(--line);color:#7a
 
 <section id="d6"><h2>6. 接口服务详细设计</h2>
 <p class="lead">接口服务（原“知识集成”）负责把平台的可信知识能力安全、标准化地开放给外部系统。设计上参考成熟云产品的“数据资源与服务资源分离”思路：知识资产本身与面向调用方的集成服务是不同对象。</p>
-<div class="note ok"><b>视图裁剪：</b>用户视图只渲染 <b>服务</b> 一个 Tab，且默认落在「服务」；接口概览、API、MCP、SSE、凭证、调用日志属于发布与运维侧，仅管理视图可见。<b>面板内的「凭证」区块同样按视图裁剪</b>（API Key 的签发、吊销与调用审计只在管理视图渲染），否则用户视图下会从面板内部绕回凭证管理。</div>
+<div class="note ok"><b>菜单裁剪：</b>接口服务共 <b>10 个 Tab</b>，其中只有 <b>服务</b> 对持有 <code>integration:view</code> 的全部角色开放，且是这些角色的默认落点；<b>接口概览 / API / MCP / SSE / 事件总线 / 凭证 / 主体 / 嵌入组件 / 调用日志</b>均标记管理员专属。</div>
 <h3>6.1 信息架构</h3>
 <div class="flow">接口服务
-├─ 接口概览                     管理视图
-├─ 服务                         用户视图 / 管理视图（用户视图默认进入）
+├─ 接口概览                     管理员
+├─ 服务                         全部角色 integration:view
 │  ├─ Search Service
 │  ├─ Retrieve Service
 │  ├─ Answer Service
 │  └─ Knowledge Object Service
-├─ API                          管理视图
-├─ MCP                          管理视图
-├─ SSE                          管理视图
-├─ 凭证与访问控制               管理视图
-└─ 调用日志 / Trace             管理视图</div>
+├─ API                          管理员
+├─ MCP                          管理员
+├─ SSE                          管理员
+├─ 事件总线                     管理员
+├─ 凭证                         管理员
+├─ 主体                         管理员
+├─ 嵌入组件                     管理员
+└─ 调用日志 / Trace             管理员</div>
 <h3>6.2 集成概览</h3>
 <table><thead><tr><th>区域</th><th>内容</th></tr></thead><tbody>
 <tr><td>服务 KPI</td><td>服务数、今日调用、成功率、P95、错误数</td></tr>
@@ -343,25 +346,31 @@ Credential / Scope / IP / Rate Limit / Expiration
 <tr><td>GET /v1/knowledge/{type}/{id}</td><td>读取知识对象</td><td>Object + lineage + version</td></tr>
 </tbody></table>
 <h3>6.5 MCP</h3>
-<p>MCP 页面分为 Server 配置、Tools/Resources 列表、权限范围、测试控制台和调用日志。建议首批工具：<code>search_knowledge</code>、<code>retrieve_context</code>、<code>get_knowledge_card</code>、<code>get_assertion</code>、<code>get_evidence</code>、<code>explore_entity</code>。MCP 不建立第二套权限模型，复用集成服务 Credential + Knowledge ACL。</p>
+<p>MCP 页面分为 Server 配置、Tools/Resources 列表、权限范围、测试控制台和调用日志。<b>工具名以 <code>McpServerService</code> 为准，文档与客户端都不得自行改名</b>：<code>knowledge_query</code>、<code>knowledge_search</code>、<code>list_knowledge_bases</code>、<code>list_knowledge_cards</code>、<code>get_knowledge_card</code>、<code>list_claims</code>、<code>get_claim</code>、<code>get_evidence</code>、<code>graph_neighbors</code>；另有按 Scope 动态下发的 <code>ingest_text</code>（需 <code>INGEST</code>）与 Memory 三件套 <code>memory_recall</code> / <code>memory_capture</code> / <code>memory_forget</code>（需 <code>MEMORY_MANAGE</code>）。<b>V2.1 初稿曾写作</b> <code>search_knowledge</code>、<code>retrieve_context</code>、<code>get_assertion</code>、<code>explore_entity</code> <b>——这些名字在代码中不存在，已废弃</b>。MCP 不建立第二套权限模型，复用集成服务 Credential + Knowledge ACL。</p>
 <h3>6.6 SSE</h3>
-<div class="code light">event: start
+<p>事件名以 <code>ExternalStreamService</code> 为准。除 <code>open</code> / <code>done</code> 外，<b>进度统一走 <code>stage</code> 事件</b>，stage 取值与 AI 服务上报的阶段一致，前端据此渲染真实进度而不是自造一个。</p>
+<div class="code light">event: open
 data: {"traceId":"..."}
 
-event: retrieval
-data: {"results":5}
+event: stage
+data: {"stage":"recall","label":"多通道召回","results":5}
+
+event: knowledge
+data: {"objectType":"CARD","code":"..."}
 
 event: citation
-data: {"evidenceId":"ev_1","documentId":"doc_1","page":38}
+data: {"evidenceCode":"ev_1","documentCode":"doc_1","page":38}
 
 event: delta
 data: {"text":"..."}
 
-event: complete
+event: done
 data: {"usage":{},"latencyMs":1280}
 
 event: error
 data: {"code":"...","message":"..."}</div>
+<p><b><code>stage</code> 的全部取值</b>（顺序固定，与 <code>PIPELINE_STAGES</code> 一致）：<code>rewrite</code> 查询改写、<code>route</code> 意图路由、<code>recall</code> 多通道召回、<code>acl_filter</code> 权限过滤、<code>fusion</code> 结果融合、<code>rerank</code> 重排序、<code>context</code> 上下文装配、<code>llm</code> 答案生成、<code>citation</code> 引用校验。另有 <code>ingestion</code> 事件用于文档摄入进度。</p>
+<p><b>已废弃的事件名：</b><code>start</code>（→ <code>open</code>）、<code>retrieval</code>（→ <code>stage</code> 且 <code>stage=recall</code>）、<code>complete</code>（→ <code>done</code>）。</p>
 <h3>6.7 凭证</h3>
 <p>凭证字段：credentialId、name、type(API_KEY/OAUTH/JWT)、serviceIds、scopes、ipAllowlist、rateLimit、expireAt、status。Secret 仅创建时显示一次；列表只显示尾号。</p>
 <h3>6.8 调用日志</h3>
@@ -382,7 +391,7 @@ data: {"code":"...","message":"..."}</div>
 </section>
 
 <section id="d7"><h2>7. 系统配置详细设计</h2>
-<p>页面顶部 Tab：<b>配置总览 / 模型配置 / 用户与组织 / 角色与权限 / 知识 Schema / 存储与索引 / 任务与告警 / 审计日志 / 知识空间 / 角色菜单</b>。低频平台配置集中在此，收在侧栏底部的设置图标进入，不占用业务导航；「用户与组织」仅管理视图可见。</p>
+<p>页面顶部 Tab（共 <b>11</b> 个）：<b>配置总览 / 模型配置 / 用户与组织 / 角色与权限 / 知识 Schema / 存储与索引 / 任务与告警 / 审计日志 / 知识空间 / 系统初始化 / 角色菜单</b>。低频平台配置集中在此，收在侧栏底部的设置图标进入，不占用业务导航；「用户与组织」与「系统初始化」标记管理员专属。</p>
 <table><thead><tr><th>模块</th><th>页面</th><th>关键设计</th></tr></thead><tbody>
 <tr><td>配置总览</td><td>平台健康 / 版本 / 容量 / 最近变更</td><td>各配置页的统一入口与平台状态一览</td></tr>
 <tr><td>模型配置</td><td>LLM / Embedding / Reranker / OCR</td><td>Provider、Endpoint、Model、Key、Timeout、默认模型、连通性测试</td></tr>
@@ -393,7 +402,8 @@ data: {"code":"...","message":"..."}</div>
 <tr><td>任务告警</td><td>任务 / DLQ / 告警规则</td><td>重试、人工重跑、Trace</td></tr>
 <tr><td>审计</td><td>操作 / 权限 / 裁决 / 集成调用</td><td>不可修改，按 traceId/objectId 检索</td></tr>
 <tr><td>知识空间</td><td>空间列表 / 成员 / 默认策略</td><td>空间是全局上下文，不在业务导航中重复出现</td></tr>
-<tr><td>角色菜单</td><td>角色 × 功能入口</td><td>按角色勾选可见入口，勾选即得该入口与其所需权限码</td></tr>
+<tr><td>系统初始化</td><td>默认配置来源 / 出厂配置</td><td>查看默认配置从哪来；必要时用镜像内的出厂配置覆盖（仅管理员）</td></tr>
+<tr><td>角色菜单</td><td>角色 × 功能入口</td><td>按角色勾选可见入口，勾选即得该入口与其所需权限码；<b>取代原先的用户 / 管理视图切换</b></td></tr>
 </tbody></table>
 </section>
 
@@ -468,7 +478,7 @@ canWrite(user, base):
   ∪ 部门挂   (t_acl_department_tag)</div>
 <p><code>AclContextResolver.resolve()</code> 的返回值是整套 ACL 的语义核心，三态必须严格区分：<code>null</code> = 不受限（ADMIN、KNOWLEDGE_ADMIN、未开认证），查询不加任何条件；<code>[]</code> = 只能看公开内容；非空数组 = 公开内容加命中任一标签。若把 <code>[]</code> 与 <code>null</code> 混为一谈，不是越权就是全员失明，这是实现中最容易被改坏的一处。三种存储的过滤写法不同、语义相同：MySQL 用 <code>JSON_LENGTH(permission_tags)=0</code> 或 <code>JSON_CONTAINS</code>；Elasticsearch 用 <code>bool.should</code>（<code>must_not exists</code> 或 <code>terms</code>，<code>minimum_should_match=1</code>）；Milvus 用 <code>json_contains_any</code> 并固定带上 <code>__public__</code>。图谱侧为避免跨来源实体聚合后越权，单独落 <code>t_entity_acl_scope</code> / <code>t_relation_acl_scope</code>（按 <code>source_id</code> 记录该实体/关系的可见范围）。标签变更写 <code>t_acl_change</code>，同时投 outbox 事件 <code>INDEX_OBJECT_ACL</code> 触发索引侧重建，避免权威库与检索索引口径不一致。</p>
 
-<p><b>10.1.5 外部主体与授权判定。</b>凭证与授权分离：<code>t_api_key</code>（secret_hash、key_prefix、scopes、rate_limit、expires_at，外加 <code>principal_id</code> 与 <code>permission_tags</code>）是凭证，<code>t_principal</code> 是主体，<code>t_principal_kb_grant(principal_id, knowledge_base_id, status, expires_at, permission_tags)</code> 是授权。判定流程：</p>
+<p><b>10.1.5 外部主体与授权判定。</b>凭证与授权分离：<code>t_api_key</code>（secret_hash、key_prefix、<b>credential_type</b>（<code>SERVICE_KEY</code> / PAT）、<b>owner_user_id</b>、scopes、rate_limit、expires_at、<b>deleted_at</b>，外加 <code>principal_id</code> 与 <code>permission_tags</code>）是凭证，<code>t_principal</code> 是主体，<code>t_principal_kb_grant(principal_id, knowledge_base_id, status, expires_at, permission_tags)</code> 是授权。判定流程：</p>
 <div class="flow">resolveKnowledgeBase(key, kb, delegated):
   grants = grantedKnowledgeBases(key)         # 委托身份时取 agentGrants ∩ employeeGrants
   if kb in grants: return kb
@@ -552,6 +562,6 @@ evaluation.completed</div>
 <tr><td>R6</td><td>衍生、图谱、MCP、Benchmark</td><td>Graph/Derivation、MCP、Evaluation</td></tr>
 </tbody></table>
 <div class="note ok"><b>验收主线：</b>用户能够从“知识概览”发现问题 → 在“知识生成”完成导入/治理 → 在“知识检索”验证可检索性 → 在“接口服务”创建服务并通过 API/MCP/SSE 调用 → 通过 traceId 回到检索证据链。五个一级菜单必须形成闭环，而不是五套独立功能。</div>
-<div class="note"><b>视图验收：</b>① 普通账号登录后顶栏停在“用户视图”且不可切换；② 管理员可在两种视图间切换，切到用户视图后知识生成只剩文档导入/裁决/衍生、知识检索看不到检索链路追踪与检索评测、接口服务只剩服务；③ 在管理视图打开“检索评测”后切到用户视图，页面自动回落到该模块默认页而不是停在原处；④ 接口服务面板内“凭证”区块随视图隐藏。</div>
+<div class="note"><b>可见性验收：</b>① 管理员登录后知识生成可见 8 个 Tab、接口服务可见 10 个 Tab、系统配置可见 11 个 Tab；② 普通成员（如 <code>VIEWER</code>）知识生成只剩文档导入 / 知识裁决 / 知识衍生，接口服务只剩「服务」，接口概览与凭证不可达；③ 在「系统配置 · 角色菜单」取消某角色的某个入口后，该角色刷新即看不到该 Tab，且通过旧书签访问会回落到模块默认页；④ 无权入口置灰并给出原因提示，点击不发请求；⑤ 未知角色降级为 <code>VIEWER</code>，不会因为脏角色数据拿到越权入口。</div>
 </section>
-</main><footer>企业级智能知识库平台 · 产品详细设计说明书 V2.1 · 五大一级菜单 / 接口服务版 · 用户视图与管理视图</footer></div></body></html>
+</main><footer>企业级智能知识库平台 · 产品详细设计说明书 V2.1 · 五大一级菜单 / 接口服务版 · 角色菜单驱动</footer></div></body></html>

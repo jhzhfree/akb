@@ -73,10 +73,12 @@ python scripts/check-code-quality.py
 
 ### 2.3 前端请求逻辑从 App.vue 中抽离
 
-新增：
+新增（前端已 TypeScript 化，实际文件为 `.ts`）：
 
 ```text
-frontend/src/api/knowledge.js
+frontend/src/api/knowledge.ts          对外导出入口
+frontend/src/api/knowledge-impl.ts     请求实现
+frontend/src/api/knowledge/            按领域拆分的类型与实现
 ```
 
 统一：
@@ -195,7 +197,7 @@ Neo4j Provider 也会重复创建 Driver / 验证连接。
 def get_reranker(): ...
 
 
-@lru_cache(maxsize=1)
+@lru_cache(maxsize=4)   # 允许同时缓存多个 embedding 配置（按模型/维度）
 def get_embedding_provider(): ...
 
 
@@ -413,7 +415,7 @@ scripts/check-code-quality.py
 scripts/benchmark-hotspots.py
 ```
 
-`check-v11.sh` 扩展到 15 项：
+本轮把 `check-v11.sh` 扩展到 15 项，覆盖：
 
 ```text
 Python syntax
@@ -433,6 +435,8 @@ RC API boundary
 RC delivery files
 ```
 
+> **该清单是当时的快照，已过期。** 后续版本持续向同一脚本加断言，当前 `scripts/check-v11.sh` 为 **52 项**（最后一条为 ACL Phase 18 契约）。引用门禁项数时请以脚本本身为准，不要用固定数字。
+
 ---
 
 ## 7. 仍然需要在后续版本继续做的性能架构升级
@@ -450,23 +454,20 @@ RC delivery files
 
 ### P1：数据量 > 5 万后
 
-V1.1 JSON IndexStore 只能作为本地 fallback，不建议继续扩容。生产架构建议：
+生产架构现状（已由 Flyway `V7__elasticsearch_milvus_retrieval.sql` 落地，不再是建议）：
 
 ```text
-BM25 / exact search -> Elasticsearch / Elasticsearch
-Vector search       -> Milvus / Milvus / pgvector / ES vector
+BM25 / exact search -> Elasticsearch
+Vector search       -> Milvus (COSINE ANN)
 Metadata / lifecycle-> MySQL
 Graph               -> Neo4j
-Cache                -> Redis
+Cache               -> Redis
 ```
 
-目标是把：
+至此 `Python 全量 Vector Scan O(N × D)` 已被替换为 ANN 索引，JSON IndexStore 退化为 Provider 全部禁用时的兜底。仍需注意：
 
-```text
-Python 全量 Vector Scan O(N × D)
-```
-
-替换成 ANN Index。
+- 图检索（Neo4j）尚未做同样的索引升级，见下一节；
+- 列表 API 分页尚不完整，见「P1：列表 API 分页」。
 
 ### P1：Neo4j 查询
 

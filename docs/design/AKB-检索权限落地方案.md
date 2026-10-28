@@ -26,6 +26,8 @@
 
 ### 1.1 漏洞链路（唯一确认的高危项）
 
+> **行号提示**：下列行号是**修复前基线快照**，代码持续演进后已漂移（`ExternalKnowledgeFacade` 的收窄逻辑现分布在更靠后的位置且已加固）。请以**调用关系**为准，不要按行号找代码。修复后的测试结果也不再是"固化漏洞"，而是"锁定收窄行为"。
+
 ```text
 外部请求 permissionTags
   → ExternalKnowledgeFacade.payload()  原样塞进 payload
@@ -46,7 +48,7 @@ ai-service 的测试直接固化了这一行为：
 
 | # | 决策点 | 结论 | 理由 |
 |---|---|---|---|
-| 1 | **租户** | 本轮不引入多租户；新表预留 `tenant_id BIGINT NOT NULL DEFAULT 0` | 当前全仓无 tenant 概念，引入要给所有表与查询动刀；预留字段可让未来开启只填值 |
+| 1 | **租户** | 本轮不引入多租户。**注：最终实现连预留字段也没有加**——已落地的 V61/V62/V63/V64/V72/V73 迁移中 `tenant_id` 零出现，仍为纯单租户 | 当前全仓无 tenant 概念，引入要给所有表与查询动刀；实现时选择不加冗余列，未来需要时用迁移补 |
 | 2 | **权限枚举** | 落地完整 6 个：`LIST` / `QUERY` / `SEARCH` / `READ_OBJECT` / `INGEST` / `MANAGE_ACL` | 现有 `hasScope` 已支持多值，成本不高；接口与审计记录操作类型，为将来拆分留口 |
 | 3 | **外部标签退场** | 影子模式过渡，配置项开关，禁止回滚到客户端自声明 | 直接收紧会影响正在依赖该行为的调用方；影子期先量化影响面 |
 | 4 | **未绑定库的 Key** | 迁移时显式授权：有绑定 → 转等价 grant；无绑定 → 仅 PUBLIC 库 | 现状语义不明（可访问任意库 vs 仅公开库），必须显式化 |
@@ -85,7 +87,12 @@ effectiveTags = 凭证授权标签 ∩ 请求标签
 5. ✅ 管理端通过授权配置接口按知识库设置 `expires_at` 与审计原因；过期时间到达后授权自动失效。
 6. ✅ 增加共享 Principal 管理：多个 API Key 可关联同一主体并立即共用授权；新主体会复制源 Key 的有效授权；主体迁移由 V62 审计记录，主体不物理删除。
 7. ✅ V63 为知识库 grant 增加独立标签范围；有效标签为 API Key 全局授权与知识库 grant 授权的交集，再与请求标签相交。`null` 继承全局配置，空数组只允许公开资料；变更审计保留标签快照。
-8. ⏳ 后续按 P2 顺序完成 OIDC/OAuth 委托身份、员工与 Agent 权限交集、资料级 ACL 和撤权传播。数据库迁移验收需在 Docker 可用环境执行。
+8. ✅ **凭证主体化与轮换（V72）**：`t_api_key` 拆分为 `SERVICE_KEY` / 个人令牌（PAT）两类凭据，`credential_type` + `owner_user_id` 标识归属；新增 `rotatePersonalAccessToken` / `rotateServiceKey`。**轮换不改变 `principal_id` 与 Memory 身份**——这是把 Memory 身份从可轮换的 Key 迁到主体的直接原因（见第 9 条）。
+9. ✅ **主体级 Memory 授权（V72）**：新增 `t_principal_memory_profile`（namespace + agent_code 归主体）与 `t_principal_memory_scope_grant`（`AGENT` / `TEAM` / `PROJECT` / `TASK` / `WORKFLOW` / `SESSION` 六种 `scope_type`，`can_read` / `can_write`）。V72 含一次性回填脚本（仅迁移无歧义的主体，冲突的保留旧列待管理员裁决）；配套 `PrincipalMemoryAdminService` 与组合 scope `MEMORY_MANAGE`。
+10. ✅ **Octop 用户到 AKB USER Principal 的显式绑定（V72）**：`t_external_identity_binding` + `t_external_identity_binding_audit`（按 `provider` / `provider_instance_id` / `external_user_id` 唯一），以及 `t_octop_assertion_jti`（一次性断言 jti，防止重放）。PAT scope 变更另记 `t_personal_access_token_scope_audit`。
+11. ✅ **凭证软删除（V73）**：`t_api_key.deleted_at` 标记删除，`DELETE /keys/{id}` **只删已失效凭证**（`status <> ACTIVE`），生效中的必须先吊销。原因是 `t_agent_memory.created_by_key_id` 与 `t_pat_scope_audit.api_key_id` 均为 `NOT NULL` 外键且无级联，物理删除会撞约束。所有列表与认证查询过滤 `deleted_at IS NULL`。
+12. ✅ **服务端分页（V73 同期）**：`GET /keys` 支持 `limit` / `offset`（默认 20、上限 200），返回 `{ items, total, limit, offset, expiringCount }`；`expiringCount` 由 SQL 统计，不再由前端按当前页计算。
+13. ⏳ 后续按 P2 顺序完成员工与 Agent 权限交集之外的资料级 ACL 和撤权传播。数据库迁移验收需在 Docker 可用环境执行。
 
 ### P2：委托身份与细粒度 ACL（身份委托 MVP 已实现）
 
@@ -114,7 +121,10 @@ knowledge.external.delegated-identity.audience=akb-external-api
 
 ## 4. 数据模型（P1 起）
 
-### 4.1 主体与凭证
+> **阅读须知**：`4.1`—`4.3` 是**设计时提出的目标模型**，其中 `tenant_id`、grant 上的 `actions` / `valid_from` / `valid_to` / `policy_version`、审计表的 `old_*` / `new_*` 快照等**均未在真实迁移中实现**。
+> **以代码为准的实际表结构见 `4.4`**。修改授权相关逻辑请先看 `4.4`。
+
+### 4.1 主体与凭证（设计稿，与实现有差异）
 
 ```sql
 CREATE TABLE t_principal (
@@ -144,7 +154,7 @@ CREATE TABLE t_principal_identity_link (
 ALTER TABLE t_api_key ADD COLUMN principal_id BIGINT NULL AFTER id;
 ```
 
-### 4.2 知识库授权
+### 4.2 知识库授权（设计稿，与实现有差异）
 
 ```sql
 CREATE TABLE t_principal_kb_grant (
@@ -179,7 +189,9 @@ CREATE TABLE t_principal_kb_grant_audit (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 ```
 
-### 4.3 资料 ACL（P2）
+### 4.3 资料 ACL（P2，尚未实现）
+
+> 尚未建表。`t_resource_acl` 目前只存在于设计中，P2 剩余工作之一。
 
 ```sql
 CREATE TABLE t_resource_acl (
@@ -200,6 +212,100 @@ CREATE TABLE t_resource_acl (
 ```
 
 > 资料表已具备 `permission_tags`，P2 再补 `visibility` / `classification` 列。
+
+### 4.4 实际落地结构（以 Flyway 为准）
+
+下表是**当前代码库中真实存在**的表结构，来源依次为 `V61`、`V62`、`V63`、`V64`、`V72`、`V73`。与上面设计稿的差异已标注。
+
+**`t_principal`**（`V61` 建表，`V64` 加 `principal_type`，`V72` 加 owner / 外部身份）
+
+```sql
+CREATE TABLE t_principal (
+  id               BIGINT PRIMARY KEY AUTO_INCREMENT,
+  principal_code   VARCHAR(128) NOT NULL,               -- 设计稿写 64，实际 128
+  name             VARCHAR(128) NOT NULL,
+  status           VARCHAR(32)  NOT NULL DEFAULT 'ACTIVE',
+  created_by       BIGINT NULL,
+  created_time     TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_time     TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  principal_type   VARCHAR(16) NOT NULL DEFAULT 'APPLICATION',   -- V64：USER/APPLICATION/...
+  owner_user_id    BIGINT NULL,                                   -- V72
+  external_instance_id VARCHAR(128) NULL,                         -- V72
+  external_subject_id  VARCHAR(255) NULL,                         -- V72
+  UNIQUE KEY uk_principal_code(principal_code),
+  UNIQUE KEY uk_principal_owner_user(owner_user_id),
+  UNIQUE KEY uk_principal_external_identity(external_instance_id, external_subject_id)
+);
+```
+
+> 无 `tenant_id`、无 `source` 列；唯一键是 `principal_code` 单列而非 `(tenant_id, principal_code)`。
+
+**`t_principal_kb_grant`**（`V61` / `V63`）
+
+```sql
+CREATE TABLE t_principal_kb_grant (
+  id                BIGINT PRIMARY KEY AUTO_INCREMENT,
+  principal_id      BIGINT NOT NULL,
+  knowledge_base_id BIGINT NOT NULL,
+  status            VARCHAR(32) NOT NULL DEFAULT 'ACTIVE',
+  reason            VARCHAR(500) NULL,
+  created_by        BIGINT NULL,
+  created_time      TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  expires_at        TIMESTAMP NULL,
+  permission_tags   JSON NULL,   -- V63：NULL=继承 Key 全局授权，空数组=仅公开资料
+  UNIQUE KEY uk_principal_kb(principal_id, knowledge_base_id),
+  CONSTRAINT fk_principal_grant_principal FOREIGN KEY (principal_id) REFERENCES t_principal(id) ON DELETE CASCADE,
+  CONSTRAINT fk_principal_grant_kb FOREIGN KEY (knowledge_base_id) REFERENCES t_knowledge_base(id) ON DELETE CASCADE
+);
+```
+
+> **关键差异**：**没有 `actions` 列**，也没有 `valid_from` / `valid_to` / `granted_by` / `policy_version`。
+> 操作级权限（`LIST` / `QUERY` / `SEARCH` / `READ_OBJECT` / `INGEST`）**不在 grant 表里**，而是记在 `t_api_key` 的 scope 上，由 `ApiKeyService.hasScope` 校验；grant 只表达"这个主体能不能进这个库"以及"标签上限"。
+> 有效期只有单个 `expires_at`，没有 `valid_from`。
+
+**`t_principal_kb_grant_audit`**（`V61` / `V63`）
+
+```sql
+CREATE TABLE t_principal_kb_grant_audit (
+  id                BIGINT PRIMARY KEY AUTO_INCREMENT,
+  principal_id      BIGINT NOT NULL,
+  knowledge_base_id BIGINT NOT NULL,
+  action            VARCHAR(16) NOT NULL,   -- GRANT/REVOKE 等，不是权限列表
+  reason            VARCHAR(500) NULL,
+  operator_id       BIGINT NULL,
+  permission_tags   JSON NULL,              -- V63：本次变更的标签快照
+  created_time      TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+```
+
+> **关键差异**：没有 `grant_id`，也没有 `old_actions` / `new_actions` / `old_status` / `new_status` 快照，只记录单次事件。
+
+**`t_api_key` 增量列**
+
+```sql
+ALTER TABLE t_api_key ADD COLUMN principal_id BIGINT NULL AFTER knowledge_base_id;   -- V61（注意位置）
+ALTER TABLE t_api_key ADD COLUMN credential_type VARCHAR(16) NOT NULL DEFAULT 'SERVICE_KEY' AFTER key_prefix;  -- V72
+ALTER TABLE t_api_key ADD COLUMN owner_user_id BIGINT NULL AFTER principal_id;       -- V72
+ALTER TABLE t_api_key ADD COLUMN deleted_at    TIMESTAMP NULL AFTER status;          -- V73 软删除
+ALTER TABLE t_api_key ADD INDEX  idx_api_key_deleted(deleted_at, created_time);      -- V73
+```
+
+**`t_principal_identity_link`**（`V64`）
+
+```sql
+CREATE TABLE t_principal_identity_link (
+  id           BIGINT PRIMARY KEY AUTO_INCREMENT,
+  principal_id BIGINT NOT NULL,
+  issuer       VARCHAR(512) NOT NULL,   -- 设计稿写 255，实际 512
+  subject      VARCHAR(255) NOT NULL,   -- 两者均 utf8mb4_bin 区分大小写
+  status       VARCHAR(16) NOT NULL DEFAULT 'ACTIVE',
+  created_by   BIGINT NULL,
+  created_time TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  revoked_by   BIGINT NULL,             -- 设计稿未含
+  revoked_time TIMESTAMP NULL,          -- 设计稿未含
+  UNIQUE KEY uk_principal_identity_issuer_subject(issuer, subject)
+);
+```
 
 ---
 
@@ -230,7 +336,7 @@ CREATE TABLE t_resource_acl (
 | 用例 | 状态 | 覆盖方式 |
 |---|---|---|
 | 1. Key 无权访问库 B | ✅ 已有 | `ExternalAccessService.resolveKnowledgeBase` |
-| 2. 仅 QUERY 不能 INGEST | ⚠️ P1 | 需 actions 细分后补测试 |
+| 2. 仅 QUERY 不能 INGEST | ✅ 已有 | Scope 由 `t_api_key.scopes` + `ApiKeyService.hasScope` 校验（**不在 grant 表的 `actions` 列**——该列未实现，见 §4.4） |
 | 3. 伪造标签不能召回 | ✅ 已补 | `narrowsRequestedTagsToGrantedScope` |
 | 4. 过滤只缩小不扩大 | ✅ 已补 | `emptyRequestUsesFullGrant` |
 | 5 / 6. 委托模式双向拒绝 | ⬜ P2 | |
@@ -248,4 +354,4 @@ CREATE TABLE t_resource_acl (
 1. **影子期必须看日志**：默认 `SHADOW` 不改变行为，不主动排查就永远发现不了影响面。
 2. **空标签的历史语义**：迁移前必须盘点空 `permission_tags` 到底是"公开"还是"无约束"，不能静默提升为全平台公开（设计 §5.3）。
 3. **图谱跨库遍历**（§11 每跳校验）改造成本高，P2 单独评估。
-4. **既有失败测试**：`QueryFeedbackServiceTest.negativeFeedbackMustHaveReasonBeforeWrite` 当前失败（期望 `IllegalArgumentException`，实际 `SecurityException`，实现先校验发起人再校验原因）。经 `git stash` 验证为**既有问题**，与本次改动无关，建议单独修。
+4. ~~**既有失败测试**：`QueryFeedbackServiceTest.negativeFeedbackMustHaveReasonBeforeWrite` 当前失败。~~ **已修复**：该用例原先因"实现先校验发起人再校验原因"而拿到 `SecurityException`；现已在 `QueryFeedbackServiceTest.java:131-138` 显式设置 `trace.put("actorUserId", 7L)`，绕过发起人校验、精确验证"负反馈必须填原因"，不再依赖 `git stash` 绕行。

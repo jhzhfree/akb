@@ -5,7 +5,29 @@
 状态：设计待确认；确认后进入代码改造\
 代码基线：AKB `feature/octop-mcp-integration`、Octop `feature/virtual-employees` 的已抽取版本\
 范围：身份映射、个人访问令牌、服务身份、AKB 权限、Memory 主体化、Octop 绑定和迁移
+> :warning: **本文是设计稿，不代表当前实现状态。**
+>
+> 本轮撰写时确实没有改动代码（见 §17），但**文档定稿后，部分设计目标已被先行落地**。
+> 请务必先看 [§0 文档定稿后的代码进展](#0-文档定稿后的代码进展)，再据此判断 §13 的 P0—P5 排期里哪些已完成——否则会把已实现的当成未实现。
 
+## 0. 文档定稿后的代码进展
+
+> 本节是文档写完之后、**对照当前代码补充**的事实清单。下列能力已在 AKB 主分支实现，§2.2 的"现状差距"与 §13 的排期应按本节校准。
+
+| 设计目标 | 代码落到哪了 | 证据 |
+|---|---|---|
+| 服务主体与 Key 生命周期治理 | `t_api_key.credential_type`（`SERVICE_KEY` / PAT 两类凭据）+ `owner_user_id` | `V72__principal_credentials_identity_and_memory.sql:1-6` |
+| Key 轮换不改变 Memory 身份 | `rotatePersonalAccessToken` / `rotateServiceKey`，轮换保持同一 `principal_id` | `ApiKeyService.java:406` / `:452` |
+| Memory 主体化（分工身份从可轮换 Key 迁到 Principal） | `t_principal_memory_profile`（namespace + agent_code 归主体）、`t_principal_memory_scope_grant`（`AGENT`/`TEAM`/`PROJECT`/`TASK`/`WORKFLOW`/`SESSION` × `can_read`/`can_write`），V72 含一次性回填 | `V72:66-95`、`:99-124` |
+| `MEMORY_MANAGE` 组合 scope | `ApiKey.SCOPE_MEMORY_MANAGE` 已存在并参与组合判定，配套 `PrincipalMemoryAdminService` | `ApiKeyService.java:502`、`:703`、`:937` |
+| Octop 用户 → AKB USER Principal 显式绑定 | `t_external_identity_binding` + `_audit`（按 provider / instance / external_user_id 唯一），`t_octop_assertion_jti` 防重放 | `V72:32-63`、`:127-132` |
+| PAT scope 变更审计 | `t_personal_access_token_scope_audit`（old/new scopes、操作人、原因） | `V72:16-30` |
+| 废凭证可清理且不丢审计 | `t_api_key.deleted_at` 软删除；`DELETE /keys/{id}` 仅对已失效凭证开放 | `V73__api_key_soft_delete.sql:7-10`、`ExternalServiceAdminController.java:146` |
+| 凭证列表服务端分页 | `GET /keys` 支持 `limit`/`offset`（默认 20、上限 200），返回 `{items,total,limit,offset,expiringCount}` | `ExternalServiceAdminController.java:140-143` |
+
+**尚未实现**（仍是本文的设计目标，需按 §13 排期推进）：资料级 `t_resource_acl`、`visibility`/`classification`、DENY 优先、索引侧撤权传播、P5 连接器 ACL 治理。
+
+---
 ## 1. 本版结论与已确认决策
 
 本文沿用上一版对 AKB 和 Octop 最新抽取代码的分析，并将用户确认的六项决策转化为可实施设计。核心结论是：**两套系统保留各自的用户目录；AKB 通过受控身份绑定接口建立跨系统 ID 映射；API Key 只是凭据，身份和 Memory 归属以主体为准。**
@@ -542,6 +564,9 @@ Octop 组织管理员在虚拟员工知识身份设置中选择已由 AKB 管理
 - `backend/src/main/java/com/jh/knowledgeos/controller/ExternalServiceAdminController.java`
 - `backend/src/main/resources/db/migration/V61__external_principal_kb_grants.sql`
 - `backend/src/main/resources/db/migration/V64__delegated_employee_identity.sql`
+- `backend/src/main/resources/db/migration/V72__principal_credentials_identity_and_memory.sql`（定稿后新增，见 §0）
+- `backend/src/main/resources/db/migration/V73__api_key_soft_delete.sql`（定稿后新增，见 §0）
+- `backend/src/main/java/com/jh/knowledgeos/service/PrincipalMemoryAdminService.java`（定稿后新增）
 - `docs/api/EXTERNAL-API.md`
 - `docs/api/AGENT-MEMORY.md`
 - `docs/api/OCTOP-INTEGRATION.md`
@@ -563,3 +588,5 @@ Octop 组织管理员在虚拟员工知识身份设置中选择已由 AKB 管理
 V1.1 已将六项用户决策纳入目标架构，并补齐不同 IdP 下的绑定与委托信任链、PAT/Service Key 生命周期、`MEMORY_MANAGE` 组合授权、主体级 Memory 迁移、AKB 管理员首期流程、Octop 绑定、测试和回滚方案。
 
 **当前状态仍是“设计待确认”。** 请评审本版中的身份绑定审批流程、Octop 服务端断言/token exchange 信任方式、Memory 组合权限边界和 PAT/Service Key 生命周期参数。设计确认后再按 P0—P5 进入代码改造；本轮没有修改 AKB 或 Octop 代码。
+
+> **补充说明**：上句"本轮没有修改代码"描述的是本轮撰写动作，成立。但请连同 [§0 文档定稿后的代码进展](#0-文档定稿后的代码进展) 一起读——其中的 Memory 主体化、`MEMORY_MANAGE` 组合 scope、Octop 身份绑定、凭证轮换与软删除在 V72/V73 中已有实现。

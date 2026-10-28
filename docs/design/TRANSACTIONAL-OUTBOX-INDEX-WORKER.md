@@ -103,6 +103,18 @@ GET  /api/knowledge/index/outbox/{kb}/stats
 POST /api/knowledge/index/outbox/events/{eventId}/replay
 POST /api/knowledge/index/outbox/events/{eventId}/skip
 GET  /api/knowledge/index/drift/{kb}
+
+# 索引 schema 蓝绿发布
+GET  /api/knowledge/index/schema/{kb}
+POST /api/knowledge/index/schema/{kb}/rebuild
+POST /api/knowledge/index/schema/{kb}/activate/{releaseId}
+POST /api/knowledge/index/schema/{kb}/rollback/{releaseId}
+
+# ACL 传播权威重建
+POST /api/knowledge/acl/rebuild/{changeCode}/start
+POST /api/knowledge/acl/rebuild/{jobCode}/qualify
+POST /api/knowledge/acl/rebuild/{jobCode}/activate
+GET  /api/knowledge/acl/rebuild/{kb}
 ```
 
 AI Service:
@@ -133,25 +145,34 @@ GET  /ai/index/external/stats/{knowledgeBaseId}
 
 ## 11. 生产部署
 
-生产 compose 已拆分：
+**生产 compose 已拆分**（指 `deploy/docker-compose.prod.yml` 与 `deploy/docker-compose.release.yml`，**仓库根目录的 `docker-compose.yml` 是开发编排，不含 `index-worker`**）：
 
 - `backend`: `INDEX_OUTBOX_ENABLED=false`；
-- `index-worker`: 同一 backend 镜像，`SPRING_MAIN_WEB_APPLICATION_TYPE=none` 且 `INDEX_OUTBOX_ENABLED=true`。
+- `index-worker`: 同一 backend 镜像，`SPRING_MAIN_WEB_APPLICATION_TYPE=none` 且 `INDEX_OUTBOX_ENABLED=true`；
+- 两个编排均开启 `INDEX_OUTBOX_ARCHIVE_ENABLED=true`。
 
 因此 API 和索引消费可以独立扩容。多 Worker 依靠数据库行锁竞争任务。
 
+> 在开发环境（根 `docker-compose.yml`）里 index worker 跑在 `backend` 进程内，不要按本节去找独立容器。
+
 ## 12. 当前 V1.1 边界
 
-已经完成：事务 Outbox、幂等键、聚合版本、多 Worker 领取、指数退避、stale lock 恢复、死信、replay/skip、状态索引同步、漂移检查、独立 Worker 部署模板。
+已经完成：事务 Outbox、幂等键、聚合版本、多 Worker 领取、指数退避、stale lock 恢复、死信、replay/skip、状态索引同步、漂移检查、**独立 Worker 部署模板**。
+
+以下三项原先列在"下一阶段"，**现已实现**，不再属于待办：
+
+| 项 | 落地位置 |
+|---|---|
+| Outbox 归档 | `V5__index_operations_and_schema_release.sql` 建立 `t_index_outbox_archive` / `t_index_delivery_attempt_archive`；由 `IndexOutboxArchiveService` 执行，生产编排 `INDEX_OUTBOX_ARCHIVE_ENABLED=true` |
+| 独立 Worker 进程 | `deploy/docker-compose.prod.yml` / `deploy/docker-compose.release.yml` 的 `index-worker` 服务（`SPRING_MAIN_WEB_APPLICATION_TYPE=none`） |
+| 索引 schema version 与蓝绿重建 | `IndexSchemaService` + `domain/IndexSchemaRelease`，端点 `POST /api/knowledge/index/schema/{kb}/{rebuild,activate,rollback}`；`scripts/check-v11.sh` 含 Blue/green schema contract 断言 |
 
 下一阶段可进一步演进：
 
-1. Outbox 分区/归档；
-2. Micrometer/Prometheus 指标；
-3. 独立 Worker 模块或独立 JVM；
+1. Micrometer/Prometheus 指标；
+2. Outbox 按时间分区（归档已解决表体积，分区面向超大吞吐场景）；
 4. Kafka/Debezium CDC（数据量极大时）；
-5. 索引 schema version 与蓝绿重建；
-6. Milvus 状态更新增加服务端 compare/version guard（若未来 API 支持条件写）。
+5. Milvus 状态更新增加服务端 compare/version guard（若未来 API 支持条件写）。
 
 ---
 
@@ -220,7 +241,9 @@ Outbox 通过 `idempotency_key` 抑制重复事件；Elasticsearch/Milvus 使用
 
 ### 验证结果
 
-当前静态/Smoke Gate 已扩展到 18 项并全部通过：原 AI Pipeline、智能裁决、API Contract、性能回归、Elasticsearch/Milvus Contract、Transactional Outbox/Index Version Contract、Flyway/Mapper/配置/可读性等均通过。
+当时的静态/Smoke Gate 为 18 项并全部通过：原 AI Pipeline、智能裁决、API Contract、性能回归、Elasticsearch/Milvus Contract、Transactional Outbox/Index Version Contract、Flyway/Mapper/配置/可读性等均通过。
+
+> **该数字已过期**：`scripts/check-v11.sh` 当前为 **52 项**（最后一条为 ACL Phase 18 契约）。引用门禁规模时请以脚本为准。
 
 当前执行环境没有 Maven 和 Docker，因此没有声称以下项目已真实跑通：MySQL 8 Testcontainers 的 `SKIP LOCKED` 多 Worker 并发、真实 Elasticsearch/Milvus/Neo4j 故障注入、生产 compose 的独立 Worker。它们应作为部署环境 RC Gate。
 

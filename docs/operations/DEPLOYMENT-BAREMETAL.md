@@ -144,7 +144,9 @@ sudo systemctl restart mysql
 mysql -uknowledge -p'Str0ng_Db_Pwd' -h127.0.0.1 -e "SELECT @@character_set_database, @@time_zone;"
 ```
 
-数据库表结构无需手工创建：后端内置 Flyway，启动时自动执行 `V1__baseline.sql` … `V32`（共 32 个迁移，含默认知识库 `KB_DEFAULT`）。
+数据库表结构无需手工创建：后端内置 Flyway，启动时自动执行 `V1__baseline.sql` … `V73__api_key_soft_delete.sql`（当前共 **73** 个迁移，含默认知识库 `KB_DEFAULT`）。
+
+> 迁移数量会随版本增长，**不要记住具体数字**，以 `backend/src/main/resources/db/migration/` 的实际文件数为准。
 
 ---
 
