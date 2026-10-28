@@ -3,7 +3,7 @@
     destroy-on-close @update:model-value="$emit('update:visible',$event)">
     <div class="mb-4 flex items-start justify-between gap-4">
       <p class="max-w-xl text-[13px] leading-6 text-ink-500">
-        PAT 代表你的 AKB 用户身份访问检索接口。新令牌默认只读，最长有效期 365 天；完整令牌只在创建时显示一次。
+        PAT 代表你的 AKB 用户身份访问检索接口。新令牌默认只读，最长有效期 365 天；完整令牌只在创建时显示一次，到期前用「轮换」换发新的。
       </p>
       <el-button type="primary" @click="openCreate">创建令牌</el-button>
     </div>
@@ -28,8 +28,9 @@
       <el-table-column label="到期时间" min-width="160">
         <template #default="{row}">{{formatTime(row.expiresAt)}}</template>
       </el-table-column>
-      <el-table-column label="操作" width="90" fixed="right">
+      <el-table-column label="操作" width="150" fixed="right">
         <template #default="{row}">
+          <el-button v-if="row.status==='ACTIVE'" link type="primary" @click="openRotate(row)">轮换</el-button>
           <el-button v-if="row.status==='ACTIVE'" link type="danger" @click="revoke(row)">撤销</el-button>
           <span v-else class="text-ink-400">—</span>
         </template>
@@ -61,6 +62,23 @@
         <el-button type="primary" :loading="saving" @click="create">创建</el-button>
       </template>
     </el-dialog>
+
+    <el-dialog v-model="rotateVisible" title="轮换个人访问令牌" width="min(480px, calc(100vw - 32px))" append-to-body>
+      <p class="mb-3 text-[13px] leading-6 text-ink-500">
+        轮换会换发一枚新明文并立即撤销旧令牌，<b>你的用户身份与权限范围都不变</b>。
+        这是令牌到期前该做的事——到期时间必须重选，不能靠改日期延长生命周期。
+      </p>
+      <el-form label-position="top">
+        <el-form-item :label="`轮换「${rotateTarget?.name || ''}」的新到期日期`" required>
+          <el-date-picker v-model="rotateExpiresAt" type="date" value-format="YYYY-MM-DD"
+            :disabled-date="disableDate" class="w-full" placeholder="选择新的到期日期"/>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="rotateVisible=false">取消</el-button>
+        <el-button type="primary" :loading="rotateSaving" @click="confirmRotate">确认轮换</el-button>
+      </template>
+    </el-dialog>
   </el-dialog>
 </template>
 
@@ -68,6 +86,7 @@
 import { computed, reactive, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { createPersonalAccessToken, listPersonalAccessTokens, revokePersonalAccessToken,
+  rotatePersonalAccessToken,
   type CreatedPersonalAccessToken, type PersonalAccessToken } from '../api/auth'
 
 const props=defineProps<{visible:boolean}>()
@@ -105,6 +124,35 @@ async function load(){
   try{tokens.value=(await listPersonalAccessTokens()).data.data||[]}
   catch{ElMessage.error('个人访问令牌列表加载失败')}
   finally{loading.value=false}
+}
+const rotateVisible=ref(false)
+const rotateTarget=ref<PersonalAccessToken|null>(null)
+const rotateExpiresAt=ref('')
+const rotateSaving=ref(false)
+
+function openRotate(token:PersonalAccessToken){
+  createdSecret.value=''
+  rotateTarget.value=token
+  // 不预填原到期：轮换要重新选一个日子，顺手沿用会让人以为「改了下日期」。
+  rotateExpiresAt.value=''
+  rotateVisible.value=true
+}
+/** 旧令牌在轮换成功的同一刻失效，所以新明文必须立刻给到使用者。 */
+async function confirmRotate(){
+  const token=rotateTarget.value
+  if(!token)return
+  if(!rotateExpiresAt.value){ElMessage.warning('请选择新的到期日期');return}
+  rotateSaving.value=true
+  try{
+    const result=(await rotatePersonalAccessToken(token.id,rotateExpiresAt.value)).data.data as CreatedPersonalAccessToken
+    createdSecret.value=result.secret
+    rotateVisible.value=false
+    ElMessage.success('已轮换，旧令牌同时失效')
+    await load()
+  }catch(error){
+    const message=(error as {response?:{data?:{message?:string}}})?.response?.data?.message
+    ElMessage.error(message||'个人访问令牌轮换失败')
+  }finally{rotateSaving.value=false}
 }
 function openCreate(){
   createdSecret.value=''

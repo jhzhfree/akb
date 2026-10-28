@@ -66,6 +66,13 @@ export const createPersonalAccessToken = (payload:{
   axios.post('/api/me/personal-access-tokens', payload)
 export const revokePersonalAccessToken = (id:number):Promise<ApiResponse<boolean>> =>
   axios.delete(`/api/me/personal-access-tokens/${id}`)
+/**
+ * 轮换：换发新明文并立即撤销旧令牌，用户主体与授权不变。
+ * 设计 5.1 要求不能通过编辑延长生命周期，所以到期时间必填——轮换走的是「重新签发」，
+ * 而不是「改一下日期」。新明文只在这一次响应里出现。
+ */
+export const rotatePersonalAccessToken = (id:number, expiresAt:string):Promise<ApiResponse<CreatedPersonalAccessToken>> =>
+  axios.post(`/api/me/personal-access-tokens/${id}/rotate`, { expiresAt })
 
 /* ---- 用户管理（系统管理员） ---- */
 
