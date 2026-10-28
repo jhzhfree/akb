@@ -42,6 +42,9 @@
 <insert id="insertPrincipal" parameterType="com.jh.knowledgeos.domain.ExternalPrincipal" useGeneratedKeys="true" keyProperty="id">INSERT INTO t_principal(principal_code,principal_type,owner_user_id,external_instance_id,external_subject_id,name,status,created_by)
   VALUES(#{principalCode},COALESCE(#{principalType},'APPLICATION'),#{ownerUserId},#{externalInstanceId},#{externalSubjectId},#{name},'ACTIVE',#{createdBy})</insert>
 
+<update id="updatePrincipalProfile">UPDATE t_principal SET name=#{name},status=#{status},owner_user_id=#{ownerUserId}
+  WHERE id=#{id}</update>
+
 <select id="getPrincipal" resultType="com.jh.knowledgeos.domain.ExternalPrincipal">SELECT * FROM t_principal WHERE id=#{id} LIMIT 1</select>
 
 <select id="getUserPrincipal" resultType="com.jh.knowledgeos.domain.ExternalPrincipal">SELECT * FROM t_principal WHERE owner_user_id=#{userId} AND principal_type='USER' LIMIT 1</select>
@@ -93,6 +96,9 @@
   revoked_by=NULL,revoked_time=NULL,updated_by=#{operatorId},updated_time=CURRENT_TIMESTAMP,reason=#{reason}
   WHERE id=#{id} AND status='REVOKED'</update>
 
+<update id="updateExternalIdentityBindingStatus">UPDATE t_external_identity_binding SET status=#{status},
+  updated_by=#{operatorId},reason=IFNULL(#{reason},reason) WHERE id=#{id}</update>
+
 <update id="revokeExternalIdentityBinding">UPDATE t_external_identity_binding SET status='REVOKED',revoked_by=#{operatorId},revoked_time=CURRENT_TIMESTAMP,updated_by=#{operatorId},reason=#{reason}
   WHERE id=#{id} AND status='ACTIVE'</update>
 
@@ -101,6 +107,9 @@
 
 <insert id="insertOctopAssertionJti">INSERT IGNORE INTO t_octop_assertion_jti(jti,expires_at) VALUES(#{jti},#{expiresAt})</insert>
 <delete id="deleteExpiredOctopAssertionJtis">DELETE FROM t_octop_assertion_jti WHERE expires_at &lt; CURRENT_TIMESTAMP</delete>
+
+<select id="getPrincipalMemoryProfile" resultType="map">SELECT principal_id AS principalId,namespace_code AS namespace,
+  agent_code AS agentCode,status FROM t_principal_memory_profile WHERE principal_id=#{principalId} LIMIT 1</select>
 
 <insert id="upsertPrincipalMemoryProfile">
   INSERT INTO t_principal_memory_profile(principal_id,namespace_code,agent_code,status,created_by)

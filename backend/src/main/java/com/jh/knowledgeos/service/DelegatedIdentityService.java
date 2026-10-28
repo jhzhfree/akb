@@ -203,6 +203,62 @@ public class DelegatedIdentityService {
             String.valueOf(binding.get("externalUserId")), longValue(binding.get("principalId")), "REVOKE", operatorId, cleanReason);
     }
 
+    public Map<String, Object> getOctopBinding(Long bindingId) {
+        return requireOctopBinding(bindingId);
+    }
+
+    /**
+     * 审批：让待审绑定生效。设计 7.1 要求 Octop 发起的申请默认 PENDING，由 AKB 侧批准；
+     * 管理员在控制台直接创建的绑定已经是 ACTIVE，不需要再走这一步。
+     */
+    @Transactional
+    public Map<String, Object> approveOctopBinding(Long bindingId, Long operatorId, String reason) {
+        return transitionOctopBinding(bindingId, "ACTIVE", java.util.Arrays.asList("PENDING", "SUSPENDED"),
+            "APPROVE", operatorId, reason);
+    }
+
+    /**
+     * 暂停：设计 10 章要求「绑定暂停 / 解绑后，后续委托立即失败」。绑定查询只认 ACTIVE，所以
+     * 改状态这一步本身就足以阻断后续委托，不需要额外的撤销表。
+     */
+    @Transactional
+    public Map<String, Object> suspendOctopBinding(Long bindingId, Long operatorId, String reason) {
+        return transitionOctopBinding(bindingId, "SUSPENDED", java.util.Arrays.asList("ACTIVE", "PENDING"),
+            "SUSPEND", operatorId, reason);
+    }
+
+    @Transactional
+    public Map<String, Object> resumeOctopBinding(Long bindingId, Long operatorId, String reason) {
+        return transitionOctopBinding(bindingId, "ACTIVE", java.util.Arrays.asList("SUSPENDED"),
+            "RESUME", operatorId, reason);
+    }
+
+    private Map<String, Object> transitionOctopBinding(Long bindingId, String target, java.util.List<String> allowedFrom,
+        String action, Long operatorId, String reason) {
+        Map<String, Object> binding = requireOctopBinding(bindingId);
+        String current = String.valueOf(binding.get("status")).toUpperCase(java.util.Locale.ROOT);
+        if (!allowedFrom.contains(current)) {
+            throw new IllegalArgumentException("Octop 身份绑定当前状态为 " + current + "，不能执行 " + action);
+        }
+        String cleanReason = normalizeReason(reason);
+        if (mapper.updateExternalIdentityBindingStatus(bindingId, target, operatorId, cleanReason) != 1) {
+            throw new IllegalArgumentException("Octop 身份绑定状态已被其他操作修改");
+        }
+        mapper.insertExternalIdentityBindingAudit(bindingId, "OCTOP", String.valueOf(binding.get("providerInstanceId")),
+            String.valueOf(binding.get("externalUserId")), longValue(binding.get("principalId")), action, operatorId,
+            cleanReason);
+        binding.put("status", target);
+        return binding;
+    }
+
+    private Map<String, Object> requireOctopBinding(Long bindingId) {
+        if (bindingId == null) throw new IllegalArgumentException("Octop 身份绑定 ID 不能为空");
+        for (Map<String, Object> row : mapper.listExternalIdentityBindings("OCTOP", null, null)) {
+            if (bindingId.equals(longValue(row.get("id")))) return row;
+        }
+        throw new IllegalArgumentException("Octop 身份绑定不存在");
+    }
+
     public List<Map<String, Object>> listOctopBindings(String instanceId, String externalUserId) {
         return mapper.listExternalIdentityBindings("OCTOP", instanceId, externalUserId);
     }

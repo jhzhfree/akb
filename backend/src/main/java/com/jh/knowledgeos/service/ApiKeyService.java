@@ -286,6 +286,31 @@ public class ApiKeyService {
         return principal;
     }
 
+    /**
+     * 更新主体：改名、换负责人、停用或启用。
+     *
+     * <p>停用主体是生命周期里最直接的开关：Key 的可用性判定会检查 principalStatus，所以停用后该
+     * 主体的所有 Service Key 与 Memory 调用立即失败，不必逐个吊销 Key；重新启用即可恢复。
+     */
+    @Transactional
+    public ExternalPrincipal updatePrincipal(Long principalId, String name, String status, Long ownerUserId) {
+        ExternalPrincipal principal = mapper.getPrincipal(principalId);
+        if (principal == null) throw new IllegalArgumentException("主体不存在");
+        String cleanName = name == null || name.trim().isEmpty() ? principal.getName() : name.trim();
+        if (cleanName.length() > 128) throw new IllegalArgumentException("主体名称不能超过 128 个字符");
+        String cleanStatus = status == null || status.trim().isEmpty()
+            ? principal.getStatus() : status.trim().toUpperCase(Locale.ROOT);
+        if (!"ACTIVE".equals(cleanStatus) && !"DISABLED".equals(cleanStatus)) {
+            throw new IllegalArgumentException("主体状态只能是 ACTIVE 或 DISABLED");
+        }
+        Long owner = ownerUserId != null ? ownerUserId : principal.getOwnerUserId();
+        if (owner != null && mapper.getUserById(owner) == null) throw new IllegalArgumentException("负责人不存在");
+        if (mapper.updatePrincipalProfile(principalId, cleanName, cleanStatus, owner) != 1) {
+            throw new IllegalArgumentException("主体已被其他操作修改");
+        }
+        return mapper.getPrincipal(principalId);
+    }
+
     @Transactional
     public Map<String, Object> createServiceKey(Long principalId, String name, List<String> scopes, Integer rateLimitPerMinute,
         LocalDateTime expiresAt, List<String> allowedOrigins, Long operatorId) {

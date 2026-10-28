@@ -16,6 +16,7 @@ import com.jh.knowledgeos.dto.AgentMemoryKeyPolicyRequest;
 import com.jh.knowledgeos.exception.UnauthorizedException;
 import com.jh.knowledgeos.service.ApiKeyService;
 import com.jh.knowledgeos.service.AgentMemoryScopeAccessService;
+import com.jh.knowledgeos.service.PrincipalMemoryAdminService;
 import com.jh.knowledgeos.service.AgentMemoryGovernanceService;
 import com.jh.knowledgeos.service.AuthContext;
 import com.jh.knowledgeos.service.EmbedTokenLifecycleService;
@@ -25,6 +26,7 @@ import com.jh.knowledgeos.service.DelegatedIdentityService;
 import com.jh.knowledgeos.service.IdGenerator;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -62,6 +64,7 @@ public class ExternalServiceAdminController {
     private final EmbedTokenLifecycleService tokenLifecycle;
     private final AgentMemoryScopeAccessService memoryScopeAccessService;
     private final AgentMemoryGovernanceService memoryGovernanceService;
+    private final PrincipalMemoryAdminService principalMemoryService;
 
     private final DelegatedIdentityService delegatedIdentityService;
 
@@ -72,7 +75,8 @@ public class ExternalServiceAdminController {
     public ExternalServiceAdminController(ApiKeyService apiKeyService, ExternalAuditService auditService, McpServerService mcpServerService,
         EmbedTokenLifecycleService tokenLifecycle, AgentMemoryScopeAccessService memoryScopeAccessService,
         AgentMemoryGovernanceService memoryGovernanceService, KnowledgeProperties properties,
-        DelegatedIdentityService delegatedIdentityService, IdGenerator ids) {
+        DelegatedIdentityService delegatedIdentityService, IdGenerator ids,
+        PrincipalMemoryAdminService principalMemoryService) {
         this.apiKeyService = apiKeyService;
         this.auditService = auditService;
         this.mcpServerService = mcpServerService;
@@ -81,6 +85,7 @@ public class ExternalServiceAdminController {
         this.memoryGovernanceService = memoryGovernanceService;
         this.delegatedIdentityService = delegatedIdentityService;
         this.ids = ids;
+        this.principalMemoryService = principalMemoryService;
         this.properties = properties.external();
     }
 
@@ -195,6 +200,48 @@ public class ExternalServiceAdminController {
         return ApiResponse.ok(apiKeyService.rotateServiceKey(id, expiresAt, operator.getId()));
     }
 
+    @PutMapping("/principals/{id}")
+    @Operation(summary = "更新主体：改名、换负责人、停用或启用；停用后其 Key 与 Memory 调用立即失败")
+    public ApiResponse<Object> updatePrincipal(@PathVariable Long id, @RequestBody(required = false) Map<String, Object> body) {
+        requireManager();
+        Map<String, Object> request = body == null ? Collections.<String, Object>emptyMap() : body;
+        return ApiResponse.ok(apiKeyService.updatePrincipal(id, value(request, "name"), value(request, "status"),
+            number(request.get("ownerUserId"))));
+    }
+
+    @GetMapping("/principals/{id}/memory-profile")
+    @Operation(summary = "查看主体的记忆身份（namespace 与 Agent identity）")
+    public ApiResponse<Object> principalMemoryProfile(@PathVariable Long id) {
+        requireManager();
+        return ApiResponse.ok(principalMemoryService.profile(id));
+    }
+
+    @PutMapping("/principals/{id}/memory-profile")
+    @Operation(summary = "设置主体的记忆身份，并播种其对自身私有空间的读写授权")
+    public ApiResponse<Object> savePrincipalMemoryProfile(@PathVariable Long id,
+        @RequestBody(required = false) Map<String, Object> body) {
+        User operator = requireManager();
+        Map<String, Object> request = body == null ? Collections.<String, Object>emptyMap() : body;
+        return ApiResponse.ok(principalMemoryService.saveProfile(id, value(request, "namespace"),
+            value(request, "agentCode"), operator.getId()));
+    }
+
+    @GetMapping("/principals/{id}/memory-grants")
+    @Operation(summary = "查看主体可操作的记忆作用域授权")
+    public ApiResponse<Object> principalMemoryGrants(@PathVariable Long id) {
+        requireManager();
+        return ApiResponse.ok(principalMemoryService.grants(id));
+    }
+
+    @PutMapping("/principals/{id}/memory-grants")
+    @Operation(summary = "原子替换主体的记忆作用域授权；空数组表示只保留自身私有空间")
+    public ApiResponse<Object> replacePrincipalMemoryGrants(@PathVariable Long id,
+        @RequestBody(required = false) List<AgentMemoryScopeGrantRequest> grants) {
+        User operator = requireManager();
+        return ApiResponse.ok(principalMemoryService.replaceGrants(id,
+            grants == null ? Collections.<AgentMemoryScopeGrantRequest>emptyList() : grants, operator.getId()));
+    }
+
     @GetMapping("/identity-bindings/octop")
     @Operation(summary = "查询 AKB 管理的 Octop 用户 ID 绑定")
     public ApiResponse<Object> listOctopIdentityBindings(@RequestParam(required = false) String providerInstanceId,
@@ -210,6 +257,46 @@ public class ExternalServiceAdminController {
         Map<String, Object> request = body == null ? Collections.<String, Object>emptyMap() : body;
         return ApiResponse.ok(delegatedIdentityService.bindOctopUser(value(request, "providerInstanceId"), value(request, "externalUserId"),
             number(request.get("principalId")), operator.getId(), value(request, "reason")));
+    }
+
+    @GetMapping("/identity-bindings/octop/{id}")
+    @Operation(summary = "查看单个 Octop 身份绑定的当前状态")
+    public ApiResponse<Object> octopIdentityBinding(@PathVariable Long id) {
+        requireManager();
+        return ApiResponse.ok(delegatedIdentityService.getOctopBinding(id));
+    }
+
+    @PostMapping("/identity-bindings/octop/{id}/approve")
+    @Operation(summary = "审批待审绑定使其生效；已暂停的绑定也可通过它恢复")
+    public ApiResponse<Object> approveOctopIdentity(@PathVariable Long id, @RequestBody(required = false) Map<String, Object> body) {
+        User operator = requireManager();
+        Map<String, Object> request = body == null ? Collections.<String, Object>emptyMap() : body;
+        return ApiResponse.ok(delegatedIdentityService.approveOctopBinding(id, operator.getId(), value(request, "reason")));
+    }
+
+    @PostMapping("/identity-bindings/octop/{id}/suspend")
+    @Operation(summary = "暂停绑定：后续委托身份校验立即失败，已签发断言到期即失效")
+    public ApiResponse<Object> suspendOctopIdentity(@PathVariable Long id, @RequestBody(required = false) Map<String, Object> body) {
+        User operator = requireManager();
+        Map<String, Object> request = body == null ? Collections.<String, Object>emptyMap() : body;
+        return ApiResponse.ok(delegatedIdentityService.suspendOctopBinding(id, operator.getId(), value(request, "reason")));
+    }
+
+    @PostMapping("/identity-bindings/octop/{id}/resume")
+    @Operation(summary = "恢复已暂停的绑定")
+    public ApiResponse<Object> resumeOctopIdentity(@PathVariable Long id, @RequestBody(required = false) Map<String, Object> body) {
+        User operator = requireManager();
+        Map<String, Object> request = body == null ? Collections.<String, Object>emptyMap() : body;
+        return ApiResponse.ok(delegatedIdentityService.resumeOctopBinding(id, operator.getId(), value(request, "reason")));
+    }
+
+    @DeleteMapping("/identity-bindings/octop/{id}")
+    @Operation(summary = "解绑：撤销 Octop 用户 ID 绑定，阻止新的委托身份校验")
+    public ApiResponse<Object> deleteOctopIdentity(@PathVariable Long id, @RequestBody(required = false) Map<String, Object> body) {
+        User operator = requireManager();
+        Map<String, Object> request = body == null ? Collections.<String, Object>emptyMap() : body;
+        delegatedIdentityService.revokeOctopUserBinding(id, operator.getId(), value(request, "reason"));
+        return ApiResponse.ok(true);
     }
 
     @PostMapping("/identity-bindings/octop/{id}/revoke")

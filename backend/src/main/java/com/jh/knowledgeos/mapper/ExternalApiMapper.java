@@ -35,6 +35,10 @@ public interface ExternalApiMapper {
 
     int assignPrincipalOwnerUser(@Param("principalId") Long principalId, @Param("userId") Long userId);
 
+    /** 主体改名 / 改负责人 / 停用。停用后该主体的 Key 与 Memory 调用立即失败。 */
+    int updatePrincipalProfile(@Param("id") Long id, @Param("name") String name, @Param("status") String status,
+        @Param("ownerUserId") Long ownerUserId);
+
     List<ApiKey> listPersonalApiKeys(@Param("userId") Long userId);
 
     int revokePersonalApiKey(@Param("id") Long id, @Param("userId") Long userId);
@@ -57,6 +61,10 @@ public interface ExternalApiMapper {
     int reactivateExternalIdentityBinding(@Param("id") Long id, @Param("principalId") Long principalId,
         @Param("operatorId") Long operatorId, @Param("reason") String reason);
 
+    /** 绑定状态流转（审批 / 暂停 / 恢复）。撤销走 revokeExternalIdentityBinding，会一并记撤销人。 */
+    int updateExternalIdentityBindingStatus(@Param("id") Long id, @Param("status") String status,
+        @Param("operatorId") Long operatorId, @Param("reason") String reason);
+
     int revokeExternalIdentityBinding(@Param("id") Long id, @Param("operatorId") Long operatorId, @Param("reason") String reason);
 
     int insertExternalIdentityBindingAudit(@Param("bindingId") Long bindingId, @Param("provider") String provider,
@@ -67,6 +75,9 @@ public interface ExternalApiMapper {
     int insertOctopAssertionJti(@Param("jti") String jti, @Param("expiresAt") java.time.LocalDateTime expiresAt);
 
     int deleteExpiredOctopAssertionJtis();
+
+    /** 主体的记忆身份；null 表示尚未配置，运行时会退回 Key 上的旧列兜底。 */
+    Map<String, Object> getPrincipalMemoryProfile(@Param("principalId") Long principalId);
 
     int upsertPrincipalMemoryProfile(@Param("principalId") Long principalId, @Param("namespace") String namespace,
         @Param("agentCode") String agentCode, @Param("operatorId") Long operatorId);
