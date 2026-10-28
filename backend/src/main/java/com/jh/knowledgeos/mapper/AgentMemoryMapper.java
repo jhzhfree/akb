@@ -42,7 +42,14 @@ public interface AgentMemoryMapper {
 
     List<Map<String, Object>> listPrincipalScopeAccess(@Param("principalId") Long principalId, @Param("namespace") String namespace);
 
-    int deletePrincipalScopeAccess(@Param("principalId") Long principalId);
+    /**
+     * Clears the principal's grants before a console-driven replace.
+     *
+     * <p>The principal's own AGENT grant is kept: it is seeded with the memory profile and is
+     * what lets a principal read and write its own private memory. Deleting it would lock a
+     * principal out of its own memory every time an operator edits an unrelated shared grant.
+     */
+    int deletePrincipalScopeAccess(@Param("principalId") Long principalId, @Param("agentCode") String agentCode);
 
     int insertPrincipalScopeAccess(@Param("principalId") Long principalId, @Param("namespace") String namespace,
         @Param("scopeType") String scopeType, @Param("scopeCode") String scopeCode,

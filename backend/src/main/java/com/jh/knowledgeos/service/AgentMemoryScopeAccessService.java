@@ -38,8 +38,19 @@ public class AgentMemoryScopeAccessService {
         ApiKey key = requireKey(keyId);
         List<Grant> grants = normalize(requests);
         if (key.getPrincipalId() == null) throw new IllegalArgumentException("API Key 未绑定主体");
+        // 授权不能超出凭据自身的能力：MEMORY_MANAGE 是覆盖读写的组合权限，未持有时仍退回
+        // 旧的细粒度判断。少了这道判断，控制台就能配出主体实际用不了的授权。
+        boolean memoryManage = key.hasScope(ApiKey.SCOPE_MEMORY_MANAGE);
+        for (Grant grant : grants) {
+            if (grant.read && !memoryManage && !key.hasScope(ApiKey.SCOPE_MEMORY_READ)) {
+                throw new IllegalArgumentException("该凭据未授予 MEMORY_MANAGE 或 MEMORY_READ，不能配置读取授权");
+            }
+            if (grant.write && !memoryManage && !key.hasScope(ApiKey.SCOPE_MEMORY_WRITE)) {
+                throw new IllegalArgumentException("该凭据未授予 MEMORY_MANAGE 或 MEMORY_WRITE，不能配置写入授权");
+            }
+        }
         String namespace = memoryService.namespace(key);
-        mapper.deletePrincipalScopeAccess(key.getPrincipalId());
+        mapper.deletePrincipalScopeAccess(key.getPrincipalId(), memoryService.agentCode(key));
         for (Grant grant : grants) {
             mapper.insertPrincipalScopeAccess(key.getPrincipalId(), namespace, grant.type, grant.code, grant.read, grant.write, operatorId);
         }

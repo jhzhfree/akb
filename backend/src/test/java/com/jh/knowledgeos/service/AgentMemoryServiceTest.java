@@ -44,6 +44,8 @@ class AgentMemoryServiceTest {
         saved.put("scopeCode", "agent-ops");
         saved.put("memoryLevel", "L3");
         saved.put("content", "Agent should cite verified sources");
+        // 主体对自身 AGENT 私有作用域的写授权（由 memory profile 播种，这里显式给出）。
+        when(mapper.hasPrincipalScopeAccess(901L, "octop-prod", "AGENT", "agent-ops", "WRITE")).thenReturn(true);
         when(mapper.findByIdempotency("octop-prod", "agent-ops", "profile-capture-1")).thenReturn(saved);
 
         Map<String, Object> result = service.capture(key, request);
@@ -165,6 +167,7 @@ class AgentMemoryServiceTest {
         stored.put("memoryLevel", "L1");
         stored.put("content", "same memory text");
         stored.put("payloadFingerprint", "0000000000000000000000000000000000000000000000000000000000000000");
+        when(mapper.hasPrincipalScopeAccess(901L, "octop-prod", "AGENT", "agent-ops", "WRITE")).thenReturn(true);
         when(mapper.findByIdempotency("octop-prod", "agent-ops", "memory-capture-7")).thenReturn(stored);
 
         assertThrows(IllegalArgumentException.class, () -> service.capture(key, request));
@@ -176,7 +179,10 @@ class AgentMemoryServiceTest {
         Map<String, Object> existing = new LinkedHashMap<String, Object>();
         existing.put("scopeType", "AGENT");
         existing.put("agentCode", "agent-ops");
+        // 归属校验读 agentCode，授权查询读 scopeCode；AGENT 记忆两者都是 agent 编码。
+        existing.put("scopeCode", "agent-ops");
         existing.put("status", "SUSPENDED");
+        when(mapper.hasPrincipalScopeAccess(901L, "octop-prod", "AGENT", "agent-ops", "WRITE")).thenReturn(true);
         when(mapper.get("octop-prod", "MEMORY_SUSPENDED")).thenReturn(existing);
         when(mapper.forget("octop-prod", "MEMORY_SUSPENDED", "agent-ops")).thenReturn(1);
 
@@ -206,6 +212,8 @@ class AgentMemoryServiceTest {
         key.setScopes("MEMORY_READ,MEMORY_WRITE");
         key.setMemoryNamespace("octop-prod");
         key.setMemoryAgentCode("agent-ops");
+        // 主体化后 Memory 授权挂在 principal 上；没有主体的 Key 不再具备记忆访问能力。
+        key.setPrincipalId(901L);
         return key;
     }
 }

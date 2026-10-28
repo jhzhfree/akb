@@ -89,7 +89,10 @@
     ORDER BY scope_type,scope_code
   </select>
 
-  <delete id="deletePrincipalScopeAccess">DELETE FROM t_principal_memory_scope_grant WHERE principal_id=#{principalId}</delete>
+  <!-- 主体自身的 AGENT 授权由 memory profile 播种，替换共享授权时不连带清除，
+       否则改一次共享授权就会把主体锁在自己的私有记忆之外。 -->
+  <delete id="deletePrincipalScopeAccess">DELETE FROM t_principal_memory_scope_grant
+    WHERE principal_id=#{principalId} AND NOT (scope_type='AGENT' AND scope_code &lt;=&gt; #{agentCode})</delete>
 
   <insert id="insertPrincipalScopeAccess">
     INSERT INTO t_principal_memory_scope_grant(principal_id,namespace_code,scope_type,scope_code,can_read,can_write,status,created_by_operator)
