@@ -136,10 +136,18 @@ public class ExternalServiceAdminController {
     }
 
     @GetMapping("/keys")
-    @Operation(summary = "API Key 列表（不含明文）")
-    public ApiResponse<Object> listKeys() {
+    @Operation(summary = "凭据列表（分页，不含明文）；已删除的不再出现")
+    public ApiResponse<Object> listKeys(@RequestParam(required = false) Integer limit,
+        @RequestParam(required = false) Integer offset) {
         requireManager();
-        return ApiResponse.ok(apiKeyService.list());
+        return ApiResponse.ok(apiKeyService.list(limit == null ? 0 : limit, offset == null ? 0 : offset));
+    }
+
+    @DeleteMapping("/keys/{id}")
+    @Operation(summary = "删除已吊销或已失效的凭证；调用留痕与记忆保留，只从列表中移除")
+    public ApiResponse<Object> deleteKey(@PathVariable Long id) {
+        requireManager();
+        return ApiResponse.ok(apiKeyService.deleteCredential(id));
     }
 
     @GetMapping("/principals")
@@ -193,6 +201,13 @@ public class ExternalServiceAdminController {
         Map<String, Object> request = body == null ? Collections.<String, Object>emptyMap() : body;
         return ApiResponse.ok(apiKeyService.updatePersonalAccessTokenScopes(id, stringList(request.get("scopes")),
             operator.getId(), value(request, "reason")));
+    }
+
+    @GetMapping("/principals/{id}/keys")
+    @Operation(summary = "某个主体下的全部凭证（主体详情要看全量，不受列表分页影响）")
+    public ApiResponse<Object> listPrincipalKeys(@PathVariable Long id) {
+        requireManager();
+        return ApiResponse.ok(apiKeyService.listPrincipalKeys(id));
     }
 
     @PostMapping("/principals/{id}/keys")

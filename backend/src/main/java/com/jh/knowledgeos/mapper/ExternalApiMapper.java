@@ -17,7 +17,18 @@ import java.util.Map;
  */
 public interface ExternalApiMapper {
 
-    List<ApiKey> listApiKeys();
+    /** 控制台列表用；已逻辑删除的不返回。limit / offset 由调用方给，避免一次拉全表。 */
+    List<ApiKey> listApiKeys(@Param("limit") int limit, @Param("offset") int offset);
+
+    long countApiKeys();
+
+    /** 临期（含已过期）凭证数：分页后前端数不准，只能服务端给。 */
+    long countExpiringApiKeys(@Param("withinDays") int withinDays);
+
+    List<ApiKey> listPrincipalKeys(@Param("principalId") Long principalId);
+
+    /** 逻辑删除：行保留，只是不再出现在列表与认证里。返回 0 表示不满足删除条件。 */
+    int markApiKeyDeleted(@Param("id") Long id);
 
     ApiKey getApiKey(@Param("id") Long id);
 

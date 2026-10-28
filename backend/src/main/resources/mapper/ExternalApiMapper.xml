@@ -14,13 +14,36 @@
   k.memory_read_enabled AS memoryReadEnabled,k.memory_write_enabled AS memoryWriteEnabled,
   CAST(k.permission_tags AS CHAR) AS permissionTags</sql>
 
+<!-- 已逻辑删除的凭证不再出现在任何列表与认证里，行保留在库（记忆与审计外键引用着它）。 -->
 <select id="listApiKeys" resultType="com.jh.knowledgeos.domain.ApiKey">SELECT <include refid="apiKeyColumns"/> FROM t_api_key k
   LEFT JOIN t_knowledge_base b ON b.id=k.knowledge_base_id
   LEFT JOIN t_principal p ON p.id=k.principal_id
   LEFT JOIN t_principal_memory_profile mp ON mp.principal_id=k.principal_id AND mp.status='ACTIVE'
   LEFT JOIN t_user owner ON owner.id=k.owner_user_id
   LEFT JOIN t_user u ON u.id=k.created_by
+  WHERE k.deleted_at IS NULL
+  ORDER BY k.created_time DESC
+  LIMIT #{limit} OFFSET #{offset}</select>
+
+<select id="countApiKeys" resultType="long">SELECT COUNT(1) FROM t_api_key k WHERE k.deleted_at IS NULL</select>
+
+<!-- 临期统计必须服务端算：列表分页后前端只拿到当前页，数出来的「即将到期」会偏小。 -->
+<select id="countExpiringApiKeys" resultType="long">SELECT COUNT(1) FROM t_api_key k WHERE k.deleted_at IS NULL
+  AND k.status='ACTIVE' AND k.expires_at IS NOT NULL
+  AND k.expires_at &lt; DATE_ADD(CURRENT_TIMESTAMP, INTERVAL #{withinDays} DAY)</select>
+
+<select id="listPrincipalKeys" resultType="com.jh.knowledgeos.domain.ApiKey">SELECT <include refid="apiKeyColumns"/> FROM t_api_key k
+  LEFT JOIN t_knowledge_base b ON b.id=k.knowledge_base_id
+  LEFT JOIN t_principal p ON p.id=k.principal_id
+  LEFT JOIN t_principal_memory_profile mp ON mp.principal_id=k.principal_id AND mp.status='ACTIVE'
+  LEFT JOIN t_user owner ON owner.id=k.owner_user_id
+  LEFT JOIN t_user u ON u.id=k.created_by
+  WHERE k.principal_id=#{principalId} AND k.deleted_at IS NULL
   ORDER BY k.created_time DESC</select>
+
+<!-- 只能删已失效的：还在生效的凭证必须先吊销，避免「删掉即悄悄断掉线上调用」。 -->
+<update id="markApiKeyDeleted">UPDATE t_api_key SET deleted_at=CURRENT_TIMESTAMP,status='REVOKED'
+  WHERE id=#{id} AND deleted_at IS NULL AND status &lt;&gt; 'ACTIVE'</update>
 
 <select id="getApiKey" resultType="com.jh.knowledgeos.domain.ApiKey">SELECT <include refid="apiKeyColumns"/> FROM t_api_key k
   LEFT JOIN t_knowledge_base b ON b.id=k.knowledge_base_id
@@ -28,7 +51,7 @@
   LEFT JOIN t_principal_memory_profile mp ON mp.principal_id=k.principal_id AND mp.status='ACTIVE'
   LEFT JOIN t_user owner ON owner.id=k.owner_user_id
   LEFT JOIN t_user u ON u.id=k.created_by
-  WHERE k.id=#{id} LIMIT 1</select>
+  WHERE k.id=#{id} AND k.deleted_at IS NULL LIMIT 1</select>
 
 <select id="getApiKeyByHash" resultType="com.jh.knowledgeos.domain.ApiKey">SELECT <include refid="apiKeyColumns"/> FROM t_api_key k
   LEFT JOIN t_knowledge_base b ON b.id=k.knowledge_base_id
@@ -36,7 +59,7 @@
   LEFT JOIN t_principal_memory_profile mp ON mp.principal_id=k.principal_id AND mp.status='ACTIVE'
   LEFT JOIN t_user owner ON owner.id=k.owner_user_id
   LEFT JOIN t_user u ON u.id=k.created_by
-  WHERE k.secret_hash=#{secretHash} LIMIT 1</select>
+  WHERE k.secret_hash=#{secretHash} AND k.deleted_at IS NULL LIMIT 1</select>
 
 <insert id="insertApiKey" parameterType="com.jh.knowledgeos.domain.ApiKey" useGeneratedKeys="true" keyProperty="id">INSERT INTO t_api_key(key_code,name,secret_hash,key_prefix,credential_type,owner_user_id,knowledge_base_id,principal_id,scopes,permission_tags,rate_limit_per_minute,status,expires_at,created_by,allowed_origins,memory_namespace,memory_agent_code)
   VALUES(#{keyCode},#{name},#{secretHash},#{keyPrefix},COALESCE(#{credentialType},'SERVICE_KEY'),#{ownerUserId},#{knowledgeBaseId},#{principalId},#{scopes},CAST(#{permissionTags} AS JSON),#{rateLimitPerMinute},#{status},#{expiresAt},#{createdBy},#{allowedOrigins},#{memoryNamespace},#{memoryAgentCode})</insert>
@@ -61,7 +84,8 @@
   LEFT JOIN t_principal_memory_profile mp ON mp.principal_id=k.principal_id AND mp.status='ACTIVE'
   LEFT JOIN t_user owner ON owner.id=k.owner_user_id
   LEFT JOIN t_user u ON u.id=k.created_by
-  WHERE k.owner_user_id=#{userId} AND k.credential_type='USER_PAT' ORDER BY k.created_time DESC</select>
+  WHERE k.owner_user_id=#{userId} AND k.credential_type='USER_PAT' AND k.deleted_at IS NULL
+  ORDER BY k.created_time DESC</select>
 
 <update id="revokePersonalApiKey">UPDATE t_api_key SET status='REVOKED' WHERE id=#{id} AND owner_user_id=#{userId} AND credential_type='USER_PAT' AND status='ACTIVE'</update>
 
@@ -228,7 +252,7 @@
     SUM(CASE WHEN status_code &gt;= 400 THEN 1 ELSE 0 END) errorCount FROM t_api_call_audit
   WHERE created_time &gt;= #{since} GROUP BY channel</select>
 
-<select id="countActiveApiKeys" resultType="int">SELECT COUNT(1) FROM t_api_key WHERE status='ACTIVE'</select>
+<select id="countActiveApiKeys" resultType="int">SELECT COUNT(1) FROM t_api_key WHERE status='ACTIVE' AND deleted_at IS NULL</select>
 
 <!-- 嵌入令牌吊销名单：签发时令牌不入库，吊销是唯一需要落盘的状态。 -->
 <insert id="insertEmbedTokenRevocation" parameterType="com.jh.knowledgeos.domain.EmbedTokenRevocation">

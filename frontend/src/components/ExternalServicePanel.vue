@@ -211,10 +211,19 @@
                 <el-button v-if="hasMemoryScope(row)" link type="primary" size="small" @click="openMemoryManager(row)">记忆管理</el-button>
                 <el-button v-if="row.status === 'ACTIVE'" link type="primary" size="small" @click="openRotate(row)">轮换</el-button>
                 <el-button v-if="row.status === 'ACTIVE'" link type="danger" size="small" @click="revoke(row)">吊销</el-button>
-                <span v-else class="text-[11px] text-ink-500">已失效</span>
+                <template v-else>
+                  <span class="text-[11px] text-ink-500">已失效</span>
+                  <!-- 失效的凭证只剩留痕价值，允许从列表清掉；生效中的必须先吊销 -->
+                  <el-button link type="danger" size="small" @click="removeKey(row)">删除</el-button>
+                </template>
               </template>
             </el-table-column>
           </el-table>
+          <div v-if="keyTotal > keyPageSize" class="mt-3 flex justify-end">
+            <el-pagination v-model:current-page="keyPage" v-model:page-size="keyPageSize"
+              :total="keyTotal" :page-sizes="[20, 50, 100]" layout="total, sizes, prev, pager, next"
+              @current-change="loadKeys" @size-change="changeKeyPageSize" />
+          </div>
         </PanelState>
       </div>
     </article>
@@ -700,7 +709,8 @@ import {
   getKnowledgeBaseGrantConfig, replaceKnowledgeBaseGrantConfig,
   forgetManagedMemory, listManagedMemories, replaceMemoryScopeGrants, setManagedMemoryStatus, updateExternalMemoryPolicy,
   listMemoryGovernanceEvents, type ManagedMemoryItem, type MemoryGovernanceEvent, type MemoryScopeGrant,
-  probeExternal, revokeExternalKey, rotateExternalKey, type ExternalPrincipalSummary,
+  probeExternal, revokeExternalKey, rotateExternalKey, deleteExternalKey, listPrincipalKeys,
+  type ExternalPrincipalSummary,
   createExternalPrincipal, updateExternalPrincipal,
   getPrincipalMemoryProfile, savePrincipalMemoryProfile, getPrincipalMemoryGrants, replacePrincipalMemoryGrants,
   listOctopBindings, bindOctopIdentity, approveOctopBinding, suspendOctopBinding, deleteOctopBinding,
@@ -733,6 +743,12 @@ const sectionTitle = computed(() =>
 
 const overview = ref<ExternalServiceOverview | null>(null)
 const keys = ref<ExternalKeyRow[]>([])
+/** 分页由服务端做：凭证会越签越多，全量拉回来再切页没有意义。 */
+const keyTotal = ref(0)
+const keyPage = ref(1)
+const keyPageSize = ref(20)
+/** 临期数取服务端统计：分页后前端只看得到当前页，自己数会随页码变。 */
+const expiringCount = ref(0)
 const audits = ref<ExternalAuditRow[]>([])
 const loading = ref(false)
 const auditLoading = ref(false)
@@ -861,12 +877,47 @@ function channelType(channel:string) {
   return 'primary' as const
 }
 
+async function loadKeys() {
+  const page = unwrap(await listExternalKeys({
+    limit: keyPageSize.value,
+    offset: (keyPage.value - 1) * keyPageSize.value,
+  }), null)
+  keys.value = page?.items || []
+  keyTotal.value = page?.total ?? 0
+  expiringCount.value = page?.expiringCount ?? 0
+}
+
+function changeKeyPageSize() {
+  // 改页大小后原来的页码可能已经越界，回到第一页
+  keyPage.value = 1
+  void loadKeys()
+}
+
+/** 删除只移出列表：调用留痕与该凭证创建的记忆都保留，所以文案要说明删的是什么。 */
+async function removeKey(row:ExternalKeyRow) {
+  try {
+    await ElMessageBox.confirm(
+      `删除「${row.name}」后它将从列表中移除，调用留痕与该凭证创建的记忆都会保留。确认删除？`,
+      '删除凭证', { type:'warning', confirmButtonText:'确认删除', cancelButtonText:'取消' },
+    )
+  } catch { return }
+  try {
+    unwrap(await deleteExternalKey(row.id), null)
+    ElMessage.success('已删除')
+    // 删掉当前页最后一条时退回上一页，否则会停在一个空页上
+    if (keys.value.length === 1 && keyPage.value > 1) keyPage.value -= 1
+    await loadAll()
+  } catch (e) {
+    ElMessage.error(message(e))
+  }
+}
+
 async function loadAll() {
   loading.value = true
   error.value = ''
   try {
     overview.value = unwrap(await getExternalServices(), null)
-    keys.value = unwrap(await listExternalKeys(), [])
+    await loadKeys()
     await loadPrincipals()
   } catch (e) {
     error.value = message(e)
@@ -904,7 +955,7 @@ async function loadPrincipals() {
 
 async function openPrincipalDetail(row:ExternalPrincipalSummary) {
   principalDetail.value = row
-  principalKeys.value = keys.value.filter(key => key.principalId === row.id)
+  principalKeys.value = unwrap(await listPrincipalKeys(row.id), [])
   principalDetailVisible.value = true
   try {
     const profile = unwrap(await getPrincipalMemoryProfile(row.id), null)
@@ -1135,7 +1186,7 @@ function expiryState(row:ExternalKeyRow):'expired'|'soon'|'none' {
   if (left <= 0) return 'expired'
   return left < EXPIRING_SOON_MS ? 'soon' : 'none'
 }
-const expiringCount = computed(() => keys.value.filter(key => expiryState(key) !== 'none').length)
+
 /** 个人令牌强制到期且最长 365 天，服务密钥走独立策略，界面上要能分清。 */
 function credentialLabel(row:ExternalKeyRow) {
   return row.credentialType === 'USER_PAT' ? '个人令牌' : '服务密钥'

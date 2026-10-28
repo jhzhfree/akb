@@ -52,7 +52,7 @@ public class IntegrationInsightService {
         result.put("windowHours", hours == null ? 24 : hours);
         result.put("services", services());
         result.put("serviceCount", services().size());
-        result.put("credentialCount", apiKeyService.list().size());
+        result.put("credentialCount", apiKeyService.countCredentials());
         result.put("activeCredentialCount", apiKeyService.countActive());
         result.put("calls", total);
         result.put("successCount", success);

@@ -9,8 +9,22 @@ type ApiResponse<T> = AxiosResponse<ApiEnvelope<T>>
 
 export const getExternalServices = ():Promise<ApiResponse<ExternalServiceOverview>> =>
   axios.get('/api/external/admin/services')
-export const listExternalKeys = ():Promise<ApiResponse<ExternalKeyRow[]>> =>
-  axios.get('/api/external/admin/keys')
+export interface ExternalKeyPage {
+  items:ExternalKeyRow[]
+  total:number
+  limit:number
+  offset:number
+  /** 已过期或即将到期的数量：由服务端算，分页后前端数不准。 */
+  expiringCount:number
+}
+export const listExternalKeys = (params?:{ limit?:number; offset?:number }):Promise<ApiResponse<ExternalKeyPage>> =>
+  axios.get('/api/external/admin/keys', { params })
+/** 只删已吊销或已失效的凭证：生效中的必须先吊销，避免「删一下」悄悄断掉线上调用。 */
+export const deleteExternalKey = (id:number):Promise<ApiResponse<boolean>> =>
+  axios.delete(`/api/external/admin/keys/${id}`)
+/** 主体详情要看该主体的全部凭证，不受列表分页影响。 */
+export const listPrincipalKeys = (principalId:number):Promise<ApiResponse<ExternalKeyRow[]>> =>
+  axios.get(`/api/external/admin/principals/${principalId}/keys`)
 export interface ExternalPrincipalSummary {
   id:number; principalCode:string; name:string
   /** USER / AGENT / APPLICATION：决定它能不能登录控制台、能不能走委托身份。 */

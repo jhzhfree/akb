@@ -41,6 +41,10 @@ public class ApiKeyService {
     private static final int SECRET_BYTES = 24;
 
     private static final int PAT_MAX_LIFETIME_DAYS = 365;
+    private static final int DEFAULT_PAGE_SIZE = 20;
+    private static final int MAX_PAGE_SIZE = 200;
+    /** 与列表上「即将到期」高亮的口径一致：7 天内到期或已过期。 */
+    private static final int EXPIRING_SOON_DAYS = 7;
 
     private static final List<String> PAT_DEFAULT_SCOPES = java.util.Arrays.asList(ApiKey.SCOPE_SEARCH, ApiKey.SCOPE_QUERY,
         ApiKey.SCOPE_LIST, ApiKey.SCOPE_READ_OBJECT);
@@ -80,12 +84,57 @@ public class ApiKeyService {
         this.aclMapper = aclMapper;
     }
 
-    public List<Map<String, Object>> list() {
+    /**
+     * 分页的凭证列表。
+     *
+     * <p>总数与临期数必须由服务端给：列表分页后前端只拿到当前页，自己数出来的「即将到期」
+     * 会随页码变化，看着像数据在跳。临期口径与列表上的高亮一致（7 天内）。
+     */
+    public Map<String, Object> list(int limit, int offset) {
+        int size = limit <= 0 ? DEFAULT_PAGE_SIZE : Math.min(limit, MAX_PAGE_SIZE);
+        int from = offset < 0 ? 0 : offset;
         List<Map<String, Object>> rows = new ArrayList<Map<String, Object>>();
-        for (ApiKey key : mapper.listApiKeys()) {
+        for (ApiKey key : mapper.listApiKeys(size, from)) {
+            rows.add(profile(key));
+        }
+        Map<String, Object> page = new LinkedHashMap<String, Object>();
+        page.put("items", rows);
+        page.put("total", mapper.countApiKeys());
+        page.put("limit", size);
+        page.put("offset", from);
+        page.put("expiringCount", mapper.countExpiringApiKeys(EXPIRING_SOON_DAYS));
+        return page;
+    }
+
+    /** 凭证总数：统计口径不能走分页列表，否则数出来的是页大小。 */
+    public long countCredentials() {
+        return mapper.countApiKeys();
+    }
+
+    /** 主体下的凭证：主体详情要看全量，不能被列表的页大小截断。 */
+    public List<Map<String, Object>> listPrincipalKeys(Long principalId) {
+        List<Map<String, Object>> rows = new ArrayList<Map<String, Object>>();
+        for (ApiKey key : mapper.listPrincipalKeys(principalId)) {
             rows.add(profile(key));
         }
         return rows;
+    }
+
+    /**
+     * 删除已吊销或已过期的凭证。
+     *
+     * <p>只做标记删除，行仍留在库里：记忆用 created_by_key_id 引用它、PAT scope 变更审计也
+     * 引用它，物理删会撞外键；而这两类数据恰恰是要留着的。生效中的凭证不给删——先吊销，
+     * 免得「删一下」就悄悄断掉线上调用。
+     */
+    @Transactional
+    public boolean deleteCredential(Long keyId) {
+        if (keyId == null) throw new IllegalArgumentException("凭据 ID 不能为空");
+        if (mapper.getApiKey(keyId) == null) throw new IllegalArgumentException("凭据不存在或已被删除");
+        if (mapper.markApiKeyDeleted(keyId) != 1) {
+            throw new IllegalArgumentException("只能删除已吊销或已失效的凭据，生效中的请先吊销");
+        }
+        return true;
     }
 
     /**

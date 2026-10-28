@@ -283,6 +283,66 @@ class ApiKeyServiceTest {
         assertTrue(service.authenticate("kos_live_permanent") != null);
     }
 
+    /** 分页要在服务端做，总数与临期数也必须服务端给——前端只拿到当前页，自己数会偏小。 */
+    @Test
+    void credentialListIsPagedWithServerSideCounts() {
+        when(mapper.listApiKeys(20, 0)).thenReturn(Arrays.asList(key("READ"), key("QUERY")));
+        when(mapper.countApiKeys()).thenReturn(53L);
+        when(mapper.countExpiringApiKeys(7)).thenReturn(4L);
+
+        Map<String, Object> page = service.list(20, 0);
+
+        assertEquals(2, ((List<?>) page.get("items")).size());
+        assertEquals(53L, ((Number) page.get("total")).longValue());
+        assertEquals(20, ((Number) page.get("limit")).intValue());
+        assertEquals(0, ((Number) page.get("offset")).intValue());
+        assertEquals(4L, ((Number) page.get("expiringCount")).longValue());
+    }
+
+    @Test
+    void pageRequestIsBounded() {
+        when(mapper.listApiKeys(200, 0)).thenReturn(Collections.<ApiKey>emptyList());
+        when(mapper.countApiKeys()).thenReturn(0L);
+        when(mapper.countExpiringApiKeys(7)).thenReturn(0L);
+
+        service.list(5000, -5);
+
+        verify(mapper).listApiKeys(200, 0);
+    }
+
+    /** 生效中的凭证不给删：先吊销，免得「删一下」就悄悄断掉线上调用。 */
+    @Test
+    void activeCredentialCannotBeDeletedWithoutRevokingFirst() {
+        when(mapper.getApiKey(9L)).thenReturn(key("READ"));
+        when(mapper.markApiKeyDeleted(9L)).thenReturn(0);
+
+        assertThrows(IllegalArgumentException.class, () -> service.deleteCredential(9L));
+    }
+
+    @Test
+    void revokedCredentialCanBeRemovedFromTheList() {
+        ApiKey revoked = key("READ");
+        revoked.setStatus("REVOKED");
+        when(mapper.getApiKey(9L)).thenReturn(revoked);
+        when(mapper.markApiKeyDeleted(9L)).thenReturn(1);
+
+        assertTrue(service.deleteCredential(9L));
+    }
+
+    @Test
+    void deletingAMissingCredentialFails() {
+        when(mapper.getApiKey(9L)).thenReturn(null);
+
+        assertThrows(IllegalArgumentException.class, () -> service.deleteCredential(9L));
+    }
+
+    @Test
+    void principalCredentialListIsNotTruncatedByThePageSize() {
+        when(mapper.listPrincipalKeys(5L)).thenReturn(Arrays.asList(key("READ"), key("QUERY"), key("WRITE")));
+
+        assertEquals(3, service.listPrincipalKeys(5L).size());
+    }
+
     private ApiKey key(String scopes) {
         ApiKey key = new ApiKey();
         key.setId(9L);
