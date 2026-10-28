@@ -4,8 +4,11 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.jh.knowledgeos.domain.ApiKey;
 import com.jh.knowledgeos.domain.ExternalPrincipal;
+import com.jh.knowledgeos.domain.User;
+import com.jh.knowledgeos.common.UserRole;
 import com.jh.knowledgeos.dto.ExternalKnowledgeBaseGrantRequest;
 import com.jh.knowledgeos.mapper.ExternalApiMapper;
+import com.jh.knowledgeos.mapper.AclPersistenceMapper;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import java.nio.charset.StandardCharsets;
@@ -13,6 +16,7 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
 import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.Base64;
@@ -35,6 +39,11 @@ public class ApiKeyService {
 
     private static final int SECRET_BYTES = 24;
 
+    private static final int PAT_MAX_LIFETIME_DAYS = 365;
+
+    private static final List<String> PAT_DEFAULT_SCOPES = java.util.Arrays.asList(ApiKey.SCOPE_SEARCH, ApiKey.SCOPE_QUERY,
+        ApiKey.SCOPE_LIST, ApiKey.SCOPE_READ_OBJECT);
+
     private static final SecureRandom RANDOM = new SecureRandom();
 
     private final ExternalApiMapper mapper;
@@ -43,15 +52,26 @@ public class ApiKeyService {
 
     private final ObjectMapper objectMapper;
 
+    private final KnowledgeBaseAccessService knowledgeBaseAccess;
+
+    private final AclPersistenceMapper aclMapper;
+
     public ApiKeyService(ExternalApiMapper mapper, IdGenerator ids) {
-        this(mapper, ids, new ObjectMapper());
+        this(mapper, ids, new ObjectMapper(), null, null);
+    }
+
+    public ApiKeyService(ExternalApiMapper mapper, IdGenerator ids, ObjectMapper objectMapper) {
+        this(mapper, ids, objectMapper, null, null);
     }
 
     @Autowired
-    public ApiKeyService(ExternalApiMapper mapper, IdGenerator ids, ObjectMapper objectMapper) {
+    public ApiKeyService(ExternalApiMapper mapper, IdGenerator ids, ObjectMapper objectMapper,
+        KnowledgeBaseAccessService knowledgeBaseAccess, AclPersistenceMapper aclMapper) {
         this.mapper = mapper;
         this.ids = ids;
         this.objectMapper = objectMapper;
+        this.knowledgeBaseAccess = knowledgeBaseAccess;
+        this.aclMapper = aclMapper;
     }
 
     public List<Map<String, Object>> list() {
@@ -88,9 +108,16 @@ public class ApiKeyService {
         }
         ExternalPrincipal principal = new ExternalPrincipal();
         principal.setPrincipalCode(ids.next("PR_"));
+        principal.setPrincipalType("APPLICATION");
         principal.setName(name == null || name.trim().isEmpty() ? "未命名调用方" : name.trim());
         principal.setCreatedBy(createdBy);
         mapper.insertPrincipal(principal);
+        String principalNamespace = normalizeMemoryIdentity(memoryNamespace, "memoryNamespace");
+        String principalAgentCode = normalizeMemoryIdentity(memoryAgentCode, "memoryAgentCode");
+        String effectiveNamespace = principalNamespace == null ? "principal:" + principal.getId() : principalNamespace;
+        String effectiveAgent = principalAgentCode == null ? principal.getPrincipalCode() : principalAgentCode;
+        mapper.upsertPrincipalMemoryProfile(principal.getId(), effectiveNamespace, effectiveAgent, createdBy);
+        mapper.insertDefaultAgentMemoryGrant(principal.getId(), effectiveNamespace, effectiveAgent, createdBy);
         String secret = newSecret();
         ApiKey key = new ApiKey();
         key.setKeyCode(ids.next("AK_"));
@@ -99,20 +126,185 @@ public class ApiKeyService {
         key.setKeyPrefix(secret.substring(0, SECRET_PREFIX.length() + 6));
         key.setKnowledgeBaseId(knowledgeBaseId);
         key.setPrincipalId(principal.getId());
+        key.setCredentialType(ApiKey.CREDENTIAL_SERVICE_KEY);
         key.setScopes(normalizeScopes(scopes));
         key.setRateLimitPerMinute(rateLimitPerMinute == null || rateLimitPerMinute < 1 ? 60 : rateLimitPerMinute);
         key.setStatus(ApiKey.STATUS_ACTIVE);
         key.setExpiresAt(expiresAt);
         key.setCreatedBy(createdBy);
         key.setAllowedOrigins(normalizeOrigins(allowedOrigins));
-        key.setMemoryNamespace(normalizeMemoryIdentity(memoryNamespace, "memoryNamespace"));
-        key.setMemoryAgentCode(normalizeMemoryIdentity(memoryAgentCode, "memoryAgentCode"));
+        // Stable Memory identity is persisted on the Principal profile, never on a new key.
         mapper.insertApiKey(key);
         if (knowledgeBaseId != null) {
             mapper.insertPrincipalKnowledgeBaseGrant(principal.getId(), knowledgeBaseId, createdBy, "API Key 初始绑定知识库");
         }
         Map<String, Object> result = profile(mapper.getApiKey(key.getId()));
         // 明文只在此处出现一次，界面提示调用方立即保存。
+        result.put("secret", secret);
+        return result;
+    }
+
+    /** Creates an expiring personal token owned by the current AKB user. */
+    @Transactional
+    public Map<String, Object> createPersonalAccessToken(Long userId, String name, List<String> requestedScopes, LocalDateTime expiresAt) {
+        if (userId == null) throw new IllegalArgumentException("当前用户无效");
+        User owner = mapper.getUserById(userId);
+        if (owner == null || !"ACTIVE".equalsIgnoreCase(owner.getStatus())) throw new IllegalArgumentException("AKB 用户不存在或已停用");
+        String cleanName = name == null ? "" : name.trim();
+        if (cleanName.isEmpty() || cleanName.length() > 128) throw new IllegalArgumentException("PAT 名称必须为 1 到 128 个字符");
+        LocalDateTime now = LocalDateTime.now();
+        if (expiresAt == null || !expiresAt.isAfter(now)) throw new IllegalArgumentException("个人访问令牌必须设置未来到期时间");
+        long lifetimeDays = ChronoUnit.DAYS.between(now, expiresAt);
+        if (lifetimeDays > PAT_MAX_LIFETIME_DAYS || expiresAt.isAfter(now.plusDays(PAT_MAX_LIFETIME_DAYS))) {
+            throw new IllegalArgumentException("个人访问令牌最长有效期为 " + PAT_MAX_LIFETIME_DAYS + " 天");
+        }
+        List<String> scopes = requestedScopes == null || requestedScopes.isEmpty()
+            ? new ArrayList<String>(PAT_DEFAULT_SCOPES) : requestedScopes;
+        String normalizedScopes = normalizeScopes(scopes);
+        for (String scope : normalizedScopes.split(",")) {
+            if (!PAT_DEFAULT_SCOPES.contains(scope)) {
+                throw new IllegalArgumentException("个人 PAT 暂只允许 SEARCH、QUERY、LIST、READ_OBJECT；Memory 和写入权限需单独审批");
+            }
+        }
+
+        ExternalPrincipal principal = mapper.getUserPrincipal(userId);
+        if (principal == null) {
+            principal = new ExternalPrincipal();
+            principal.setPrincipalCode(ids.next("USR_"));
+            principal.setPrincipalType("USER");
+            principal.setOwnerUserId(userId);
+            principal.setName("AKB 用户 " + userId);
+            principal.setCreatedBy(userId);
+            mapper.insertPrincipal(principal);
+        }
+        if (!"ACTIVE".equalsIgnoreCase(principal.getStatus())) throw new IllegalArgumentException("用户主体已停用");
+        refreshPersonalPrincipalGrants(principal.getId(), owner);
+
+        String secret = newSecret();
+        ApiKey key = new ApiKey();
+        key.setKeyCode(ids.next("PAT_"));
+        key.setName(cleanName);
+        key.setSecretHash(hash(secret));
+        key.setKeyPrefix(secret.substring(0, SECRET_PREFIX.length() + 6));
+        key.setCredentialType(ApiKey.CREDENTIAL_USER_PAT);
+        key.setOwnerUserId(userId);
+        key.setPrincipalId(principal.getId());
+        key.setScopes(normalizedScopes);
+        key.setRateLimitPerMinute(60);
+        key.setStatus(ApiKey.STATUS_ACTIVE);
+        key.setExpiresAt(expiresAt);
+        key.setCreatedBy(userId);
+        mapper.insertApiKey(key);
+        Map<String, Object> result = profile(mapper.getApiKey(key.getId()));
+        result.put("secret", secret);
+        result.put("expiresAt", expiresAt);
+        return result;
+    }
+
+    public List<Map<String, Object>> listPersonalAccessTokens(Long userId) {
+        List<Map<String, Object>> rows = new ArrayList<Map<String, Object>>();
+        for (ApiKey key : mapper.listPersonalApiKeys(userId)) rows.add(profile(key));
+        return rows;
+    }
+
+    @Transactional
+    public boolean revokePersonalAccessToken(Long userId, Long tokenId) {
+        if (mapper.revokePersonalApiKey(tokenId, userId) == 0) throw new IllegalArgumentException("个人访问令牌不存在或已撤销");
+        return true;
+    }
+
+    @Transactional
+    public Map<String, Object> updatePersonalAccessTokenScopes(Long tokenId, List<String> scopes, Long operatorId, String reason) {
+        ApiKey key = mapper.getApiKey(tokenId);
+        if (key == null || !ApiKey.CREDENTIAL_USER_PAT.equalsIgnoreCase(key.getCredentialType()) || key.getOwnerUserId() == null) {
+            throw new IllegalArgumentException("个人访问令牌不存在");
+        }
+        String cleanReason = reason == null ? "" : reason.trim();
+        if (cleanReason.isEmpty() || cleanReason.length() > 500) throw new IllegalArgumentException("授权原因必须为 1 到 500 个字符");
+        String updated = normalizeScopes(scopes);
+        if (mapper.updatePersonalApiKeyScopes(tokenId, updated) != 1) throw new IllegalArgumentException("个人访问令牌状态已变化");
+        mapper.insertPersonalApiKeyScopeAudit(tokenId, key.getOwnerUserId(), key.getScopes(), updated, operatorId, cleanReason);
+        return profile(mapper.getApiKey(tokenId));
+    }
+
+    @Transactional
+    public ExternalPrincipal assignPrincipalToLocalUser(Long principalId, Long userId) {
+        User user = userId == null ? null : mapper.getUserById(userId);
+        if (user == null || !"ACTIVE".equalsIgnoreCase(user.getStatus())) {
+            throw new IllegalArgumentException("只能关联到有效的 AKB 登录用户");
+        }
+        ExternalPrincipal principal = mapper.getPrincipal(principalId);
+        if (principal == null || !"ACTIVE".equalsIgnoreCase(principal.getStatus()) || !"USER".equalsIgnoreCase(principal.getPrincipalType())) {
+            throw new IllegalArgumentException("只能将 ACTIVE USER 主体关联到 AKB 用户");
+        }
+        ExternalPrincipal existing = mapper.getUserPrincipal(userId);
+        if (existing != null && !existing.getId().equals(principalId)) throw new IllegalArgumentException("AKB 用户已关联其他 USER 主体");
+        if (principal.getOwnerUserId() != null && !principal.getOwnerUserId().equals(userId)) {
+            throw new IllegalArgumentException("该 USER 主体已关联到其他 AKB 用户");
+        }
+        if (principal.getOwnerUserId() == null && mapper.assignPrincipalOwnerUser(principalId, userId) != 1) {
+            throw new IllegalArgumentException("USER 主体关联状态已变化");
+        }
+        return mapper.getPrincipal(principalId);
+    }
+
+    @Transactional
+    public ExternalPrincipal createServicePrincipal(String code, String name, String principalType, String instanceId,
+        String externalSubjectId, String memoryNamespace, String memoryAgentCode, Long operatorId) {
+        String type = principalType == null ? "" : principalType.trim().toUpperCase(Locale.ROOT);
+        if (!("AGENT".equals(type) || "APPLICATION".equals(type))) throw new IllegalArgumentException("服务主体类型只能是 AGENT 或 APPLICATION");
+        String cleanName = name == null ? "" : name.trim();
+        if (cleanName.isEmpty() || cleanName.length() > 128) throw new IllegalArgumentException("服务主体名称必须为 1 到 128 个字符");
+        String cleanCode = code == null || code.trim().isEmpty() ? ids.next("PR_") : code.trim();
+        if (cleanCode.length() > 128 || !cleanCode.matches("[A-Za-z0-9_.:-]+")) throw new IllegalArgumentException("principalCode 格式不合法");
+        String instance = instanceId == null ? "" : instanceId.trim();
+        String subject = externalSubjectId == null ? "" : externalSubjectId.trim();
+        if ("AGENT".equals(type) && (instance.isEmpty() || subject.isEmpty())) {
+            throw new IllegalArgumentException("AGENT 主体必须绑定 Octop instanceId 与不可变 agentId");
+        }
+        if (instance.length() > 128 || subject.length() > 255) throw new IllegalArgumentException("外部身份字段长度超限");
+        ExternalPrincipal principal = new ExternalPrincipal();
+        principal.setPrincipalCode(cleanCode);
+        principal.setPrincipalType(type);
+        principal.setExternalInstanceId(instance.isEmpty() ? null : instance);
+        principal.setExternalSubjectId(subject.isEmpty() ? null : subject);
+        principal.setName(cleanName);
+        principal.setCreatedBy(operatorId);
+        mapper.insertPrincipal(principal);
+        String namespace = normalizeMemoryIdentity(memoryNamespace, "memoryNamespace");
+        String agent = normalizeMemoryIdentity(memoryAgentCode, "memoryAgentCode");
+        String effectiveNamespace = namespace == null ? "principal:" + principal.getId() : namespace;
+        String effectiveAgent = agent == null ? cleanCode : agent;
+        mapper.upsertPrincipalMemoryProfile(principal.getId(), effectiveNamespace, effectiveAgent, operatorId);
+        if ("AGENT".equals(type)) mapper.insertDefaultAgentMemoryGrant(principal.getId(), effectiveNamespace, effectiveAgent, operatorId);
+        return principal;
+    }
+
+    @Transactional
+    public Map<String, Object> createServiceKey(Long principalId, String name, List<String> scopes, Integer rateLimitPerMinute,
+        LocalDateTime expiresAt, List<String> allowedOrigins, Long operatorId) {
+        ExternalPrincipal principal = mapper.getPrincipal(principalId);
+        if (principal == null || !"ACTIVE".equalsIgnoreCase(principal.getStatus()) || "USER".equalsIgnoreCase(principal.getPrincipalType())) {
+            throw new IllegalArgumentException("Service Key 只能签发给有效的 AGENT/APPLICATION 主体");
+        }
+        if (expiresAt != null && !expiresAt.isAfter(LocalDateTime.now())) throw new IllegalArgumentException("到期时间必须晚于当前时间");
+        String cleanName = name == null || name.trim().isEmpty() ? principal.getName() : name.trim();
+        String secret = newSecret();
+        ApiKey key = new ApiKey();
+        key.setKeyCode(ids.next("AK_"));
+        key.setName(cleanName);
+        key.setSecretHash(hash(secret));
+        key.setKeyPrefix(secret.substring(0, SECRET_PREFIX.length() + 6));
+        key.setCredentialType(ApiKey.CREDENTIAL_SERVICE_KEY);
+        key.setPrincipalId(principalId);
+        key.setScopes(normalizeScopes(scopes));
+        key.setRateLimitPerMinute(rateLimitPerMinute == null || rateLimitPerMinute < 1 ? 60 : rateLimitPerMinute);
+        key.setStatus(ApiKey.STATUS_ACTIVE);
+        key.setExpiresAt(expiresAt);
+        key.setCreatedBy(operatorId);
+        key.setAllowedOrigins(normalizeOrigins(allowedOrigins));
+        mapper.insertApiKey(key);
+        Map<String, Object> result = profile(mapper.getApiKey(key.getId()));
         result.put("secret", secret);
         return result;
     }
@@ -132,10 +324,11 @@ public class ApiKeyService {
         if (key == null) {
             throw new IllegalArgumentException("API Key 不存在");
         }
-        if (readEnabled && !key.scopeList().contains(ApiKey.SCOPE_MEMORY_READ)) {
+        boolean compositeMemory = key.scopeList().contains(ApiKey.SCOPE_MEMORY_MANAGE);
+        if (readEnabled && !compositeMemory && !key.scopeList().contains(ApiKey.SCOPE_MEMORY_READ)) {
             throw new IllegalArgumentException("该 API Key 未签发 MEMORY_READ scope，不能通过策略新增读取权限");
         }
-        if (writeEnabled && !key.scopeList().contains(ApiKey.SCOPE_MEMORY_WRITE)) {
+        if (writeEnabled && !compositeMemory && !key.scopeList().contains(ApiKey.SCOPE_MEMORY_WRITE)) {
             throw new IllegalArgumentException("该 API Key 未签发 MEMORY_WRITE scope，不能通过策略新增写入权限");
         }
         mapper.updateApiKeyMemoryPolicy(id, Boolean.valueOf(readEnabled), Boolean.valueOf(writeEnabled));
@@ -145,6 +338,7 @@ public class ApiKeyService {
     /**
      * Resolves a presented secret to an active credential, or returns null.
      */
+    @Transactional
     public ApiKey authenticate(String secret) {
         if (secret == null || secret.trim().isEmpty()) {
             return null;
@@ -153,8 +347,80 @@ public class ApiKeyService {
         if (key == null || !key.isUsable()) {
             return null;
         }
+        if (ApiKey.CREDENTIAL_USER_PAT.equalsIgnoreCase(key.getCredentialType())) {
+            User owner = key.getOwnerUserId() == null ? null : mapper.getUserById(key.getOwnerUserId());
+            if (owner == null || !"ACTIVE".equalsIgnoreCase(owner.getStatus())) return null;
+            refreshPersonalPrincipalGrants(key.getPrincipalId(), owner);
+            key.setPermissionTags(personalAclTagsJson(owner));
+        }
         mapper.touchApiKey(key.getId());
         return key;
+    }
+
+    public User ownerUser(ApiKey key) {
+        if (key == null || key.getOwnerUserId() == null) return null;
+        return mapper.getUserById(key.getOwnerUserId());
+    }
+
+    private void refreshPersonalPrincipalGrants(Long principalId, User owner) {
+        if (principalId == null || owner == null || knowledgeBaseAccess == null) return;
+        List<Long> readable = knowledgeBaseAccess.readableKnowledgeBaseIds(owner);
+        List<String> tags = personalAclTags(owner);
+        String tagsJson = isUnrestrictedAclUser(owner) ? null : json(tags);
+        List<Map<String, Object>> current = mapper.listPrincipalKnowledgeBaseGrantDetails(principalId);
+        boolean same = current != null && current.size() == readable.size();
+        if (same) {
+            for (Long knowledgeBaseId : readable) {
+                Map<String, Object> row = null;
+                for (Map<String, Object> candidate : current) {
+                    if (knowledgeBaseId.equals(numberValue(candidate.get("knowledgeBaseId")))) { row = candidate; break; }
+                }
+                if (row == null || !"ACTIVE".equalsIgnoreCase(String.valueOf(row.get("status")))
+                    || row.get("expiresAt") != null || !equalNullable(tagsJson, nullableString(row.get("permissionTagsJson")))) {
+                    same = false;
+                    break;
+                }
+            }
+        }
+        if (same) return;
+        if (current != null) {
+            for (Map<String, Object> row : current) {
+                Long kb = numberValue(row.get("knowledgeBaseId"));
+                if (kb != null) mapper.insertPrincipalKnowledgeBaseGrantAudit(principalId, kb, "REVOKE", owner.getId(),
+                    "个人 PAT 权限与 AKB 用户当前可见知识库同步", nullableString(row.get("permissionTagsJson")));
+            }
+        }
+        mapper.deletePrincipalKnowledgeBaseGrants(principalId);
+        for (Long knowledgeBaseId : readable) {
+            mapper.insertPrincipalKnowledgeBaseGrantWithExpiry(principalId, knowledgeBaseId, owner.getId(),
+                "个人 PAT 按 AKB 用户当前可见范围同步", null, tagsJson);
+            mapper.insertPrincipalKnowledgeBaseGrantAudit(principalId, knowledgeBaseId, "GRANT", owner.getId(),
+                "个人 PAT 权限与 AKB 用户当前可见知识库同步", tagsJson);
+        }
+    }
+
+    private List<String> personalAclTags(User owner) {
+        if (isUnrestrictedAclUser(owner) || aclMapper == null) return null;
+        List<String> tags = aclMapper.resolveAclPermissionTags(owner.getUserCode());
+        return tags == null ? new ArrayList<String>() : tags;
+    }
+
+    private static boolean isUnrestrictedAclUser(User owner) {
+        UserRole role = UserRole.of(owner.getRole());
+        return role == UserRole.ADMIN || role == UserRole.KNOWLEDGE_ADMIN;
+    }
+
+    private String personalAclTagsJson(User owner) {
+        return isUnrestrictedAclUser(owner) ? null : json(personalAclTags(owner));
+    }
+
+    private String json(Object value) {
+        try { return objectMapper.writeValueAsString(value); }
+        catch (JsonProcessingException ex) { throw new IllegalStateException("个人访问令牌 ACL 标签序列化失败", ex); }
+    }
+
+    private static boolean equalNullable(String first, String second) {
+        return first == null ? second == null : first.equals(second);
     }
 
     public ApiKey get(Long id) {
@@ -243,6 +509,8 @@ public class ApiKeyService {
         row.put("keyCode", key.getKeyCode());
         row.put("name", key.getName());
         row.put("keyPrefix", key.getKeyPrefix());
+        row.put("credentialType", key.getCredentialType());
+        row.put("ownerUserId", key.getOwnerUserId());
         row.put("knowledgeBaseId", key.getKnowledgeBaseId());
         row.put("knowledgeBaseName", key.getKnowledgeBaseName());
         row.put("principalId", key.getPrincipalId());
@@ -257,6 +525,7 @@ public class ApiKeyService {
         row.put("memoryAgentCode", key.getMemoryAgentCode());
         row.put("memoryReadEnabled", Boolean.valueOf(key.hasScope(ApiKey.SCOPE_MEMORY_READ)));
         row.put("memoryWriteEnabled", Boolean.valueOf(key.hasScope(ApiKey.SCOPE_MEMORY_WRITE)));
+        row.put("memoryManageEnabled", Boolean.valueOf(key.hasScope(ApiKey.SCOPE_MEMORY_MANAGE)));
         row.put("lastUsedAt", key.getLastUsedAt());
         row.put("createdByName", key.getCreatedByName());
         row.put("createdTime", key.getCreatedTime());
@@ -489,7 +758,8 @@ public class ApiKeyService {
                 boolean supported = ApiKey.SCOPE_READ.equals(value) || ApiKey.SCOPE_LIST.equals(value) || ApiKey.SCOPE_QUERY.equals(value)
                     || ApiKey.SCOPE_SEARCH.equals(value) || ApiKey.SCOPE_READ_OBJECT.equals(value)
                     || ApiKey.SCOPE_WRITE.equals(value) || ApiKey.SCOPE_INGEST.equals(value)
-                    || ApiKey.SCOPE_MEMORY_READ.equals(value) || ApiKey.SCOPE_MEMORY_WRITE.equals(value);
+                    || ApiKey.SCOPE_MEMORY_READ.equals(value) || ApiKey.SCOPE_MEMORY_WRITE.equals(value)
+                    || ApiKey.SCOPE_MEMORY_MANAGE.equals(value);
                 if (!supported) {
                     throw new IllegalArgumentException("不支持的权限范围：" + value);
                 }

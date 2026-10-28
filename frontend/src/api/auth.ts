@@ -52,6 +52,21 @@ export const changeOwnPassword = (
 ):Promise<ApiResponse<boolean>> =>
   axios.post('/api/auth/password', { oldPassword, newPassword })
 
+/* ---- 个人访问令牌（PAT） ---- */
+export type PersonalAccessToken = {
+  id:number; name:string; keyPrefix:string; scopes:string; status:string; expiresAt:string
+  createdTime?:string; lastUsedAt?:string
+}
+export type CreatedPersonalAccessToken = PersonalAccessToken & { secret:string }
+export const listPersonalAccessTokens = ():Promise<ApiResponse<PersonalAccessToken[]>> =>
+  axios.get('/api/me/personal-access-tokens')
+export const createPersonalAccessToken = (payload:{
+  name:string; expiresAt:string; scopes:string[]
+}):Promise<ApiResponse<CreatedPersonalAccessToken>> =>
+  axios.post('/api/me/personal-access-tokens', payload)
+export const revokePersonalAccessToken = (id:number):Promise<ApiResponse<boolean>> =>
+  axios.delete(`/api/me/personal-access-tokens/${id}`)
+
 /* ---- 用户管理（系统管理员） ---- */
 
 export const listUsers = ():Promise<ApiResponse<UserAccount[]>> => axios.get('/api/users')

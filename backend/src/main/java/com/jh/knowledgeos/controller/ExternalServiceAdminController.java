@@ -5,6 +5,7 @@ import com.jh.knowledgeos.common.UserRole;
 import com.jh.knowledgeos.config.KnowledgeProperties;
 import com.jh.knowledgeos.domain.ApiCallAudit;
 import com.jh.knowledgeos.domain.User;
+import com.jh.knowledgeos.domain.ExternalPrincipal;
 import com.jh.knowledgeos.dto.EmbedTokenRevokeRequest;
 import com.jh.knowledgeos.dto.ExternalKeyRequest;
 import com.jh.knowledgeos.dto.ExternalKnowledgeBaseGrantRequest;
@@ -102,8 +103,8 @@ public class ExternalServiceAdminController {
             endpoint("GET", "/cards/{code}", "知识卡片详情"), endpoint("GET", "/claims", "断言清单"),
             endpoint("GET", "/claims/{code}", "断言详情"), endpoint("GET", "/evidence/{code}", "证据原文"), endpoint("GET", "/graph/{code}", "图谱邻域"),
             endpoint("GET", "/queries/{queryId}", "问答链路回放"), endpoint("GET", "/overview", "知识库概览"),
-            endpoint("POST", "/documents/text", "文本接入（INGEST）"), endpoint("POST", "/memories/capture", "记忆写入（MEMORY_WRITE）"),
-            endpoint("POST", "/memories/recall", "记忆召回（MEMORY_READ）"), endpoint("DELETE", "/memories/{memoryCode}", "记忆删除（MEMORY_WRITE）")));
+            endpoint("POST", "/documents/text", "文本接入（INGEST）"), endpoint("POST", "/memories/capture", "记忆写入（MEMORY_MANAGE）"),
+            endpoint("POST", "/memories/recall", "记忆召回（MEMORY_MANAGE）"), endpoint("DELETE", "/memories/{memoryCode}", "记忆删除（MEMORY_MANAGE）")));
         Map<String, Object> mcp = new LinkedHashMap<String, Object>();
         mcp.put("enabled", properties.isEnabled() && properties.isMcpEnabled());
         mcp.put("endpoint", "/api/mcp");
@@ -143,6 +144,71 @@ public class ExternalServiceAdminController {
         return ApiResponse.ok(apiKeyService.listPrincipals());
     }
 
+    @PostMapping("/principals")
+    @Operation(summary = "由 AKB 管理员创建 AGENT/APPLICATION 服务主体")
+    public ApiResponse<Object> createServicePrincipal(@RequestBody(required = false) Map<String, Object> body) {
+        User operator = requireManager();
+        Map<String, Object> request = body == null ? Collections.<String, Object>emptyMap() : body;
+        ExternalPrincipal principal = apiKeyService.createServicePrincipal(value(request, "principalCode"), value(request, "name"),
+            value(request, "principalType"), value(request, "providerInstanceId"), value(request, "externalSubjectId"),
+            value(request, "memoryNamespace"), value(request, "memoryAgentCode"), operator.getId());
+        return ApiResponse.ok(principal);
+    }
+
+    @PutMapping("/principals/{id}/owner-user")
+    @Operation(summary = "经管理员核验后将外部 USER 主体关联到 AKB 登录用户")
+    public ApiResponse<Object> assignPrincipalOwner(@PathVariable Long id, @RequestBody(required = false) Map<String, Object> body) {
+        requireManager();
+        Map<String, Object> request = body == null ? Collections.<String, Object>emptyMap() : body;
+        return ApiResponse.ok(apiKeyService.assignPrincipalToLocalUser(id, number(request.get("userId"))));
+    }
+
+    @PutMapping("/personal-access-tokens/{id}/scopes")
+    @Operation(summary = "管理员审批并更新个人访问令牌 scope；记录变更原因")
+    public ApiResponse<Object> updatePersonalAccessTokenScopes(@PathVariable Long id, @RequestBody(required = false) Map<String, Object> body) {
+        User operator = requireManager();
+        Map<String, Object> request = body == null ? Collections.<String, Object>emptyMap() : body;
+        return ApiResponse.ok(apiKeyService.updatePersonalAccessTokenScopes(id, stringList(request.get("scopes")),
+            operator.getId(), value(request, "reason")));
+    }
+
+    @PostMapping("/principals/{id}/keys")
+    @Operation(summary = "为服务主体签发独立 Service Key，明文仅返回一次")
+    public ApiResponse<Object> createPrincipalKey(@PathVariable Long id, @RequestBody(required = false) ExternalKeyRequest body) {
+        User operator = requireManager();
+        ExternalKeyRequest request = body == null ? new ExternalKeyRequest() : body;
+        LocalDateTime expiresAt = parseExpiresAt(request.getExpiresAt(), properties.isServiceKeyExpiryRequired());
+        validateServiceKeyExpiry(expiresAt);
+        Integer limit = request.getRateLimitPerMinute() == null ? properties.getDefaultRateLimitPerMinute() : request.getRateLimitPerMinute();
+        return ApiResponse.ok(apiKeyService.createServiceKey(id, request.getName(), request.getScopes(), limit, expiresAt,
+            request.getAllowedOrigins(), operator.getId()));
+    }
+
+    @GetMapping("/identity-bindings/octop")
+    @Operation(summary = "查询 AKB 管理的 Octop 用户 ID 绑定")
+    public ApiResponse<Object> listOctopIdentityBindings(@RequestParam(required = false) String providerInstanceId,
+        @RequestParam(required = false) String externalUserId) {
+        requireManager();
+        return ApiResponse.ok(delegatedIdentityService.listOctopBindings(providerInstanceId, externalUserId));
+    }
+
+    @PostMapping("/identity-bindings/octop")
+    @Operation(summary = "将 Octop 不可变用户 ID 绑定到 AKB USER 主体")
+    public ApiResponse<Object> bindOctopIdentity(@RequestBody(required = false) Map<String, Object> body) {
+        User operator = requireManager();
+        Map<String, Object> request = body == null ? Collections.<String, Object>emptyMap() : body;
+        return ApiResponse.ok(delegatedIdentityService.bindOctopUser(value(request, "providerInstanceId"), value(request, "externalUserId"),
+            number(request.get("principalId")), operator.getId(), value(request, "reason")));
+    }
+
+    @PostMapping("/identity-bindings/octop/{id}/revoke")
+    @Operation(summary = "吊销 Octop 用户 ID 绑定，阻止新的委托身份校验")
+    public ApiResponse<Object> revokeOctopIdentity(@PathVariable Long id, @RequestBody(required = false) Map<String, Object> body) {
+        User operator = requireManager();
+        delegatedIdentityService.revokeOctopUserBinding(id, operator.getId(), body == null ? null : value(body, "reason"));
+        return ApiResponse.ok(Collections.singletonMap("revoked", Boolean.TRUE));
+    }
+
     @PostMapping("/principals/users")
     @Operation(summary = "创建供 OIDC 委托身份绑定的 USER 主体")
     public ApiResponse<Object> createUserPrincipal(@RequestBody(required = false) Map<String, Object> body) {
@@ -151,7 +217,7 @@ public class ExternalServiceAdminController {
         Object code = request.get("principalCode");
         Object name = request.get("name");
         return ApiResponse.ok(delegatedIdentityService.createUserPrincipal(code == null ? null : String.valueOf(code),
-            name == null ? null : String.valueOf(name), operator.getId(), ids));
+            name == null ? null : String.valueOf(name), number(request.get("ownerUserId")), operator.getId(), ids));
     }
 
     @GetMapping("/principals/{id}/identities")
@@ -212,14 +278,8 @@ public class ExternalServiceAdminController {
     public ApiResponse<Object> createKey(@RequestBody(required = false) ExternalKeyRequest body) {
         User operator = requireManager();
         ExternalKeyRequest request = body == null ? new ExternalKeyRequest() : body;
-        LocalDateTime expiresAt = null;
-        if (request.getExpiresAt() != null && !request.getExpiresAt().trim().isEmpty()) {
-            try {
-                expiresAt = LocalDateTime.parse(request.getExpiresAt().trim());
-            } catch (DateTimeParseException e) {
-                throw new IllegalArgumentException("expiresAt 需为 ISO 时间，如 2026-12-31T23:59:59");
-            }
-        }
+        LocalDateTime expiresAt = parseExpiresAt(request.getExpiresAt(), properties.isServiceKeyExpiryRequired());
+        validateServiceKeyExpiry(expiresAt);
         Integer limit = request.getRateLimitPerMinute() == null ? properties.getDefaultRateLimitPerMinute() : request.getRateLimitPerMinute();
         return ApiResponse.ok(apiKeyService.create(request.getName(), request.getKnowledgeBaseId(), request.getScopes(), limit, expiresAt,
             operator.getId(), request.getAllowedOrigins(), request.getMemoryNamespace(), request.getMemoryAgentCode()));
@@ -507,5 +567,44 @@ public class ExternalServiceAdminController {
             throw new SecurityException("需要系统管理员或知识库管理员角色");
         }
         return user;
+    }
+
+    private static String value(Map<String, Object> body, String key) {
+        Object raw = body == null ? null : body.get(key);
+        return raw == null ? null : String.valueOf(raw);
+    }
+
+    private static Long number(Object raw) {
+        if (raw == null) return null;
+        try { return Long.valueOf(String.valueOf(raw)); } catch (NumberFormatException ex) { throw new IllegalArgumentException("principalId 必须是数字"); }
+    }
+
+    private static List<String> stringList(Object raw) {
+        if (raw == null) return Collections.<String>emptyList();
+        if (!(raw instanceof List<?>)) throw new IllegalArgumentException("scopes 必须是字符串数组");
+        List<String> result = new ArrayList<String>();
+        for (Object item : (List<?>) raw) {
+            if (!(item instanceof String)) throw new IllegalArgumentException("scopes 必须是字符串数组");
+            result.add((String) item);
+        }
+        return result;
+    }
+
+    private static LocalDateTime parseExpiresAt(String raw, boolean optional) {
+        if (raw == null || raw.trim().isEmpty()) {
+            if (optional) return null;
+            throw new IllegalArgumentException("expiresAt 必填");
+        }
+        try { return LocalDateTime.parse(raw.trim()); }
+        catch (DateTimeParseException ex) { throw new IllegalArgumentException("expiresAt 需为 ISO 时间，如 2027-01-31T23:59:59"); }
+    }
+
+    private void validateServiceKeyExpiry(LocalDateTime expiresAt) {
+        if (expiresAt == null) return;
+        if (!expiresAt.isAfter(LocalDateTime.now())) throw new IllegalArgumentException("Service Key 到期时间必须晚于当前时间");
+        int maxDays = properties.getServiceKeyMaxLifetimeDays();
+        if (maxDays > 0 && expiresAt.isAfter(LocalDateTime.now().plusDays(maxDays))) {
+            throw new IllegalArgumentException("Service Key 最长有效期为 " + maxDays + " 天");
+        }
     }
 }

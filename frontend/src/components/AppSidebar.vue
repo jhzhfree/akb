@@ -54,6 +54,9 @@
           {{[environment,version?`v${version}`:''].filter(Boolean).join(' · ')}}
         </p>
         <div class="kos-user-panel-foot">
+          <button v-if="loggedIn" class="kos-user-panel-link" @click="manageTokens">
+            <NavIcon name="key" :size="14"/>个人访问令牌
+          </button>
           <button class="kos-user-panel-link" :class="{disabled:!canSystem}" :disabled="!canSystem"
             :title="systemTitle" @click="enterSystem">
             <NavIcon name="settings" :size="14"/>系统配置
@@ -115,6 +118,7 @@ const emit = defineEmits<{
   (e:'enter-system'):void
   (e:'go',key:string):void
   (e:'logout'):void
+  (e:'manage-tokens'):void
 }>()
 
 const panel = ref(false)
@@ -163,6 +167,10 @@ function enterSystem(){
 function logout(){
   panel.value=false
   emit('logout')
+}
+function manageTokens(){
+  panel.value=false
+  emit('manage-tokens')
 }
 /** 面板外点击与 Esc 关闭：面板是浮层，不关闭会挡住导航。 */
 function onDocClick(){panel.value=false}

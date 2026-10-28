@@ -89,7 +89,7 @@ public class AgentMemoryService {
         }
         // 顺序不能动：作用域与级别本身不合法时（比如 L3 写进 PROJECT），要先报参数错，
         // 而不是等走到共享授权那里报"未获准访问"——后者会把真正的参数问题盖掉。
-        if (key != null && !"AGENT".equals(scopeType)) {
+        if (key != null) {
             requireSharedScopeAccess(key, namespace, scopeType, scopeCode, "WRITE");
         }
         List<String> tags = normalizeTags(request.getTags());
@@ -206,9 +206,7 @@ public class AgentMemoryService {
             ? "AGENT" : normalize(request.getScopeType());
         validateScopeType(scopeType);
         String scopeCode = resolveScopeCode(scopeType, request.getScopeCode(), agent);
-        if (!"AGENT".equals(scopeType)) {
-            requireSharedScopeAccess(key, namespace, scopeType, scopeCode, "READ");
-        }
+        requireSharedScopeAccess(key, namespace, scopeType, scopeCode, "READ");
         String query = request.getQuery() == null ? "" : request.getQuery().trim();
         if (query.isEmpty() || query.length() > 300) {
             throw new IllegalArgumentException("召回关键词不能为空且最多 300 字符");
@@ -297,10 +295,8 @@ public class AgentMemoryService {
         if ("AGENT".equals(String.valueOf(existing.get("scopeType"))) && !agent.equals(String.valueOf(existing.get("agentCode")))) {
             throw new SecurityException("只能删除当前 Agent 自己的私有记忆");
         }
-        if (!"AGENT".equals(String.valueOf(existing.get("scopeType")))) {
-            requireSharedScopeAccess(key, namespace, String.valueOf(existing.get("scopeType")),
-                String.valueOf(existing.get("scopeCode")), "WRITE");
-        }
+        requireSharedScopeAccess(key, namespace, String.valueOf(existing.get("scopeType")),
+            String.valueOf(existing.get("scopeCode")), "WRITE");
         int changed = mapper.forget(namespace, memoryCode.trim(), agent);
         Map<String, Object> result = new LinkedHashMap<String, Object>();
         result.put("forgotten", Boolean.valueOf(changed > 0));
@@ -309,8 +305,18 @@ public class AgentMemoryService {
     }
 
     private void requireSharedScopeAccess(ApiKey key, String namespace, String scopeType, String scopeCode, String accessMode) {
-        if (!mapper.hasScopeAccess(key.getId(), namespace, scopeType, scopeCode, accessMode)) {
-            throw new SecurityException("当前 API Key 未获准访问该共享记忆作用域");
+        boolean agentGrant = key.getPrincipalId() != null
+            && mapper.hasPrincipalScopeAccess(key.getPrincipalId(), namespace, scopeType, scopeCode, accessMode);
+        // Transition fallback for grants that were not safe to merge because sibling keys had
+        // different scope grants. New and migrated common grants are principal-owned.
+        boolean legacyKeyGrant = !agentGrant && key.getDelegatedPrincipalId() == null
+            && mapper.hasScopeAccess(key.getId(), namespace, scopeType, scopeCode, accessMode);
+        if (!agentGrant && !legacyKeyGrant) {
+            throw new SecurityException("当前 Agent 主体未获准访问该记忆作用域");
+        }
+        if (key.getDelegatedPrincipalId() != null
+            && !mapper.hasPrincipalScopeAccess(key.getDelegatedPrincipalId(), namespace, scopeType, scopeCode, accessMode)) {
+            throw new SecurityException("委托用户主体未获准访问该记忆作用域");
         }
     }
 

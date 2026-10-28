@@ -7,6 +7,8 @@ import com.jh.knowledgeos.domain.User;
 import com.jh.knowledgeos.mapper.AuthMapper;
 import com.jh.knowledgeos.mapper.KnowledgeMapper;
 import org.springframework.stereotype.Service;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * Knowledge-base sharing rules.
@@ -100,6 +102,19 @@ public class KnowledgeBaseAccessService {
             return true;
         }
         return role.canWriteKnowledge() && canRead(user, base);
+    }
+
+    /** Current read grants used when refreshing a user's personal-token Principal. */
+    public List<Long> readableKnowledgeBaseIds(User user) {
+        List<Long> ids = new ArrayList<Long>();
+        if (user == null || user.getId() == null || !"ACTIVE".equalsIgnoreCase(user.getStatus())) return ids;
+        boolean all = UserRole.of(user.getRole()) == UserRole.ADMIN;
+        List<KnowledgeBase> bases = mapper.listKnowledgeBases(user.getId(), all);
+        if (bases == null) return ids;
+        for (KnowledgeBase base : bases) {
+            if (base != null && base.getId() != null && canRead(user, base)) ids.add(base.getId());
+        }
+        return ids;
     }
 
     private boolean isOwner(User user, KnowledgeBase base) {

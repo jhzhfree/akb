@@ -240,8 +240,33 @@ public class KnowledgeProperties {
         /** When enabled, external calls require an API Key plus a verified employee OIDC JWT. */
         private DelegatedIdentity delegatedIdentity = new DelegatedIdentity();
 
+        /** Signed per-request identity assertions for an Octop installation using a separate IdP. */
+        private OctopIdentity octopIdentity = new OctopIdentity();
+
         public DelegatedIdentity getDelegatedIdentity() { return delegatedIdentity; }
         public void setDelegatedIdentity(DelegatedIdentity value) { delegatedIdentity = value == null ? new DelegatedIdentity() : value; }
+
+        public OctopIdentity getOctopIdentity() { return octopIdentity; }
+        public void setOctopIdentity(OctopIdentity value) { octopIdentity = value == null ? new OctopIdentity() : value; }
+
+        public static class OctopIdentity {
+            private boolean enabled = false;
+            private String issuer = "";
+            private String jwkSetUri = "";
+            private String audience = "";
+            private String instanceId = "";
+
+            public boolean isEnabled() { return enabled; }
+            public void setEnabled(boolean value) { enabled = value; }
+            public String getIssuer() { return issuer; }
+            public void setIssuer(String value) { issuer = value == null ? "" : value.trim(); }
+            public String getJwkSetUri() { return jwkSetUri; }
+            public void setJwkSetUri(String value) { jwkSetUri = value == null ? "" : value.trim(); }
+            public String getAudience() { return audience; }
+            public void setAudience(String value) { audience = value == null ? "" : value.trim(); }
+            public String getInstanceId() { return instanceId; }
+            public void setInstanceId(String value) { instanceId = value == null ? "" : value.trim(); }
+        }
 
         public static class DelegatedIdentity {
             private boolean enabled = false;
@@ -278,6 +303,10 @@ public class KnowledgeProperties {
         private int answerChunkDelayMillis = 40;
 
         private int defaultRateLimitPerMinute = 60;
+
+        private boolean serviceKeyExpiryRequired = true;
+
+        private int serviceKeyMaxLifetimeDays = 365;
 
         private String allowedOrigins = "";
 
@@ -363,6 +392,11 @@ public class KnowledgeProperties {
         public int getDefaultRateLimitPerMinute() {
             return defaultRateLimitPerMinute;
         }
+
+        public boolean isServiceKeyExpiryRequired() { return serviceKeyExpiryRequired; }
+        public void setServiceKeyExpiryRequired(boolean value) { serviceKeyExpiryRequired = value; }
+        public int getServiceKeyMaxLifetimeDays() { return serviceKeyMaxLifetimeDays; }
+        public void setServiceKeyMaxLifetimeDays(int value) { serviceKeyMaxLifetimeDays = value; }
 
         public void setDefaultRateLimitPerMinute(int value) {
             defaultRateLimitPerMinute = value < 1 ? 60 : value;

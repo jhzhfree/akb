@@ -34,6 +34,8 @@ public class ExternalAccessService {
 
     public static final String EMBED_HEADER = "X-Embed-Token";
 
+    public static final String OCTOP_ASSERTION_HEADER = "X-Octop-Identity";
+
     private final ApiKeyService apiKeyService;
 
     private final ExternalRateLimiter rateLimiter;
@@ -70,7 +72,8 @@ public class ExternalAccessService {
      * Resolves the presented credential, enforcing status, expiry and the per-minute quota.
      */
     public ApiKey authenticate(HttpServletRequest request) {
-        if (delegatedIdentityEnabled()) {
+        String octopAssertion = request.getHeader(OCTOP_ASSERTION_HEADER);
+        if (delegatedIdentityEnabled() || (octopAssertion != null && !octopAssertion.trim().isEmpty())) {
             String apiKeyHeader = request.getHeader(HEADER);
             if (apiKeyHeader == null || apiKeyHeader.trim().isEmpty()) {
                 throw new UnauthorizedException("委托身份模式要求通过 X-API-Key 单独提供 Agent 凭证");
@@ -84,7 +87,15 @@ public class ExternalAccessService {
         if (key == null) {
             throw new UnauthorizedException("API Key 无效、已吊销或已过期");
         }
-        if (delegatedIdentityEnabled()) {
+        if (octopAssertion != null && !octopAssertion.trim().isEmpty()) {
+            if (delegatedIdentityService == null || !delegatedIdentityService.isOctopEnabled()) {
+                throw new UnauthorizedException("Octop 身份断言验证未启用");
+            }
+            if (request.getHeader("Authorization") != null) {
+                throw new UnauthorizedException("Octop 委托请求仅接受 X-Octop-Identity，不接受通用 Bearer Token");
+            }
+            key.setDelegatedPrincipalId(delegatedIdentityService.authenticateOctopAssertion(octopAssertion, key));
+        } else if (delegatedIdentityEnabled()) {
             if (key.getPrincipalId() == null || "USER".equalsIgnoreCase(key.getPrincipalType())) {
                 throw new UnauthorizedException("API Key 必须归属 APPLICATION 或 AGENT 主体");
             }

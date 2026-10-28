@@ -37,6 +37,17 @@ public interface AgentMemoryMapper {
         @Param("scopeType") String scopeType, @Param("scopeCode") String scopeCode,
         @Param("canRead") boolean canRead, @Param("canWrite") boolean canWrite, @Param("operatorId") Long operatorId);
 
+    boolean hasPrincipalScopeAccess(@Param("principalId") Long principalId, @Param("namespace") String namespace,
+        @Param("scopeType") String scopeType, @Param("scopeCode") String scopeCode, @Param("accessMode") String accessMode);
+
+    List<Map<String, Object>> listPrincipalScopeAccess(@Param("principalId") Long principalId, @Param("namespace") String namespace);
+
+    int deletePrincipalScopeAccess(@Param("principalId") Long principalId);
+
+    int insertPrincipalScopeAccess(@Param("principalId") Long principalId, @Param("namespace") String namespace,
+        @Param("scopeType") String scopeType, @Param("scopeCode") String scopeCode,
+        @Param("canRead") boolean canRead, @Param("canWrite") boolean canWrite, @Param("operatorId") Long operatorId);
+
     List<Map<String, Object>> listManaged(@Param("namespace") String namespace, @Param("status") String status,
         @Param("scopeType") String scopeType, @Param("scopeCode") String scopeCode, @Param("limit") int limit, @Param("offset") int offset);
 

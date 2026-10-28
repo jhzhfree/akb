@@ -24,7 +24,8 @@
   :system-active="activeSection==='system'" :system-hint="systemHint"
   :system-leaves="shell.tabs('system')" :system-leaf="active"
   :environment="environmentLabel" :version="APP_VERSION"
-  @enter="enterSection" @enter-system="enterSystem" @go="key=>goto(key)" @logout="doLogout"/>
+  @enter="enterSection" @enter-system="enterSystem" @go="key=>goto(key)" @logout="doLogout"
+  @manage-tokens="showPersonalAccessTokens=true"/>
 <main class="kos-main">
   <div v-if="failure" role="alert" aria-live="assertive" class="mb-3 flex items-start gap-3 rounded-lg border px-4 py-3" style="background:var(--danger-bg);border-color:var(--danger)">
     <span class="text-[13px] leading-5 text-[color:var(--danger)]">⚠</span>
@@ -131,6 +132,7 @@
   :visible="showBases" :bases="bases" :groups="groups" :active-id="knowledgeBaseId"
   :can-manage="canCreateBase" :current-user-id="me?.user?.id??null"
   @close="showBases=false" @select="selectBase" @create="createBase" @update="updateBase"/>
+<PersonalAccessTokenDialog v-model:visible="showPersonalAccessTokens"/>
 <TaskCenterDrawer v-model:visible="taskCenterVisible" :key="knowledgeBaseId" :knowledge-base-id="knowledgeBaseId"
   @navigate="navigate" @open-run="openRun"/>
 <KnowledgeDetailWorkspace
@@ -175,6 +177,7 @@ import TaskCenterDrawer from './components/TaskCenterDrawer.vue'
 import SpaceContextBar from'./components/SpaceContextBar.vue';
 import AppHeader from './components/AppHeader.vue'
 import AppSidebar from './components/AppSidebar.vue'
+import PersonalAccessTokenDialog from './components/PersonalAccessTokenDialog.vue'
 /** 主内容底部：版本与授权信息统一显示区 */
 import AppFooter from './components/AppFooter.vue'
 import KnowledgeBaseDialog from './components/KnowledgeBaseDialog.vue'
@@ -234,6 +237,7 @@ const knowledgeBaseId=ref(Number(localStorage.getItem('llmkb.kbId')||1));
 /** 页面数据按知识库隔离；同一数据域只允许最后一次请求提交结果。 */
 const requestGate=createRequestGate()
 const showBases=ref(false);
+const showPersonalAccessTokens=ref(false)
 const bases=ref<KnowledgeBase[]>([])
 const file=ref<File|null>(null);
 const authority=ref(.85);

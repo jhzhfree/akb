@@ -30,22 +30,22 @@ AKB 在既有知识服务之外提供独立的 Agent Memory Engine，供本系�
 
 ### 身份和隔离
 
-管理员在 API Key 上分别授予 `MEMORY_READ`、`MEMORY_WRITE`，并配置：
+管理员给服务凭证授予组合权限 `MEMORY_MANAGE`，并在 Principal 上维护稳定的 Memory Profile 与共享作用域授权。历史 `MEMORY_READ` / `MEMORY_WRITE` scope 在兼容期仍可识别：
 
 | 配置 | 用途 |
 |---|---|
-| `memoryNamespace` | 记忆共享边界；留空时按 API Key 独立隔离 |
-| `memoryAgentCode` | 服务端绑定的 Agent 身份；留空时使用 API Key 编码 |
+| `memoryNamespace` | Principal 的记忆共享边界；留空时自动生成 Principal 隔离值 |
+| `memoryAgentCode` | Principal 的稳定 Agent 身份；留空时使用 Principal 编码 |
 
-Agent 作用域的 owner 永远由 API Key 推导，忽略请求中的身份字段。TEAM / PROJECT / TASK / WORKFLOW / SESSION 共享作用域除 namespace 外，还必须由管理员对具体 API Key 显式授予读取和/或写入权限。只有 scope code 而没有授权记录时，Capture、Recall、Forget 都会被拒绝。`MEMORY_READ` / `MEMORY_WRITE` 是调用能力的上限，作用域授权不能扩大 Key 本身的能力。授权精确匹配 `scopeType + scopeCode`，比较区分大小写。
+Agent 作用域的 owner 永远由 Principal Profile 推导，忽略请求中的身份字段。TEAM / PROJECT / TASK / WORKFLOW / SESSION 共享作用域除 namespace 外，还必须由管理员对该 Principal 显式授予读取和/或写入权限。只有 scope code 而没有授权记录时，Capture、Recall、Forget 都会被拒绝。`MEMORY_MANAGE` 是新凭证的组合调用能力，服务端仍按操作检查读/写权限；作用域授权不能扩大凭证 scope。授权精确匹配 `scopeType + scopeCode`，比较区分大小写。
 
 API Key 撤销会立即阻止继续读写。旧记忆仍留在 namespace 中，可由同 namespace 中仍有效且单独获得该作用域授权的凭证继续访问。升级到按作用域授权后，原先仅凭相同 namespace 即可访问的共享作用域默认拒绝；管理员须补充精确授权。Forget 会立即物理删除单条记忆，包括已暂停的记忆；读取暂停记忆仍会被状态过滤阻止。L0 到期后由小时级清理任务删除；其他层级到期后不再召回，并在 30 天恢复窗口结束后清理。
 
-当前 REST / MCP Key 代表 Agent 服务身份，不代表最终员工身份。因此本版实现 Agent、团队、项目、任务、工作流和会话作用域；最终用户个人记忆需要由下游身份提供方把可信 subject 映射进服务端凭证上下文，不能让模型从请求体自行声明 userId。
+REST / MCP Key 代表 Agent 或应用服务身份。Octop 使用独立 IdP 时，可额外附带 AKB 验签的短期用户身份断言；AKB 管理员先将 Octop 不可变用户 ID 绑定到 USER Principal，授权按 Agent Principal 与 USER Principal 的知识库/Memory 权限交集执行。断言未配置或未附带时，请求仍以服务 Principal 身份运行。不能让模型或调用方从普通请求字段自行声明 userId。
 
 ### Agent 工作流调用模式
 
-1. 工作流运行前，Agent 使用 `MEMORY_READ` 调用 Recall：先读取自己的 AGENT 记忆，再读取当前 namespace 中指定的 PROJECT / TASK / WORKFLOW 记忆。
+1. 工作流运行前，Agent 使用具备 `MEMORY_MANAGE`（或兼容期完整读写 scope）的凭证调用 Recall：先读取自己的 AGENT 记忆，再读取当前 namespace 中指定的 PROJECT / TASK / WORKFLOW 记忆。
 2. Agent 执行任务时，将召回内容与 AKB Knowledge 检索结果分别放入上下文；模型提示需保留二者的来源和可信度区别。
 3. 任务完成后，仅把对后续任务有用的结构化经验显式 Capture；携带稳定 `sourceRef` 和重试稳定的 `idempotencyKey`。
 4. L3 画像只能由用户确认或管理员录入。需要变成企业正式知识的经验走既有知识接入、裁决和发布流程。
@@ -83,16 +83,15 @@ API Key 撤销会立即阻止继续读写。旧记忆仍留在 namespace 中，�
 
 `POST /api/mcp` 的 `tools/list` 按 API Key scope 动态显示：
 
-- `MEMORY_READ`：`memory_recall`
-- `MEMORY_WRITE`：`memory_capture`、`memory_forget`
+- `MEMORY_MANAGE`：`memory_recall`、`memory_capture`、`memory_forget`
 
-记忆开关分两层：部署环境变量 `EXTERNAL_AGENT_MEMORY_ENABLED` 是平台总开关，关闭后 REST 记忆接口拒绝调用且 MCP 不公布记忆工具；每把 API Key 还可分别关闭已签发的 `MEMORY_READ` / `MEMORY_WRITE` 能力。单 Key 策略只能收回既有 scope，不能新增 scope；新增权限需重新签发凭证。以上开关不会让普通 `knowledge_query` 自动读取或写入记忆。
+记忆开关分两层：部署环境变量 `EXTERNAL_AGENT_MEMORY_ENABLED` 是平台总开关，关闭后 REST 记忆接口拒绝调用且 MCP 不公布记忆工具；每个凭证可通过 scope 关闭 Memory 能力，服务端再按 Recall/Capture/Forget 操作检查授权。以上开关不会让普通 `knowledge_query` 自动读取或写入记忆。
 
 Octop 和其他兼容 MCP 的平台可直接将 AKB 注册为远程 MCP Server。只支持 REST 的平台也可直接调用上述 HTTP 契约。
 
 ### 当前交付与后续阶段
 
-本次版本包含独立存储、API Key 共享作用域 ACL、L0–L3 写入规则、TTL、幂等 Capture、关键词 Recall、Forget、REST/MCP、平台总开关、API Key 记忆读写策略，以及记忆治理控制台的查询/暂停/恢复/删除和操作审计。Octop 虚拟员工的任务级自动召回/写入策略需在 Octop 侧配置；AKB 不会因 API Key 有记忆权限而自动向普通知识问答注入记忆。BM25/向量混合 Recall、异步记忆归并、可信员工 subject 身份映射和跨系统经验审批仍属于后续阶段；Memory 结果不会自动写成权威知识或 Skill。
+当前版本包含 Principal 级 Memory Profile/共享作用域 ACL、L0–L3 写入规则、TTL、幂等 Capture、关键词 Recall、Forget、REST/MCP、平台总开关，以及记忆治理控制台的查询/暂停/恢复/删除和操作审计。Octop 虚拟员工的任务级自动召回/写入策略需在 Octop 侧配置；AKB 不会因凭证有记忆权限而自动向普通知识问答注入记忆。BM25/向量混合 Recall、异步记忆归并和跨系统经验审批仍属于后续阶段；Memory 结果不会自动写成权威知识或 Skill。旧 API Key 级字段和未能无损迁移的 ACL 保留在兼容路径中，待管理员核对后再移除。
 
 
 
@@ -165,3 +164,6 @@ AKB 已实现文档接入与治理、知识卡片和断言、知识图谱、多�
 5. 将 Octop 作为首个 Agent 平台接入方，使用 REST/MCP Memory API 在虚拟员工任务前 Recall、任务后幂等 Capture；不将短期工作记忆默认写回权威知识。
 
 上述扩展沿用 AKB 既有治理能力，不重做知识抽取、图谱、混合检索或证据链。
+# Memory 主体化与统一身份改造
+
+AKB–Octop 的当前身份、PAT、Service Key、Memory Principal Grant 和迁移说明见 [AKB–Octop 身份认证与授权改造实施说明](AKB-OCTOP-IDENTITY-AUTH.md)。新凭据使用组合 scope `MEMORY_MANAGE`；Memory namespace、Agent code 与共享作用域授权由 Principal 持有，不随 Key 轮换变化。历史 Key 作用域在 V72 兼容迁移期间保留。

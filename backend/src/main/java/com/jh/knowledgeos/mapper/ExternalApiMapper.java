@@ -5,6 +5,8 @@ import com.jh.knowledgeos.domain.ApiKey;
 import com.jh.knowledgeos.domain.EmbedTokenRevocation;
 import com.jh.knowledgeos.domain.ExternalPrincipal;
 import com.jh.knowledgeos.domain.ExternalIdentityLink;
+import com.jh.knowledgeos.domain.ExternalIdentityBinding;
+import com.jh.knowledgeos.domain.User;
 import org.apache.ibatis.annotations.Param;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -26,6 +28,51 @@ public interface ExternalApiMapper {
     int insertPrincipal(ExternalPrincipal principal);
 
     ExternalPrincipal getPrincipal(@Param("id") Long id);
+
+    ExternalPrincipal getUserPrincipal(@Param("userId") Long userId);
+
+    User getUserById(@Param("userId") Long userId);
+
+    int assignPrincipalOwnerUser(@Param("principalId") Long principalId, @Param("userId") Long userId);
+
+    List<ApiKey> listPersonalApiKeys(@Param("userId") Long userId);
+
+    int revokePersonalApiKey(@Param("id") Long id, @Param("userId") Long userId);
+
+    int updatePersonalApiKeyScopes(@Param("id") Long id, @Param("scopes") String scopes);
+
+    int insertPersonalApiKeyScopeAudit(@Param("keyId") Long keyId, @Param("ownerUserId") Long ownerUserId,
+        @Param("oldScopes") String oldScopes, @Param("newScopes") String newScopes, @Param("operatorId") Long operatorId,
+        @Param("reason") String reason);
+
+    ExternalPrincipal findActiveExternalUserBinding(@Param("provider") String provider, @Param("instanceId") String instanceId,
+        @Param("externalUserId") String externalUserId);
+
+    List<Map<String, Object>> listExternalIdentityBindings(@Param("provider") String provider,
+        @Param("providerInstanceId") String providerInstanceId,
+        @Param("externalUserId") String externalUserId);
+
+    int insertExternalIdentityBinding(ExternalIdentityBinding binding);
+
+    int reactivateExternalIdentityBinding(@Param("id") Long id, @Param("principalId") Long principalId,
+        @Param("operatorId") Long operatorId, @Param("reason") String reason);
+
+    int revokeExternalIdentityBinding(@Param("id") Long id, @Param("operatorId") Long operatorId, @Param("reason") String reason);
+
+    int insertExternalIdentityBindingAudit(@Param("bindingId") Long bindingId, @Param("provider") String provider,
+        @Param("providerInstanceId") String providerInstanceId, @Param("externalUserId") String externalUserId,
+        @Param("principalId") Long principalId, @Param("action") String action, @Param("operatorId") Long operatorId,
+        @Param("reason") String reason);
+
+    int insertOctopAssertionJti(@Param("jti") String jti, @Param("expiresAt") java.time.LocalDateTime expiresAt);
+
+    int deleteExpiredOctopAssertionJtis();
+
+    int upsertPrincipalMemoryProfile(@Param("principalId") Long principalId, @Param("namespace") String namespace,
+        @Param("agentCode") String agentCode, @Param("operatorId") Long operatorId);
+
+    int insertDefaultAgentMemoryGrant(@Param("principalId") Long principalId, @Param("namespace") String namespace,
+        @Param("agentCode") String agentCode, @Param("operatorId") Long operatorId);
 
     List<Map<String, Object>> listPrincipals();
 

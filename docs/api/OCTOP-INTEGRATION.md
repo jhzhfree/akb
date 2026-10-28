@@ -45,3 +45,6 @@ AKB 可作为 Octop 的企业知识来源，通过 AKB MCP Server 让 Agent 使�
 AKB 的版本化 REST 接口也提供 `POST /api/v1/external/search` 与 `POST /api/v1/external/query`。需要客户端直接管理检索流程时，可使用 REST；Octop Agent 运行时集成优先使用 MCP，以复用 Octop 已有的凭据加密、连接探测和 Agent 工具选择能力。
 
 当前 MCP 端点接受 `Content-Type: application/json` 的 POST，并返回 JSON-RPC JSON 响应；不建立会话、不推送 SSE 事件，HTTP GET 返回 405。带 JSON-RPC `id` 的请求返回 JSON-RPC 响应；不带 `id` 的 `notifications/*` 通知返回 HTTP 202 和空响应体。协议初始化协商版本 `2025-06-18`。服务端工具与资源列表不提供订阅或变更通知。后端契约测试覆盖初始化、通知、缺失 ID、未知方法、工具 scope 过滤及 RPC 失败审计；Octop 部署联调仍需在目标 Octop 环境按上方步骤执行。
+# 跨 IdP 身份绑定契约
+
+AKB 与 Octop 不共享 OIDC IdP。AKB 管理员需要将 Octop 的不可变用户 ID 绑定到 AKB `USER` Principal；Octop 调用端不能转发 Octop 普通 OIDC Token。身份断言、请求 Header、Agent Principal 绑定和配置项见 [AKB–Octop 身份认证与授权改造实施说明](AKB-OCTOP-IDENTITY-AUTH.md)。

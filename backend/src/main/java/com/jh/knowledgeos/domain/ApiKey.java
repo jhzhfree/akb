@@ -40,6 +40,13 @@ public class ApiKey {
 
     public static final String SCOPE_MEMORY_WRITE = "MEMORY_WRITE";
 
+    /** Composite Memory capability used by newly issued credentials. */
+    public static final String SCOPE_MEMORY_MANAGE = "MEMORY_MANAGE";
+
+    public static final String CREDENTIAL_SERVICE_KEY = "SERVICE_KEY";
+
+    public static final String CREDENTIAL_USER_PAT = "USER_PAT";
+
     private Long id;
 
     private String keyCode;
@@ -49,6 +56,14 @@ public class ApiKey {
     private String secretHash;
 
     private String keyPrefix;
+
+    private String credentialType;
+
+    private Long ownerUserId;
+
+    private String ownerUserStatus;
+
+    private String principalStatus;
 
     private Long knowledgeBaseId;
 
@@ -133,10 +148,15 @@ public class ApiKey {
             return false;
         }
         if (SCOPE_MEMORY_READ.equals(requested)) {
-            return !Boolean.FALSE.equals(memoryReadEnabled);
+            return (owned.contains(SCOPE_MEMORY_MANAGE) || granted) && !Boolean.FALSE.equals(memoryReadEnabled);
         }
         if (SCOPE_MEMORY_WRITE.equals(requested)) {
-            return !Boolean.FALSE.equals(memoryWriteEnabled);
+            return (owned.contains(SCOPE_MEMORY_MANAGE) || granted) && !Boolean.FALSE.equals(memoryWriteEnabled);
+        }
+        if (SCOPE_MEMORY_MANAGE.equals(requested)) {
+            boolean legacyManage = owned.contains(SCOPE_MEMORY_READ) && owned.contains(SCOPE_MEMORY_WRITE);
+            return (owned.contains(SCOPE_MEMORY_MANAGE) || legacyManage)
+                && !Boolean.FALSE.equals(memoryReadEnabled) && !Boolean.FALSE.equals(memoryWriteEnabled);
         }
         return true;
     }
@@ -151,7 +171,14 @@ public class ApiKey {
     }
 
     public boolean isUsable() {
-        return STATUS_ACTIVE.equalsIgnoreCase(status) && (expiresAt == null || expiresAt.isAfter(LocalDateTime.now()));
+        if (!STATUS_ACTIVE.equalsIgnoreCase(status) || (expiresAt != null && !expiresAt.isAfter(LocalDateTime.now()))) {
+            return false;
+        }
+        if (principalStatus != null && !STATUS_ACTIVE.equalsIgnoreCase(principalStatus)) {
+            return false;
+        }
+        return !CREDENTIAL_USER_PAT.equalsIgnoreCase(credentialType)
+            || (ownerUserId != null && "ACTIVE".equalsIgnoreCase(ownerUserStatus));
     }
 
     public Long getId() {
@@ -193,6 +220,15 @@ public class ApiKey {
     public void setKeyPrefix(String v) {
         keyPrefix = v;
     }
+
+    public String getCredentialType() { return credentialType; }
+    public void setCredentialType(String value) { credentialType = value; }
+    public Long getOwnerUserId() { return ownerUserId; }
+    public void setOwnerUserId(Long value) { ownerUserId = value; }
+    public String getOwnerUserStatus() { return ownerUserStatus; }
+    public void setOwnerUserStatus(String value) { ownerUserStatus = value; }
+    public String getPrincipalStatus() { return principalStatus; }
+    public void setPrincipalStatus(String value) { principalStatus = value; }
 
     public Long getKnowledgeBaseId() {
         return knowledgeBaseId;

@@ -1,40 +1,117 @@
 <?xml version="1.0" encoding="UTF-8"?><!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd"><mapper namespace="com.jh.knowledgeos.mapper.ExternalApiMapper">
 
-<sql id="apiKeyColumns">k.id,k.key_code,k.name,k.secret_hash,k.key_prefix,k.knowledge_base_id,k.principal_id AS principalId,
+<sql id="apiKeyColumns">k.id,k.key_code,k.name,k.secret_hash,k.key_prefix,k.credential_type AS credentialType,k.owner_user_id AS ownerUserId,
+  owner.status AS ownerUserStatus,p.status AS principalStatus,p.external_instance_id AS externalInstanceId,p.external_subject_id AS externalSubjectId,
+  k.knowledge_base_id,k.principal_id AS principalId,
   (SELECT COUNT(1) FROM t_principal_kb_grant g WHERE g.principal_id=k.principal_id AND g.status='ACTIVE'
     AND (g.expires_at IS NULL OR g.expires_at&gt;CURRENT_TIMESTAMP)) AS grantedKnowledgeBaseCount,
   b.name AS knowledge_base_name,k.scopes,k.rate_limit_per_minute,k.status,k.expires_at,k.last_used_at,
   p.name AS principalName,p.principal_type AS principalType,
   k.created_by,u.display_name AS created_by_name,k.created_time,k.updated_time,k.allowed_origins,
-  k.memory_namespace AS memoryNamespace,k.memory_agent_code AS memoryAgentCode,
+  COALESCE(mp.namespace_code,k.memory_namespace) AS memoryNamespace,COALESCE(mp.agent_code,k.memory_agent_code) AS memoryAgentCode,
   k.memory_read_enabled AS memoryReadEnabled,k.memory_write_enabled AS memoryWriteEnabled,
   CAST(k.permission_tags AS CHAR) AS permissionTags</sql>
 
 <select id="listApiKeys" resultType="com.jh.knowledgeos.domain.ApiKey">SELECT <include refid="apiKeyColumns"/> FROM t_api_key k
   LEFT JOIN t_knowledge_base b ON b.id=k.knowledge_base_id
   LEFT JOIN t_principal p ON p.id=k.principal_id
+  LEFT JOIN t_principal_memory_profile mp ON mp.principal_id=k.principal_id AND mp.status='ACTIVE'
+  LEFT JOIN t_user owner ON owner.id=k.owner_user_id
   LEFT JOIN t_user u ON u.id=k.created_by
   ORDER BY k.created_time DESC</select>
 
 <select id="getApiKey" resultType="com.jh.knowledgeos.domain.ApiKey">SELECT <include refid="apiKeyColumns"/> FROM t_api_key k
   LEFT JOIN t_knowledge_base b ON b.id=k.knowledge_base_id
   LEFT JOIN t_principal p ON p.id=k.principal_id
+  LEFT JOIN t_principal_memory_profile mp ON mp.principal_id=k.principal_id AND mp.status='ACTIVE'
+  LEFT JOIN t_user owner ON owner.id=k.owner_user_id
   LEFT JOIN t_user u ON u.id=k.created_by
   WHERE k.id=#{id} LIMIT 1</select>
 
 <select id="getApiKeyByHash" resultType="com.jh.knowledgeos.domain.ApiKey">SELECT <include refid="apiKeyColumns"/> FROM t_api_key k
   LEFT JOIN t_knowledge_base b ON b.id=k.knowledge_base_id
   LEFT JOIN t_principal p ON p.id=k.principal_id
+  LEFT JOIN t_principal_memory_profile mp ON mp.principal_id=k.principal_id AND mp.status='ACTIVE'
+  LEFT JOIN t_user owner ON owner.id=k.owner_user_id
   LEFT JOIN t_user u ON u.id=k.created_by
   WHERE k.secret_hash=#{secretHash} LIMIT 1</select>
 
-<insert id="insertApiKey" parameterType="com.jh.knowledgeos.domain.ApiKey" useGeneratedKeys="true" keyProperty="id">INSERT INTO t_api_key(key_code,name,secret_hash,key_prefix,knowledge_base_id,principal_id,scopes,permission_tags,rate_limit_per_minute,status,expires_at,created_by,allowed_origins,memory_namespace,memory_agent_code)
-  VALUES(#{keyCode},#{name},#{secretHash},#{keyPrefix},#{knowledgeBaseId},#{principalId},#{scopes},CAST(#{permissionTags} AS JSON),#{rateLimitPerMinute},#{status},#{expiresAt},#{createdBy},#{allowedOrigins},#{memoryNamespace},#{memoryAgentCode})</insert>
+<insert id="insertApiKey" parameterType="com.jh.knowledgeos.domain.ApiKey" useGeneratedKeys="true" keyProperty="id">INSERT INTO t_api_key(key_code,name,secret_hash,key_prefix,credential_type,owner_user_id,knowledge_base_id,principal_id,scopes,permission_tags,rate_limit_per_minute,status,expires_at,created_by,allowed_origins,memory_namespace,memory_agent_code)
+  VALUES(#{keyCode},#{name},#{secretHash},#{keyPrefix},COALESCE(#{credentialType},'SERVICE_KEY'),#{ownerUserId},#{knowledgeBaseId},#{principalId},#{scopes},CAST(#{permissionTags} AS JSON),#{rateLimitPerMinute},#{status},#{expiresAt},#{createdBy},#{allowedOrigins},#{memoryNamespace},#{memoryAgentCode})</insert>
 
-<insert id="insertPrincipal" parameterType="com.jh.knowledgeos.domain.ExternalPrincipal" useGeneratedKeys="true" keyProperty="id">INSERT INTO t_principal(principal_code,principal_type,name,status,created_by)
-  VALUES(#{principalCode},COALESCE(#{principalType},'APPLICATION'),#{name},'ACTIVE',#{createdBy})</insert>
+<insert id="insertPrincipal" parameterType="com.jh.knowledgeos.domain.ExternalPrincipal" useGeneratedKeys="true" keyProperty="id">INSERT INTO t_principal(principal_code,principal_type,owner_user_id,external_instance_id,external_subject_id,name,status,created_by)
+  VALUES(#{principalCode},COALESCE(#{principalType},'APPLICATION'),#{ownerUserId},#{externalInstanceId},#{externalSubjectId},#{name},'ACTIVE',#{createdBy})</insert>
 
 <select id="getPrincipal" resultType="com.jh.knowledgeos.domain.ExternalPrincipal">SELECT * FROM t_principal WHERE id=#{id} LIMIT 1</select>
+
+<select id="getUserPrincipal" resultType="com.jh.knowledgeos.domain.ExternalPrincipal">SELECT * FROM t_principal WHERE owner_user_id=#{userId} AND principal_type='USER' LIMIT 1</select>
+
+<select id="getUserById" resultType="com.jh.knowledgeos.domain.User">SELECT * FROM t_user WHERE id=#{userId} LIMIT 1</select>
+
+<update id="assignPrincipalOwnerUser">UPDATE t_principal SET owner_user_id=#{userId} WHERE id=#{principalId} AND principal_type='USER' AND owner_user_id IS NULL</update>
+
+<select id="listPersonalApiKeys" resultType="com.jh.knowledgeos.domain.ApiKey">SELECT <include refid="apiKeyColumns"/> FROM t_api_key k
+  LEFT JOIN t_knowledge_base b ON b.id=k.knowledge_base_id
+  LEFT JOIN t_principal p ON p.id=k.principal_id
+  LEFT JOIN t_principal_memory_profile mp ON mp.principal_id=k.principal_id AND mp.status='ACTIVE'
+  LEFT JOIN t_user owner ON owner.id=k.owner_user_id
+  LEFT JOIN t_user u ON u.id=k.created_by
+  WHERE k.owner_user_id=#{userId} AND k.credential_type='USER_PAT' ORDER BY k.created_time DESC</select>
+
+<update id="revokePersonalApiKey">UPDATE t_api_key SET status='REVOKED' WHERE id=#{id} AND owner_user_id=#{userId} AND credential_type='USER_PAT' AND status='ACTIVE'</update>
+
+<update id="updatePersonalApiKeyScopes">UPDATE t_api_key SET scopes=#{scopes} WHERE id=#{id} AND credential_type='USER_PAT'</update>
+
+<insert id="insertPersonalApiKeyScopeAudit">INSERT INTO t_personal_access_token_scope_audit(api_key_id,owner_user_id,old_scopes,new_scopes,operator_id,reason)
+  VALUES(#{keyId},#{ownerUserId},#{oldScopes},#{newScopes},#{operatorId},#{reason})</insert>
+
+<select id="findActiveExternalUserBinding" resultType="com.jh.knowledgeos.domain.ExternalPrincipal">
+  SELECT p.id,p.principal_code AS principalCode,p.principal_type AS principalType,p.name,p.status,p.created_by AS createdBy,
+    p.owner_user_id AS ownerUserId,p.external_instance_id AS externalInstanceId,p.external_subject_id AS externalSubjectId
+  FROM t_external_identity_binding b JOIN t_principal p ON p.id=b.principal_id
+  WHERE b.provider=#{provider} AND b.provider_instance_id=#{instanceId} AND b.external_user_id=#{externalUserId}
+    AND b.status='ACTIVE' AND p.status='ACTIVE' AND p.principal_type='USER' LIMIT 1
+</select>
+
+<select id="listExternalIdentityBindings" resultType="map">
+  SELECT b.id,b.provider,b.provider_instance_id AS providerInstanceId,b.external_user_id AS externalUserId,
+    b.principal_id AS principalId,p.principal_code AS principalCode,p.name AS principalName,b.status,
+    b.created_by AS createdBy,b.created_time AS createdTime,b.updated_by AS updatedBy,b.updated_time AS updatedTime,b.reason
+  FROM t_external_identity_binding b JOIN t_principal p ON p.id=b.principal_id
+  <where><if test="provider != null">AND b.provider=#{provider}</if>
+    <if test="providerInstanceId != null">AND b.provider_instance_id=#{providerInstanceId}</if>
+    <if test="externalUserId != null">AND b.external_user_id=#{externalUserId}</if></where>
+  ORDER BY b.updated_time DESC,b.id DESC
+</select>
+
+<insert id="insertExternalIdentityBinding" useGeneratedKeys="true" keyProperty="id">
+  INSERT INTO t_external_identity_binding(provider,provider_instance_id,external_user_id,principal_id,status,created_by,updated_by,reason)
+  VALUES(#{provider},#{providerInstanceId},#{externalUserId},#{principalId},'ACTIVE',#{operatorId},#{operatorId},#{reason})
+</insert>
+
+<update id="reactivateExternalIdentityBinding">UPDATE t_external_identity_binding SET principal_id=#{principalId},status='ACTIVE',
+  revoked_by=NULL,revoked_time=NULL,updated_by=#{operatorId},updated_time=CURRENT_TIMESTAMP,reason=#{reason}
+  WHERE id=#{id} AND status='REVOKED'</update>
+
+<update id="revokeExternalIdentityBinding">UPDATE t_external_identity_binding SET status='REVOKED',revoked_by=#{operatorId},revoked_time=CURRENT_TIMESTAMP,updated_by=#{operatorId},reason=#{reason}
+  WHERE id=#{id} AND status='ACTIVE'</update>
+
+<insert id="insertExternalIdentityBindingAudit">INSERT INTO t_external_identity_binding_audit(binding_id,provider,provider_instance_id,external_user_id,principal_id,action,operator_id,reason)
+  VALUES(#{bindingId},#{provider},#{providerInstanceId},#{externalUserId},#{principalId},#{action},#{operatorId},#{reason})</insert>
+
+<insert id="insertOctopAssertionJti">INSERT IGNORE INTO t_octop_assertion_jti(jti,expires_at) VALUES(#{jti},#{expiresAt})</insert>
+<delete id="deleteExpiredOctopAssertionJtis">DELETE FROM t_octop_assertion_jti WHERE expires_at &lt; CURRENT_TIMESTAMP</delete>
+
+<insert id="upsertPrincipalMemoryProfile">
+  INSERT INTO t_principal_memory_profile(principal_id,namespace_code,agent_code,status,created_by)
+  VALUES(#{principalId},#{namespace},#{agentCode},'ACTIVE',#{operatorId})
+  ON DUPLICATE KEY UPDATE namespace_code=VALUES(namespace_code),agent_code=VALUES(agent_code),status='ACTIVE'
+</insert>
+
+<insert id="insertDefaultAgentMemoryGrant">
+  INSERT IGNORE INTO t_principal_memory_scope_grant(principal_id,namespace_code,scope_type,scope_code,can_read,can_write,status,created_by_operator)
+  VALUES(#{principalId},#{namespace},'AGENT',#{agentCode},1,1,'ACTIVE',#{operatorId})
+</insert>
 
 <select id="listPrincipals" resultType="map">SELECT p.id,p.principal_code AS principalCode,p.name,p.status,
   p.principal_type AS principalType,

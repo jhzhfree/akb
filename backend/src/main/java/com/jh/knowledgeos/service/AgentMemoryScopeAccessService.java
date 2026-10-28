@@ -13,10 +13,10 @@ import java.util.Set;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-/** Console-managed, credential-specific access to shared memory scopes. */
+/** Console-managed, principal-level access to shared memory scopes. */
 @Service
 public class AgentMemoryScopeAccessService {
-    private static final Set<String> SHARED_SCOPE_TYPES = new LinkedHashSet<String>(Arrays.asList("TEAM", "PROJECT", "TASK", "WORKFLOW", "SESSION"));
+    private static final Set<String> SHARED_SCOPE_TYPES = new LinkedHashSet<String>(Arrays.asList("AGENT", "TEAM", "PROJECT", "TASK", "WORKFLOW", "SESSION"));
     private final AgentMemoryMapper mapper;
     private final ApiKeyService apiKeyService;
     private final AgentMemoryService memoryService;
@@ -29,27 +29,21 @@ public class AgentMemoryScopeAccessService {
 
     public List<Map<String, Object>> list(Long keyId) {
         ApiKey key = requireKey(keyId);
-        return mapper.listScopeAccess(key.getId(), memoryService.namespace(key));
+        if (key.getPrincipalId() == null) throw new IllegalArgumentException("API Key 未绑定主体");
+        return mapper.listPrincipalScopeAccess(key.getPrincipalId(), memoryService.namespace(key));
     }
 
     @Transactional
     public List<Map<String, Object>> replace(Long keyId, List<AgentMemoryScopeGrantRequest> requests, Long operatorId) {
         ApiKey key = requireKey(keyId);
         List<Grant> grants = normalize(requests);
-        for (Grant grant : grants) {
-            if (grant.read && !key.hasScope(ApiKey.SCOPE_MEMORY_READ)) {
-                throw new IllegalArgumentException("该 API Key 未授予 MEMORY_READ，不能配置读取授权");
-            }
-            if (grant.write && !key.hasScope(ApiKey.SCOPE_MEMORY_WRITE)) {
-                throw new IllegalArgumentException("该 API Key 未授予 MEMORY_WRITE，不能配置写入授权");
-            }
-        }
+        if (key.getPrincipalId() == null) throw new IllegalArgumentException("API Key 未绑定主体");
         String namespace = memoryService.namespace(key);
-        mapper.deleteScopeAccess(key.getId());
+        mapper.deletePrincipalScopeAccess(key.getPrincipalId());
         for (Grant grant : grants) {
-            mapper.insertScopeAccess(key.getId(), namespace, grant.type, grant.code, grant.read, grant.write, operatorId);
+            mapper.insertPrincipalScopeAccess(key.getPrincipalId(), namespace, grant.type, grant.code, grant.read, grant.write, operatorId);
         }
-        return mapper.listScopeAccess(key.getId(), namespace);
+        return mapper.listPrincipalScopeAccess(key.getPrincipalId(), namespace);
     }
 
     private ApiKey requireKey(Long id) {

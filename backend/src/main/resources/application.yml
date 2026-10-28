@@ -93,11 +93,20 @@ knowledge:
     mcp-enabled: ${EXTERNAL_MCP_ENABLED:true}
     sse-enabled: ${EXTERNAL_SSE_ENABLED:true}
     agent-memory-enabled: ${EXTERNAL_AGENT_MEMORY_ENABLED:true}
+    # Separate-IdP Octop assertion validation. Leave disabled until issuer/JWKS/audience/instance are provisioned.
+    octop-identity:
+      enabled: ${EXTERNAL_OCTOP_IDENTITY_ENABLED:false}
+      issuer: ${EXTERNAL_OCTOP_IDENTITY_ISSUER:}
+      jwk-set-uri: ${EXTERNAL_OCTOP_IDENTITY_JWK_SET_URI:}
+      audience: ${EXTERNAL_OCTOP_IDENTITY_AUDIENCE:}
+      instance-id: ${EXTERNAL_OCTOP_IDENTITY_INSTANCE_ID:}
     sse-heartbeat-seconds: ${EXTERNAL_SSE_HEARTBEAT_SECONDS:15}
     sse-max-minutes: ${EXTERNAL_SSE_MAX_MINUTES:30}
     answer-chunk-chars: ${EXTERNAL_ANSWER_CHUNK_CHARS:40}
     answer-chunk-delay-millis: ${EXTERNAL_ANSWER_CHUNK_DELAY_MILLIS:40}
     default-rate-limit-per-minute: ${EXTERNAL_DEFAULT_RATE_LIMIT:60}
+    service-key-expiry-required: ${EXTERNAL_SERVICE_KEY_EXPIRY_REQUIRED:true}
+    service-key-max-lifetime-days: ${EXTERNAL_SERVICE_KEY_MAX_LIFETIME_DAYS:365}
     # 允许嵌入聊天组件的站点来源，逗号分隔；为空表示不校验来源（仅建议内网使用）
     allowed-origins: ${EXTERNAL_ALLOWED_ORIGINS:}
     # 嵌入组件访问令牌有效期（小时）与签名密钥；密钥为空时启动时自动生成

@@ -73,6 +73,29 @@
     VALUES(#{keyId},#{namespace},#{scopeType},#{scopeCode},#{canRead},#{canWrite},'ACTIVE',#{operatorId})
   </insert>
 
+  <select id="hasPrincipalScopeAccess" resultType="boolean">
+    SELECT CASE WHEN COUNT(1) &gt; 0 THEN TRUE ELSE FALSE END
+    FROM t_principal_memory_scope_grant
+    WHERE principal_id=#{principalId} AND namespace_code=#{namespace}
+      AND scope_type=#{scopeType} AND scope_code=#{scopeCode} AND status='ACTIVE'
+      AND ((#{accessMode}='READ' AND can_read=1) OR (#{accessMode}='WRITE' AND can_write=1))
+  </select>
+
+  <select id="listPrincipalScopeAccess" resultType="map">
+    SELECT scope_type scopeType,scope_code scopeCode,can_read canRead,can_write canWrite,
+      created_by_operator createdByOperator,created_time createdTime
+    FROM t_principal_memory_scope_grant
+    WHERE principal_id=#{principalId} AND namespace_code=#{namespace} AND status='ACTIVE'
+    ORDER BY scope_type,scope_code
+  </select>
+
+  <delete id="deletePrincipalScopeAccess">DELETE FROM t_principal_memory_scope_grant WHERE principal_id=#{principalId}</delete>
+
+  <insert id="insertPrincipalScopeAccess">
+    INSERT INTO t_principal_memory_scope_grant(principal_id,namespace_code,scope_type,scope_code,can_read,can_write,status,created_by_operator)
+    VALUES(#{principalId},#{namespace},#{scopeType},#{scopeCode},#{canRead},#{canWrite},'ACTIVE',#{operatorId})
+  </insert>
+
   <select id="listManaged" resultType="map">
     SELECT memory_code memoryCode,namespace_code namespaceCode,agent_code agentCode,scope_type scopeType,scope_code scopeCode,
       memory_level memoryLevel,content,tags_json tags,source_type sourceType,source_ref sourceRef,confidence,importance,
