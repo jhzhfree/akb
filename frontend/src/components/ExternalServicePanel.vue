@@ -9,10 +9,10 @@
             主体是授权的最终载体：知识库授权、记忆身份与外部身份绑定都挂在主体上，凭证只是主体的一种凭据——轮换凭证不改变这里的任何配置。
           </template>
           <template v-else-if="section==='credentials'">
-            API 密钥决定调用方可见的知识库范围与可用动作：明文只在签发时展示一次，吊销即让外部系统立即失去访问能力。
+            凭据决定调用方可见的知识库范围与可用动作：明文只在签发时展示一次，吊销即让外部系统立即失去访问能力。
           </template>
           <template v-else>
-            对外以 RESTful、MCP 服务、SSE 三种形态开放同一套知识能力：一个 API 密钥 决定可见的知识库范围与可用动作，
+            对外以 RESTful、MCP 服务、SSE 三种形态开放同一套知识能力：一份凭据决定可见的知识库范围与可用动作，
             三个通道共用一套限流与调用审计。
           </template>
         </p>
@@ -27,7 +27,7 @@
       <MetricCard label="RESTful" :value="overview?.rest?.endpoints?.length ?? 0" hint="对外接口数" />
       <MetricCard label="MCP 工具" :value="overview?.mcp?.tools?.length ?? 0" hint="智能体可用工具" />
       <MetricCard label="SSE" :value="overview?.sse?.endpoints?.length ?? 0" hint="推送通道" />
-      <MetricCard label="在用凭证" :value="overview?.activeKeys ?? 0" hint="有效状态的 API 密钥" />
+      <MetricCard label="在用凭证" :value="overview?.activeKeys ?? 0" hint="有效状态的凭据" />
     </div>
 
     <div v-if="error" class="mt-3 rounded-lg border border-[color:var(--warn-bd)] bg-[color:var(--warn-bg)] px-4 py-2.5 text-xs text-[color:var(--warn)]">
@@ -112,7 +112,7 @@
 
     <article v-if="section==='credentials'" class="kb-card mt-4">
       <div class="kb-card-head">
-        <b class="text-sm">API 密钥凭证</b>
+        <b class="text-sm">凭据</b>
         <div class="flex items-center gap-2">
           <span class="kb-muted">明文只在签发时展示一次</span>
           <el-tag v-if="expiringCount" size="small" type="warning" effect="plain">
@@ -121,8 +121,15 @@
           <button class="kb-btn-primary" @click="openCreate">签发凭证</button>
         </div>
       </div>
+      <!-- 两类凭据的调用方式完全一致，差别只在「代表谁、谁能签发、能拿什么权限」 -->
+      <div class="px-3 pt-3 text-[12px] leading-6 text-ink-500">
+        <b class="text-ink-700">该用哪种？</b>
+        服务密钥给线上系统与服务主体——管理员签发，可含写入与记忆权限，长期有效；
+        个人令牌给个人脚本与本地调试——在左侧栏用户菜单「个人访问令牌」里自助签发，只读、最长 365 天。
+        两者调用接口的方式一致，都是同一个 <code class="rounded bg-black/5 px-1">X-API-Key</code> 请求头。
+      </div>
       <div class="p-3">
-        <PanelState :loading="loading" :empty="!keys.length" empty-text="尚未签发任何 API Key"
+        <PanelState :loading="loading" :empty="!keys.length" empty-text="尚未签发任何凭据"
           empty-hint="签发后外部系统即可按范围调用知识服务" retryable @retry="loadAll">
           <el-table :data="keys" border size="small">
             <el-table-column prop="name" label="调用方" min-width="150" show-overflow-tooltip />
@@ -134,7 +141,7 @@
                 </el-tag>
               </template>
             </el-table-column>
-            <el-table-column label="密钥前缀" width="180">
+            <el-table-column label="凭据前缀" width="180">
               <template #default="{ row }"><span class="text-[11px]">{{ row.keyPrefix || '—' }}</span></template>
             </el-table-column>
             <el-table-column label="知识库范围" min-width="180">
@@ -156,7 +163,7 @@
                     : '尚未配置主体记忆身份，当前取自该凭证自身；建议到「主体」页配置'" placement="top">
                     <el-tag size="small" effect="plain"
                       :type="row.memoryIdentitySource === 'PRINCIPAL' ? 'success' : 'info'">
-                      {{ row.memoryIdentitySource === 'PRINCIPAL' ? '来自主体' : '来自密钥' }}
+                      {{ row.memoryIdentitySource === 'PRINCIPAL' ? '来自主体' : '来自凭证' }}
                     </el-tag>
                   </el-tooltip>
                 </div>
@@ -383,7 +390,7 @@
           <p v-if="exampleTab === 'sse'" class="kb-muted mt-1 text-[11px]">{{ contentHint }}</p>
           <div class="mt-3 border-t border-ink-100 pt-3">
             <div class="flex flex-wrap items-center gap-2">
-              <input v-model="probeSecret" class="kb-input flex-1" placeholder="粘贴明文 API 密钥做连通性自检" />
+              <input v-model="probeSecret" class="kb-input flex-1" placeholder="粘贴明文凭据做连通性自检" />
               <button class="kb-btn-outline" :disabled="probing || !probeSecret.trim()" @click="probe">REST 自检</button>
               <button class="kb-btn-outline" :disabled="probing || !probeSecret.trim()" @click="probeSse">SSE 自检</button>
             </div>
@@ -425,7 +432,7 @@
       </article>
     </div>
 
-    <el-dialog v-model="createVisible" title="签发 API 密钥" width="560px">
+    <el-dialog v-model="createVisible" title="签发服务密钥" width="560px">
       <el-form label-width="96px" size="small">
         <el-form-item label="调用方名称">
           <el-input v-model="form.name" placeholder="如：ERP 问答助手" />

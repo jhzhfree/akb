@@ -2,9 +2,18 @@
   <el-dialog :model-value="visible" title="个人访问令牌" width="min(760px, calc(100vw - 32px))"
     destroy-on-close @update:model-value="$emit('update:visible',$event)">
     <div class="mb-4 flex items-start justify-between gap-4">
-      <p class="max-w-xl text-[13px] leading-6 text-ink-500">
-        PAT 代表你的 AKB 用户身份访问检索接口。新令牌默认只读，最长有效期 365 天；完整令牌只在创建时显示一次，到期前用「轮换」换发新的。
-      </p>
+      <div class="max-w-xl text-[13px] leading-6 text-ink-500">
+        <p>
+          个人令牌代表<b>你本人的 AKB 用户身份</b>访问检索接口：自助签发、默认只读、最长 365 天；
+          完整令牌只在创建时显示一次，到期前用「轮换」换发新的。
+        </p>
+        <!-- 用户自助只能拿到只读检索权限，服务级能力要给出口，而不是让他自己去找管理员 -->
+        <p class="mt-1 text-[12px]">
+          线上系统、或需要写入与记忆权限，请用服务密钥：
+          <el-button v-if="canServiceCredentials" link type="primary" @click="gotoServiceCredentials">去「接口服务 › 凭证」签发</el-button>
+          <span v-else>请联系管理员在「接口服务 › 凭证」签发。</span>
+        </p>
+      </div>
       <el-button type="primary" @click="openCreate">创建令牌</el-button>
     </div>
 
@@ -88,9 +97,17 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { createPersonalAccessToken, listPersonalAccessTokens, revokePersonalAccessToken,
   rotatePersonalAccessToken,
   type CreatedPersonalAccessToken, type PersonalAccessToken } from '../api/auth'
+import { useShell } from '../shell'
 
 const props=defineProps<{visible:boolean}>()
-defineEmits<{(e:'update:visible',value:boolean):void}>()
+const emit=defineEmits<{(e:'update:visible',value:boolean):void}>()
+/** 个人令牌拿不到写入与记忆权限，需要服务级能力时直接送到签发页，而不是让用户自己找管理员。 */
+const shell=useShell()
+const canServiceCredentials=computed(()=>shell.canNavigate('integration.credentials'))
+function gotoServiceCredentials(){
+  emit('update:visible',false)
+  shell.navigate('integration.credentials')
+}
 const tokens=ref<PersonalAccessToken[]>([])
 const loading=ref(false)
 const saving=ref(false)
