@@ -168,6 +168,24 @@ public class ExternalServiceAdminController {
         return ApiResponse.ok(apiKeyService.assignPrincipalToLocalUser(id, number(request.get("userId"))));
     }
 
+    /**
+     * 管理员视角的用户个人令牌：PAT 由用户自助创建，但治理上管理员要能看见谁持有、是否临期，
+     * 并在人员变动时撤销。只读列表，明文只在用户自己创建时给过一次，这里也拿不到。
+     */
+    @GetMapping("/users/{userId}/personal-access-tokens")
+    @Operation(summary = "管理员查看某用户的个人访问令牌（不含明文）")
+    public ApiResponse<Object> listUserPersonalAccessTokens(@PathVariable Long userId) {
+        requireManager();
+        return ApiResponse.ok(apiKeyService.listPersonalAccessTokens(userId));
+    }
+
+    @PostMapping("/users/{userId}/personal-access-tokens/{id}/revoke")
+    @Operation(summary = "管理员撤销某用户的个人访问令牌")
+    public ApiResponse<Object> revokeUserPersonalAccessToken(@PathVariable Long userId, @PathVariable Long id) {
+        requireManager();
+        return ApiResponse.ok(apiKeyService.revokePersonalAccessToken(userId, id));
+    }
+
     @PutMapping("/personal-access-tokens/{id}/scopes")
     @Operation(summary = "管理员审批并更新个人访问令牌 scope；记录变更原因")
     public ApiResponse<Object> updatePersonalAccessTokenScopes(@PathVariable Long id, @RequestBody(required = false) Map<String, Object> body) {

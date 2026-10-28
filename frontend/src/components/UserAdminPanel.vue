@@ -42,6 +42,27 @@
       <el-table-column label="最近登录" width="180">
         <template #default="{ row }">{{ row.lastLoginTime || '未登录' }}</template>
       </el-table-column>
+      <!-- 主体化之后，身份与授权不只体现在角色上：个人令牌、负责的服务主体、外部身份绑定都要能看见 -->
+      <el-table-column label="个人令牌" width="100">
+        <template #default="{ row }">
+          <el-button link type="primary" size="small" @click="openTokens(row)">查看</el-button>
+        </template>
+      </el-table-column>
+      <el-table-column label="负责主体" width="100">
+        <template #default="{ row }">
+          <el-button link type="primary" size="small" :disabled="!ownedPrincipals(row.id).length"
+            @click="openOwnedPrincipals(row)">
+            {{ ownedPrincipals(row.id).length || '—' }}
+          </el-button>
+        </template>
+      </el-table-column>
+      <el-table-column label="外部身份" width="110">
+        <template #default="{ row }">
+          <el-tag size="small" effect="plain" :type="externalIdentityOf(row.id) === 'BOUND' ? 'success' : 'info'">
+            {{ externalIdentityOf(row.id) === 'BOUND' ? '已绑定' : '未绑定' }}
+          </el-tag>
+        </template>
+      </el-table-column>
       <el-table-column label="操作" width="230" fixed="right">
         <template #default="{ row }">
           <!-- 与「存储与索引 · 蓝绿索引版本」一致：size=small + plain，危险动作只靠 type 区分 -->
@@ -55,6 +76,49 @@
       </el-table-column>
     </el-table>
   </section>
+
+  <!-- 个人令牌由用户自助创建与轮换，管理员只能查看和撤销 -->
+  <el-dialog v-model="tokenDialog" :title="`个人令牌 · ${tokenUser?.username || ''}`" width="800px" append-to-body>
+    <p class="kb-muted mb-2">明文只在用户创建时出现一次，这里看不到；令牌只能撤销，不能续期——续期要用户自己轮换。</p>
+    <el-table :data="tokens" border size="small" v-loading="tokenLoading" empty-text="该用户没有个人访问令牌">
+      <el-table-column prop="name" label="名称" min-width="140" show-overflow-tooltip />
+      <el-table-column prop="keyPrefix" label="前缀" width="180" />
+      <el-table-column label="权限" min-width="180">
+        <template #default="{ row }">
+          <el-tag v-for="scope in (row.scopes || '').split(',').filter(Boolean)" :key="scope" size="small" effect="plain" class="mr-1">{{ scope }}</el-tag>
+        </template>
+      </el-table-column>
+      <el-table-column prop="expiresAt" label="有效期" width="170" />
+      <el-table-column label="状态" width="90">
+        <template #default="{ row }">{{ row.status === 'ACTIVE' ? '有效' : '已撤销' }}</template>
+      </el-table-column>
+      <el-table-column label="操作" width="90" fixed="right">
+        <template #default="{ row }">
+          <el-button v-if="row.status === 'ACTIVE'" link type="danger" size="small" @click="revokeToken(row)">撤销</el-button>
+        </template>
+      </el-table-column>
+    </el-table>
+    <template #footer>
+      <el-button size="small" @click="tokenDialog = false">关闭</el-button>
+    </template>
+  </el-dialog>
+
+  <el-dialog v-model="ownedPrincipalDialog" :title="`负责的服务主体 · ${ownedPrincipalUser?.username || ''}`" width="640px" append-to-body>
+    <el-table :data="ownedPrincipalRows" border size="small" empty-text="该用户不负责任何服务主体">
+      <el-table-column prop="principalCode" label="编码" width="160" />
+      <el-table-column prop="name" label="名称" min-width="160" show-overflow-tooltip />
+      <el-table-column label="类型" width="110">
+        <template #default="{ row }">{{ row.principalType || '—' }}</template>
+      </el-table-column>
+      <el-table-column label="状态" width="90">
+        <template #default="{ row }">{{ row.status === 'ACTIVE' ? '启用' : '停用' }}</template>
+      </el-table-column>
+      <el-table-column prop="keyCount" label="凭证数" width="90" />
+    </el-table>
+    <template #footer>
+      <el-button size="small" @click="ownedPrincipalDialog = false">关闭</el-button>
+    </template>
+  </el-dialog>
 
   <section class="ua-block">
     <div class="ua-head">
@@ -159,7 +223,11 @@ import {
   setGroupMembers, setGroupStatus, setUserStatus, updateGroup, updateUser,
 } from '../api/auth'
 import { unwrap } from '../api/knowledge'
-import type { UserAccount, UserGroupRow, UserRoleValue } from '../types'
+import type { ExternalKeyRow, UserAccount, UserGroupRow, UserRoleValue } from '../types'
+import {
+  listExternalPrincipals, listOctopBindings, listUserPersonalAccessTokens, revokeUserPersonalAccessToken,
+  type ExternalPrincipalSummary, type OctopBinding,
+} from '../api/external'
 import { statusLabel, userRoleLabel } from '../types'
 import { errorMessage as message } from '../utils/feedback'
 import { PERM, ROLE_BRIEF } from '../permissions'
@@ -390,7 +458,68 @@ async function saveMembers() {
   }
 }
 
-onMounted(() => { load(); void loadRoles() })
+/* ---- 主体化之后的用户视角：个人令牌、负责的服务主体、外部身份绑定 ---- */
+const principals = ref<ExternalPrincipalSummary[]>([])
+const octopBindings = ref<OctopBinding[]>([])
+/** 主体与绑定只服务于「用户与组织」的三列补充信息，取不到时静默降级，不挡住主流程。 */
+async function loadIdentityContext() {
+  try { principals.value = unwrap(await listExternalPrincipals(), []) }
+  catch { principals.value = [] }
+  try { octopBindings.value = unwrap(await listOctopBindings(), []) }
+  catch { octopBindings.value = [] }
+}
+function ownedPrincipals(userId:number) {
+  return principals.value.filter(item => item.ownerUserId === userId)
+}
+/** 委托身份依赖「用户的 USER 主体是否被 Octop 绑定」，这里回答「能不能被代表」。 */
+function externalIdentityOf(userId:number):'BOUND'|'NONE' {
+  const userPrincipal = principals.value.find(item => item.ownerUserId === userId && item.principalType === 'USER')
+  if (!userPrincipal) return 'NONE'
+  const bound = octopBindings.value.some(item => item.principalId === userPrincipal.id && item.status === 'ACTIVE')
+  return bound ? 'BOUND' : 'NONE'
+}
+
+const tokenDialog = ref(false)
+const tokenUser = ref<UserAccount | null>(null)
+const tokens = ref<ExternalKeyRow[]>([])
+const tokenLoading = ref(false)
+const ownedPrincipalDialog = ref(false)
+const ownedPrincipalUser = ref<UserAccount | null>(null)
+const ownedPrincipalRows = ref<ExternalPrincipalSummary[]>([])
+
+async function openTokens(row:UserAccount) {
+  tokenUser.value = row
+  tokenDialog.value = true
+  tokenLoading.value = true
+  try { tokens.value = unwrap(await listUserPersonalAccessTokens(row.id), []) }
+  catch (e) { ElMessage.error(message(e)); tokens.value = [] }
+  finally { tokenLoading.value = false }
+}
+
+/** 撤销会立即中断使用该令牌的调用，所以先确认。 */
+async function revokeToken(row:ExternalKeyRow) {
+  const user = tokenUser.value
+  if (!user) return
+  try {
+    await ElMessageBox.confirm(
+      `撤销「${row.name}」后，使用该令牌的调用会立即失败；令牌不能续期，只能由用户自己重新创建。确认撤销？`,
+      '撤销个人令牌', { type:'warning', confirmButtonText:'确认撤销', cancelButtonText:'取消' },
+    )
+  } catch { return }
+  try {
+    unwrap(await revokeUserPersonalAccessToken(user.id, row.id), null)
+    ElMessage.success('已撤销')
+    await openTokens(user)
+  } catch (e) { ElMessage.error(message(e)) }
+}
+
+function openOwnedPrincipals(row:UserAccount) {
+  ownedPrincipalUser.value = row
+  ownedPrincipalRows.value = ownedPrincipals(row.id)
+  ownedPrincipalDialog.value = true
+}
+
+onMounted(() => { load(); void loadRoles(); void loadIdentityContext() })
 defineExpose({ load })
 </script>
 <style scoped>

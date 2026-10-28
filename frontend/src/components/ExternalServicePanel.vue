@@ -115,6 +115,9 @@
         <b class="text-sm">API 密钥凭证</b>
         <div class="flex items-center gap-2">
           <span class="kb-muted">明文只在签发时展示一次</span>
+          <el-tag v-if="expiringCount" size="small" type="warning" effect="plain">
+            {{ expiringCount }} 个凭证已过期或 7 天内到期
+          </el-tag>
           <button class="kb-btn-primary" @click="openCreate">签发凭证</button>
         </div>
       </div>
@@ -123,6 +126,14 @@
           empty-hint="签发后外部系统即可按范围调用知识服务" retryable @retry="loadAll">
           <el-table :data="keys" border size="small">
             <el-table-column prop="name" label="调用方" min-width="150" show-overflow-tooltip />
+            <el-table-column label="类型" width="110">
+              <!-- 个人令牌与服务密钥的生命周期策略不同（前者强制到期、最长 365 天），分开标识 -->
+              <template #default="{ row }">
+                <el-tag size="small" effect="plain" :type="row.credentialType === 'USER_PAT' ? 'warning' : 'primary'">
+                  {{ credentialLabel(row) }}
+                </el-tag>
+              </template>
+            </el-table-column>
             <el-table-column label="密钥前缀" width="180">
               <template #default="{ row }"><span class="text-[11px]">{{ row.keyPrefix || '—' }}</span></template>
             </el-table-column>
@@ -174,8 +185,12 @@
                 </el-tag>
               </template>
             </el-table-column>
-            <el-table-column label="有效期" width="170">
-              <template #default="{ row }">{{ row.expiresAt || '长期有效' }}</template>
+            <el-table-column label="有效期" width="180">
+              <template #default="{ row }">
+                <div class="text-xs">{{ row.expiresAt || '长期有效' }}</div>
+                <el-tag v-if="expiryState(row) === 'expired'" size="small" type="danger" effect="plain">已过期</el-tag>
+                <el-tag v-else-if="expiryState(row) === 'soon'" size="small" type="warning" effect="plain">即将到期</el-tag>
+              </template>
             </el-table-column>
             <el-table-column label="最近调用" width="170">
               <template #default="{ row }">{{ row.lastUsedAt || '—' }}</template>
@@ -1092,6 +1107,21 @@ async function loadAudits() {
   } finally {
     auditLoading.value = false
   }
+}
+
+/** 到期治理：列表上直接看见谁已过期、谁快到期，不必逐条点开。 */
+const EXPIRING_SOON_MS = 7 * 24 * 60 * 60 * 1000
+function expiryState(row:ExternalKeyRow):'expired'|'soon'|'none' {
+  if (!row.expiresAt) return 'none'
+  const left = Date.parse(row.expiresAt) - Date.now()
+  if (!Number.isFinite(left)) return 'none'
+  if (left <= 0) return 'expired'
+  return left < EXPIRING_SOON_MS ? 'soon' : 'none'
+}
+const expiringCount = computed(() => keys.value.filter(key => expiryState(key) !== 'none').length)
+/** 个人令牌强制到期且最长 365 天，服务密钥走独立策略，界面上要能分清。 */
+function credentialLabel(row:ExternalKeyRow) {
+  return row.credentialType === 'USER_PAT' ? '个人令牌' : '服务密钥'
 }
 
 function openCreate() {

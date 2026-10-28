@@ -125,7 +125,7 @@
 </insert>
 
 <select id="listPrincipals" resultType="map">SELECT p.id,p.principal_code AS principalCode,p.name,p.status,
-  p.principal_type AS principalType,
+  p.principal_type AS principalType,p.owner_user_id AS ownerUserId,
   COUNT(DISTINCT k.id) AS keyCount,
   COUNT(DISTINCT CASE WHEN g.status='ACTIVE' AND (g.expires_at IS NULL OR g.expires_at&gt;CURRENT_TIMESTAMP) THEN g.id END) AS activeGrantCount,
   p.created_time AS createdTime FROM t_principal p

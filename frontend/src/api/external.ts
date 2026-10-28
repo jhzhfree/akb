@@ -86,6 +86,12 @@ export interface OctopBinding {
 }
 export const listOctopBindings = ():Promise<ApiResponse<OctopBinding[]>> =>
   axios.get('/api/external/admin/identity-bindings/octop')
+
+/* ---- 用户维度：个人令牌与负责主体（系统用户管理用） ---- */
+export const listUserPersonalAccessTokens = (userId:number):Promise<ApiResponse<ExternalKeyRow[]>> =>
+  axios.get(`/api/external/admin/users/${userId}/personal-access-tokens`)
+export const revokeUserPersonalAccessToken = (userId:number, tokenId:number):Promise<ApiResponse<boolean>> =>
+  axios.post(`/api/external/admin/users/${userId}/personal-access-tokens/${tokenId}/revoke`)
 export const bindOctopIdentity = (body:{
   providerInstanceId:string; externalUserId:string; principalId:number; reason?:string|null
 }):Promise<ApiResponse<OctopBinding>> => axios.post('/api/external/admin/identity-bindings/octop', body)
