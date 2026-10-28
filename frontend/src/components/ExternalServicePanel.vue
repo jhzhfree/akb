@@ -192,7 +192,7 @@
                 </el-tag>
               </template>
             </el-table-column>
-            <el-table-column label="有效期" width="180">
+            <el-table-column label="到期时间" width="180">
               <template #default="{ row }">
                 <div class="text-xs">{{ row.expiresAt || '长期有效' }}</div>
                 <el-tag v-if="expiryState(row) === 'expired'" size="small" type="danger" effect="plain">已过期</el-tag>
@@ -278,7 +278,7 @@
           <el-table-column label="状态" width="90">
             <template #default="{ row }">{{ row.status === 'ACTIVE' ? '有效' : '已失效' }}</template>
           </el-table-column>
-          <el-table-column prop="expiresAt" label="有效期" width="170" />
+          <el-table-column prop="expiresAt" label="到期时间" width="170" />
         </el-table>
         <p class="kb-muted mt-1 text-[11px]">在「凭证」页轮换只换明文，主体与下面的记忆身份都不会变。</p>
 
@@ -467,8 +467,13 @@
           <el-input-number v-model="form.rateLimitPerMinute" :min="1" :max="6000" />
           <span class="ml-2 text-[11px] text-ink-500">次 / 分钟</span>
         </el-form-item>
-        <el-form-item label="有效期">
-          <el-input v-model="form.expiresAt" placeholder="留空长期有效，如 2026-12-31T23:59:59" />
+        <el-form-item label="到期时间">
+          <el-date-picker v-model="form.expiresAt" type="datetime" value-format="YYYY-MM-DDTHH:mm:ss"
+            :disabled-date="disablePastDate" class="w-full"
+            placeholder="留空长期有效；选定后到点即失效" />
+          <p class="mt-1 text-[11px] text-ink-500">
+            到点后该凭据在接口调用时立即失效（认证每次查库判定），无需额外吊销。
+          </p>
         </el-form-item>
       </el-form>
       <p class="kb-muted">
@@ -1114,6 +1119,11 @@ async function loadAudits() {
   } finally {
     auditLoading.value = false
   }
+}
+
+/** 到点失效是签发时就定好的，选过去的时间没有意义。 */
+function disablePastDate(date:Date) {
+  return date.getTime() < Date.now() - 24 * 60 * 60 * 1000
 }
 
 /** 到期治理：列表上直接看见谁已过期、谁快到期，不必逐条点开。 */

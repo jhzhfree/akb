@@ -254,6 +254,35 @@ class ApiKeyServiceTest {
         verify(mapper, never()).deletePrincipalKnowledgeBaseGrants(71L);
     }
 
+    /**
+     * 签发页选的是「到期时间」而非整天，这里钉住它在接口调用时真的生效：认证每次查库，
+     * 到点的凭据直接判为不可用，不需要额外吊销；没到点或长期凭据不受影响。
+     */
+    @Test
+    void expiredCredentialIsRejectedWhenCallingTheApi() {
+        ApiKey expired = key("READ");
+        expired.setExpiresAt(LocalDateTime.now().minusSeconds(1));
+        when(mapper.getApiKeyByHash(any())).thenReturn(expired);
+
+        assertNull(service.authenticate("kos_live_expired"));
+    }
+
+    @Test
+    void credentialExpiringInTheFutureIsStillAccepted() {
+        ApiKey valid = key("READ");
+        valid.setExpiresAt(LocalDateTime.now().plusMinutes(1));
+        when(mapper.getApiKeyByHash(any())).thenReturn(valid);
+
+        assertEquals(valid, service.authenticate("kos_live_valid"));
+    }
+
+    @Test
+    void credentialWithoutExpiryIsNotTreatedAsExpired() {
+        when(mapper.getApiKeyByHash(any())).thenReturn(key("READ"));
+
+        assertTrue(service.authenticate("kos_live_permanent") != null);
+    }
+
     private ApiKey key(String scopes) {
         ApiKey key = new ApiKey();
         key.setId(9L);
