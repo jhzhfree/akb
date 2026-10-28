@@ -613,6 +613,10 @@ export interface ExternalKeyRow {
   principalId?:number|null; principalName?:string|null
   scopes:string; rateLimitPerMinute:number; status:string
   memoryNamespace?:string|null; memoryAgentCode?:string|null
+  /** 记忆身份取自主体 Memory Profile 还是 Key 旧列：主体优先，控制台据此说明轮换不会改变它。 */
+  memoryIdentitySource?:'PRINCIPAL'|'KEY'|null
+  credentialType?:string|null
+  ownerUserId?:number|null
   memoryReadEnabled?:boolean; memoryWriteEnabled?:boolean
   expiresAt:string|null; lastUsedAt:string|null; createdByName:string|null; createdTime:string
   /** 明文仅创建响应携带一次。 */

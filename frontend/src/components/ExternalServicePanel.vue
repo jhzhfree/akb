@@ -131,10 +131,21 @@
                 <span v-else>{{ row.knowledgeBaseName || (row.knowledgeBaseId ? `知识库 #${row.knowledgeBaseId}` : '公开库') }}</span>
               </template>
             </el-table-column>
-            <el-table-column label="记忆身份" min-width="190">
+            <el-table-column label="记忆身份" min-width="200">
               <template #default="{ row }">
                 <div class="text-xs">{{ row.memoryAgentCode || row.keyCode }}</div>
-                <div class="text-[10px] text-ink-500">{{ row.memoryNamespace || '密钥隔离' }}</div>
+                <div class="text-[10px] text-ink-500">{{ row.memoryNamespace || '未配置（按密钥隔离）' }}</div>
+                <!-- 说清来源：来自主体时轮换凭证不会改变它；来自密钥时提示迁到主体更稳。 -->
+                <div class="mt-1">
+                  <el-tooltip :content="row.memoryIdentitySource === 'PRINCIPAL'
+                    ? '记忆身份挂在主体上，轮换或新增凭证都不会改变它'
+                    : '尚未配置主体记忆身份，当前取自该凭证自身；建议到「主体」页配置'" placement="top">
+                    <el-tag size="small" effect="plain"
+                      :type="row.memoryIdentitySource === 'PRINCIPAL' ? 'success' : 'info'">
+                      {{ row.memoryIdentitySource === 'PRINCIPAL' ? '来自主体' : '来自密钥' }}
+                    </el-tag>
+                  </el-tooltip>
+                </div>
               </template>
             </el-table-column>
             <el-table-column label="共享主体" min-width="170">
@@ -173,6 +184,7 @@
                 <el-button v-if="hasMemoryCapability(row)" link type="primary" size="small" @click="openMemoryPolicy(row)">记忆开关</el-button>
                 <el-button v-if="hasMemoryScope(row)" link type="primary" size="small" @click="openMemoryAccess(row)">记忆授权</el-button>
                 <el-button v-if="hasMemoryScope(row)" link type="primary" size="small" @click="openMemoryManager(row)">记忆管理</el-button>
+                <el-button v-if="row.status === 'ACTIVE'" link type="primary" size="small" @click="openRotate(row)">轮换</el-button>
                 <el-button v-if="row.status === 'ACTIVE'" link type="danger" size="small" @click="revoke(row)">吊销</el-button>
                 <span v-else class="text-[11px] text-ink-500">已失效</span>
               </template>
@@ -468,6 +480,25 @@
       </el-table>
     </el-dialog>
 
+    <el-dialog v-model="rotateVisible" title="轮换凭证" width="520px">
+      <p class="kb-muted">
+        轮换会换发一枚新明文并立即撤销旧凭证，<b>主体、知识库授权与记忆身份都保持不变</b>。
+        这正是它区别于「吊销 + 新建」的地方：新建的凭证没有主体绑定，记忆身份会漂到新的 key:&lt;id&gt;。
+      </p>
+      <div class="mt-3">
+        <div class="kb-label mb-1">新到期时间（可选）</div>
+        <el-date-picker v-model="rotateExpiresAt" type="datetime" value-format="YYYY-MM-DDTHH:mm:ss"
+          placeholder="留空则沿用原到期时间" class="w-full" />
+        <div class="text-[11px] text-ink-500 mt-1">
+          原到期：{{ rotateTarget?.expiresAt || '长期有效' }}
+        </div>
+      </div>
+      <template #footer>
+        <el-button size="small" @click="rotateVisible = false">取消</el-button>
+        <el-button size="small" type="primary" :loading="rotateSaving" @click="confirmRotate">确认轮换</el-button>
+      </template>
+    </el-dialog>
+
     <el-dialog v-model="secretVisible" title="请立即保存明文密钥" width="520px">
       <p class="kb-muted">明文密钥只会展示这一次，关闭后无法再次获取，只能重新签发。</p>
       <pre class="code-block mt-2">{{ issuedSecret }}</pre>
@@ -489,7 +520,7 @@ import {
   getKnowledgeBaseGrantConfig, replaceKnowledgeBaseGrantConfig,
   forgetManagedMemory, listManagedMemories, replaceMemoryScopeGrants, setManagedMemoryStatus, updateExternalMemoryPolicy,
   listMemoryGovernanceEvents, type ManagedMemoryItem, type MemoryGovernanceEvent, type MemoryScopeGrant,
-  probeExternal, revokeExternalKey, type ExternalPrincipalSummary,
+  probeExternal, revokeExternalKey, rotateExternalKey, type ExternalPrincipalSummary,
 } from '../api/external'
 import { unwrap } from '../api/knowledge'
 import { errorMessage as message } from '../utils/feedback'
@@ -558,6 +589,11 @@ const memoryEventsLoading = ref(false)
 const memoryEvents = ref<MemoryGovernanceEvent[]>([])
 const secretVisible = ref(false)
 const issuedSecret = ref('')
+/** 轮换：换发新明文、撤销旧凭证，主体与记忆身份原样带走。 */
+const rotateVisible = ref(false)
+const rotateTarget = ref<ExternalKeyRow | null>(null)
+const rotateExpiresAt = ref('')
+const rotateSaving = ref(false)
 const form = ref<{
   name:string; knowledgeBaseId:number | null; scopes:string[]
   rateLimitPerMinute:number; expiresAt:string; memoryNamespace:string; memoryAgentCode:string
@@ -888,6 +924,32 @@ async function revoke(row:ExternalKeyRow) {
     await loadAll()
   } catch (e) {
     ElMessage.error(message(e))
+  }
+}
+
+function openRotate(row:ExternalKeyRow) {
+  rotateTarget.value = row
+  // 默认沿用原到期：轮换不该顺手把短期凭证变成长期凭证。
+  rotateExpiresAt.value = row.expiresAt || ''
+  rotateVisible.value = true
+}
+
+/** 轮换后旧凭证立即失效，所以新明文必须在同一动作里给到使用者。 */
+async function confirmRotate() {
+  const target = rotateTarget.value
+  if (!target) return
+  rotateSaving.value = true
+  try {
+    const rotated = unwrap(await rotateExternalKey(target.id, rotateExpiresAt.value || null), null)
+    rotateVisible.value = false
+    issuedSecret.value = rotated?.secret || ''
+    secretVisible.value = true
+    ElMessage.success('已轮换，旧凭证同时失效')
+    await loadAll()
+  } catch (e) {
+    ElMessage.error(message(e))
+  } finally {
+    rotateSaving.value = false
   }
 }
 

@@ -9,6 +9,8 @@
   p.name AS principalName,p.principal_type AS principalType,
   k.created_by,u.display_name AS created_by_name,k.created_time,k.updated_time,k.allowed_origins,
   COALESCE(mp.namespace_code,k.memory_namespace) AS memoryNamespace,COALESCE(mp.agent_code,k.memory_agent_code) AS memoryAgentCode,
+  /* 记忆身份来自主体还是 Key 旧列：控制台要能说清「轮换凭证不会改变它」的依据。 */
+  CASE WHEN mp.namespace_code IS NOT NULL THEN 'PRINCIPAL' ELSE 'KEY' END AS memoryIdentitySource,
   k.memory_read_enabled AS memoryReadEnabled,k.memory_write_enabled AS memoryWriteEnabled,
   CAST(k.permission_tags AS CHAR) AS permissionTags</sql>
 

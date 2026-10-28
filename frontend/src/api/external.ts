@@ -40,6 +40,13 @@ export const replaceKnowledgeBaseGrantConfig = (id:number, grants:Array<{
   axios.put(`/api/external/admin/keys/${id}/knowledge-base-grants/config`, grants)
 export const revokeExternalKey = (id:number):Promise<ApiResponse<ExternalKeyRow>> =>
   axios.post(`/api/external/admin/keys/${id}/revoke`)
+/**
+ * 轮换：换发新明文并立即撤销旧凭证，主体、授权与记忆身份都保持不变。
+ * 这是换密钥的正确姿势——「吊销 + 新建」会丢掉主体绑定，记忆身份会漂到新的 key:<id>。
+ * 明文只在这次响应里出现一次；不传 expiresAt 表示沿用原到期时间。
+ */
+export const rotateExternalKey = (id:number, expiresAt?:string|null):Promise<ApiResponse<ExternalKeyRow>> =>
+  axios.post(`/api/external/admin/keys/${id}/rotate`, { expiresAt: expiresAt ?? null })
 export const updateExternalMemoryPolicy = (id:number, policy:{readEnabled:boolean;writeEnabled:boolean}):Promise<ApiResponse<ExternalKeyRow>> =>
   axios.put(`/api/external/admin/keys/${id}/memory-policy`, policy)
 export interface MemoryScopeGrant {
