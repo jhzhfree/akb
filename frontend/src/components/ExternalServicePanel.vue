@@ -3,9 +3,12 @@
     <header class="kb-section-head">
       <div>
         <div class="kb-eyebrow">接口服务</div>
-        <h1 class="kb-title mt-1">{{ section === 'credentials' ? '凭证' : '服务' }}</h1>
+        <h1 class="kb-title mt-1">{{ sectionTitle }}</h1>
         <p class="kb-muted mt-1">
-          <template v-if="section==='credentials'">
+          <template v-if="section==='principals'">
+            主体是授权的最终载体：知识库授权、记忆身份与外部身份绑定都挂在主体上，凭证只是主体的一种凭据——轮换凭证不改变这里的任何配置。
+          </template>
+          <template v-else-if="section==='credentials'">
             API 密钥决定调用方可见的知识库范围与可用动作：明文只在签发时展示一次，吊销即让外部系统立即失去访问能力。
           </template>
           <template v-else>
@@ -193,6 +196,156 @@
         </PanelState>
       </div>
     </article>
+
+    <!-- 主体：授权的最终载体。凭证只是主体的凭据，轮换、新增凭证都不改变主体上的任何配置。 -->
+    <article v-if="section==='principals'" class="kb-card mt-4">
+      <div class="kb-card-head">
+        <b class="text-sm">主体</b>
+        <span class="kb-muted">知识库授权、记忆身份与外部身份绑定都挂在主体上；停用主体即让其下全部凭证立即失效</span>
+        <div class="ml-auto flex gap-2">
+          <button class="kb-btn-outline" :disabled="principalLoading" @click="loadPrincipals">刷新</button>
+          <button class="kb-btn-primary" @click="principalCreateVisible = true">新建主体</button>
+        </div>
+      </div>
+      <div class="p-3">
+        <PanelState :loading="principalLoading" :empty="!principals.length" empty-text="尚未创建任何主体"
+          empty-hint="服务主体承载调用方身份，凭证只是它的一种凭据" retryable @retry="loadPrincipals">
+          <el-table :data="principals" border size="small">
+            <el-table-column prop="principalCode" label="编码" width="160" />
+            <el-table-column prop="name" label="名称" min-width="160" show-overflow-tooltip />
+            <el-table-column label="类型" width="120">
+              <template #default="{ row }">
+                <el-tag size="small" effect="plain">{{ row.principalType || '—' }}</el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column label="状态" width="100">
+              <template #default="{ row }">
+                <el-tag size="small" effect="plain" :type="row.status === 'ACTIVE' ? 'success' : 'danger'">
+                  {{ row.status === 'ACTIVE' ? '启用' : '停用' }}
+                </el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column prop="keyCount" label="凭证数" width="90" />
+            <el-table-column prop="activeGrantCount" label="知识库授权" width="110" />
+            <el-table-column label="操作" width="300" fixed="right">
+              <template #default="{ row }">
+                <el-button link type="primary" size="small" @click="openPrincipalDetail(row)">详情</el-button>
+                <el-button v-if="row.status === 'ACTIVE'" link type="danger" size="small" @click="disablePrincipal(row)">停用</el-button>
+                <el-button v-else link type="success" size="small" @click="enablePrincipal(row)">启用</el-button>
+              </template>
+            </el-table-column>
+          </el-table>
+        </PanelState>
+      </div>
+    </article>
+
+    <!-- 主体详情：凭证、记忆身份、记忆授权与外部身份绑定集中在一处，避免逐把凭证去猜 -->
+    <el-dialog v-model="principalDetailVisible" :title="`主体 · ${principalDetail?.name || ''}`" width="900px">
+      <div v-if="principalDetail">
+        <div class="grid grid-cols-2 gap-2 text-xs">
+          <div><span class="kb-muted">编码：</span>{{ principalDetail.principalCode }}</div>
+          <div><span class="kb-muted">类型：</span>{{ principalDetail.principalType || '—' }}</div>
+          <div><span class="kb-muted">状态：</span>{{ principalDetail.status === 'ACTIVE' ? '启用' : '停用' }}</div>
+          <div><span class="kb-muted">凭证数：</span>{{ principalKeys.length }}</div>
+        </div>
+
+        <el-divider content-position="left">该主体的凭证</el-divider>
+        <el-table :data="principalKeys" border size="small" empty-text="该主体下还没有凭证">
+          <el-table-column prop="name" label="名称" min-width="140" show-overflow-tooltip />
+          <el-table-column prop="keyPrefix" label="前缀" width="180" />
+          <el-table-column label="状态" width="90">
+            <template #default="{ row }">{{ row.status === 'ACTIVE' ? '有效' : '已失效' }}</template>
+          </el-table-column>
+          <el-table-column prop="expiresAt" label="有效期" width="170" />
+        </el-table>
+        <p class="kb-muted mt-1 text-[11px]">在「凭证」页轮换只换明文，主体与下面的记忆身份都不会变。</p>
+
+        <el-divider content-position="left">记忆身份</el-divider>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <div class="kb-label mb-1">命名空间</div>
+            <el-input v-model="principalMemoryForm.namespace" placeholder="如 octop-prod" />
+          </div>
+          <div>
+            <div class="kb-label mb-1">Agent 标识</div>
+            <el-input v-model="principalMemoryForm.agentCode" placeholder="如 agent-ops" />
+          </div>
+        </div>
+        <p class="kb-muted mt-1 text-[11px]">
+          设置后会同时给该主体播种自身私有空间的读写授权——没有它，主体即便拿到 MEMORY_MANAGE 也读不到自己的记忆。
+        </p>
+        <el-button class="mt-2" size="small" type="primary" :loading="principalMemorySaving" @click="savePrincipalMemory">
+          保存记忆身份
+        </el-button>
+
+        <el-divider content-position="left">记忆作用域授权</el-divider>
+        <div v-for="(grant, index) in principalGrants" :key="index" class="mb-2 flex items-center gap-2">
+          <el-select v-model="grant.scopeType" class="w-32">
+            <el-option v-for="type in memoryScopeTypes" :key="type" :label="type" :value="type" />
+          </el-select>
+          <el-input v-model="grant.scopeCode" placeholder="作用域编码" class="flex-1" />
+          <el-checkbox v-model="grant.canRead">读</el-checkbox>
+          <el-checkbox v-model="grant.canWrite">写</el-checkbox>
+          <el-button link type="danger" @click="principalGrants.splice(index, 1)">移除</el-button>
+        </div>
+        <div class="mt-1 flex gap-2">
+          <el-button size="small" @click="addPrincipalGrant">添加作用域</el-button>
+          <el-button size="small" type="primary" :loading="principalGrantSaving" @click="savePrincipalGrants">保存授权</el-button>
+        </div>
+        <p class="kb-muted mt-1 text-[11px]">空列表表示只保留主体自身的私有空间。</p>
+
+        <el-divider content-position="left">Octop 身份绑定</el-divider>
+        <el-table :data="principalBindings" border size="small" empty-text="该主体还没有外部身份绑定">
+          <el-table-column prop="providerInstanceId" label="实例" width="160" />
+          <el-table-column prop="externalUserId" label="外部用户 ID" min-width="200" show-overflow-tooltip />
+          <el-table-column label="状态" width="110">
+            <template #default="{ row }">
+              <el-tag size="small" effect="plain" :type="row.status === 'ACTIVE' ? 'success' : 'info'">{{ row.status }}</el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column label="操作" width="220" fixed="right">
+            <template #default="{ row }">
+              <el-button v-if="row.status === 'ACTIVE'" link type="warning" size="small" @click="suspendBinding(row)">暂停</el-button>
+              <el-button v-else-if="row.status === 'SUSPENDED' || row.status === 'PENDING'" link type="success" size="small" @click="approveBinding(row)">恢复</el-button>
+              <el-button link type="danger" size="small" @click="unbindBinding(row)">解绑</el-button>
+            </template>
+          </el-table-column>
+        </el-table>
+        <div class="mt-2 flex items-center gap-2">
+          <el-input v-model="bindingForm.providerInstanceId" placeholder="Octop 实例 ID" class="w-56" />
+          <el-input v-model="bindingForm.externalUserId" placeholder="Octop 不可变用户 ID" class="flex-1" />
+          <el-button size="small" :loading="bindingSaving" @click="bindOctopUser">绑定</el-button>
+        </div>
+        <p class="kb-muted mt-1 text-[11px]">绑定暂停或解绑后，用该用户身份发起的委托调用会立即失败。</p>
+      </div>
+      <template #footer>
+        <el-button size="small" @click="principalDetailVisible = false">关闭</el-button>
+      </template>
+    </el-dialog>
+
+    <el-dialog v-model="principalCreateVisible" title="新建服务主体" width="520px">
+      <div class="grid gap-3">
+        <div>
+          <div class="kb-label mb-1">编码</div>
+          <el-input v-model="principalCreateForm.principalCode" placeholder="如 AGT_OPS" />
+        </div>
+        <div>
+          <div class="kb-label mb-1">名称</div>
+          <el-input v-model="principalCreateForm.name" placeholder="如 运维助手" />
+        </div>
+        <div>
+          <div class="kb-label mb-1">类型</div>
+          <el-select v-model="principalCreateForm.principalType" class="w-full">
+            <el-option label="AGENT（服务主体）" value="AGENT" />
+            <el-option label="APPLICATION（应用）" value="APPLICATION" />
+          </el-select>
+        </div>
+      </div>
+      <template #footer>
+        <el-button size="small" @click="principalCreateVisible = false">取消</el-button>
+        <el-button size="small" type="primary" :loading="principalCreateSaving" @click="createPrincipal">创建</el-button>
+      </template>
+    </el-dialog>
 
     <div v-if="section==='services'" class="mt-4 grid grid-cols-1 gap-4 xl:grid-cols-2">
       <article class="kb-card">
@@ -521,6 +674,10 @@ import {
   forgetManagedMemory, listManagedMemories, replaceMemoryScopeGrants, setManagedMemoryStatus, updateExternalMemoryPolicy,
   listMemoryGovernanceEvents, type ManagedMemoryItem, type MemoryGovernanceEvent, type MemoryScopeGrant,
   probeExternal, revokeExternalKey, rotateExternalKey, type ExternalPrincipalSummary,
+  createExternalPrincipal, updateExternalPrincipal,
+  getPrincipalMemoryProfile, savePrincipalMemoryProfile, getPrincipalMemoryGrants, replacePrincipalMemoryGrants,
+  listOctopBindings, bindOctopIdentity, approveOctopBinding, suspendOctopBinding, deleteOctopBinding,
+  type OctopBinding,
 } from '../api/external'
 import { unwrap } from '../api/knowledge'
 import { errorMessage as message } from '../utils/feedback'
@@ -530,15 +687,22 @@ import PanelState from './PanelState.vue'
 import { copyText } from '../utils/clipboard'
 
 /** focus 由知识集成的 Tab 决定：服务 Tab 看协议与接入示例，凭证 Tab 看 API Key 与调用审计。 */
-const props = defineProps<{ bases:KnowledgeBase[]; focus?:'services'|'credentials' }>()
+const props = defineProps<{ bases:KnowledgeBase[]; focus?:'services'|'credentials'|'principals' }>()
 const shell = useShell()
 /** 凭证（API Key 的签发、吊销与调用审计）是否可用：由该角色的可见菜单决定，不再靠「是否管理视图」。 */
 const canCredentials = computed(() => shell.menuHas('integration.credentials'))
-const section = ref<'services'|'credentials'>(
-  props.focus === 'credentials' && canCredentials.value ? 'credentials' : 'services')
-watch(() => props.focus, value => {
-  section.value = value === 'credentials' && canCredentials.value ? 'credentials' : 'services'
-})
+const canPrincipals = computed(() => shell.menuHas('integration.principals'))
+type Section = 'services'|'credentials'|'principals'
+/** 区块由 Tab 决定；菜单里没有的那个 Tab 即便被直接指定也回落到「服务」。 */
+function resolveSection(focus?:string):Section {
+  if (focus === 'credentials' && canCredentials.value) return 'credentials'
+  if (focus === 'principals' && canPrincipals.value) return 'principals'
+  return 'services'
+}
+const section = ref<Section>(resolveSection(props.focus))
+watch(() => props.focus, value => { section.value = resolveSection(value) })
+const sectionTitle = computed(() =>
+  section.value === 'credentials' ? '凭证' : section.value === 'principals' ? '主体' : '服务')
 
 const overview = ref<ExternalServiceOverview | null>(null)
 const keys = ref<ExternalKeyRow[]>([])
@@ -676,12 +840,168 @@ async function loadAll() {
   try {
     overview.value = unwrap(await getExternalServices(), null)
     keys.value = unwrap(await listExternalKeys(), [])
+    await loadPrincipals()
   } catch (e) {
     error.value = message(e)
   } finally {
     loading.value = false
   }
   await loadAudits()
+}
+
+/* ---- 主体：授权的最终载体（知识库授权、记忆身份、外部身份绑定都挂在这里） ---- */
+const principals = ref<ExternalPrincipalSummary[]>([])
+const principalLoading = ref(false)
+const principalDetailVisible = ref(false)
+const principalDetail = ref<ExternalPrincipalSummary | null>(null)
+const principalKeys = ref<ExternalKeyRow[]>([])
+const principalMemoryForm = ref<{ namespace:string; agentCode:string }>({ namespace:'', agentCode:'' })
+const principalMemorySaving = ref(false)
+const principalGrants = ref<MemoryScopeGrant[]>([])
+const principalGrantSaving = ref(false)
+const principalBindings = ref<OctopBinding[]>([])
+const bindingForm = ref({ providerInstanceId:'', externalUserId:'' })
+const bindingSaving = ref(false)
+const principalCreateVisible = ref(false)
+const principalCreateSaving = ref(false)
+const principalCreateForm = ref({ principalCode:'', name:'', principalType:'AGENT' as 'AGENT'|'APPLICATION' })
+/** 主体自身的 AGENT 私有空间由记忆身份播种，不在这个列表里手动配置。 */
+const memoryScopeTypes = ['TEAM', 'PROJECT', 'TASK', 'WORKFLOW', 'SESSION'] as const
+
+async function loadPrincipals() {
+  principalLoading.value = true
+  try { principals.value = unwrap(await listExternalPrincipals(), []) }
+  catch (e) { ElMessage.error(message(e)) }
+  finally { principalLoading.value = false }
+}
+
+async function openPrincipalDetail(row:ExternalPrincipalSummary) {
+  principalDetail.value = row
+  principalKeys.value = keys.value.filter(key => key.principalId === row.id)
+  principalDetailVisible.value = true
+  try {
+    const profile = unwrap(await getPrincipalMemoryProfile(row.id), null)
+    principalMemoryForm.value = { namespace:profile?.namespace || '', agentCode:profile?.agentCode || '' }
+  } catch (e) { ElMessage.error(message(e)) }
+  try { principalGrants.value = unwrap(await getPrincipalMemoryGrants(row.id), []) }
+  catch { principalGrants.value = [] }
+  await loadBindings(row.id)
+}
+
+async function loadBindings(principalId?:number|null) {
+  try {
+    const all = unwrap(await listOctopBindings(), [])
+    principalBindings.value = principalId == null ? all : all.filter(item => item.principalId === principalId)
+  } catch { principalBindings.value = [] }
+}
+
+async function savePrincipalMemory() {
+  const target = principalDetail.value
+  if (!target) return
+  principalMemorySaving.value = true
+  try {
+    unwrap(await savePrincipalMemoryProfile(target.id, principalMemoryForm.value), null)
+    ElMessage.success('记忆身份已保存')
+  } catch (e) { ElMessage.error(message(e)) }
+  finally { principalMemorySaving.value = false }
+}
+
+function addPrincipalGrant() {
+  principalGrants.value.push({ scopeType:'PROJECT', scopeCode:'', canRead:true, canWrite:false })
+}
+
+async function savePrincipalGrants() {
+  const target = principalDetail.value
+  if (!target) return
+  principalGrantSaving.value = true
+  try {
+    principalGrants.value = unwrap(await replacePrincipalMemoryGrants(target.id, principalGrants.value), [])
+    ElMessage.success('记忆作用域授权已更新')
+  } catch (e) { ElMessage.error(message(e)) }
+  finally { principalGrantSaving.value = false }
+}
+
+/** 停用主体会让它下面所有凭证与记忆调用立即失效，所以先把影响说清楚再执行。 */
+async function disablePrincipal(row:ExternalPrincipalSummary) {
+  try {
+    await ElMessageBox.confirm(
+      `停用「${row.name}」后，该主体下 ${row.keyCount} 个凭证会立即失效，外部系统调用将中断。确认停用？`,
+      '停用主体', { type:'warning', confirmButtonText:'确认停用', cancelButtonText:'取消' },
+    )
+  } catch { return }
+  await setPrincipalStatus(row, 'DISABLED')
+}
+async function enablePrincipal(row:ExternalPrincipalSummary) {
+  await setPrincipalStatus(row, 'ACTIVE')
+}
+async function setPrincipalStatus(row:ExternalPrincipalSummary, status:'ACTIVE'|'DISABLED') {
+  try {
+    unwrap(await updateExternalPrincipal(row.id, { status }), null)
+    ElMessage.success(status === 'ACTIVE' ? '主体已启用' : '主体已停用')
+    await loadPrincipals()
+    if (principalDetail.value?.id === row.id) principalDetail.value = { ...row, status }
+  } catch (e) { ElMessage.error(message(e)) }
+}
+
+async function createPrincipal() {
+  principalCreateSaving.value = true
+  try {
+    unwrap(await createExternalPrincipal({
+      principalCode: principalCreateForm.value.principalCode.trim(),
+      name: principalCreateForm.value.name.trim(),
+      principalType: principalCreateForm.value.principalType,
+    }), null)
+    principalCreateVisible.value = false
+    principalCreateForm.value = { principalCode:'', name:'', principalType:'AGENT' }
+    ElMessage.success('主体已创建')
+    await loadPrincipals()
+  } catch (e) { ElMessage.error(message(e)) }
+  finally { principalCreateSaving.value = false }
+}
+
+async function bindOctopUser() {
+  const target = principalDetail.value
+  if (!target) return
+  bindingSaving.value = true
+  try {
+    unwrap(await bindOctopIdentity({
+      providerInstanceId: bindingForm.value.providerInstanceId.trim(),
+      externalUserId: bindingForm.value.externalUserId.trim(),
+      principalId: target.id,
+    }), null)
+    bindingForm.value.externalUserId = ''
+    ElMessage.success('已绑定')
+    await loadBindings(target.id)
+  } catch (e) { ElMessage.error(message(e)) }
+  finally { bindingSaving.value = false }
+}
+
+async function suspendBinding(row:OctopBinding) {
+  try {
+    unwrap(await suspendOctopBinding(row.id), null)
+    ElMessage.success('已暂停，该身份的委托调用将失败')
+    await loadBindings(principalDetail.value?.id)
+  } catch (e) { ElMessage.error(message(e)) }
+}
+async function approveBinding(row:OctopBinding) {
+  try {
+    unwrap(await approveOctopBinding(row.id), null)
+    ElMessage.success('绑定已恢复')
+    await loadBindings(principalDetail.value?.id)
+  } catch (e) { ElMessage.error(message(e)) }
+}
+async function unbindBinding(row:OctopBinding) {
+  try {
+    await ElMessageBox.confirm(
+      '解绑后将无法再用该 Octop 用户身份发起委托调用，确认解绑？',
+      '解绑外部身份', { type:'warning', confirmButtonText:'确认解绑', cancelButtonText:'取消' },
+    )
+  } catch { return }
+  try {
+    unwrap(await deleteOctopBinding(row.id), null)
+    ElMessage.success('已解绑')
+    await loadBindings(principalDetail.value?.id)
+  } catch (e) { ElMessage.error(message(e)) }
 }
 
 async function openKnowledgeBaseGrants(row:ExternalKeyRow) {

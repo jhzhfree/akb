@@ -12,7 +12,11 @@ export const getExternalServices = ():Promise<ApiResponse<ExternalServiceOvervie
 export const listExternalKeys = ():Promise<ApiResponse<ExternalKeyRow[]>> =>
   axios.get('/api/external/admin/keys')
 export interface ExternalPrincipalSummary {
-  id:number; principalCode:string; name:string; status:string; keyCount:number; activeGrantCount:number; createdTime:string
+  id:number; principalCode:string; name:string
+  /** USER / AGENT / APPLICATION：决定它能不能登录控制台、能不能走委托身份。 */
+  principalType?:string|null
+  status:string; keyCount:number; activeGrantCount:number; createdTime:string
+  ownerUserId?:number|null
 }
 export const listExternalPrincipals = ():Promise<ApiResponse<ExternalPrincipalSummary[]>> =>
   axios.get('/api/external/admin/principals')
@@ -40,6 +44,59 @@ export const replaceKnowledgeBaseGrantConfig = (id:number, grants:Array<{
   axios.put(`/api/external/admin/keys/${id}/knowledge-base-grants/config`, grants)
 export const revokeExternalKey = (id:number):Promise<ApiResponse<ExternalKeyRow>> =>
   axios.post(`/api/external/admin/keys/${id}/revoke`)
+
+/* ---- 主体：身份、授权与生命周期 ---- */
+/**
+ * 主体是授权的最终载体：知识库授权、记忆身份、外部身份绑定都挂在主体上，
+ * 凭证只是主体的一种凭据——轮换或新增凭证都不改变这些。
+ */
+export const createExternalPrincipal = (payload:{
+  principalCode:string; name:string; principalType:'USER'|'AGENT'|'APPLICATION'
+  providerInstanceId?:string|null; externalSubjectId?:string|null
+  memoryNamespace?:string|null; memoryAgentCode?:string|null
+}):Promise<ApiResponse<ExternalPrincipalSummary>> => axios.post('/api/external/admin/principals', payload)
+/** 停用主体即让其下全部凭证与记忆调用立即失效，不必逐个吊销。 */
+export const updateExternalPrincipal = (id:number, payload:{
+  name?:string|null; status?:'ACTIVE'|'DISABLED'|null; ownerUserId?:number|null
+}):Promise<ApiResponse<ExternalPrincipalSummary>> => axios.put(`/api/external/admin/principals/${id}`, payload)
+export const assignPrincipalOwnerUser = (id:number, userId:number):Promise<ApiResponse<ExternalPrincipalSummary>> =>
+  axios.put(`/api/external/admin/principals/${id}/owner-user`, { userId })
+export const createPrincipalKey = (principalId:number, payload:{
+  name?:string; knowledgeBaseId?:number|null; scopes?:string[]; rateLimitPerMinute?:number; expiresAt?:string|null
+}):Promise<ApiResponse<ExternalKeyRow>> =>
+  axios.post(`/api/external/admin/principals/${principalId}/keys`, payload)
+
+export interface PrincipalMemoryProfile {
+  principalId:number; principalCode:string; principalType:string
+  configured:boolean; namespace:string|null; agentCode:string|null; status:string|null
+}
+export const getPrincipalMemoryProfile = (id:number):Promise<ApiResponse<PrincipalMemoryProfile>> =>
+  axios.get(`/api/external/admin/principals/${id}/memory-profile`)
+export const savePrincipalMemoryProfile = (id:number, body:{ namespace:string; agentCode:string }):Promise<ApiResponse<PrincipalMemoryProfile>> =>
+  axios.put(`/api/external/admin/principals/${id}/memory-profile`, body)
+export const getPrincipalMemoryGrants = (id:number):Promise<ApiResponse<MemoryScopeGrant[]>> =>
+  axios.get(`/api/external/admin/principals/${id}/memory-grants`)
+export const replacePrincipalMemoryGrants = (id:number, grants:MemoryScopeGrant[]):Promise<ApiResponse<MemoryScopeGrant[]>> =>
+  axios.put(`/api/external/admin/principals/${id}/memory-grants`, grants)
+
+/* ---- Octop 身份绑定：委托身份的前提 ---- */
+export interface OctopBinding {
+  id:number; provider:string; providerInstanceId:string; externalUserId:string
+  principalId:number|null; principalCode:string|null; status:string; reason:string|null; createdTime:string
+}
+export const listOctopBindings = ():Promise<ApiResponse<OctopBinding[]>> =>
+  axios.get('/api/external/admin/identity-bindings/octop')
+export const bindOctopIdentity = (body:{
+  providerInstanceId:string; externalUserId:string; principalId:number; reason?:string|null
+}):Promise<ApiResponse<OctopBinding>> => axios.post('/api/external/admin/identity-bindings/octop', body)
+export const approveOctopBinding = (id:number, reason?:string|null):Promise<ApiResponse<OctopBinding>> =>
+  axios.post(`/api/external/admin/identity-bindings/octop/${id}/approve`, { reason: reason ?? null })
+export const suspendOctopBinding = (id:number, reason?:string|null):Promise<ApiResponse<OctopBinding>> =>
+  axios.post(`/api/external/admin/identity-bindings/octop/${id}/suspend`, { reason: reason ?? null })
+export const resumeOctopBinding = (id:number, reason?:string|null):Promise<ApiResponse<OctopBinding>> =>
+  axios.post(`/api/external/admin/identity-bindings/octop/${id}/resume`, { reason: reason ?? null })
+export const deleteOctopBinding = (id:number, reason?:string|null):Promise<ApiResponse<boolean>> =>
+  axios.delete(`/api/external/admin/identity-bindings/octop/${id}`, { data:{ reason: reason ?? null } })
 /**
  * 轮换：换发新明文并立即撤销旧凭证，主体、授权与记忆身份都保持不变。
  * 这是换密钥的正确姿势——「吊销 + 新建」会丢掉主体绑定，记忆身份会漂到新的 key:<id>。

@@ -14,6 +14,9 @@
   <ExternalServicePanel
     v-else-if="active==='integration.credentials'"
     :bases="bases" focus="credentials" />
+  <ExternalServicePanel
+    v-else-if="active==='integration.principals'"
+    :bases="bases" focus="principals" />
 
   <!-- API / SSE 复用联调台：按协议进入对应页签（设计 §6.3）。 -->
   <ExternalServiceLab v-else-if="active==='integration.api'" :bases="bases" protocol="rest" />

@@ -172,6 +172,12 @@ export const NAV_SECTIONS: NavSection[] = [
        */
       { key: 'integration.events', label: '事件总线', icon: 'rss', adminOnly: true, permission: PERM.INTEGRATION_VIEW },
       { key: 'integration.credentials', label: '凭证', icon: 'key', adminOnly: true, permission: PERM.INTEGRATION_VIEW },
+      /**
+       * 主体与凭证并列但不等同：知识库授权、记忆身份、外部身份绑定都挂在主体上，
+       * 凭证只是主体的一种凭据（轮换凭证不改变主体上的任何配置）。单独成页，
+       * 否则「换个密钥」和「改主体的记忆身份」会挤在同一张凭证表里说不清。
+       */
+      { key: 'integration.principals', label: '主体', icon: 'shield', adminOnly: true, permission: PERM.INTEGRATION_VIEW },
       { key: 'integration.embed', label: '嵌入组件', icon: 'code', adminOnly: true, permission: PERM.INTEGRATION_VIEW },
       { key: 'integration.logs', label: '调用日志', icon: 'doc', adminOnly: true, permission: PERM.INTEGRATION_VIEW },
     ],
