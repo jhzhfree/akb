@@ -56,6 +56,8 @@ public class KnowledgeBaseService {
     /**
      * Single workspace lookup, used by external callers bound to one knowledge base.
      */
+    public KnowledgeBase getExternalByCode(String code) { return mapper.getExternalKnowledgeBaseByCode(code); }
+
     public KnowledgeBase get(Long id) {
         return id == null ? null : mapper.getKnowledgeBase(id);
     }

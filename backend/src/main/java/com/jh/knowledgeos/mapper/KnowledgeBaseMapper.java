@@ -19,6 +19,9 @@ import java.util.Map;
 
 /** Focused persistence contract extracted from the legacy KnowledgeMapper. */
 public interface KnowledgeBaseMapper {
+    @org.apache.ibatis.annotations.Select("SELECT * FROM t_knowledge_base WHERE base_code=#{code} AND status='ACTIVE' LIMIT 1")
+    com.jh.knowledgeos.domain.KnowledgeBase getExternalKnowledgeBaseByCode(@org.apache.ibatis.annotations.Param("code") String code);
+
 
     List<KnowledgeBase> listKnowledgeBases(@Param("userId") Long userId, @Param("all") boolean all);
 

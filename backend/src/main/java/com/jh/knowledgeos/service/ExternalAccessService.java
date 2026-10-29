@@ -37,6 +37,9 @@ public class ExternalAccessService {
     public static final String OCTOP_ASSERTION_HEADER = "X-Octop-Identity";
 
     private final ApiKeyService apiKeyService;
+    private WorkloadIdentityService workloadIdentityService;
+    @Autowired
+    public void setWorkloadIdentityService(WorkloadIdentityService service) { this.workloadIdentityService = service; }
 
     private final ExternalRateLimiter rateLimiter;
 
@@ -87,6 +90,15 @@ public class ExternalAccessService {
         if (key == null) {
             throw new UnauthorizedException("API Key 无效、已吊销或已过期");
         }
+        if (key.isWorkloadCredential()) {
+            if (workloadIdentityService == null) throw new UnauthorizedException("工作负载认证不可用");
+            key.setWorkloadIdentity(workloadIdentityService.authenticate(request, key));
+            rateLimiter.check(key);
+            return key;
+        }
+        if (request.getHeader(com.jh.knowledgeos.config.WorkloadRequestFilter.HEADER) != null) {
+            throw new UnauthorizedException("该凭据未启用工作负载认证");
+        }
         if (octopAssertion != null && !octopAssertion.trim().isEmpty()) {
             if (delegatedIdentityService == null || !delegatedIdentityService.isOctopEnabled()) {
                 throw new UnauthorizedException("Octop 身份断言验证未启用");
@@ -114,6 +126,11 @@ public class ExternalAccessService {
 
     public List<Long> grantedKnowledgeBases(ApiKey key) {
         List<Long> agentGrants = apiKeyService.grantedKnowledgeBases(key);
+        if (key != null && key.isWorkloadCredential()) {
+            if (key.getWorkloadIdentity() == null) throw new UnauthorizedException("缺少已认证 Agent");
+            agentGrants = new ArrayList<Long>(agentGrants);
+            agentGrants.retainAll(apiKeyService.grantedKnowledgeBases(key.getWorkloadIdentity().getAgentPrincipalId()));
+        }
         if (key == null || key.getDelegatedPrincipalId() == null) {
             return agentGrants;
         }
@@ -145,7 +162,7 @@ public class ExternalAccessService {
         if (kb == null) {
             throw new IllegalArgumentException("缺少 knowledgeBaseId 参数");
         }
-        if (key.getDelegatedPrincipalId() != null) {
+        if (key.isWorkloadCredential() || key.getDelegatedPrincipalId() != null) {
             if (grants.contains(kb)) {
                 return kb;
             }
@@ -201,7 +218,7 @@ public class ExternalAccessService {
             return null;
         }
         ApiKey key = apiKeyService.get(parsed.getKeyId());
-        if (key == null || !key.isUsable()) {
+        if (key == null || !key.isUsable() || key.isWorkloadCredential()) {
             return null;
         }
         // Published before the revocation check on purpose: a rejected call is exactly the one an

@@ -426,6 +426,8 @@ public class ApiKeyService {
         key.setCredentialType(ApiKey.CREDENTIAL_USER_PAT);
         key.setOwnerUserId(userId);
         key.setPrincipalId(existing.getPrincipalId());
+        key.setIdentityMode(existing.getIdentityMode());
+        key.setWorkloadPolicyId(existing.getWorkloadPolicyId());
         key.setScopes(existing.getScopes());
         key.setRateLimitPerMinute(existing.getRateLimitPerMinute());
         key.setStatus(ApiKey.STATUS_ACTIVE);
@@ -467,6 +469,8 @@ public class ApiKeyService {
         key.setKeyPrefix(secret.substring(0, SECRET_PREFIX.length() + 6));
         key.setCredentialType(existing.getCredentialType() == null ? ApiKey.CREDENTIAL_SERVICE_KEY : existing.getCredentialType());
         key.setPrincipalId(existing.getPrincipalId());
+        key.setIdentityMode(existing.getIdentityMode());
+        key.setWorkloadPolicyId(existing.getWorkloadPolicyId());
         key.setOwnerUserId(existing.getOwnerUserId());
         key.setKnowledgeBaseId(existing.getKnowledgeBaseId());
         key.setScopes(existing.getScopes());
@@ -685,6 +689,8 @@ public class ApiKeyService {
         row.put("name", key.getName());
         row.put("keyPrefix", key.getKeyPrefix());
         row.put("credentialType", key.getCredentialType());
+        row.put("identityMode", key.getIdentityMode());
+        row.put("workloadPolicyId", key.getWorkloadPolicyId());
         row.put("ownerUserId", key.getOwnerUserId());
         row.put("knowledgeBaseId", key.getKnowledgeBaseId());
         row.put("knowledgeBaseName", key.getKnowledgeBaseName());

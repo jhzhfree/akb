@@ -15,6 +15,38 @@ public class ApiCallAudit {
 
     private Long id;
 
+    private Long applicationPrincipalId;
+    public Long getApplicationPrincipalId() { return applicationPrincipalId; }
+    public void setApplicationPrincipalId(Long value) { applicationPrincipalId = value; }
+    private Long agentPrincipalId;
+    public Long getAgentPrincipalId() { return agentPrincipalId; }
+    public void setAgentPrincipalId(Long value) { agentPrincipalId = value; }
+    private String workloadSessionId;
+    public String getWorkloadSessionId() { return workloadSessionId; }
+    public void setWorkloadSessionId(String value) { workloadSessionId = value; }
+    private String workloadInvocationId;
+    public String getWorkloadInvocationId() { return workloadInvocationId; }
+    public void setWorkloadInvocationId(String value) { workloadInvocationId = value; }
+    private String workloadIdentityMode;
+    public String getWorkloadIdentityMode() { return workloadIdentityMode; }
+    public void setWorkloadIdentityMode(String value) { workloadIdentityMode = value; }
+
+    private String proofProfile;
+    public String getProofProfile() { return proofProfile; }
+    public void setProofProfile(String value) { proofProfile = value; }
+    private String signingKid;
+    public String getSigningKid() { return signingKid; }
+    public void setSigningKid(String value) { signingKid = value; }
+    private Long agentKeyRegistrationId;
+    public Long getAgentKeyRegistrationId() { return agentKeyRegistrationId; }
+    public void setAgentKeyRegistrationId(Long value) { agentKeyRegistrationId = value; }
+    private String workloadMessageId;
+    public String getWorkloadMessageId() { return workloadMessageId; }
+    public void setWorkloadMessageId(String value) { workloadMessageId = value; }
+    private String workloadPlatformId;
+    public String getWorkloadPlatformId() { return workloadPlatformId; }
+    public void setWorkloadPlatformId(String value) { workloadPlatformId = value; }
+
     private Long keyId;
 
     private String keyCode;

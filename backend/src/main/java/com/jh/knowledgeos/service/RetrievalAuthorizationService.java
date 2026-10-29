@@ -76,6 +76,7 @@ public class RetrievalAuthorizationService {
             return requested;
         }
         RetrievalAuthorizationContext context = forCredential(key, knowledgeBaseId);
+        if (key.isWorkloadCredential()) return context.effectiveTags(requested);
         List<String> removed = context.removedTags(requested);
         if (mode == Mode.CLIENT) {
             return requested;
@@ -113,10 +114,15 @@ public class RetrievalAuthorizationService {
             String employeeGrantJson = externalApiMapper.getPrincipalKnowledgeBaseGrantPermissionTags(key.getDelegatedPrincipalId(), kb);
             kbTags = intersectPolicies(kbTags, parseTags(employeeGrantJson));
         }
+        if (key != null && key.isWorkloadCredential() && kb != null && externalApiMapper != null) {
+            if (key.getWorkloadIdentity() == null) throw new SecurityException("缺少已认证 Agent");
+            String agentTags = externalApiMapper.getPrincipalKnowledgeBaseGrantPermissionTags(key.getWorkloadIdentity().getAgentPrincipalId(), kb);
+            kbTags = intersectPolicies(kbTags, parseTags(agentTags));
+        }
         List<String> granted = intersectPolicies(keyTags, kbTags);
         if (granted == null) {
             // 未配置标签授权：强制模式下按默认拒绝处理，其余模式不约束。
-            return mode == Mode.ENFORCE
+            return (mode == Mode.ENFORCE || (key != null && key.isWorkloadCredential()))
                 ? RetrievalAuthorizationContext.denyByDefault(code, kb)
                 : RetrievalAuthorizationContext.unconstrained(code, kb);
         }

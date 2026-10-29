@@ -2,7 +2,7 @@
 
 <sql id="apiKeyColumns">k.id,k.key_code,k.name,k.secret_hash,k.key_prefix,k.credential_type AS credentialType,k.owner_user_id AS ownerUserId,
   owner.status AS ownerUserStatus,p.status AS principalStatus,p.external_instance_id AS externalInstanceId,p.external_subject_id AS externalSubjectId,
-  k.knowledge_base_id,k.principal_id AS principalId,
+  k.identity_mode,k.workload_policy_id,k.knowledge_base_id,k.principal_id AS principalId,
   (SELECT COUNT(1) FROM t_principal_kb_grant g WHERE g.principal_id=k.principal_id AND g.status='ACTIVE'
     AND (g.expires_at IS NULL OR g.expires_at&gt;CURRENT_TIMESTAMP)) AS grantedKnowledgeBaseCount,
   b.name AS knowledge_base_name,k.scopes,k.rate_limit_per_minute,k.status,k.expires_at,k.last_used_at,
@@ -61,8 +61,8 @@
   LEFT JOIN t_user u ON u.id=k.created_by
   WHERE k.secret_hash=#{secretHash} AND k.deleted_at IS NULL LIMIT 1</select>
 
-<insert id="insertApiKey" parameterType="com.jh.knowledgeos.domain.ApiKey" useGeneratedKeys="true" keyProperty="id">INSERT INTO t_api_key(key_code,name,secret_hash,key_prefix,credential_type,owner_user_id,knowledge_base_id,principal_id,scopes,permission_tags,rate_limit_per_minute,status,expires_at,created_by,allowed_origins,memory_namespace,memory_agent_code)
-  VALUES(#{keyCode},#{name},#{secretHash},#{keyPrefix},COALESCE(#{credentialType},'SERVICE_KEY'),#{ownerUserId},#{knowledgeBaseId},#{principalId},#{scopes},CAST(#{permissionTags} AS JSON),#{rateLimitPerMinute},#{status},#{expiresAt},#{createdBy},#{allowedOrigins},#{memoryNamespace},#{memoryAgentCode})</insert>
+<insert id="insertApiKey" parameterType="com.jh.knowledgeos.domain.ApiKey" useGeneratedKeys="true" keyProperty="id">INSERT INTO t_api_key(key_code,name,secret_hash,key_prefix,credential_type,owner_user_id,knowledge_base_id,principal_id,scopes,permission_tags,rate_limit_per_minute,status,expires_at,created_by,allowed_origins,memory_namespace,memory_agent_code,identity_mode,workload_policy_id)
+  VALUES(#{keyCode},#{name},#{secretHash},#{keyPrefix},COALESCE(#{credentialType},'SERVICE_KEY'),#{ownerUserId},#{knowledgeBaseId},#{principalId},#{scopes},CAST(#{permissionTags} AS JSON),#{rateLimitPerMinute},#{status},#{expiresAt},#{createdBy},#{allowedOrigins},#{memoryNamespace},#{memoryAgentCode},COALESCE(#{identityMode},'LEGACY'),#{workloadPolicyId})</insert>
 
 <insert id="insertPrincipal" parameterType="com.jh.knowledgeos.domain.ExternalPrincipal" useGeneratedKeys="true" keyProperty="id">INSERT INTO t_principal(principal_code,principal_type,owner_user_id,external_instance_id,external_subject_id,name,status,created_by)
   VALUES(#{principalCode},COALESCE(#{principalType},'APPLICATION'),#{ownerUserId},#{externalInstanceId},#{externalSubjectId},#{name},'ACTIVE',#{createdBy})</insert>
@@ -222,8 +222,8 @@
 
 <update id="touchApiKey">UPDATE t_api_key SET last_used_at=CURRENT_TIMESTAMP WHERE id=#{id}</update>
 
-<insert id="insertApiCallAudit" parameterType="com.jh.knowledgeos.domain.ApiCallAudit">INSERT INTO t_api_call_audit(key_id,key_code,caller_name,token_jti,origin,caller_ip,channel,method,knowledge_base_id,request_params,status_code,response_data,duration_ms,trace_id,message)
-  VALUES(#{keyId},#{keyCode},#{callerName},#{tokenJti},#{origin},#{callerIp},#{channel},#{method},#{knowledgeBaseId},#{requestParams},#{statusCode},#{responseData},#{durationMs},#{traceId},#{message})</insert>
+<insert id="insertApiCallAudit" parameterType="com.jh.knowledgeos.domain.ApiCallAudit">INSERT INTO t_api_call_audit(key_id,key_code,caller_name,token_jti,origin,caller_ip,channel,method,knowledge_base_id,request_params,status_code,response_data,duration_ms,trace_id,message,application_principal_id,agent_principal_id,workload_session_id,workload_invocation_id,workload_identity_mode,proof_profile,signing_kid,agent_key_registration_id,workload_message_id,workload_platform_id)
+  VALUES(#{keyId},#{keyCode},#{callerName},#{tokenJti},#{origin},#{callerIp},#{channel},#{method},#{knowledgeBaseId},#{requestParams},#{statusCode},#{responseData},#{durationMs},#{traceId},#{message},#{applicationPrincipalId},#{agentPrincipalId},#{workloadSessionId},#{workloadInvocationId},#{workloadIdentityMode},#{proofProfile},#{signingKid},#{agentKeyRegistrationId},#{workloadMessageId},#{workloadPlatformId})</insert>
 
 <select id="listApiCallAudits" resultType="com.jh.knowledgeos.domain.ApiCallAudit">SELECT * FROM t_api_call_audit
   <where>

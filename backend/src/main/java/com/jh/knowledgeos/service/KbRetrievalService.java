@@ -65,11 +65,8 @@ public class KbRetrievalService {
             }
             return id;
         }
-        for (KnowledgeBase base : bases.list()) {
-            if (raw.equalsIgnoreCase(base.getBaseCode())) {
-                return base.getId();
-            }
-        }
+        KnowledgeBase base = bases.getExternalByCode(raw);
+        if (base != null) return base.getId();
         throw KbRetrievalException.kbNotFound(raw);
     }
 

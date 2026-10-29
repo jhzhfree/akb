@@ -52,7 +52,7 @@ class KbRetrievalServiceTest {
         base.setId(41L);
         base.setBaseCode("HR-POLICY");
         when(bases.get(41L)).thenReturn(base);
-        when(bases.list()).thenReturn(Arrays.asList(base));
+        when(bases.getExternalByCode("hr-policy")).thenReturn(base);
 
         assertEquals(Long.valueOf(41L), service.resolveKnowledgeBase(null, "41", null));
         assertEquals(Long.valueOf(41L), service.resolveKnowledgeBase(null, null, "hr-policy"));

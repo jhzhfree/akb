@@ -55,7 +55,7 @@ public class ExternalAuditService {
      * belongs here: the audit table is readable by the whole operations surface.</p>
      */
     private static final Set<String> SECRET_KEYS = new HashSet<String>(Arrays.asList("apikey", "apikeyid", "authorization", "token", "accesstoken",
-        "refreshtoken", "secret", "secretkey", "accesskey", "password", "passwd", "credential", "credentialsecret", "privatekey", "cookie", "sessionid"));
+        "refreshtoken", "secret", "secretkey", "accesskey", "password", "passwd", "credential", "credentialsecret", "privatekey", "cookie", "sessionid", "xakbworkloadassertion", "workloadassertion", "xoctopidentity", "registrationproof", "nonce", "credentialsha256"));
 
     private final ExternalApiMapper mapper;
 
@@ -101,6 +101,20 @@ public class ExternalAuditService {
         ApiCallAudit audit = new ApiCallAudit();
         audit.setKeyId(key == null ? null : key.getId());
         audit.setKeyCode(key == null ? null : key.getKeyCode());
+        if (key != null && key.isWorkloadCredential()) {
+            audit.setApplicationPrincipalId(key.getPrincipalId());
+            audit.setWorkloadIdentityMode(key.getIdentityMode());
+            if (key.getWorkloadIdentity() != null) {
+                audit.setAgentPrincipalId(key.getWorkloadIdentity().getAgentPrincipalId());
+                audit.setWorkloadSessionId(key.getWorkloadIdentity().getSessionId());
+                audit.setWorkloadInvocationId(key.getWorkloadIdentity().getInvocationId());
+                audit.setProofProfile(key.getWorkloadIdentity().getProofProfile());
+                audit.setSigningKid(key.getWorkloadIdentity().getSigningKid());
+                audit.setAgentKeyRegistrationId(key.getWorkloadIdentity().getKeyRegistrationId());
+                audit.setWorkloadMessageId(key.getWorkloadIdentity().getMessageId());
+                audit.setWorkloadPlatformId(key.getWorkloadIdentity().getPlatformId());
+            }
+        }
         audit.setCallerName(callerName(key));
         audit.setTokenJti(embedToken == null ? null : embedToken.getJti());
         audit.setOrigin(embedToken == null ? null : embedToken.getOrigin());

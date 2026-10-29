@@ -57,7 +57,13 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(UnauthorizedException.class)
     @ResponseStatus(HttpStatus.UNAUTHORIZED)
     public ApiResponse<Object> unauthorized(UnauthorizedException e) {
-        return ApiResponse.fail(ApiErrorCode.UNAUTHORIZED, e.getMessage());
+        return ApiResponse.fail(e instanceof WorkloadProofException ? ApiErrorCode.WORKLOAD_PROOF_INVALID : ApiErrorCode.UNAUTHORIZED, e.getMessage());
+    }
+
+    @ExceptionHandler(WorkloadUnavailableException.class)
+    @ResponseStatus(HttpStatus.SERVICE_UNAVAILABLE)
+    public ApiResponse<Object> workloadUnavailable(WorkloadUnavailableException e) {
+        return ApiResponse.fail(ApiErrorCode.WORKLOAD_IDENTITY_UNAVAILABLE, e.getMessage());
     }
 
     /**

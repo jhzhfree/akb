@@ -251,27 +251,27 @@ public class McpServerService {
         } else if ("list_knowledge_cards".equals(name)) {
             accessService.assertScope(key, ApiKey.SCOPE_READ_OBJECT);
             Long kb = resolve(key, args);
-            value = facade.cards(kb, null);
+            value = facade.cards(kb, facade.tagsFor(key, kb));
         } else if ("get_knowledge_card".equals(name)) {
             accessService.assertScope(key, ApiKey.SCOPE_READ_OBJECT);
             Long kb = resolve(key, args);
-            value = facade.objectDetail(kb, "CARD", text(args, "code"), null);
+            value = facade.objectDetail(kb, "CARD", text(args, "code"), facade.tagsFor(key, kb));
         } else if ("list_claims".equals(name)) {
             accessService.assertScope(key, ApiKey.SCOPE_READ_OBJECT);
             Long kb = resolve(key, args);
-            value = facade.claims(kb, null);
+            value = facade.claims(kb, facade.tagsFor(key, kb));
         } else if ("get_claim".equals(name)) {
             accessService.assertScope(key, ApiKey.SCOPE_READ_OBJECT);
             Long kb = resolve(key, args);
-            value = facade.objectDetail(kb, "CLAIM", text(args, "code"), null);
+            value = facade.objectDetail(kb, "CLAIM", text(args, "code"), facade.tagsFor(key, kb));
         } else if ("get_evidence".equals(name)) {
             accessService.assertScope(key, ApiKey.SCOPE_READ_OBJECT);
             Long kb = resolve(key, args);
-            value = facade.objectDetail(kb, "EVIDENCE", text(args, "evidenceCode"), null);
+            value = facade.objectDetail(kb, "EVIDENCE", text(args, "evidenceCode"), facade.tagsFor(key, kb));
         } else if ("graph_neighbors".equals(name)) {
             accessService.assertScope(key, ApiKey.SCOPE_READ_OBJECT);
             Long kb = resolve(key, args);
-            value = facade.graph(kb, text(args, "code"), integer(args, "depth"), integer(args, "limit"), null);
+            value = facade.graph(kb, text(args, "code"), integer(args, "depth"), integer(args, "limit"), facade.tagsFor(key, kb));
         } else if ("ingest_text".equals(name)) {
             accessService.assertScope(key, ApiKey.SCOPE_INGEST);
             Long kb = resolve(key, args);
@@ -347,11 +347,11 @@ public class McpServerService {
         String type = parts.length > 2 ? parts[2] : "";
         String code = parts.length > 3 ? parts[3] : "";
         if ("cards".equalsIgnoreCase(type)) {
-            value = facade.objectDetail(resolved, "CARD", code, null);
+            value = facade.objectDetail(resolved, "CARD", code, facade.tagsFor(key, resolved));
         } else if ("claims".equalsIgnoreCase(type)) {
-            value = facade.objectDetail(resolved, "CLAIM", code, null);
+            value = facade.objectDetail(resolved, "CLAIM", code, facade.tagsFor(key, resolved));
         } else {
-            value = facade.overview(resolved, null);
+            value = facade.overview(resolved, facade.tagsFor(key, resolved));
         }
         Map<String, Object> content = new LinkedHashMap<String, Object>();
         content.put("uri", uri);

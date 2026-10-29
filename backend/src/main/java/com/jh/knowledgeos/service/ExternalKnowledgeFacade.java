@@ -60,6 +60,8 @@ public class ExternalKnowledgeFacade {
     /**
      * Visible workspaces for the caller: bound key sees its own, otherwise the public ones.
      */
+    public List<String> tagsFor(ApiKey key, Long kb) { return authorization.effectiveTags(key, kb, null, "REST"); }
+
     public List<Map<String, Object>> bases(Long boundKb) {
         List<Map<String, Object>> rows = new ArrayList<Map<String, Object>>();
         if (boundKb != null) {
@@ -87,7 +89,7 @@ public class ExternalKnowledgeFacade {
             }
             return rows;
         }
-        if (key != null && key.getPrincipalId() != null && key.getKnowledgeBaseId() != null) {
+        if (key != null && (key.isWorkloadCredential() || (key.getPrincipalId() != null && key.getKnowledgeBaseId() != null))) {
             return rows;
         }
         if (key != null && key.getKnowledgeBaseId() != null) {

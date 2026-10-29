@@ -83,48 +83,48 @@ public class ExternalApiController {
         return call(request, "POST /query", body.getKnowledgeBaseId(), (key, kb) -> Boolean.TRUE.equals(body.getIncludeMemory())
             ? facade.queryWithMemory(key, kb, body.getQuestion(), body.getTopK(), body.getPermissionTags(),
                 body.getAnswerFormat(), body.getMinScore(), body.getResponseMode())
-            : facade.query(kb, body.getQuestion(), body.getTopK(), body.getPermissionTags(),
-                body.getAnswerFormat(), body.getMinScore(), body.getResponseMode()));
+            : facade.query(key, kb, body.getQuestion(), body.getTopK(), body.getPermissionTags(),
+                "REST", body.getAnswerFormat(), body.getMinScore(), body.getResponseMode()));
     }
 
     @PostMapping("/search")
     @Operation(summary = "只检索不生成答案：返回候选、重排结果与引用")
     public ApiResponse<Object> search(HttpServletRequest request, @Valid @RequestBody ExternalQueryRequest body) throws Exception {
-        return call(request, "POST /search", body.getKnowledgeBaseId(), (key, kb) -> facade.search(kb, body.getQuestion(), body.getTopK(),
-            body.getPermissionTags(), body.getMinScore(), body.getResponseMode()));
+        return call(request, "POST /search", body.getKnowledgeBaseId(), (key, kb) -> facade.search(key, kb, body.getQuestion(), body.getTopK(),
+            body.getPermissionTags(), "REST", body.getMinScore(), body.getResponseMode()));
     }
 
     @GetMapping("/cards")
     @Operation(summary = "知识卡片清单")
     public ApiResponse<Object> cards(HttpServletRequest request, @RequestParam(value = "knowledgeBaseId", required = false) Long kb) throws Exception {
-        return call(request, "GET /cards", kb, (key, resolved) -> facade.cards(resolved, null));
+        return call(request, "GET /cards", kb, (key, resolved) -> facade.cards(resolved, facade.tagsFor(key, resolved)));
     }
 
     @GetMapping("/cards/{code}")
     @Operation(summary = "知识卡片详情（含证据链）")
     public ApiResponse<Object> card(HttpServletRequest request, @PathVariable String code, @RequestParam(value = "knowledgeBaseId", required = false)
         Long kb) throws Exception {
-        return call(request, "GET /cards/{code}", kb, (key, resolved) -> facade.objectDetail(resolved, "CARD", code, null));
+        return call(request, "GET /cards/{code}", kb, (key, resolved) -> facade.objectDetail(resolved, "CARD", code, facade.tagsFor(key, resolved)));
     }
 
     @GetMapping("/claims")
     @Operation(summary = "断言清单")
     public ApiResponse<Object> claims(HttpServletRequest request, @RequestParam(value = "knowledgeBaseId", required = false) Long kb) throws Exception {
-        return call(request, "GET /claims", kb, (key, resolved) -> facade.claims(resolved, null));
+        return call(request, "GET /claims", kb, (key, resolved) -> facade.claims(resolved, facade.tagsFor(key, resolved)));
     }
 
     @GetMapping("/claims/{code}")
     @Operation(summary = "断言详情")
     public ApiResponse<Object> claim(HttpServletRequest request, @PathVariable String code, @RequestParam(value = "knowledgeBaseId", required = false)
         Long kb) throws Exception {
-        return call(request, "GET /claims/{code}", kb, (key, resolved) -> facade.objectDetail(resolved, "CLAIM", code, null));
+        return call(request, "GET /claims/{code}", kb, (key, resolved) -> facade.objectDetail(resolved, "CLAIM", code, facade.tagsFor(key, resolved)));
     }
 
     @GetMapping("/evidence/{code}")
     @Operation(summary = "证据原文与出处")
     public ApiResponse<Object> evidence(HttpServletRequest request, @PathVariable String code, @RequestParam(value = "knowledgeBaseId", required =
         false) Long kb) throws Exception {
-        return call(request, "GET /evidence/{code}", kb, (key, resolved) -> facade.objectDetail(resolved, "EVIDENCE", code, null));
+        return call(request, "GET /evidence/{code}", kb, (key, resolved) -> facade.objectDetail(resolved, "EVIDENCE", code, facade.tagsFor(key, resolved)));
     }
 
     @GetMapping("/graph/{code}")
@@ -132,7 +132,7 @@ public class ExternalApiController {
     public ApiResponse<Object> graph(HttpServletRequest request, @PathVariable String code, @RequestParam(value = "knowledgeBaseId", required = false)
         Long kb, @RequestParam(value = "depth", required = false) Integer depth, @RequestParam(value = "limit", required = false) Integer limit)
         throws Exception {
-        return call(request, "GET /graph/{code}", kb, (key, resolved) -> facade.graph(resolved, code, depth, limit, null));
+        return call(request, "GET /graph/{code}", kb, (key, resolved) -> facade.graph(resolved, code, depth, limit, facade.tagsFor(key, resolved)));
     }
 
     @GetMapping("/queries/{queryId}")
@@ -144,7 +144,7 @@ public class ExternalApiController {
     @GetMapping("/overview")
     @Operation(summary = "知识库概览计数")
     public ApiResponse<Object> overview(HttpServletRequest request, @RequestParam(value = "knowledgeBaseId", required = false) Long kb) throws Exception {
-        return call(request, "GET /overview", kb, (key, resolved) -> facade.overview(resolved, null));
+        return call(request, "GET /overview", kb, (key, resolved) -> facade.overview(resolved, facade.tagsFor(key, resolved)));
     }
 
     @PostMapping("/documents/text")
@@ -315,7 +315,8 @@ public class ExternalApiController {
             if (requiredScope != null) {
                 accessService.assertScope(key, requiredScope);
             }
-            Long kb = requestedKb == null ? null : accessService.resolveKnowledgeBase(key, requestedKb);
+            Long kb = requestedKb == null && (!key.isWorkloadCredential() || "GET /bases".equals(method))
+                ? null : accessService.resolveKnowledgeBase(key, requestedKb);
             Object data = body.run(key, kb);
             auditService.record(key, ApiCallAudit.CHANNEL_REST, method, kb, 200, System.currentTimeMillis() - start, null, params,
                 memoryCall ? memoryAuditResponse(method, data) : data, ExternalAccessService.embedTokenOf(request));

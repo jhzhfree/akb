@@ -69,6 +69,18 @@ public class ApiKey {
 
     /** Service principal owning this credential's knowledge-base grants. */
     private Long principalId;
+    private String identityMode = "LEGACY";
+    private Long workloadPolicyId;
+    private transient WorkloadIdentity workloadIdentity;
+
+    public String getIdentityMode() { return identityMode; }
+    public void setIdentityMode(String value) { identityMode = value; }
+    public Long getWorkloadPolicyId() { return workloadPolicyId; }
+    public void setWorkloadPolicyId(Long value) { workloadPolicyId = value; }
+    public boolean isWorkloadCredential() { return "APPLICATION_WORKLOAD".equals(identityMode); }
+    public WorkloadIdentity getWorkloadIdentity() { return workloadIdentity; }
+    public void setWorkloadIdentity(WorkloadIdentity value) { workloadIdentity = value; }
+
 
     private Integer grantedKnowledgeBaseCount;
 
@@ -134,6 +146,9 @@ public class ApiKey {
         }
         List<String> owned = scopeList();
         String requested = scope.toUpperCase(Locale.ROOT);
+        // Initial workload release is explicitly read-only, including legacy scope aliases.
+        if (isWorkloadCredential() && !(SCOPE_LIST.equals(requested) || SCOPE_QUERY.equals(requested)
+            || SCOPE_SEARCH.equals(requested) || SCOPE_READ_OBJECT.equals(requested))) return false;
         boolean legacyRead = owned.contains(SCOPE_READ) || owned.contains(SCOPE_WRITE);
         boolean granted = owned.contains(requested);
         if (SCOPE_READ.equals(requested)) {
