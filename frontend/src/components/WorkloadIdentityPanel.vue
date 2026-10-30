@@ -690,6 +690,7 @@ import AgentPolicyWizard from "./AgentPolicyWizard.vue";
 import axios from "axios";
 import { ElMessage } from "element-plus";
 import { getMe } from "../api/auth";
+import { uuid } from "../utils/uid";
 import {
   createExternalPrincipal,
   listExternalPrincipals,
@@ -969,7 +970,7 @@ async function bindAgent() {
     let id = bindingForm.agentPrincipalId;
     if (!id) {
       const r = await createExternalPrincipal({
-        principalCode: `AG_${crypto.randomUUID().slice(0, 12)}`,
+        principalCode: `AG_${uuid().slice(0, 12)}`,
         name: bindingForm.runtimeAgentKey,
         principalType: "AGENT",
         providerInstanceId: p.installation_id,

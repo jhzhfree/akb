@@ -249,6 +249,7 @@ import {
   validatePlatformSetup,
 } from "../utils/workload-identity.mjs";
 import { errorMessage } from "../utils/feedback";
+import { uuid } from "../utils/uid";
 const props = defineProps<{
   modelValue: boolean;
   principals: ExternalPrincipalSummary[];
@@ -398,7 +399,7 @@ async function create() {
           : undefined;
     if (!id) {
       const r = await createExternalPrincipal({
-        principalCode: `APP_${crypto.randomUUID().slice(0, 12)}`,
+        principalCode: `APP_${uuid().slice(0, 12)}`,
         name: applicationName.value.trim(),
         principalType: "APPLICATION",
       });
