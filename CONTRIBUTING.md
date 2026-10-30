@@ -25,6 +25,11 @@
 6. 修改既有 Flyway migration 是禁止的；新增 migration。
 7. 新公开 Java 类型写类级 Javadoc；Python 公共模块/符号写 docstring。
 8. 代码注释优先解释设计原因、失败策略和一致性约束。
+9. 前端不得直接取用仅「安全上下文」可用的 API（`crypto.randomUUID`、`crypto.subtle`、
+   `navigator.clipboard`、WebAuthn、File System Access 等）。内网部署常以明文 HTTP 打开
+   控制台，那里这些 API 根本不存在，直接取用是运行时才炸的坑。用封装
+   （`frontend/src/utils/uid.ts`、`utils/clipboard.ts`）或先探测再降级；由
+   `scripts/check-frontend-secure-context.py` 把关。
 
 ## 提交前
 

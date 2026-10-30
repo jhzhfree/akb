@@ -98,6 +98,7 @@ import { createPersonalAccessToken, listPersonalAccessTokens, revokePersonalAcce
   rotatePersonalAccessToken,
   type CreatedPersonalAccessToken, type PersonalAccessToken } from '../api/auth'
 import { useShell } from '../shell'
+import { copyText } from '../utils/clipboard'
 
 const props=defineProps<{visible:boolean}>()
 const emit=defineEmits<{(e:'update:visible',value:boolean):void}>()
@@ -204,8 +205,10 @@ async function revoke(token:PersonalAccessToken){
   }catch(error){if(error!=='cancel'&&error!=='close')ElMessage.error('令牌撤销失败')}
 }
 async function copySecret(){
-  try{await navigator.clipboard.writeText(createdSecret.value);ElMessage.success('已复制令牌')}
-  catch{ElMessage.warning('无法访问剪贴板，请手动复制令牌')}
+  // 走封装：内网明文下 navigator.clipboard 不存在，直接取用会抛且没有任何提示
+  const ok=await copyText(createdSecret.value)
+  if(ok)ElMessage.success('已复制令牌')
+  else ElMessage.warning('无法访问剪贴板，请手动复制令牌')
 }
 function scopeLabel(value:string){
   const labels:Record<string,string>={SEARCH:'检索',QUERY:'问答',LIST:'列表',READ_OBJECT:'读取知识对象'}

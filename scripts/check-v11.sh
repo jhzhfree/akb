@@ -177,3 +177,6 @@ python3 scripts/check-acl-phase17-answer-qualification.py
 echo "[52/52] ACL Phase 18 answer-quality operations"
 python3 scripts/check-acl-phase18-answer-quality-operations.py
 python3 scripts/check-phase19-okf-v02.py
+
+echo "[53/53] Frontend secure-context API contract"
+python3 scripts/check-frontend-secure-context.py

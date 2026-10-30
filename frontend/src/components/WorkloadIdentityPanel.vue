@@ -691,6 +691,7 @@ import axios from "axios";
 import { ElMessage } from "element-plus";
 import { getMe } from "../api/auth";
 import { uuid } from "../utils/uid";
+import { copyText } from "../utils/clipboard";
 import {
   createExternalPrincipal,
   listExternalPrincipals,
@@ -1126,10 +1127,10 @@ async function revokeKey(id: number) {
   });
 }
 async function copySecret() {
-  try {
-    await navigator.clipboard.writeText(secret.value);
+  // 走封装：内网明文下 navigator.clipboard 不存在，直接取用会抛且没有任何提示
+  if (await copyText(secret.value)) {
     ElMessage.success("已复制，请安全保存");
-  } catch {
+  } else {
     ElMessage.warning("复制失败，请手动保存");
   }
 }
