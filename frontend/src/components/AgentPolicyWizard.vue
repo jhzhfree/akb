@@ -132,6 +132,9 @@
               <p class="kb-muted">
                 填写调用平台实际使用的根地址，不加 /api/mcp 或 /api/v1。内网部署可用明文 HTTP
                 （如 http://192.168.1.50:8080、http://akb.internal）；公网地址必须用 HTTPS。
+              </p>
+              <p v-if="loopbackHint" class="mt-1 text-[11px] text-amber-600">
+                {{ loopbackHint }}
               </p></el-form-item
             >
             <el-form-item label="签发者标识（issuer）" :error="errors.issuer"
@@ -245,6 +248,7 @@ import {
 } from "../api/external";
 import { workloadApi, type WorkloadPolicy } from "../api/workload";
 import {
+  isLoopbackHost,
   parsePlatformSetup,
   validatePlatformSetup,
 } from "../utils/workload-identity.mjs";
@@ -284,6 +288,24 @@ const applications = computed(() =>
     (p) => p.principalType === "APPLICATION" && p.status === "ACTIVE",
   ),
 );
+/**
+ * 本机明文要提醒两件事：后端默认不收（WORKLOAD_ALLOW_LOOPBACK_HTTP 默认关，内网开关不管
+ * localhost），以及「本机」是相对平台而言的——平台与 AKB 不同机时 localhost 指向平台自己。
+ * 这个地址默认是从浏览器地址带出来的（window.location.origin），所以这条提示经常用得上。
+ */
+const loopbackHint = computed(() => {
+  const value = (form.resource || "").trim();
+  if (!value) return "";
+  try {
+    const u = new URL(value);
+    if (u.protocol !== "http:" || !isLoopbackHost(u.hostname)) return "";
+  } catch {
+    return "";
+  }
+  return `这是本机地址：后端要开启 WORKLOAD_ALLOW_LOOPBACK_HTTP=true 才会接受（内网开关`
+    + `不放行 localhost）；而且「本机」是相对平台而言的——平台与 AKB 不在同一台主机时，`
+    + `localhost 指向的是平台自己，请改填 AKB 实际可达的地址。`;
+});
 watch(
   () => props.modelValue,
   (open) => {

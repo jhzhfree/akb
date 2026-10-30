@@ -18,4 +18,5 @@ export interface PlatformSetup {
 export function validatePlatformSetup(
   value: PlatformSetup,
 ): Record<string, string>;
+export function isLoopbackHost(host: string): boolean;
 export function parsePlatformSetup(text: string): PlatformSetup;

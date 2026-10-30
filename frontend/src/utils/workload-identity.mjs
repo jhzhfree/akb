@@ -82,7 +82,12 @@ function normalizeHost(host) {
   if (value.startsWith("[") && value.endsWith("]")) value = value.slice(1, -1);
   return value;
 }
-function isLoopbackHost(host) {
+/**
+ * 本机地址。导出给界面用：后端是否放行本机明文由 WORKLOAD_ALLOW_LOOPBACK_HTTP 决定（默认
+ * 不开），前端无从知道那个开关的值，但至少能提前把「这里需要后端开开关」说清楚，而不是让
+ * 用户在控制台填完、提交后才撞上一句后端的拒绝。
+ */
+export function isLoopbackHost(host) {
   const value = normalizeHost(host);
   if (!value) return false;
   return (
