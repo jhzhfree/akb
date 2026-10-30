@@ -49,4 +49,11 @@ class WorkloadIdentityAdminServiceTest {
         assertThrows(IllegalArgumentException.class, () -> service.bind(7, body, 9));
         verify(repository, never()).createBinding(anyLong(), anyString(), anyString(), anyLong());
     }
+    @Test void pausedPolicyBindingsRemainVisibleForManagement() {
+        Map<String,Object> p = policy(); p.put("status", "PAUSED");
+        when(repository.bindings(7L)).thenReturn(Collections.singletonList(Collections.<String,Object>singletonMap("id", 3L)));
+        assertEquals(1, service.bindings(7L).size());
+        when(repository.policy(999L)).thenReturn(null);
+        assertThrows(IllegalArgumentException.class, () -> service.bindings(999L));
+    }
 }

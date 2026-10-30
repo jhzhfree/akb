@@ -11,9 +11,14 @@
   <ExternalServicePanel
     v-else-if="active==='integration.services'"
     :bases="bases" focus="services" />
-  <ExternalServicePanel
-    v-else-if="active==='integration.credentials'"
-    :bases="bases" focus="credentials" />
+  <el-tabs v-else-if="active==='integration.credentials'" v-model="credentialTab" class="mt-3">
+    <el-tab-pane label="服务凭证" name="keys">
+      <ExternalServicePanel v-if="credentialTab==='keys'" :bases="bases" focus="credentials" />
+    </el-tab-pane>
+    <el-tab-pane label="Agent 身份接入" name="identity">
+      <WorkloadIdentityPanel v-if="credentialTab==='identity'" :bases="bases" />
+    </el-tab-pane>
+  </el-tabs>
   <ExternalServicePanel
     v-else-if="active==='integration.principals'"
     :bases="bases" focus="principals" />
@@ -54,6 +59,7 @@ import McpServicePanel from './McpServicePanel.vue'
 import PlatformEventPanel from './PlatformEventPanel.vue'
 import EmbedWidgetPanel from './EmbedWidgetPanel.vue'
 import CallLogPanel from './CallLogPanel.vue'
+import WorkloadIdentityPanel from './WorkloadIdentityPanel.vue'
 
 defineProps<{ active: string; knowledgeBaseId: number; bases: KnowledgeBase[] }>()
 const emit = defineEmits<{ select: [key: string] }>()
@@ -63,6 +69,7 @@ const tabs = computed(() => shell.tabs('integration'))
 
 /** 从协议视角（如 MCP 的「调用日志 →」）跳进来时的预置过滤条件。 */
 const logProtocol = ref('')
+const credentialTab = ref('keys')
 function openCallLogs(protocol: string) {
   logProtocol.value = protocol
   emit('select', 'integration.logs')

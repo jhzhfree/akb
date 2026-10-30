@@ -27,7 +27,7 @@ public class WorkloadIdentityAdminService {
         this.repository = repository; this.principals = principals; this.keys = keys; this.json = json; this.allowLoopback = allowLoopback;
     }
     public List<Map<String, Object>> policies() { return repository.policies(); }
-    public List<Map<String, Object>> bindings(long policy) { requirePolicy(policy); return repository.bindings(policy); }
+    public List<Map<String, Object>> bindings(long policy) { requirePolicyExists(policy); return repository.bindings(policy); }
 
     @Transactional
     public Map<String, Object> createPolicy(Map<String, Object> body, long operator) {

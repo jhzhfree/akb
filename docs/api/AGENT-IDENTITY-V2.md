@@ -151,3 +151,11 @@ SDK 每调用读取活动密钥，每 HTTP 请求读取共享 Key，因此 selec
 调用审计增加 proofProfile、signingKid、agentKeyRegistrationId、workloadMessageId、workloadPlatformId；同 Key 可追踪不同 Agent 与密钥版本。管理审计不存 nonce、私钥、Service Key 或完整登记证明。普通业务审计仍是尽力写入，不是不可变审计账本。
 
 当前配额仍是按 Key 的进程内限流，多副本需另做分布式限流，入口应配置前置速率控制。公钥绑定缩小密钥泄漏影响，但宿主或同 UID 恶意程序若能读取所有私钥，仍可冒用；需要部署隔离。
+
+## 前端管理入口
+
+`接口服务 → 更多能力 → 凭证 → Agent 身份接入`（仅 ADMIN）提供 V2 策略、应用主体、Agent 绑定、公钥挑战登记 / 退役 / 撤销、只读共享 Key 签发 / 轮换和最近调用审计。应用与 Agent 分别配置知识库授权，最终权限仍取交集。导入仅支持公钥包 / 公共 JWK，私钥由对应平台 SDK 保管，登记证明由平台签署后交回本页。暂停策略仍可查看绑定与公钥，不能继续签发凭证或登记密钥。
+
+资料标签授权区分“继承主体权限”（null）与“无标签资料”（空数组）；保存授权时保留已有语义。服务 Key 仅在生成 / 轮换时显示一次，关闭弹窗即清除页面状态。
+
+更新分支后需重新构建 `frontend`（`npm ci && npm run typecheck && npm test && npm run build`）并部署新的 `dist/`，同时更新后端；仅更新后端不会改变现有静态页面。Octop 对应入口为“外部知识库 → AKB 知识源右侧盾牌按钮”。完整双端步骤、SDK 0.3.0 的宿主安装和安全边界见 Octop 仓库 `integrations/agent-identity-spec/DASHBOARD-SETUP.md`。

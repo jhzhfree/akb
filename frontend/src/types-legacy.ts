@@ -607,6 +607,8 @@ export interface ExternalServiceOverview {
   activeKeys:number; docs:{ openapi:string; swaggerUi:string }
 }
 export interface ExternalKeyRow {
+  identityMode?: string
+  workloadPolicyId?: number | null
   id:number; keyCode:string; name:string; keyPrefix:string
   knowledgeBaseId:number|null; knowledgeBaseName:string|null
   grantedKnowledgeBaseCount?:number
@@ -623,6 +625,13 @@ export interface ExternalKeyRow {
   secret?:string
 }
 export interface ExternalAuditRow {
+  applicationPrincipalId?: number | null
+  agentPrincipalId?: number | null
+  proofProfile?: string | null
+  signingKid?: string | null
+  workloadSessionId?: string | null
+  workloadInvocationId?: string | null
+  workloadMessageId?: string | null
   id:number; keyId:number|null; keyCode:string|null; channel:string; method:string
   knowledgeBaseId:number|null; statusCode:number; durationMs:number
   traceId:string|null; message:string|null; createdTime:string
