@@ -8,16 +8,20 @@ import com.jh.knowledgeos.dto.ExternalKeyRequest;
 import com.jh.knowledgeos.mapper.ExternalApiMapper;
 import com.jh.knowledgeos.mapper.WorkloadIdentityRepository;
 import java.net.URI;
+import java.net.URISyntaxException;
 import java.time.LocalDateTime;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class WorkloadIdentityAdminService {
+    private static final Logger LOG = LoggerFactory.getLogger(WorkloadIdentityAdminService.class);
     private final WorkloadIdentityRepository repository;
     private final ExternalApiMapper principals;
     private final ApiKeyService keys;
@@ -40,15 +44,15 @@ public class WorkloadIdentityAdminService {
         String profile = body.containsKey("proofProfile") ? text(body, "proofProfile", 32) : AgentProofCrypto.V1;
         if (!Arrays.asList(AgentProofCrypto.V1, AgentProofCrypto.V2).contains(profile)) throw new IllegalArgumentException("不支持的身份证明模式");
         String issuer = text(body, "issuer", 255), jwks = AgentProofCrypto.V1.equals(profile) ? text(body, "jwksUri", 1000) : null;
-        validateUrl(issuer);
-        if (jwks != null) validateUrl(jwks);
+        validateUrl("身份签发者地址（issuer）", issuer);
+        if (jwks != null) validateUrl("JWKS 地址（jwksUri）", jwks);
         if (AgentProofCrypto.V2.equals(profile) && body.get("jwksUri") != null) throw new IllegalArgumentException("V2 不使用远程 JWKS");
         long id = repository.createPolicy(application, issuer, jwks, text(body, "audience", 255),
             text(body, "installationId", 128), text(body, "workspaceId", 128), operator);
         if (AgentProofCrypto.V2.equals(profile)) {
             String platform = text(body, "platformId", 128), resource = text(body, "resourceOrigin", 255);
             if (!platform.matches("[A-Za-z0-9_.:-]{1,128}")) throw new IllegalArgumentException("无效的平台标识");
-            validateUrl(resource);
+            validateUrl("AKB 对外访问地址（resourceOrigin）", resource);
             URI origin = URI.create(resource);
             String canonical;
             try { canonical = new URI(origin.getScheme(), null, origin.getHost().toLowerCase(java.util.Locale.ROOT),
@@ -119,24 +123,42 @@ public class WorkloadIdentityAdminService {
         }
         return principal;
     }
-    private void validateUrl(String text) {
-        URI uri = URI.create(text);
-        if (uri.getHost() == null || uri.getUserInfo() != null || uri.getFragment() != null || uri.getQuery() != null) {
-            throw new IllegalArgumentException("身份提供者必须使用无凭据、查询和片段的地址");
+    /**
+     * 地址校验。这三个地址都是管理员在控制台里手填的，报错必须说清是哪个字段、哪个地址、
+     * 为什么被拒——一句「地址必须使用 HTTPS」定位不了，只能靠猜。
+     */
+    private void validateUrl(String field, String value) {
+        URI uri;
+        try {
+            uri = new URI(value);
+        } catch (URISyntaxException ex) {
+            throw new IllegalArgumentException(field + " 不是一个合法地址：" + value);
+        }
+        if (uri.getHost() == null) {
+            // 下划线等 URI 不接受的主机会让 getHost() 返回 null：这不是「带了凭据」，得说清楚
+            throw new IllegalArgumentException(field + " 的主机名无法解析：" + value
+                + "（URI 不接受下划线等字符，请检查拼写）");
+        }
+        if (uri.getUserInfo() != null || uri.getFragment() != null || uri.getQuery() != null) {
+            throw new IllegalArgumentException(field + " 必须是不含凭据、查询和片段的地址，当前：" + value);
         }
         if ("https".equals(uri.getScheme())) {
             return;
         }
         if (!"http".equals(uri.getScheme())) {
-            throw new IllegalArgumentException("身份提供者必须使用 HTTPS 地址");
+            throw new IllegalArgumentException(field + " 必须使用 HTTPS 地址，当前：" + value);
         }
         // 明文 HTTP 只放开两类场景：本机调试与内网部署。公网一律要求 HTTPS——工作负载身份
         // 证明在明文链路上可被中间人直接替换，这不是「多一层加密」的偏好问题。
         // 判定规则不在这里：见 contracts/intranet-http.json，前端读同一份
         if (allowLoopback && IntranetAddressRules.isLoopback(uri.getHost())) return;
         if (allowIntranetHttp && IntranetAddressRules.isIntranetHost(uri.getHost())) return;
-        throw new IllegalArgumentException("地址必须使用 HTTPS；明文 HTTP 仅允许本机调试"
-            + "（WORKLOAD_ALLOW_LOOPBACK_HTTP）与内网地址（WORKLOAD_ALLOW_INTRANET_HTTP）");
+        LOG.warn("拒绝明文 HTTP：{}={}，主机 {} 既不是本机也不是内网（loopback={}, intranet={}）",
+            field, value, uri.getHost(), allowLoopback, allowIntranetHttp);
+        throw new IllegalArgumentException(field + " 必须使用 HTTPS：明文 HTTP 只允许本机调试"
+            + "（WORKLOAD_ALLOW_LOOPBACK_HTTP=" + allowLoopback + "）与内网地址"
+            + "（WORKLOAD_ALLOW_INTRANET_HTTP=" + allowIntranetHttp + "）。"
+            + "当前 " + value + " 的主机 " + uri.getHost() + " 被判定为公网。");
     }
     private void audit(long policy, String action, long operator, Object detail) {
         try { repository.audit(policy, action, operator, json.writeValueAsString(detail)); }

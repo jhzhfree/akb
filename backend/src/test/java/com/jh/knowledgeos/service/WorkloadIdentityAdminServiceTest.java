@@ -75,6 +75,29 @@ class WorkloadIdentityAdminServiceTest {
         assertThrows(IllegalArgumentException.class, () -> strict.createPolicy(policyBody("http://192.168.1.50"), 9));
     }
 
+    /**
+     * 报错要能定位：这三个地址都是管理员手填的，只说「地址必须使用 HTTPS」等于让人猜是哪个
+     * 框、哪个地址、为什么。所以错误里带上字段名、完整地址与被判定为公网的主机名。
+     */
+    @Test void rejectedHttpOriginNamesTheFieldAndTheHost() {
+        when(principals.getPrincipal(1L)).thenReturn(principal(1, "APPLICATION"));
+        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
+            () -> service.createPolicy(policyBody("http://203.0.113.10/agents"), 9));
+        assertTrue(ex.getMessage().contains("issuer"), ex.getMessage());
+        assertTrue(ex.getMessage().contains("203.0.113.10"), ex.getMessage());
+    }
+
+    /**
+     * 下划线主机名（容器里常见）会让 URI.getHost() 返回 null。以前报的是「必须使用无凭据、
+     * 查询和片段的地址」，跟真正的原因毫无关系；现在直说主机名解析不出来。
+     */
+    @Test void unresolvableHostSaysSoInsteadOfBlamingCredentials() {
+        when(principals.getPrincipal(1L)).thenReturn(principal(1, "APPLICATION"));
+        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
+            () -> service.createPolicy(policyBody("http://akb_gateway/agents"), 9));
+        assertTrue(ex.getMessage().contains("无法解析"), ex.getMessage());
+    }
+
     /** 只变待校验的地址，其余字段给合法值，否则先撞上的是「缺字段」而不是 URL 规则。 */
     private Map<String,Object> policyBody(String issuer) {
         Map<String,Object> body = new HashMap<String,Object>();
