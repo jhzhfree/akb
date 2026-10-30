@@ -40,4 +40,20 @@ class WorkloadAuthorizationTest {
         RetrievalAuthorizationService service = new RetrievalAuthorizationService(new com.fasterxml.jackson.databind.ObjectMapper(), "CLIENT", mapper);
         assertEquals(Collections.singletonList("engineering"), service.effectiveTags(key, 2L, Arrays.asList("engineering", "finance"), "REST"));
     }
+    @Test void simpleAgentsInheritServiceScopeButCannotEscapeIt() {
+        ApiKeyService keys = mock(ApiKeyService.class);
+        ExternalAccessService access = new ExternalAccessService(keys, mock(ExternalRateLimiter.class), mock(KnowledgeBaseAccessService.class),
+            mock(EmbedTokenService.class), mock(EmbedTokenLifecycleService.class), new KnowledgeProperties());
+        ApiKey key = new ApiKey(); key.setPrincipalId(1L); key.setIdentityMode("APPLICATION_WORKLOAD");
+        key.setWorkloadIdentity(new WorkloadIdentity(10L,"session","call").inheritServiceGrants());
+        when(keys.grantedKnowledgeBases(key)).thenReturn(Collections.singletonList(2L));
+        assertEquals(2L,access.resolveKnowledgeBase(key,2L));
+        assertThrows(SecurityException.class,()->access.resolveKnowledgeBase(key,3L));
+        verify(keys,never()).grantedKnowledgeBases(10L);
+        com.jh.knowledgeos.mapper.ExternalApiMapper mapper = mock(com.jh.knowledgeos.mapper.ExternalApiMapper.class);
+        when(mapper.getPrincipalKnowledgeBaseGrantPermissionTags(1L,2L)).thenReturn("[]");
+        RetrievalAuthorizationService tags = new RetrievalAuthorizationService(new com.fasterxml.jackson.databind.ObjectMapper(),"CLIENT",mapper);
+        assertTrue(tags.effectiveTags(key,2L,Arrays.asList("finance"),"REST").isEmpty());
+        verify(mapper,never()).getPrincipalKnowledgeBaseGrantPermissionTags(10L,2L);
+    }
 }

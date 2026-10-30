@@ -64,6 +64,7 @@ public class WorkloadIdentityRepository {
         jdbc.update("INSERT INTO t_workload_admin_audit(policy_id,action,operator_id,detail) VALUES(?,?,?,CAST(? AS JSON))", policy, action, operator, detail);
     }
 
+    public void enableSimple(long policy) { jdbc.update("UPDATE t_workload_policy SET simple_mode=TRUE WHERE id=?", policy); }
     public void configureV2(long policy, String platform, String resource) {
         jdbc.update("UPDATE t_workload_policy SET proof_profile='AGENT_KEY_RS256_V2',platform_id=?,resource_origin=? WHERE id=?", platform, resource, policy);
     }

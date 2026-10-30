@@ -8,12 +8,23 @@ public final class WorkloadIdentity {
     private final String proofProfile, signingKid, messageId, platformId, externalAgentId;
     private final Long keyRegistrationId;
     private final String keyStatus;
+    private final boolean serviceGrantsInherited;
+    public boolean isServiceGrantsInherited() { return serviceGrantsInherited; }
+    public WorkloadIdentity inheritServiceGrants() {
+        return new WorkloadIdentity(agentPrincipalId, sessionId, invocationId, proofProfile, signingKid,
+            keyRegistrationId, messageId, platformId, externalAgentId, keyStatus, true);
+    }
 
     public WorkloadIdentity(Long agentPrincipalId, String sessionId, String invocationId) {
         this(agentPrincipalId, sessionId, invocationId, "INSTALLATION_RS256_V1", null, null, null, null, null, null);
     }
     public WorkloadIdentity(Long agentPrincipalId, String sessionId, String invocationId, String profile, String kid,
         Long registration, String message, String platform, String external, String keyStatus) {
+        this(agentPrincipalId, sessionId, invocationId, profile, kid, registration, message, platform, external, keyStatus, false);
+    }
+    private WorkloadIdentity(Long agentPrincipalId, String sessionId, String invocationId, String profile, String kid,
+        Long registration, String message, String platform, String external, String keyStatus, boolean inherited) {
+        this.serviceGrantsInherited = inherited;
         this.agentPrincipalId = agentPrincipalId;
         this.sessionId = sessionId;
         this.invocationId = invocationId;

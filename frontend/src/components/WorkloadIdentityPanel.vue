@@ -800,9 +800,11 @@ async function load() {
       listExternalPrincipals(),
     ]);
     if (sequence !== loadSequence) return;
-    policies.value = p;
+    policies.value = p.filter((item) => !item.simple_mode);
     principals.value = s.data.data || [];
-    const next = p.find((p) => p.id === selected.value?.id) || p[0];
+    const next =
+      policies.value.find((p) => p.id === selected.value?.id) ||
+      policies.value[0];
     if (next) await choose(next);
   } catch (e) {
     error.value = errorMessage(e);
@@ -868,7 +870,7 @@ async function policyCreated(p: WorkloadPolicy) {
       listExternalPrincipals(),
     ]);
     if (sequence !== loadSequence) return;
-    policies.value = next;
+    policies.value = next.filter((item) => !item.simple_mode);
     principals.value = people.data.data || [];
     await choose(p);
     ElMessage.success("连接已创建。下一步：为接入应用选择可读知识库。");

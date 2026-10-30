@@ -116,8 +116,10 @@ public class RetrievalAuthorizationService {
         }
         if (key != null && key.isWorkloadCredential() && kb != null && externalApiMapper != null) {
             if (key.getWorkloadIdentity() == null) throw new SecurityException("缺少已认证 Agent");
-            String agentTags = externalApiMapper.getPrincipalKnowledgeBaseGrantPermissionTags(key.getWorkloadIdentity().getAgentPrincipalId(), kb);
-            kbTags = intersectPolicies(kbTags, parseTags(agentTags));
+            if (!key.getWorkloadIdentity().isServiceGrantsInherited()) {
+                String agentTags = externalApiMapper.getPrincipalKnowledgeBaseGrantPermissionTags(key.getWorkloadIdentity().getAgentPrincipalId(), kb);
+                kbTags = intersectPolicies(kbTags, parseTags(agentTags));
+            }
         }
         List<String> granted = intersectPolicies(keyTags, kbTags);
         if (granted == null) {

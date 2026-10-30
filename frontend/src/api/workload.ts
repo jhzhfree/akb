@@ -2,6 +2,7 @@ import axios from "axios";
 import type { ApiEnvelope } from "../types";
 
 export interface WorkloadPolicy {
+  simple_mode?: boolean;
   id: number;
   application_principal_id: number;
   issuer: string;

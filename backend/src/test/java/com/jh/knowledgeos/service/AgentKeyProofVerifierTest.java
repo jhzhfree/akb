@@ -84,6 +84,13 @@ class AgentKeyProofVerifierTest {
         assertEquals(a.getKeyID(),one.getSigningKid()); assertEquals(AgentProofCrypto.V2,one.getProofProfile());
         assertEquals("message",one.getMessageId()); assertEquals(123L,credential.getPrincipalId());
     }
+    @Test void onlyServerStoredSimpleModeEnablesInheritance() throws Exception {
+        assertFalse(service.authenticate(request(sign(claims(A),a)),credential).isServiceGrantsInherited());
+        repository.policy(17L).put("simple_mode",true);
+        assertTrue(service.authenticate(request(sign(claims(A),a)),credential).isServiceGrantsInherited());
+        Map<String,Object> forged=claims(B); forged.put("simple_mode",true);
+        assertThrows(WorkloadProofException.class,()->service.authenticate(request(sign(forged,a)),credential));
+    }
     @Test void validASignatureCannotImpersonateBAndDoesNotConsumeANonce() throws Exception {
         assertThrows(WorkloadProofException.class,()->service.authenticate(request(sign(claims(B),a)),credential));
         verify(repository,never()).consumeV2(anyLong(),anyString(),anyString(),any());

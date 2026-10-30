@@ -129,7 +129,8 @@ public class ExternalAccessService {
         if (key != null && key.isWorkloadCredential()) {
             if (key.getWorkloadIdentity() == null) throw new UnauthorizedException("缺少已认证 Agent");
             agentGrants = new ArrayList<Long>(agentGrants);
-            agentGrants.retainAll(apiKeyService.grantedKnowledgeBases(key.getWorkloadIdentity().getAgentPrincipalId()));
+            if (!key.getWorkloadIdentity().isServiceGrantsInherited())
+                agentGrants.retainAll(apiKeyService.grantedKnowledgeBases(key.getWorkloadIdentity().getAgentPrincipalId()));
         }
         if (key == null || key.getDelegatedPrincipalId() == null) {
             return agentGrants;

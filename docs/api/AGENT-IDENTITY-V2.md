@@ -1,3 +1,21 @@
+# 简化第一版（V76）
+
+新接入从「Agent 身份接入」主页面创建服务接入、选择可读知识库，获得共享 Key；登记 Agent 名称、UUID 和 public.jwk。无需手工策略、issuer、安装标识或挑战签名。私钥由离线工具生成并保存在调用平台，AKB 不接收私钥。
+
+- 管理 `/api/external/admin/agent-connections`：GET 列表，POST 创建 `{name,resourceOrigin,knowledgeBaseIds}`；创建响应的 `key.secret` 仅显示一次。
+- `/{id}/scope` PUT `{knowledgeBaseIds}`；简化版默认只读无权限标签内容，同接入 Agent 继承范围。保存范围即覆盖该接入的可读库；不配置 Agent 个别权限。
+- `/{id}/agents` GET 列表 / POST `{name,agentId,publicJwk}`；管理员直接批准公钥。原 UUID 可登记第二把公钥完成轮换，最多两把有效公钥。已撤销公钥不可重新登记。
+- 原 workload 状态和 key 撤销接口继续管理服务、Agent 和公钥；原凭证轮换保留服务绑定。
+- `GET /api/v1/external/identity/configuration?agentId=<UUID>`：仅 X-API-Key 验证有效简化接入，返回本接入已登记 Agent 的公开签名坐标；禁止据此读取知识。`/identity/status` 与 MCP/REST 知识请求仍须每次签名。
+
+仅数据库 `simple_mode` 明确开启的新接入继承服务范围；原接入保持应用与 Agent 权限交集，客户端参数不能开启继承。默认无权限标签授权不会扩大到带标签内容。
+
+密钥工具目前在 Octop 的独立可打包工程 `tools/agent-keygen`；可单独交付，不依赖 Octop 服务。调用平台需使用支持简化发现的 SDK 0.4.0；OpenCode 适配器 0.3.0 支持 configVersion 3。
+
+部署需同时更新后端（Flyway V76）和前端。生产使用 HTTPS。旧接入见下文的高级协议，页面底部保留兼容入口，不自动迁移。
+
+---
+
 # 跨平台 Agent 身份 V2 接入
 
 已实现于 AKB V75 与 Octop 仓库 `integrations/agent-identity-sdk` 0.2.0。共享服务 Key 识别 APPLICATION，每 Agent 独立 RSA 私钥签名，AKB 直接登记并绑定公钥，无需远程 JWKS。现有 V1 策略默认保持安装级 JWKS 模式。

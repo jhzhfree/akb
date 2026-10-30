@@ -16,7 +16,7 @@
       <ExternalServicePanel v-if="credentialTab==='keys'" :bases="bases" focus="credentials" />
     </el-tab-pane>
     <el-tab-pane label="Agent 身份接入" name="identity">
-      <WorkloadIdentityPanel v-if="credentialTab==='identity'" :bases="bases" />
+      <SimpleAgentConnections v-if="credentialTab==='identity'" :bases="bases" />
     </el-tab-pane>
   </el-tabs>
   <ExternalServicePanel
@@ -59,7 +59,7 @@ import McpServicePanel from './McpServicePanel.vue'
 import PlatformEventPanel from './PlatformEventPanel.vue'
 import EmbedWidgetPanel from './EmbedWidgetPanel.vue'
 import CallLogPanel from './CallLogPanel.vue'
-import WorkloadIdentityPanel from './WorkloadIdentityPanel.vue'
+import SimpleAgentConnections from './SimpleAgentConnections.vue'
 
 defineProps<{ active: string; knowledgeBaseId: number; bases: KnowledgeBase[] }>()
 const emit = defineEmits<{ select: [key: string] }>()
