@@ -147,6 +147,7 @@ dev-backend:
 	@command -v javac >/dev/null || { echo "检测到 java 但无 javac：当前是 JRE 不是 JDK。请安装 JDK 8，例如 sudo apt-get install -y openjdk-8-jdk-headless"; exit 1; }
 	cd backend && DB_URL='jdbc:mysql://127.0.0.1:3306/knowledge_os?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true' \
 		REDIS_HOST=127.0.0.1 AI_SERVICE_BASE_URL=http://127.0.0.1:12000 \
+		WORKLOAD_ALLOW_LOOPBACK_HTTP=true \
 		$(MVN) spring-boot:run
 
 # frontend：vite dev server 5173，已配置 /api 代理到 127.0.0.1:8080
