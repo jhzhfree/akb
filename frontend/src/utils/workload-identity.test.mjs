@@ -39,3 +39,35 @@ test("registration proof accepts the dedicated response envelope and rejects mal
   );
   assert.throws(() => parseRegistrationProof("private key"));
 });
+
+test("platform setup package accepts public metadata and rejects credentials or invalid origins", async () => {
+  const { parsePlatformSetup, validatePlatformSetup } =
+    await import("./workload-identity.mjs");
+  const setup = {
+    format: "akb-platform-setup/v1",
+    proofProfile: "AGENT_KEY_RS256_V2",
+    platformId: "octop",
+    installationId: "install",
+    workspaceId: "workspace",
+    issuer: "https://octop.local/agents",
+    audience: "akb-external-api",
+    resource: "https://akb.example.com",
+  };
+  assert.equal(
+    parsePlatformSetup(JSON.stringify(setup)).installationId,
+    "install",
+  );
+  for (const bad of [
+    { ...setup, serviceKey: "secret" },
+    { ...setup, resource: "https://akb.example.com/api/mcp" },
+    { ...setup, installationId: "my agent name" },
+    { ...setup, issuer: "http://identity.example" },
+  ])
+    assert.throws(() => parsePlatformSetup(JSON.stringify(bad)));
+  assert.equal(
+    Object.keys(
+      validatePlatformSetup({ ...setup, resource: "http://127.0.0.1:8080" }),
+    ).length,
+    0,
+  );
+});

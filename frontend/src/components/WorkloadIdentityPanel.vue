@@ -3,10 +3,10 @@
     <header class="kb-section-head">
       <div>
         <div class="kb-eyebrow">共享凭证 · 独立身份</div>
-        <h1 class="kb-title">Agent 身份接入</h1>
+        <h1 class="kb-title">让 Agent 安全使用知识库</h1>
         <p class="kb-muted mt-2">
-          一个应用共用服务 Key，每个 Agent 使用独立公钥。按应用与 Agent
-          的授权交集访问知识库。
+          先连接调用平台，再选择可读知识库、登记 Agent，最后回到平台验证。多个
+          Agent 可以共用一个服务 Key，AKB 会分别识别它们。
         </p>
       </div>
       <el-button :loading="loading" @click="load">刷新</el-button>
@@ -25,21 +25,158 @@
         :closable="false"
         class="mb-4"
       />
+      <article class="kb-card p-4 mb-4" aria-label="接入操作指引">
+        <div class="flex flex-wrap items-center justify-between gap-2">
+          <h2 class="font-semibold">第一次接入？按这四步操作</h2>
+          <el-button type="primary" @click="policyDialog = true"
+            >连接新平台</el-button
+          >
+        </div>
+        <ol
+          class="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-4"
+          style="list-style: none; padding-left: 0"
+        >
+          <li class="rounded-lg border border-ink-100 p-3">
+            <b>1. 连接调用平台</b>
+            <p class="kb-muted mt-2">
+              从 Octop / OpenCode
+              导出接入信息，按向导导入。安装实例、工作区等标识由平台提供，不需要自己编造。
+            </p>
+            <el-tag class="mt-2" :type="selected ? 'success' : 'info'">{{
+              selected ? "已选择一个连接" : "从「连接新平台」开始"
+            }}</el-tag>
+          </li>
+          <li class="rounded-lg border border-ink-100 p-3">
+            <b>2. 选择可读知识库</b>
+            <p class="kb-muted mt-2">
+              先设置应用的最大可读范围，之后每个 Agent
+              还要单独授权，两者重叠的知识才可访问。
+            </p>
+            <el-button
+              v-if="selected"
+              class="mt-2"
+              size="small"
+              :disabled="loading || detailLoading"
+              @click="openGrants(selected.application_principal_id)"
+              >{{
+                applicationGrantCount === 0
+                  ? "选择知识库"
+                  : applicationGrantCount === null
+                    ? "查看应用授权"
+                    : `已授权 ${applicationGrantCount} 个知识库`
+              }}</el-button
+            >
+          </li>
+          <li class="rounded-lg border border-ink-100 p-3">
+            <b>3. 添加并登记 Agent</b>
+            <p class="kb-muted mt-2">
+              在调用平台生成公钥包，导入下方 Agent
+              列表；按公钥抽屉中的说明完成挑战签名，再为 Agent 选知识库。
+            </p>
+            <el-tag class="mt-2" type="info">{{
+              selected
+                ? agents.length
+                  ? `已添加 ${agents.length} 个 Agent，请逐个登记和授权`
+                  : "还未添加 Agent，请先导入平台公钥包"
+                : "连接平台后可操作"
+            }}</el-tag>
+            <el-button
+              v-if="isV2"
+              class="mt-2"
+              size="small"
+              :disabled="!active || loading || detailLoading"
+              @click="openBinding"
+              >导入 Agent 公钥包</el-button
+            >
+          </li>
+          <li class="rounded-lg border border-ink-100 p-3">
+            <b>4. 回到平台验证</b>
+            <p class="kb-muted mt-2">
+              下载连接配置并导入平台，填入共享服务 Key；对每个 Agent
+              执行「验证并选中」，再测试检索。
+            </p>
+            <el-button
+              v-if="isV2"
+              class="mt-2"
+              size="small"
+              @click="exportConnection"
+              >下载平台连接配置</el-button
+            >
+            <el-button
+              v-if="isV2 && !serviceKeys.some((k) => k.status === 'ACTIVE')"
+              class="mt-2"
+              size="small"
+              :disabled="!active || loading || detailLoading"
+              @click="keyDialog = true"
+              >生成共享服务 Key</el-button
+            >
+            <p v-else-if="isV2" class="kb-muted mt-2">
+              已有共享 Key，不需要为每个 Agent 另建。
+            </p>
+          </li>
+        </ol>
+        <el-alert
+          v-if="selected && isV2 && applicationGrantCount === 0"
+          class="mt-3"
+          type="warning"
+          :closable="false"
+          title="这个连接还没有知识库授权，Agent 目前无法读取知识。请先完成第 2 步。"
+        />
+      </article>
+      <el-collapse class="mb-4"
+        ><el-collapse-item
+          title="不熟悉这些概念？查看填写说明和常见问题"
+          name="help"
+        >
+          <div class="grid gap-4 p-3 md:grid-cols-2">
+            <div>
+              <b>“接入应用”和“接入策略”是什么？</b>
+              <p class="kb-muted mt-2">
+                它们代表一次平台连接。你只需给连接起名，安装实例、工作区等标识从调用平台导入。一个连接内可以有多个
+                Agent。
+              </p>
+            </div>
+            <div>
+              <b>服务 Key 和 Agent 公钥分别做什么？</b>
+              <p class="kb-muted mt-2">
+                服务 Key 证明平台获准接入；每个 Agent 的公钥用来区分调用者。只填
+                Key 或只导入公钥都不能完成接入。私钥始终保留在调用平台。
+              </p>
+            </div>
+            <div>
+              <b>为什么验证身份成功，却读不到知识？</b>
+              <p class="kb-muted mt-2">
+                请确认应用和该 Agent
+                都获准读取目标知识库，并检查资料标签权限、资料是否已发布和完成索引。身份通过不等于获得所有知识。
+              </p>
+            </div>
+            <div>
+              <b>提示“身份未就绪”时怎么办？</b>
+              <p class="kb-muted mt-2">
+                先在平台确认 SDK
+                可用，再完成此处公钥登记，最后回平台执行“验证并选中”。启用 V2
+                后，每个要使用知识库的 Agent 都需要单独完成这些步骤。
+              </p>
+            </div>
+          </div>
+        </el-collapse-item></el-collapse
+      >
       <div class="grid gap-4 xl:grid-cols-[300px_minmax(0,1fr)]">
         <article class="kb-card p-4">
           <div class="mb-3 flex items-center justify-between">
             <b>接入策略</b
             ><el-button type="primary" size="small" @click="policyDialog = true"
-              >新建策略</el-button
+              >连接新平台</el-button
             >
           </div>
           <el-empty
             v-if="!policies.length && !loading"
-            description="尚未创建接入策略"
+            description="还没有连接 Agent 平台"
           />
           <button
             v-for="item in policies"
             :key="item.id"
+            :disabled="loading || saving"
             class="mb-2 block w-full rounded-lg border p-3 text-left"
             :class="
               selected?.id === item.id
@@ -119,8 +256,9 @@
             <el-button
               class="mt-3"
               size="small"
+              :disabled="loading || detailLoading"
               @click="openGrants(selected.application_principal_id)"
-              >应用知识库授权上限</el-button
+              >为应用选择可读知识库</el-button
             >
           </article>
           <el-alert
@@ -289,79 +427,24 @@
       </div>
     </template>
 
-    <el-dialog
+    <AgentPolicyWizard
       v-model="policyDialog"
-      title="新建 Agent 接入策略"
-      width="min(680px,96vw)"
-    >
-      <el-form label-position="top">
-        <el-form-item label="应用主体"
-          ><el-select
-            v-model="policyForm.applicationPrincipalId"
-            class="w-full"
-            placeholder="选择 APPLICATION 主体"
-            ><el-option
-              v-for="p in principals.filter(
-                (p) =>
-                  p.principalType === 'APPLICATION' && p.status === 'ACTIVE',
-              )"
-              :key="p.id"
-              :value="p.id"
-              :label="`${p.name} (#${p.id})`" /></el-select
-          ><el-button link @click="createApplication"
-            >新建应用主体</el-button
-          ></el-form-item
-        >
-        <div class="grid grid-cols-2 gap-3">
-          <el-form-item label="平台标识"
-            ><el-select
-              v-model="policyForm.platformId"
-              filterable
-              allow-create
-              default-first-option
-              ><el-option label="OpenCode" value="opencode" /><el-option
-                label="Octop"
-                value="octop" /></el-select></el-form-item
-          ><el-form-item label="安装 ID"
-            ><el-input v-model="policyForm.installationId"
-          /></el-form-item>
-        </div>
-        <el-form-item label="工作区 ID"
-          ><el-input
-            v-model="policyForm.workspaceId"
-            placeholder="与插件/Octop 接入信息一致"
-        /></el-form-item>
-        <el-form-item label="AKB 公共地址"
-          ><el-input
-            v-model="policyForm.resourceOrigin"
-            placeholder="https://akb.example.com"
-        /></el-form-item>
-        <el-form-item label="签发标识 issuer"
-          ><el-input v-model="policyForm.issuer"
-        /></el-form-item>
-        <el-form-item label="受众 audience"
-          ><el-input v-model="policyForm.audience"
-        /></el-form-item>
-        <el-alert
-          title="请复制调用平台展示的安装和工作区信息。V2 不需要发布 JWKS 网站。"
-          type="info"
-          :closable="false"
-        />
-      </el-form>
-      <template #footer
-        ><el-button @click="policyDialog = false">取消</el-button
-        ><el-button type="primary" :loading="saving" @click="createPolicy"
-          >创建 V2 策略</el-button
-        ></template
-      >
-    </el-dialog>
+      :principals="principals"
+      @created="policyCreated"
+    />
     <el-dialog
       v-model="bindingDialog"
       title="绑定 Agent"
       width="min(680px,96vw)"
     >
+      <el-alert
+        type="info"
+        :closable="false"
+        class="mb-4"
+        title="先回到调用平台，选择一个 Agent，点击生成公钥、导出公钥包。导入该文件即可自动填写身份；不要填写个人用户名。"
+      />
       <el-form label-position="top">
-        <el-form-item label="导入公钥接入包（可选）"
+        <el-form-item label="导入公钥接入包（推荐）"
           ><input
             aria-label="导入 Agent 公钥包"
             type="file"
@@ -442,7 +525,7 @@
           ></el-table-column
         ></el-table
       >
-      <el-divider>登记新公钥</el-divider>
+      <el-divider>1. 导入调用平台生成的公钥包</el-divider>
       <input
         aria-label="导入待登记公钥"
         type="file"
@@ -462,7 +545,7 @@
         :disabled="!active || currentAgent?.status !== 'ACTIVE'"
         :loading="saving"
         @click="makeChallenge"
-        >生成登记挑战</el-button
+        >2. 生成挑战，交回平台签名</el-button
       >
       <template v-if="challenge">
         <el-alert
@@ -481,9 +564,9 @@
         <el-button
           class="mt-2"
           @click="download('registration-challenge.json', challenge)"
-          >下载挑战</el-button
+          >下载挑战，上传到调用平台</el-button
         >
-        <el-form-item label="调用平台返回的登记证明" class="mt-4"
+        <el-form-item label="3. 粘贴调用平台返回的登记证明" class="mt-4"
           ><el-input
             v-model="proofText"
             type="textarea"
@@ -491,7 +574,7 @@
             placeholder="粘贴 registrationProof JWT"
         /></el-form-item>
         <el-button type="primary" :loading="saving" @click="finishRegistration"
-          >验证并登记公钥</el-button
+          >完成登记，然后回平台验证</el-button
         >
       </template>
     </el-drawer>
@@ -516,7 +599,7 @@
             :max="100000" /></el-form-item
       ></el-form>
       <el-alert
-        title="同一策略的 Agent 共用此 Key。仅开放知识库只读操作。"
+        title="为这个连接生成一个服务 Key，所有 Agent 共用。复制到调用平台的服务 Key 配置后保存；它不会代替每个 Agent 的公钥登记。仅开放知识库只读操作。"
         type="info"
         :closable="false"
       />
@@ -555,11 +638,12 @@
     </el-dialog>
     <el-dialog
       v-model="grantDialog"
+      :close-on-click-modal="false"
       :title="`知识库授权 · ${principalName(grantPrincipal)}`"
       width="min(760px,96vw)"
     >
       <el-alert
-        title="有效范围为应用与 Agent 的交集。空资料标签仅允许无标签资料；取消知识库选择会撤销整库访问。"
+        title="勾选允许访问的知识库并保存。应用和 Agent 都要获得同一知识库的授权才能读取；取消勾选会撤销访问。资料标签权限可在每个知识库下单独设置。"
         type="info"
         :closable="false"
       />
@@ -602,8 +686,9 @@
 </template>
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from "vue";
+import AgentPolicyWizard from "./AgentPolicyWizard.vue";
 import axios from "axios";
-import { ElMessage, ElMessageBox } from "element-plus";
+import { ElMessage } from "element-plus";
 import { getMe } from "../api/auth";
 import {
   createExternalPrincipal,
@@ -637,6 +722,7 @@ const admin = ref(false),
 const policies = ref<WorkloadPolicy[]>([]),
   principals = ref<ExternalPrincipalSummary[]>([]),
   selected = ref<WorkloadPolicy | null>(null);
+const applicationGrantCount = ref<number | null>(null);
 const agents = ref<WorkloadAgent[]>([]),
   serviceKeys = ref<ExternalKeyRow[]>([]),
   audits = ref<ExternalAuditRow[]>([]);
@@ -656,15 +742,6 @@ const currentAgent = ref<WorkloadAgent | null>(null),
   proofText = ref(""),
   challenge = ref<RegistrationChallenge | null>(null);
 const importedBundle = ref<ReturnType<typeof parsePublicBundle> | null>(null);
-const policyForm = reactive({
-  applicationPrincipalId: undefined as number | undefined,
-  platformId: "opencode",
-  installationId: "",
-  workspaceId: "",
-  issuer: "https://identity.example.com/agents",
-  audience: "akb-external-api",
-  resourceOrigin: window.location.origin,
-});
 const bindingForm = reactive({
   runtimeAgentKey: "",
   externalAgentId: "",
@@ -672,7 +749,7 @@ const bindingForm = reactive({
 });
 const keyForm = reactive({
   name: "共享 Agent 服务 Key",
-  expiresAt: "",
+  expiresAt: new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 19),
   rateLimitPerMinute: 60,
 });
 const grantPrincipal = ref(0),
@@ -711,13 +788,16 @@ async function action(fn: () => Promise<void>) {
     saving.value = false;
   }
 }
+let loadSequence = 0;
 async function load() {
+  const sequence = ++loadSequence;
   loading.value = true;
   try {
     const [p, s] = await Promise.all([
       workloadApi.policies(),
       listExternalPrincipals(),
     ]);
+    if (sequence !== loadSequence) return;
     policies.value = p;
     principals.value = s.data.data || [];
     const next = p.find((p) => p.id === selected.value?.id) || p[0];
@@ -725,11 +805,12 @@ async function load() {
   } catch (e) {
     error.value = errorMessage(e);
   } finally {
-    loading.value = false;
+    if (sequence === loadSequence) loading.value = false;
   }
 }
 async function choose(policy: WorkloadPolicy) {
   selected.value = policy;
+  applicationGrantCount.value = null;
   agentDrawer.value = false;
   clearEnrollment();
   currentAgent.value = null;
@@ -740,12 +821,21 @@ async function loadDetails() {
   if (!p) return;
   detailLoading.value = true;
   try {
-    const [a, k, log] = await Promise.all([
+    const [a, k, log, grants] = await Promise.all([
       workloadApi.agents(p.id),
       listPrincipalKeys(p.application_principal_id),
       listExternalAudits(null, 100),
+      axios.get(
+        `/api/external/admin/principals/${p.application_principal_id}/knowledge-base-grants/config`,
+      ),
     ]);
     if (selected.value?.id !== p.id) return;
+    applicationGrantCount.value = Array.isArray(grants.data.data)
+      ? grants.data.data.filter(
+          (g: { expiresAt?: string | null }) =>
+            !g.expiresAt || new Date(g.expiresAt).getTime() > Date.now(),
+        ).length
+      : null;
     agents.value = a;
     serviceKeys.value = (k.data.data || []).filter(
       (k) =>
@@ -762,40 +852,44 @@ async function loadDetails() {
     detailLoading.value = false;
   }
 }
-async function createApplication() {
+async function policyCreated(p: WorkloadPolicy) {
+  const sequence = ++loadSequence;
+  loading.value = true;
+  selected.value = p;
+  applicationGrantCount.value = null;
+  agents.value = [];
+  serviceKeys.value = [];
+  audits.value = [];
   try {
-    const result = await ElMessageBox.prompt(
-      "应用名称",
-      "新建 APPLICATION 主体",
-      { inputPattern: /\S+/, inputErrorMessage: "请输入名称" },
-    );
-    const r = await createExternalPrincipal({
-      principalCode: `APP_${crypto.randomUUID().slice(0, 12)}`,
-      name: result.value,
-      principalType: "APPLICATION",
-    });
-    principals.value = (await listExternalPrincipals()).data.data || [];
-    policyForm.applicationPrincipalId = r.data.data!.id;
+    const [next, people] = await Promise.all([
+      workloadApi.policies(),
+      listExternalPrincipals(),
+    ]);
+    if (sequence !== loadSequence) return;
+    policies.value = next;
+    principals.value = people.data.data || [];
+    await choose(p);
+    ElMessage.success("连接已创建。下一步：为接入应用选择可读知识库。");
   } catch (e) {
-    if (e !== "cancel" && e !== "close") ElMessage.error(errorMessage(e));
+    error.value = errorMessage(e);
+  } finally {
+    if (sequence === loadSequence) loading.value = false;
   }
 }
-async function createPolicy() {
-  await action(async () => {
-    if (
-      !policyForm.applicationPrincipalId ||
-      !policyForm.installationId.trim() ||
-      !policyForm.workspaceId.trim()
-    )
-      throw new Error("请选择应用并填写安装和工作区 ID");
-    const p = await workloadApi.createPolicy({
-      ...policyForm,
-      proofProfile: "AGENT_KEY_RS256_V2",
-    });
-    policyDialog.value = false;
-    await load();
-    await choose(p);
-    ElMessage.success("策略已创建，请配置应用授权并绑定 Agent");
+function exportConnection() {
+  const p = selected.value;
+  if (!p) return;
+  download("akb-connection.json", {
+    format: "akb-platform-connection/v1",
+    proofProfile: p.proof_profile,
+    platformId: p.platform_id,
+    installationId: p.installation_id,
+    workspaceId: p.workspace_id,
+    resource: p.resource_origin,
+    policyId: String(p.id),
+    applicationPrincipalId: String(p.application_principal_id),
+    issuer: p.issuer,
+    audience: p.audience,
   });
 }
 async function destructive(title: string, message: string) {
@@ -1084,6 +1178,7 @@ async function saveGrants() {
       Object.values(grantRows.value),
     );
     grantDialog.value = false;
+    await loadDetails();
     ElMessage.success("知识库授权已保存");
   });
 }

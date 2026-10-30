@@ -158,4 +158,10 @@ SDK 每调用读取活动密钥，每 HTTP 请求读取共享 Key，因此 selec
 
 资料标签授权区分“继承主体权限”（null）与“无标签资料”（空数组）；保存授权时保留已有语义。服务 Key 仅在生成 / 轮换时显示一次，关闭弹窗即清除页面状态。
 
-更新分支后需重新构建 `frontend`（`npm ci && npm run typecheck && npm test && npm run build`）并部署新的 `dist/`，同时更新后端；仅更新后端不会改变现有静态页面。Octop 对应入口为“外部知识库 → AKB 知识源右侧盾牌按钮”。完整双端步骤、SDK 0.3.0 的宿主安装和安全边界见 Octop 仓库 `integrations/agent-identity-spec/DASHBOARD-SETUP.md`。
+更新分支后需重新构建 `frontend`（`npm ci && npm run typecheck && npm test && npm run build`）并部署新的 `dist/`，同时更新后端；仅更新后端不会改变现有静态页面。Octop 对应入口为“外部知识库 → AKB 知识源右侧盾牌按钮”。完整双端步骤、SDK 0.3.1 的宿主安装和安全边界见 Octop 仓库 `integrations/agent-identity-spec/DASHBOARD-SETUP.md`。
+
+### 新手向导与参数交接
+
+“连接新平台”向导引导用户导入平台提供的公开接入信息、命名应用、核对创建；安装实例 / 工作区等标识不应由用户编造。Octop 页面可直接下载 `akb-platform-setup/v1` 信息包；OpenCode 配套 SDK 0.3.1+ 可运行 `akb-agent-identity setup export /absolute/path/identity.json > akb-setup.json`。
+
+创建后页面给出四步指引及未授权提示。AKB 可导出 `akb-platform-connection/v1` 平台连接配置，供 Octop 自动填写应用 / 策略 ID、签发者和受众；导入时核对平台、安装实例、工作区及资源地址，且不自动保存、不更改认证模式。两个信息包都不包含服务 Key 或私钥；服务 Key 仍通过一次性凭证窗口单独配置，Agent 公钥仍需完成挑战登记与远端验证。

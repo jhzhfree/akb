@@ -7,3 +7,15 @@ export function parsePublicBundle(text: string): {
   workspaceId: string;
 };
 export function parseRegistrationProof(text: string): string;
+export interface PlatformSetup {
+  platformId: string;
+  installationId: string;
+  workspaceId: string;
+  issuer: string;
+  audience: string;
+  resource: string;
+}
+export function validatePlatformSetup(
+  value: PlatformSetup,
+): Record<string, string>;
+export function parsePlatformSetup(text: string): PlatformSetup;
