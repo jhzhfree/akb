@@ -68,6 +68,43 @@ const setupFields = [
   "audience",
   "resource",
 ];
+/**
+ * 内网判定：与后端 WorkloadIdentityAdminService 的规则保持一致——公网一律要求 HTTPS，
+ * 明文 HTTP 只放开本机与内网（内网部署拿不到公网证书，也不该为一个内部地址去申请）。
+ * 不解析 DNS：解析会阻塞、可能失败，且结果随时可变，判出来的结论不可靠。
+ */
+const INTRANET_SUFFIXES = [
+  ".local",
+  ".internal",
+  ".intranet",
+  ".lan",
+  ".corp",
+  ".home",
+  ".localdomain",
+  ".private",
+];
+function isIntranetHost(host) {
+  const value = (host || "").trim().toLowerCase().replace(/^\[|\]$/g, "");
+  if (value === "localhost" || value === "::1" || value.startsWith("127."))
+    return true;
+  if (value.startsWith("fd") || value.startsWith("fc") || value.startsWith("fe80"))
+    return true;
+  if (INTRANET_SUFFIXES.some((suffix) => value.endsWith(suffix))) return true;
+  if (!value.includes(".") && !value.includes(":")) return true;
+  const parts = value.split(".");
+  if (parts.length !== 4 || parts.some((part) => !/^\d+$/.test(part)))
+    return false;
+  const a = Number(parts[0]);
+  const b = Number(parts[1]);
+  return (
+    a === 10 ||
+    (a === 172 && b >= 16 && b <= 31) ||
+    (a === 192 && b === 168) ||
+    (a === 169 && b === 254) ||
+    (a === 100 && b >= 64 && b <= 127)
+  );
+}
+
 export function validatePlatformSetup(value) {
   const errors = {};
   for (const name of ["platformId", "installationId", "workspaceId"]) {
@@ -106,12 +143,9 @@ export function validatePlatformSetup(value) {
     errors.audience = "请填写平台提供的受众标识（1–128 个字符）";
   try {
     const u = new URL(value.resource);
+    const plainIntranet = u.protocol === "http:" && isIntranetHost(u.hostname);
     if (
-      (u.protocol !== "https:" &&
-        !(
-          u.protocol === "http:" &&
-          ["localhost", "127.0.0.1", "[::1]"].includes(u.hostname)
-        )) ||
+      (u.protocol !== "https:" && !plainIntranet) ||
       u.username ||
       u.password ||
       u.pathname !== "/" ||
@@ -122,7 +156,7 @@ export function validatePlatformSetup(value) {
       throw new Error();
   } catch {
     errors.resource =
-      "填写 AKB 对外访问的根地址，例如 https://akb.example.com，不要包含 /api 路径、默认端口或末尾参数；HTTP 仅支持本机调试";
+      "填写 AKB 对外访问的根地址，例如 https://akb.example.com，不要包含 /api 路径、默认端口或末尾参数；HTTP 仅支持本机与内网地址";
   }
   return errors;
 }
@@ -141,7 +175,15 @@ export function parsePlatformSetup(text) {
     throw new Error(
       "请导入平台导出的 AKB 接入信息包，不要上传完整配置、私钥、公钥包或服务 Key",
     );
-  const errors = validatePlatformSetup(value);
+  // 平台导出的 resource 是它实际调用的端点（如 .../api/v1/external/kb/retrievals），AKB
+  // 要的是根地址：取 origin，顺带去掉默认端口与末尾斜杠。手动填写仍然要求就是根地址。
+  let resource;
+  try {
+    resource = new URL(value.resource).origin;
+  } catch {
+    throw new Error("接入信息包里的 AKB 地址不是一个完整地址，请从平台重新导出");
+  }
+  const errors = validatePlatformSetup({ ...value, resource });
   if (Object.keys(errors).length)
     throw new Error(Object.values(errors).join("；"));
   return {
@@ -150,6 +192,6 @@ export function parsePlatformSetup(text) {
     workspaceId: value.workspaceId,
     issuer: value.issuer,
     audience: value.audience,
-    resource: value.resource.replace(/\/$/, ""),
+    resource,
   };
 }

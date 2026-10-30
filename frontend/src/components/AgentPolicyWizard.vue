@@ -80,6 +80,9 @@
           :closable="false"
           title="接入信息已校验并自动填写，请核对平台和 AKB 地址后继续。"
         />
+        <p v-if="importedNote" class="mt-1 text-[11px] text-ink-500">
+          {{ importedNote }}
+        </p>
       </div>
       <el-descriptions v-if="imported" :column="1" border class="mb-4"
         ><el-descriptions-item label="平台提供的 AKB 地址">{{
@@ -258,6 +261,7 @@ const step = ref(0),
   platform = ref("octop"),
   details = ref<string[]>([]),
   imported = ref(false),
+  importedNote = ref(""),
   saving = ref(false),
   failure = ref(""),
   errors = ref<Record<string, string>>({}),
@@ -292,6 +296,7 @@ watch(
       newApplication.value = null;
       applicationName.value = "Octop 知识接入";
       imported.value = false;
+  importedNote.value = "";
       details.value = [];
       platform.value = "octop";
       Object.assign(form, {
@@ -309,6 +314,7 @@ function selectPlatform() {
   form.installationId = "";
   form.workspaceId = "";
   imported.value = false;
+  importedNote.value = "";
   errors.value = {};
   form.platformId = platform.value === "custom" ? "" : platform.value;
   form.issuer = platform.value === "octop" ? "https://octop.local/agents" : "";
@@ -326,8 +332,15 @@ async function importSetup(event: Event) {
   if (!f) return;
   try {
     if (f.size > 16384) throw new Error("接入信息包不能超过 16 KiB");
-    const value = parsePlatformSetup(await f.text());
+    const text = await f.text();
+    const value = parsePlatformSetup(text);
+    const declared = (JSON.parse(text) as { resource?: string }).resource || "";
     Object.assign(form, value);
+    // 平台导出的是它调用的端点，这里取的是根地址，说清楚改了什么，免得用户以为填错了
+    importedNote.value =
+      declared === value.resource
+        ? ""
+        : `平台给出的是它实际调用的端点 ${declared}，已取根地址 ${value.resource}。`;
     platform.value = ["octop", "opencode"].includes(value.platformId)
       ? value.platformId
       : "custom";
