@@ -21,7 +21,11 @@
 5. 管理员登记每个运行 Agent 与 AKB Principal 的映射；不需要给每个 Agent 创建 Key 或 MCP 配置。
 6. 通过策略签发一个共享 Key，保存一次性返回的 secret 到插件受保护文件。
 
-创建策略：
+> 这里描述的复杂版接入（`/api/external/admin/workload/policies/**`）已下线：只保留
+> `AGENT_KEY_RS256_V2`，不再签发 V1 策略，也不再支持 nonce 挑战与远程 JWKS。新接入请用
+> 简化流程，见 `docs/api/AGENT-IDENTITY-V2.md`；以下保留的是历史策略的字段说明。
+
+创建策略（历史）：
 
 ```http
 POST /api/external/admin/workload/policies
@@ -30,12 +34,15 @@ Content-Type: application/json
 {
   "applicationPrincipalId": 123,
   "issuer": "https://identity.example.com/opencode",
-  "jwksUri": "https://identity.example.com/.well-known/jwks.json",
   "audience": "akb-external-api",
   "installationId": "opencode-office-01",
-  "workspaceId": "engineering-01"
+  "workspaceId": "engineering-01",
+  "platformId": "opencode",
+  "resourceOrigin": "https://akb.example.com"
 }
 ```
+
+只接受 `proofProfile=AGENT_KEY_RS256_V2`（不传就是它）；带 `jwksUri` 会被拒绝——V2 用登记的公钥验签，不需要远程 JWKS。
 
 URL 不允许内嵌凭据、query、fragment，默认必须 HTTPS。仅本地开发可在 AKB 显式设置 `WORKLOAD_ALLOW_LOOPBACK_HTTP=true` 接受 loopback HTTP，不用于远程 HTTP。
 

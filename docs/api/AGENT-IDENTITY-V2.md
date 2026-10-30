@@ -100,25 +100,24 @@ POST /api/external/admin/workload/policies/17/keys
 
 SDK 文件 Provider 当前为 POSIX 0700/0600、当前账户所有且工作区外；Windows 需注入 ACL/Keychain Provider，默认文件 Provider 会明确拒绝。可替换 RsaSigner 端口支持将来 KMS，但模块化本身不隔离同 UID 恶意代码。
 
-## 4. 管理员挑战与持钥登记
+## 4. 管理员登记公钥
+
+简化接入不再走「挑战—持钥证明」：管理员在控制台直接登记公钥，部署端既不需要签登记证明，
+也不需要保存管理员 Token。
 
 ```http
-POST /api/external/admin/workload/policies/17/agents/21/keys/challenges
+POST /api/external/admin/agent-connections/17/agents
 
-{"publicJwk":{"kty":"RSA","n":"<modulus>","e":"AQAB","kid":"<fingerprint>","alg":"RS256","use":"sig"}}
+{"name":"构建助手","agentId":"<uuid>","publicJwk":{"kty":"RSA","n":"<modulus>","e":"AQAB","kid":"<fingerprint>","alg":"RS256","use":"sig"}}
 ```
 
-响应包含 challengeId、nonce、policyId、bindingId、externalAgentId、jkt、purpose、audience、expiresAt（整数秒）。有效期 5 分钟，同一绑定最多 5 个未过期未消费挑战，最多 2 个未过期活动密钥。
+- kid 必须是 RFC7638 SHA-256 指纹；只接受公钥，带 d/p/q 等私有字段的一律拒绝
+- 同一 Agent 最多两把活动公钥：轮换时先登记新的，验证通过后再撤销旧的
+- REVOKED 是终态，撤销过的公钥不能重新启用，只能换一把新密钥重新登记
+- 不知道还缺什么时，用控制台的「接入自检」——它只回答配置项齐不齐（能不能调通取决于私钥有没有在平台侧配好）
 
-部署端核对 owner/kid，以目标私钥签名专用登记证明；同一管理员提交完成请求：
-
-```http
-POST /api/external/admin/workload/policies/17/agents/21/keys/registrations
-
-{"challengeId":"<uuid>","registrationProof":"<专用JWS>"}
-```
-
-登记证明 Header typ 为 `akb-key-registration+jwt`，aud 为 `akb-agent-key-registration`，purpose 为 `akb.agent-key.register`。绑定挑战、nonce、公钥指纹和 Agent，不能当成知识库请求证明。服务端以挑战中保存的公钥验证，并在同一事务消费挑战、登记公钥、写管理审计；重放拒绝。普通插件不保存管理员 Token。
+> 旧版（nonce 挑战 + 登记证明）已下线：`.../keys/challenges`、`.../keys/registrations`
+> 与 `t_workload_key_challenge` 表都已删除。
 
 ## 5. 身份探针与本地选中
 

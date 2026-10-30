@@ -16,7 +16,7 @@ class WorkloadAuthorizationTest {
         ExternalAccessService access = new ExternalAccessService(keys, mock(ExternalRateLimiter.class), bases,
             mock(EmbedTokenService.class), mock(EmbedTokenLifecycleService.class), new KnowledgeProperties());
         ApiKey key = new ApiKey(); key.setPrincipalId(1L); key.setIdentityMode("APPLICATION_WORKLOAD");
-        key.setWorkloadIdentity(new WorkloadIdentity(10L, "session", "call"));
+        key.setWorkloadIdentity(new WorkloadIdentity(10L, "session", "call", "AGENT_KEY_RS256_V2", null, null, null, null, null, null));
         when(keys.grantedKnowledgeBases(key)).thenReturn(Arrays.asList(1L, 2L));
         when(keys.grantedKnowledgeBases(10L)).thenReturn(Collections.singletonList(2L));
         assertEquals(Collections.singletonList(2L), access.grantedKnowledgeBases(key));
@@ -36,7 +36,7 @@ class WorkloadAuthorizationTest {
         when(mapper.getPrincipalKnowledgeBaseGrantPermissionTags(1L, 2L)).thenReturn("[\"engineering\",\"finance\"]");
         when(mapper.getPrincipalKnowledgeBaseGrantPermissionTags(10L, 2L)).thenReturn("[\"engineering\"]");
         ApiKey key = new ApiKey(); key.setPrincipalId(1L); key.setIdentityMode("APPLICATION_WORKLOAD");
-        key.setWorkloadIdentity(new WorkloadIdentity(10L, "session", "call"));
+        key.setWorkloadIdentity(new WorkloadIdentity(10L, "session", "call", "AGENT_KEY_RS256_V2", null, null, null, null, null, null));
         RetrievalAuthorizationService service = new RetrievalAuthorizationService(new com.fasterxml.jackson.databind.ObjectMapper(), "CLIENT", mapper);
         assertEquals(Collections.singletonList("engineering"), service.effectiveTags(key, 2L, Arrays.asList("engineering", "finance"), "REST"));
     }
@@ -45,7 +45,7 @@ class WorkloadAuthorizationTest {
         ExternalAccessService access = new ExternalAccessService(keys, mock(ExternalRateLimiter.class), mock(KnowledgeBaseAccessService.class),
             mock(EmbedTokenService.class), mock(EmbedTokenLifecycleService.class), new KnowledgeProperties());
         ApiKey key = new ApiKey(); key.setPrincipalId(1L); key.setIdentityMode("APPLICATION_WORKLOAD");
-        key.setWorkloadIdentity(new WorkloadIdentity(10L,"session","call").inheritServiceGrants());
+        key.setWorkloadIdentity(new WorkloadIdentity(10L,"session","call", "AGENT_KEY_RS256_V2", null, null, null, null, null, null).inheritServiceGrants());
         when(keys.grantedKnowledgeBases(key)).thenReturn(Collections.singletonList(2L));
         assertEquals(2L,access.resolveKnowledgeBase(key,2L));
         assertThrows(SecurityException.class,()->access.resolveKnowledgeBase(key,3L));

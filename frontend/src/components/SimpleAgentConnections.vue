@@ -54,6 +54,17 @@
             {{ selected.name }} <el-tag>{{ selected.status }}</el-tag>
           </h2>
           <p class="kb-muted mt-2">AKB 地址：{{ selected.resource_origin }}</p>
+          <div class="mt-2">
+            <el-button link @click="runCheck">接入自检</el-button>
+            <ul v-if="checklist.length" class="mt-1 kb-muted">
+              <li v-for="item in checklist" :key="item.item">
+                {{ item.ok ? "✓" : "✗" }} {{ item.item }}
+                <span v-if="!item.ok && item.hint" class="text-amber-600"
+                  >— {{ item.hint }}</span
+                >
+              </li>
+            </ul>
+          </div>
           <p class="mt-3">可读知识库</p>
           <el-select v-model="scopeIds" multiple class="mt-2 w-full"
             ><el-option
@@ -148,6 +159,9 @@
                     >撤销公钥</el-button
                   >
                 </div>
+                <el-button link @click="copyAgentId(row.external_agent_id)"
+                  >复制 Agent ID</el-button
+                >
                 <el-button
                   v-if="row.status !== 'REVOKED'"
                   link
@@ -161,12 +175,6 @@
           >
         </article>
       </template>
-      <el-collapse class="mt-4"
-        ><el-collapse-item
-          title="已有高级接入记录（兼容旧配置）"
-          name="advanced"
-          ><WorkloadIdentityPanel :bases="bases" /></el-collapse-item
-      ></el-collapse>
     </template>
     <el-dialog v-model="createOpen" title="新建服务接入" width="540px"
       ><el-form label-position="top"
@@ -182,7 +190,9 @@
           /><small
             >填写调用平台实际访问的根地址，不要附加 /api
             路径。需与调用平台一致。</small
-          ></el-form-item
+          ><p v-if="loopbackHint" class="mt-1 text-[11px] text-amber-600">
+            {{ loopbackHint }}
+          </p></el-form-item
         ><el-form-item label="可读知识库"
           ><el-select v-model="newScope" multiple class="w-full"
             ><el-option
@@ -258,7 +268,7 @@
   </section>
 </template>
 <script setup lang="ts">
-import { onMounted, ref } from "vue";
+import { computed, onMounted, ref } from "vue";
 import axios from "axios";
 import { ElMessage } from "element-plus";
 import { getMe } from "../api/auth";
@@ -268,14 +278,14 @@ import {
   revokeExternalKey,
 } from "../api/external";
 import {
-  workloadApi,
   type WorkloadPolicy,
   type WorkloadAgent,
   type WorkloadAgentKey,
 } from "../api/workload";
 import type { KnowledgeBase, ExternalKeyRow } from "../types";
 import { confirmAction, errorMessage } from "../utils/feedback";
-import WorkloadIdentityPanel from "./WorkloadIdentityPanel.vue";
+import { copyText } from "../utils/clipboard";
+import intranetRules from "../utils/intranet-rules.mjs";
 defineProps<{ bases: KnowledgeBase[] }>();
 type Connection = WorkloadPolicy & { name: string; knowledgeBaseIds: number[] };
 type Agent = WorkloadAgent & { name: string; keys: WorkloadAgentKey[] };
@@ -293,11 +303,37 @@ const scopeIds = ref<number[]>([]),
   agentOpen = ref(false),
   secretOpen = ref(false),
   secret = ref("");
+const checklist = ref<{ item: string; ok: boolean; hint: string }[]>([]);
 const newName = ref(""),
   origin = ref(window.location.origin),
   agentName = ref(""),
   agentId = ref(""),
   publicText = ref("");
+/**
+ * 本机明文要提醒两件事：后端默认不收（WORKLOAD_ALLOW_LOOPBACK_HTTP 默认关），以及「本机」是
+ * 相对平台而言的——平台与 AKB 不同机时 localhost 指向平台自己。这个地址默认从浏览器地址带出来，
+ * 所以在 dev 模式下打开控制台时这条提示经常用得上。
+ */
+const loopbackHint = computed(() => {
+  const value = origin.value.trim();
+  if (!value) return "";
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch {
+    return "";
+  }
+  if (url.protocol !== "http:") return "";
+  const host = url.hostname.toLowerCase();
+  const loopback = intranetRules.loopback ?? {};
+  const isLoopback =
+    (loopback.hosts ?? []).some((h) => host === h.toLowerCase()) ||
+    (loopback.ipv4Prefixes ?? []).some((prefix) => host.startsWith(prefix));
+  if (!isLoopback) return "";
+  return `这是本机地址：后端要开启 WORKLOAD_ALLOW_LOOPBACK_HTTP=true 才会接受；而且「本机」`
+    + `是相对平台而言的——平台与 AKB 不在同一台主机时，localhost 指向的是平台自己，`
+    + `请改填 AKB 实际可达的地址。`;
+});
 async function act(fn: () => Promise<void>) {
   if (busy.value) return;
   busy.value = true;
@@ -320,6 +356,7 @@ async function load(id?: number) {
   selected.value = next ?? null;
   agents.value = [];
   serviceKeys.value = [];
+  checklist.value = [];
   if (next) {
     scopeIds.value = [...next.knowledgeBaseIds];
     const [a, k] = await Promise.all([
@@ -388,6 +425,19 @@ async function register() {
     ElMessage.success("公钥已登记，请回调用平台绑定并测试");
   });
 }
+async function runCheck() {
+  if (!selected.value) return;
+  await act(async () => {
+    checklist.value = (
+      await axios.get(`${root}/${selected.value!.id}/checklist`)
+    ).data.data;
+  });
+}
+async function copyAgentId(id: string) {
+  // 走封装：内网明文下 navigator.clipboard 不存在
+  if (await copyText(id)) ElMessage.success("已复制 Agent ID");
+  else ElMessage.info("当前浏览器不支持剪贴板，请手动选中复制");
+}
 async function issue() {
   await act(async () => {
     if (!selected.value) return;
@@ -396,11 +446,11 @@ async function issue() {
       .slice(0, 19);
     showSecret(
       (
-        await workloadApi.issueKey(selected.value.id, {
+        await axios.post(`${root}/${selected.value.id}/keys`, {
           name: selected.value.name,
           expiresAt: expires,
         })
-      ).secret,
+      ).data.data.secret,
     );
     await load();
   });
@@ -432,7 +482,10 @@ async function revokePublic(binding: number, kid: string) {
   if (!(await confirm("撤销后此私钥将不能再认证，且不可恢复。"))) return;
   await act(async () => {
     if (!selected.value) return;
-    await workloadApi.keyStatus(selected.value.id, binding, kid, "REVOKED");
+    await axios.put(
+      `${root}/${selected.value.id}/agents/${binding}/keys/${encodeURIComponent(kid)}/status`,
+      { status: "REVOKED" },
+    );
     await load();
   });
 }
@@ -441,10 +494,9 @@ async function connectionStatus() {
   if (!(await confirm("确认变更服务接入状态？"))) return;
   await act(async () => {
     if (!selected.value) return;
-    await workloadApi.policyStatus(
-      selected.value.id,
-      selected.value.status === "ACTIVE" ? "SUSPENDED" : "ACTIVE",
-    );
+    await axios.put(`${root}/${selected.value.id}/status`, {
+      status: selected.value.status === "ACTIVE" ? "SUSPENDED" : "ACTIVE",
+    });
     await load();
   });
 }
@@ -452,21 +504,16 @@ async function agentStatus(row: Agent) {
   if (!(await confirm("确认变更 Agent 状态？"))) return;
   await act(async () => {
     if (!selected.value) return;
-    await workloadApi.agentStatus(
-      selected.value.id,
-      row.id,
-      row.status === "ACTIVE" ? "SUSPENDED" : "ACTIVE",
-    );
+    await axios.put(`${root}/${selected.value.id}/agents/${row.id}/status`, {
+      status: row.status === "ACTIVE" ? "SUSPENDED" : "ACTIVE",
+    });
     await load();
   });
 }
 async function copySecret() {
-  try {
-    await navigator.clipboard.writeText(secret.value);
-    ElMessage.success("已复制");
-  } catch {
-    ElMessage.info("当前浏览器不支持剪贴板，请手动选中复制");
-  }
+  // 走封装：内网明文下 navigator.clipboard 不存在，直接取用会抛且没有任何提示
+  if (await copyText(secret.value)) ElMessage.success("已复制");
+  else ElMessage.info("当前浏览器不支持剪贴板，请手动选中复制");
 }
 onMounted(() =>
   act(async () => {

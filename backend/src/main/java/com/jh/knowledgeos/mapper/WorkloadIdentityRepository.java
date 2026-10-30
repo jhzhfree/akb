@@ -54,12 +54,6 @@ public class WorkloadIdentityRepository {
     public void configureKey(long key, long policy) {
         jdbc.update("UPDATE t_api_key SET identity_mode='APPLICATION_WORKLOAD',workload_policy_id=? WHERE id=?", policy, key);
     }
-    public void consume(String issuerHash, String jti, Instant expires) {
-        jdbc.update("INSERT INTO t_workload_assertion_jti(issuer_hash,jti,expires_at) VALUES(?,?,?)", issuerHash, jti, Timestamp.from(expires));
-    }
-    public void cleanExpired() {
-        jdbc.update("DELETE FROM t_workload_assertion_jti WHERE expires_at < CURRENT_TIMESTAMP LIMIT 1000");
-    }
     public void audit(long policy, String action, long operator, String detail) {
         jdbc.update("INSERT INTO t_workload_admin_audit(policy_id,action,operator_id,detail) VALUES(?,?,?,CAST(? AS JSON))", policy, action, operator, detail);
     }
@@ -80,19 +74,6 @@ public class WorkloadIdentityRepository {
     public int activeKeyCount(long policy, long binding) {
         return jdbc.queryForObject("SELECT COUNT(*) FROM t_workload_agent_key WHERE policy_id=? AND binding_id=? AND status<>'REVOKED' AND (valid_until IS NULL OR valid_until>CURRENT_TIMESTAMP)", Integer.class, policy, binding);
     }
-    public int pendingChallenges(long binding) {
-        return jdbc.queryForObject("SELECT COUNT(*) FROM t_workload_key_challenge WHERE binding_id=? AND consumed_at IS NULL AND expires_at>CURRENT_TIMESTAMP", Integer.class, binding);
-    }
-    public void createChallenge(String id, long policy, long binding, String jwk, String kid, String nonceHash, Instant expires, long operator) {
-        jdbc.update("INSERT INTO t_workload_key_challenge(challenge_id,policy_id,binding_id,public_jwk,jkt,nonce_hash,expires_at,created_by) VALUES(?,?,?,CAST(? AS JSON),?,?,?,?)",
-            id, policy, binding, jwk, kid, nonceHash, Timestamp.from(expires), operator);
-    }
-    public Map<String, Object> challenge(String id) {
-        return first(jdbc.queryForList("SELECT * FROM t_workload_key_challenge WHERE challenge_id=? FOR UPDATE", id));
-    }
-    public int consumeChallenge(String id) {
-        return jdbc.update("UPDATE t_workload_key_challenge SET consumed_at=CURRENT_TIMESTAMP WHERE challenge_id=? AND consumed_at IS NULL AND expires_at>CURRENT_TIMESTAMP", id);
-    }
     public Map<String, Object> registerKey(long policy, long binding, String kid, String jwk, long operator) {
         jdbc.update("INSERT INTO t_workload_agent_key(policy_id,binding_id,kid,public_jwk,created_by) VALUES(?,?,?,CAST(? AS JSON),?)", policy, binding, kid, jwk, operator);
         return agentKey(policy, binding, kid);
@@ -107,7 +88,6 @@ public class WorkloadIdentityRepository {
     }
     public void cleanV2() {
         jdbc.update("DELETE FROM t_workload_v2_jti WHERE expires_at<CURRENT_TIMESTAMP LIMIT 1000");
-        jdbc.update("DELETE FROM t_workload_key_challenge WHERE expires_at<CURRENT_TIMESTAMP-INTERVAL 1 DAY LIMIT 1000");
     }
     private static Map<String, Object> first(List<Map<String, Object>> rows) { return rows.isEmpty() ? null : rows.get(0); }
 }

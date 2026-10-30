@@ -40,14 +40,12 @@ class WorkloadIdentityAdminServiceTest {
         assertThrows(IllegalArgumentException.class, () -> service.createKey(7, request, 9));
         verifyNoInteractions(keys);
     }
-    @Test void productionPoliciesRejectInsecureJwksAndAgentIdentityMustMatch() {
+    /** V2 不需要也不能要远程 JWKS：给了就报错，而不是静默忽略。 */
+    @Test void v2PoliciesRejectRemoteJwks() {
         when(principals.getPrincipal(1L)).thenReturn(principal(1, "APPLICATION"));
-        Map<String,Object> body = new HashMap<String,Object>(); body.put("applicationPrincipalId", 1L); body.put("issuer", "https://identity.example"); body.put("jwksUri", "http://127.0.0.1/jwks");
+        Map<String,Object> body = policyBody("https://identity.example");
+        body.put("jwksUri", "https://identity.example/jwks");
         assertThrows(IllegalArgumentException.class, () -> service.createPolicy(body, 9));
-        policy(); body.clear(); body.put("externalAgentId", "external-a"); body.put("runtimeAgentKey", "build"); body.put("agentPrincipalId", 3L);
-        when(principals.getPrincipal(3L)).thenReturn(principal(3, "AGENT"));
-        assertThrows(IllegalArgumentException.class, () -> service.bind(7, body, 9));
-        verify(repository, never()).createBinding(anyLong(), anyString(), anyString(), anyLong());
     }
     /**
      * 内网部署用明文 HTTP 是常态（没有公网证书，也不该为此开一个），所以私有地址段与内网
@@ -103,18 +101,11 @@ class WorkloadIdentityAdminServiceTest {
         Map<String,Object> body = new HashMap<String,Object>();
         body.put("applicationPrincipalId", 1L);
         body.put("issuer", issuer);
-        body.put("jwksUri", "https://identity.example/jwks");
         body.put("audience", "https://akb.example.com");
         body.put("installationId", "install-1");
         body.put("workspaceId", "ws-1");
+        body.put("platformId", "akb-service");
+        body.put("resourceOrigin", "https://akb.example.com");
         return body;
-    }
-
-    @Test void pausedPolicyBindingsRemainVisibleForManagement() {
-        Map<String,Object> p = policy(); p.put("status", "PAUSED");
-        when(repository.bindings(7L)).thenReturn(Collections.singletonList(Collections.<String,Object>singletonMap("id", 3L)));
-        assertEquals(1, service.bindings(7L).size());
-        when(repository.policy(999L)).thenReturn(null);
-        assertThrows(IllegalArgumentException.class, () -> service.bindings(999L));
     }
 }

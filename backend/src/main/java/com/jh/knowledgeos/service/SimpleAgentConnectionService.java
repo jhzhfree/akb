@@ -8,6 +8,7 @@ import com.jh.knowledgeos.exception.UnauthorizedException;
 import com.jh.knowledgeos.mapper.ExternalApiMapper;
 import com.jh.knowledgeos.mapper.WorkloadIdentityRepository;
 import com.nimbusds.jose.jwk.RSAKey;
+import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.*;
 import org.springframework.stereotype.Service;
@@ -114,6 +115,65 @@ public class SimpleAgentConnectionService {
         Map<String, Object> result = repository.registerKey(id, bindingId, key.getKeyID(), key.toJSONString(), operator);
         repository.audit(id, "ADMIN_APPROVE_AGENT_KEY", operator, "{\"kid\":\"" + key.getKeyID() + "\"}");
         return result;
+    }
+    /**
+     * 签发/补发共享服务 Key。原来界面走的是复杂版 /workload/policies/{id}/keys，简化版既然要
+     * 独立成唯一入口，这些操作就得由自己提供——实现仍复用内核，只是换了归属。
+     */
+    @Transactional
+    public Map<String, Object> issueKey(long id, ExternalKeyRequest request, long operator) {
+        require(id);
+        return workload.createKey(id, request, operator);
+    }
+    /** 连接或单个 Agent 的启用/停用；binding 为空表示改整个连接。 */
+    @Transactional
+    public void status(long id, Long binding, Map<String, Object> body, long operator) {
+        require(id);
+        workload.status(id, binding, body, operator);
+    }
+    /**
+     * 撤销或「限期退休」一把公钥。规则沿用登记侧那套：kid 是 JWK 指纹，退役要在一小时内？
+     * 不——是一天内，且只能由管理员发起。
+     */
+    @Transactional
+    public void keyStatus(long id, long binding, String kid, Map<String, Object> body, long operator) {
+        require(id);
+        String status = AgentProofCrypto.text(body, "status", 16);
+        if (!kid.matches("[A-Za-z0-9_-]{43}") || !("RETIRING".equals(status) || "REVOKED".equals(status))) throw AgentProofCrypto.invalid();
+        Instant until = null;
+        if ("RETIRING".equals(status)) {
+            until = Instant.parse(AgentProofCrypto.text(body, "validUntil", 64));
+            if (!until.isAfter(Instant.now()) || until.isAfter(Instant.now().plusSeconds(86400))) throw new IllegalArgumentException("退休截止时间必须在未来一天内");
+        }
+        String reason = body.get("reason") == null ? null : AgentProofCrypto.text(body, "reason", 500);
+        if (repository.keyStatus(id, binding, kid, status, until, operator, reason) != 1) throw new IllegalArgumentException("密钥不存在、已撤销或状态转换无效");
+        repository.audit(id, "AGENT_KEY_" + status, operator, "{\"kid\":\"" + kid + "\"}");
+    }
+    /**
+     * 接入自检。不碰私钥，也不假装能验证连通——能不能调通取决于平台那边有没有配好私钥，
+     * AKB 这边只能回答「配置齐不齐」，把缺哪一项说清楚。
+     */
+    public List<Map<String, Object>> checklist(long id) {
+        Map<String, Object> policy = require(id);
+        long principal = ((Number) policy.get("application_principal_id")).longValue();
+        boolean agentActive = false, keyActive = false;
+        for (Map<String, Object> binding : repository.bindings(id)) {
+            if ("ACTIVE".equals(binding.get("status"))) agentActive = true;
+            for (Map<String, Object> registered : repository.agentKeys(id, ((Number) binding.get("id")).longValue())) {
+                if ("ACTIVE".equals(registered.get("status"))) keyActive = true;
+            }
+        }
+        List<Map<String, Object>> items = new ArrayList<>();
+        items.add(check("服务接入处于启用状态", "ACTIVE".equals(policy.get("status")), "点「启用接入」"));
+        items.add(check("已授权至少一个可读知识库", !keys.grantedKnowledgeBases(principal).isEmpty(), "在上方选择知识库并保存可读范围"));
+        items.add(check("已登记至少一个启用的 Agent", agentActive, "登记 Agent 公钥"));
+        items.add(check("至少有一把生效中的公钥", keyActive, "导入该 Agent 的 public.jwk"));
+        return items;
+    }
+    private static Map<String, Object> check(String item, boolean ok, String hint) {
+        Map<String, Object> row = new LinkedHashMap<>();
+        row.put("item", item); row.put("ok", Boolean.valueOf(ok)); row.put("hint", hint);
+        return row;
     }
     /** Key-only discovery returns public signing coordinates, never authority to read knowledge. */
     public Map<String, Object> configuration(String secret, String external) {

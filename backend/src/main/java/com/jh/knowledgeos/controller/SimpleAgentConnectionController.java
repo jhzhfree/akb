@@ -3,6 +3,7 @@ package com.jh.knowledgeos.controller;
 import com.jh.knowledgeos.common.ApiResponse;
 import com.jh.knowledgeos.common.UserRole;
 import com.jh.knowledgeos.domain.User;
+import com.jh.knowledgeos.dto.ExternalKeyRequest;
 import com.jh.knowledgeos.exception.UnauthorizedException;
 import com.jh.knowledgeos.service.AuthContext;
 import com.jh.knowledgeos.service.SimpleAgentConnectionService;
@@ -30,6 +31,20 @@ public class SimpleAgentConnectionController {
     public ApiResponse<Object> agents(@PathVariable long id) { admin(); return ApiResponse.ok(service.agents(id)); }
     @PostMapping("/api/external/admin/agent-connections/{id}/agents")
     public ApiResponse<Object> register(@PathVariable long id, @RequestBody Map<String, Object> body) { return ApiResponse.ok(service.register(id, body, admin())); }
+    // 下面这几个原本挂在复杂版 /workload/policies/** 下，简化版界面在用。收归到自己的路径下，
+    // 复杂版界面删掉后它们就是唯一入口。
+    @PostMapping("/api/external/admin/agent-connections/{id}/keys")
+    public ApiResponse<Object> key(@PathVariable long id, @RequestBody ExternalKeyRequest body) { return ApiResponse.ok(service.issueKey(id, body, admin())); }
+    @PutMapping("/api/external/admin/agent-connections/{id}/status")
+    public ApiResponse<Object> status(@PathVariable long id, @RequestBody Map<String, Object> body) { service.status(id, null, body, admin()); return ApiResponse.ok(true); }
+    @PutMapping("/api/external/admin/agent-connections/{id}/agents/{binding}/status")
+    public ApiResponse<Object> agentStatus(@PathVariable long id, @PathVariable long binding, @RequestBody Map<String, Object> body) { service.status(id, binding, body, admin()); return ApiResponse.ok(true); }
+    @PutMapping("/api/external/admin/agent-connections/{id}/agents/{binding}/keys/{kid}/status")
+    public ApiResponse<Object> keyStatus(@PathVariable long id, @PathVariable long binding, @PathVariable String kid, @RequestBody Map<String, Object> body) {
+        service.keyStatus(id, binding, kid, body, admin()); return ApiResponse.ok(true);
+    }
+    @GetMapping("/api/external/admin/agent-connections/{id}/checklist")
+    public ApiResponse<Object> checklist(@PathVariable long id) { admin(); return ApiResponse.ok(service.checklist(id)); }
     @GetMapping("/api/v1/external/identity/configuration")
     public ApiResponse<Object> configuration(HttpServletRequest request, @RequestParam String agentId) {
         return ApiResponse.ok(service.configuration(request.getHeader("X-API-Key"), agentId));

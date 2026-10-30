@@ -4,8 +4,8 @@
  * 的模块。
  *
  * 后端从 classpath 读同一个文件（pom 把 contracts 挂成了资源目录，不复制），前端生成一份
- * 副本——Node 与浏览器都直接 import，不需要 JSON import attribute。workload-identity.test.mjs
- * 会断言副本与真源一致，所以改了规则忘了跑这个脚本，测试会红而不是静默漂移。
+ * 副本——Node 与浏览器都直接 import，不需要 JSON import attribute。有测试断言副本与真源一致，
+ * 所以改了规则忘了跑这个脚本，测试会红而不是静默漂移。
  */
 import { readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";

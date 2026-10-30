@@ -28,12 +28,13 @@ Agent 稳定 ID 使用持久化 UUID，不能把 kid 当 Agent ID。每 Agent �
 策略新增：
 
 ```text
-proof_profile = INSTALLATION_RS256_V1 | AGENT_KEY_RS256_V2
+proof_profile = AGENT_KEY_RS256_V2
 platform_id = opencode / 其他受控平台标识
 resource_origin = AKB 公开 HTTPS origin
 ```
 
-旧策略默认 V1。V1 保留 issuer/JWKS 行为。V2 使用登记公钥，jwks_uri 为空；需在新迁移中允许该列为空，并由管理服务按 profile 校验字段，禁止填假 URL 应付原 NOT NULL。
+V1（`INSTALLATION_RS256_V1`，远程 JWKS + 安装级证明）已下线：不再新建 V1 策略，请求侧只认 V2，
+V1 策略一律拒绝而不是回退到远程 JWKS。V2 使用登记公钥，jwks_uri 恒为空；管理服务拒绝带 jwksUri 的创建请求。
 
 Key 仍使用 APPLICATION_WORKLOAD 和 workload_policy_id。已认证 Key 决定使用哪个 profile，不能让 JWT 自行选择 V1/V2。V2 不接受安装断言或 LEGACY 降级，客户端不自动回退。
 
@@ -61,12 +62,6 @@ Key 仍使用 APPLICATION_WORKLOAD 和 workload_policy_id。已认证 Key 决定
 
 最多允许每绑定少量并行有效版本，例如 2 个 ACTIVE/RETIRING，避免无限登记。REVOKED 为终态，重新启用需新密钥和新登记，不能把状态直接改回 ACTIVE。
 
-### t_workload_key_challenge
-
-保存 challenge_id、policy_id、binding_id、public_jwk、jkt、nonce_hash、expires_at（用途固定为登记）、created_by、consumed_at。随机 nonce 至少 32 字节；5 分钟到期；按管理员/策略限流并限制未完成数量。
-
-服务端保存候选公钥，不从完成请求的 JWS 中接受另一把公钥。一次完成应在同一事务中消费挑战、插入公钥记录、写管理审计；失败不得留下半激活记录。
-
 ### t_workload_v2_jti
 
 唯一键建议 `(policy_id,kid,jti)`，保存 expires_at；使用共享数据库或等效原子存储。消费应在业务执行前独立持久化，不能随业务异常回滚后允许重放。清理增加合理时间余量，不依赖每台 JVM 独立缓存。
@@ -83,13 +78,11 @@ Key 仍使用 APPLICATION_WORKLOAD 和 workload_policy_id。已认证 Key 决定
 
 | 方法与路径 | 行为 |
 |---|---|
-| POST /policies | 增加 proofProfile/platformId/resourceOrigin；V1/V2 按模式校验 |
-| POST /policies/{p}/agents | 复用已批准稳定 Agent ID 与 runtimeAgentKey 的登记 |
-| POST /policies/{p}/agents/{b}/keys/challenges | 提交候选 publicJwk，创建持钥挑战 |
-| POST /policies/{p}/agents/{b}/keys/registrations | 提交 challengeId + registrationProof，验持钥并激活公钥 |
-| GET /policies/{p}/agents/{b}/keys | 查看公钥元信息和状态，绝不返回私钥 |
-| PUT /policies/{p}/agents/{b}/keys/{kid}/status | 退休或撤销，强制状态机 |
-| POST /policies/{p}/keys | 复用现有严格共享服务 Key 签发；profile 从策略取得 |
+| POST /policies | 只接受 proofProfile=AGENT_KEY_RS256_V2；带 jwksUri 一律拒绝 |
+
+> 公钥登记、撤销、接入启停与共享 Key 签发现由简化端点承担：
+> `/api/external/admin/agent-connections/**`（见 `SimpleAgentConnectionController`）。
+> nonce 挑战与登记证明端点、`t_workload_key_challenge` 表已删除。
 
 V2 策略创建示例：
 

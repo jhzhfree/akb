@@ -11,7 +11,7 @@ import java.nio.file.Paths;
 import org.junit.jupiter.api.Test;
 
 /**
- * 判定用的是 contracts/ 里那份规则，用例也是同一份：前端 workload-identity.test.mjs 读同一个
+ * 判定用的是 contracts/ 里那份规则，用例也是同一份：前端 utils/intranet-rules.mjs 由同一份真源
  * intranet-http.cases.json。两边任何一边改了口径而另一边没跟上，这里就会红。
  */
 class IntranetAddressRulesTest {
