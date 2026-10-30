@@ -178,6 +178,10 @@ services:
       REDIS_PASSWORD: ${REDIS_PASSWORD:-}
       AI_SERVICE_BASE_URL: http://ai-service:12000
       TZ: Asia/Shanghai
+      # dev 放行本机明文：控制台、AKB、平台常在同一台机器上联调，而 loopback 生产默认关闭
+      # （WORKLOAD_ALLOW_LOOPBACK_HTTP:false）。写在这里是省掉每人改自己 .env.dev 的一步，
+      # 生产配置不受影响。内网 HTTP 由 WORKLOAD_ALLOW_INTRANET_HTTP 管，默认已是 true。
+      WORKLOAD_ALLOW_LOOPBACK_HTTP: "true"
       # 默认配置目录：直接挂仓库里的那份，改完 docker restart 即生效，不用重打镜像。
       KNOWLEDGE_CONFIG_DIR: /app/config
     volumes:
