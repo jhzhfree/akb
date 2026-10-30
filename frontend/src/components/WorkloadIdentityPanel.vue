@@ -95,9 +95,11 @@
               >
             </div>
             <el-descriptions :column="2" size="small" class="mt-3" border>
-              <el-descriptions-item label="应用">{{
-                principalName(selected.application_principal_id)
-              }}</el-descriptions-item>
+              <el-descriptions-item label="应用"
+                >{{ principalName(selected.application_principal_id) }} (#{{
+                  selected.application_principal_id
+                }})</el-descriptions-item
+              >
               <el-descriptions-item label="工作区">{{
                 selected.workspace_id
               }}</el-descriptions-item>
@@ -106,6 +108,12 @@
               }}</el-descriptions-item>
               <el-descriptions-item label="AKB 地址">{{
                 selected.resource_origin || "V1 JWKS 模式"
+              }}</el-descriptions-item>
+              <el-descriptions-item label="安装 ID">{{
+                selected.installation_id
+              }}</el-descriptions-item>
+              <el-descriptions-item label="受众 audience">{{
+                selected.audience
               }}</el-descriptions-item>
             </el-descriptions>
             <el-button
