@@ -127,7 +127,8 @@
                 placeholder="https://akb.example.com"
               />
               <p class="kb-muted">
-                填写调用平台实际使用的根地址，不加 /api/mcp 或 /api/v1。
+                填写调用平台实际使用的根地址，不加 /api/mcp 或 /api/v1。内网部署可用明文 HTTP
+                （如 http://192.168.1.50:8080、http://akb.internal）；公网地址必须用 HTTPS。
               </p></el-form-item
             >
             <el-form-item label="签发者标识（issuer）" :error="errors.issuer"

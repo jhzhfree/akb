@@ -16,7 +16,7 @@ class WorkloadIdentityAdminServiceTest {
     private final WorkloadIdentityRepository repository = mock(WorkloadIdentityRepository.class);
     private final ExternalApiMapper principals = mock(ExternalApiMapper.class);
     private final ApiKeyService keys = mock(ApiKeyService.class);
-    private final WorkloadIdentityAdminService service = new WorkloadIdentityAdminService(repository, principals, keys, new ObjectMapper(), false);
+    private final WorkloadIdentityAdminService service = new WorkloadIdentityAdminService(repository, principals, keys, new ObjectMapper(), false, true);
     private ExternalPrincipal principal(long id, String type) {
         ExternalPrincipal p = new ExternalPrincipal(); p.setId(id); p.setPrincipalType(type); p.setStatus("ACTIVE"); return p;
     }
@@ -49,6 +49,44 @@ class WorkloadIdentityAdminServiceTest {
         assertThrows(IllegalArgumentException.class, () -> service.bind(7, body, 9));
         verify(repository, never()).createBinding(anyLong(), anyString(), anyString(), anyLong());
     }
+    /**
+     * 内网部署用明文 HTTP 是常态（没有公网证书，也不该为此开一个），所以私有地址段与内网
+     * 命名放行；公网地址仍必须 HTTPS——工作负载证明在明文链路上可被中间人替换。
+     */
+    @Test void intranetHttpOriginsAreAcceptedWhilePublicOnesStillRequireHttps() {
+        when(principals.getPrincipal(1L)).thenReturn(principal(1, "APPLICATION"));
+        List<String> accepted = Arrays.asList(
+            "http://192.168.1.50:8080", "http://10.20.30.40", "http://172.16.5.9:18080",
+            "http://akb.internal", "http://akb.corp:8080", "http://akb-gateway");
+        List<String> rejected = Arrays.asList(
+            "http://203.0.113.10", "http://8.8.8.8", "http://akb.example.com", "ftp://192.168.1.50");
+        for (String url : accepted) {
+            service.createPolicy(policyBody(url), 9);
+        }
+        for (String url : rejected) {
+            assertThrows(IllegalArgumentException.class, () -> service.createPolicy(policyBody(url), 9), url);
+        }
+    }
+
+    /** 本机明文仍由独立开关管：只开内网开关时不该顺带放开 127.0.0.1。 */
+    @Test void loopbackHttpStillNeedsItsOwnSwitch() {
+        WorkloadIdentityAdminService strict = new WorkloadIdentityAdminService(repository, principals, keys, new ObjectMapper(), false, false);
+        when(principals.getPrincipal(1L)).thenReturn(principal(1, "APPLICATION"));
+        assertThrows(IllegalArgumentException.class, () -> strict.createPolicy(policyBody("http://192.168.1.50"), 9));
+    }
+
+    /** 只变待校验的地址，其余字段给合法值，否则先撞上的是「缺字段」而不是 URL 规则。 */
+    private Map<String,Object> policyBody(String issuer) {
+        Map<String,Object> body = new HashMap<String,Object>();
+        body.put("applicationPrincipalId", 1L);
+        body.put("issuer", issuer);
+        body.put("jwksUri", "https://identity.example/jwks");
+        body.put("audience", "https://akb.example.com");
+        body.put("installationId", "install-1");
+        body.put("workspaceId", "ws-1");
+        return body;
+    }
+
     @Test void pausedPolicyBindingsRemainVisibleForManagement() {
         Map<String,Object> p = policy(); p.put("status", "PAUSED");
         when(repository.bindings(7L)).thenReturn(Collections.singletonList(Collections.<String,Object>singletonMap("id", 3L)));
