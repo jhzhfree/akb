@@ -24,6 +24,8 @@
     <dependency><groupId>org.testcontainers</groupId><artifactId>junit-jupiter</artifactId><version>${testcontainers.version}</version><scope>test</scope></dependency>
     <dependency><groupId>org.testcontainers</groupId><artifactId>mysql</artifactId><version>${testcontainers.version}</version><scope>test</scope></dependency>
   </dependencies>
-  <build><plugins><plugin><groupId>org.springframework.boot</groupId><artifactId>spring-boot-maven-plugin</artifactId></plugin><plugin><groupId>org.apache.maven.plugins</groupId><artifactId>maven-failsafe-plugin</artifactId><version>3.2.5</version></plugin></plugins></build>
+  <!-- contracts/ 直接挂成资源目录，不做复制：内网判定规则只有仓库里那一份（见
+       com.jh.knowledgeos.common.IntranetAddressRules），前端也读它。 -->
+  <build><resources><resource><directory>src/main/resources</directory></resource><resource><directory>../contracts</directory><includes><include>intranet-http.json</include></includes></resource></resources><plugins><plugin><groupId>org.springframework.boot</groupId><artifactId>spring-boot-maven-plugin</artifactId></plugin><plugin><groupId>org.apache.maven.plugins</groupId><artifactId>maven-failsafe-plugin</artifactId><version>3.2.5</version></plugin></plugins></build>
   <profiles><profile><id>integration-test</id><build><plugins><plugin><groupId>org.apache.maven.plugins</groupId><artifactId>maven-failsafe-plugin</artifactId><executions><execution><goals><goal>integration-test</goal><goal>verify</goal></goals></execution></executions></plugin></plugins></build></profile></profiles>
 </project>

@@ -136,3 +136,48 @@ test("platform setup accepts plain http on intranet origins only", async () => {
     1,
   );
 });
+
+/** 规则只有 contracts/intranet-http.json 一份：生成物必须与真源逐字节一致。 */
+test("intranet rules are generated from the contract, not maintained twice", async () => {
+  const { readFileSync } = await import("node:fs");
+  const truth = JSON.parse(
+    readFileSync(
+      new URL("../../../contracts/intranet-http.json", import.meta.url),
+      "utf8",
+    ),
+  );
+  const generated = (await import("./intranet-rules.mjs")).default;
+  assert.deepEqual(generated, truth);
+});
+
+test("plain http follows the shared intranet contract", async () => {
+  const { validatePlatformSetup } = await import("./workload-identity.mjs");
+  const { readFileSync } = await import("node:fs");
+  const contract = JSON.parse(
+    readFileSync(
+      new URL("../../../contracts/intranet-http.cases.json", import.meta.url),
+      "utf8",
+    ),
+  );
+  const setup = {
+    platformId: "octop",
+    installationId: "install",
+    workspaceId: "workspace",
+    issuer: "https://octop.local/agents",
+    audience: "akb-external-api",
+  };
+  for (const item of contract.cases) {
+    if (!item.host) continue;
+    // 裸 IPv6 在 URL 里要带方括号
+    const host =
+      item.host.includes(":") && !item.host.startsWith("[")
+        ? `[${item.host}]`
+        : item.host;
+    const allowed = item.loopback || item.intranet;
+    assert.equal(
+      !validatePlatformSetup({ ...setup, resource: `http://${host}` }).resource,
+      allowed,
+      `${item.host} 的明文 HTTP 放行应为 ${allowed}`,
+    );
+  }
+});

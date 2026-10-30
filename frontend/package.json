@@ -9,6 +9,7 @@
     "test": "node --test",
     "typecheck": "vue-tsc --noEmit",
     "check:answer-style": "node scripts/check-answer-style.mjs",
+    "sync:intranet-rules": "node ../scripts/sync-intranet-rules.mjs",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "format": "prettier --write \"src/**/*.{ts,vue,css}\"",

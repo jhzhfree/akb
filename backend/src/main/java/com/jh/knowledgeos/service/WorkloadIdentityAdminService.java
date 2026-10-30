@@ -2,6 +2,7 @@ package com.jh.knowledgeos.service;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.jh.knowledgeos.common.IntranetAddressRules;
 import com.jh.knowledgeos.domain.ExternalPrincipal;
 import com.jh.knowledgeos.dto.ExternalKeyRequest;
 import com.jh.knowledgeos.mapper.ExternalApiMapper;
@@ -118,13 +119,6 @@ public class WorkloadIdentityAdminService {
         }
         return principal;
     }
-    /**
-     * 内网域名后缀。域名不像地址段那样能判断归属，这里按命名约定放行；公网域名仍然必须 HTTPS。
-     * 不解析 DNS：解析会阻塞、也可能失败，且解析结果随时可变，判出来的结论不可靠。
-     */
-    private static final List<String> INTRANET_SUFFIXES = Arrays.asList(
-        ".local", ".internal", ".intranet", ".lan", ".corp", ".home", ".localdomain", ".private");
-
     private void validateUrl(String text) {
         URI uri = URI.create(text);
         if (uri.getHost() == null || uri.getUserInfo() != null || uri.getFragment() != null || uri.getQuery() != null) {
@@ -138,52 +132,11 @@ public class WorkloadIdentityAdminService {
         }
         // 明文 HTTP 只放开两类场景：本机调试与内网部署。公网一律要求 HTTPS——工作负载身份
         // 证明在明文链路上可被中间人直接替换，这不是「多一层加密」的偏好问题。
-        if (allowLoopback && isLoopback(uri.getHost())) return;
-        if (allowIntranetHttp && isIntranetHost(uri.getHost())) return;
+        // 判定规则不在这里：见 contracts/intranet-http.json，前端读同一份
+        if (allowLoopback && IntranetAddressRules.isLoopback(uri.getHost())) return;
+        if (allowIntranetHttp && IntranetAddressRules.isIntranetHost(uri.getHost())) return;
         throw new IllegalArgumentException("地址必须使用 HTTPS；明文 HTTP 仅允许本机调试"
             + "（WORKLOAD_ALLOW_LOOPBACK_HTTP）与内网地址（WORKLOAD_ALLOW_INTRANET_HTTP）");
-    }
-
-    private static boolean isLoopback(String host) {
-        String value = normalize(host);
-        return value.equals("localhost") || value.equals("::1") || value.startsWith("127.");
-    }
-
-    /**
-     * 内网地址：私有地址段与内网命名。公网 IP 与公网域名都不算。
-     * 不包含本机——本机调试是另一类场景，由 WORKLOAD_ALLOW_LOOPBACK_HTTP 单独管，
-     * 内网开关不该顺带把它放开。
-     */
-    private static boolean isIntranetHost(String host) {
-        String value = normalize(host);
-        // IPv6：唯一本地地址 fc00::/7 与链路本地 fe80::/10
-        if (value.startsWith("fd") || value.startsWith("fc") || value.startsWith("fe80")) return true;
-        for (String suffix : INTRANET_SUFFIXES) {
-            if (value.endsWith(suffix)) return true;
-        }
-        // 无点主机名（如 k8s 里的服务名 akb-gateway）只在内网可达
-        if (!value.contains(".") && !value.contains(":")) return true;
-        String[] parts = value.split("\\.");
-        if (parts.length != 4) return false;
-        int a = parseInt(parts[0], -1), b = parseInt(parts[1], -1);
-        if (a < 0 || b < 0) return false;
-        return a == 10
-            || (a == 172 && b >= 16 && b <= 31)
-            || (a == 192 && b == 168)
-            || (a == 169 && b == 254)
-            || (a == 100 && b >= 64 && b <= 127);
-    }
-
-    private static String normalize(String host) {
-        String value = host == null ? "" : host.trim().toLowerCase(java.util.Locale.ROOT);
-        // URI 里 IPv6 带方括号，取内容判定
-        if (value.startsWith("[") && value.endsWith("]")) value = value.substring(1, value.length() - 1);
-        return value;
-    }
-
-    private static int parseInt(String value, int fallback) {
-        try { return Integer.parseInt(value); }
-        catch (NumberFormatException ex) { return fallback; }
     }
     private void audit(long policy, String action, long operator, Object detail) {
         try { repository.audit(policy, action, operator, json.writeValueAsString(detail)); }

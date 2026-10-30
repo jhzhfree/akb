@@ -69,40 +69,60 @@ const setupFields = [
   "resource",
 ];
 /**
- * 内网判定：与后端 WorkloadIdentityAdminService 的规则保持一致——公网一律要求 HTTPS，
- * 明文 HTTP 只放开本机与内网（内网部署拿不到公网证书，也不该为一个内部地址去申请）。
- * 不解析 DNS：解析会阻塞、可能失败，且结果随时可变，判出来的结论不可靠。
+ * 内网判定读的是 contracts/intranet-http.json —— 与后端
+ * com.jh.knowledgeos.common.IntranetAddressRules 同一个真源（这里用的是
+ * scripts/sync-intranet-rules.mjs 生成的模块）。规则只有一处定义，不会各改各的。
+ * 公网一律要求 HTTPS，明文只放开本机与内网：内网部署拿不到公网证书，也不该为一个内部
+ * 地址去申请。不解析 DNS：解析会阻塞、可能失败，且结果随时可变。
  */
-const INTRANET_SUFFIXES = [
-  ".local",
-  ".internal",
-  ".intranet",
-  ".lan",
-  ".corp",
-  ".home",
-  ".localdomain",
-  ".private",
-];
+import intranetRules from "./intranet-rules.mjs";
+
+function normalizeHost(host) {
+  let value = (host || "").trim().toLowerCase();
+  if (value.startsWith("[") && value.endsWith("]")) value = value.slice(1, -1);
+  return value;
+}
+function isLoopbackHost(host) {
+  const value = normalizeHost(host);
+  if (!value) return false;
+  return (
+    (intranetRules.loopback?.hosts || []).some(
+      (name) => value === name.toLowerCase(),
+    ) ||
+    (intranetRules.loopback?.ipv4Prefixes || []).some((prefix) =>
+      value.startsWith(prefix),
+    )
+  );
+}
 function isIntranetHost(host) {
-  const value = (host || "").trim().toLowerCase().replace(/^\[|\]$/g, "");
-  if (value === "localhost" || value === "::1" || value.startsWith("127."))
+  const value = normalizeHost(host);
+  if (!value) return false;
+  // 本机不算内网：它是另一类场景。"无点主机名"这条规则本身会把 localhost 算进来，
+  // 显式排除才能和后端同口径。
+  if (isLoopbackHost(value)) return false;
+  if ((intranetRules.ipv6Prefixes || []).some((p) => value.startsWith(p)))
     return true;
-  if (value.startsWith("fd") || value.startsWith("fc") || value.startsWith("fe80"))
+  if ((intranetRules.hostSuffixes || []).some((s) => value.endsWith(s)))
     return true;
-  if (INTRANET_SUFFIXES.some((suffix) => value.endsWith(suffix))) return true;
-  if (!value.includes(".") && !value.includes(":")) return true;
+  if (
+    intranetRules.bareHostnameIsIntranet &&
+    !value.includes(".") &&
+    !value.includes(":")
+  )
+    return true;
   const parts = value.split(".");
   if (parts.length !== 4 || parts.some((part) => !/^\d+$/.test(part)))
     return false;
   const a = Number(parts[0]);
   const b = Number(parts[1]);
-  return (
-    a === 10 ||
-    (a === 172 && b >= 16 && b <= 31) ||
-    (a === 192 && b === 168) ||
-    (a === 169 && b === 254) ||
-    (a === 100 && b >= 64 && b <= 127)
-  );
+  return (intranetRules.ipv4Ranges || []).some((range) => {
+    if (a !== range.first) return false;
+    if (range.second !== undefined) return b === range.second;
+    // 只给了 first 就是整段（如 10/8），第二段没有上下限——与后端读取时的默认值一致
+    const from = range.secondFrom ?? Number.MIN_SAFE_INTEGER;
+    const to = range.secondTo ?? Number.MAX_SAFE_INTEGER;
+    return b >= from && b <= to;
+  });
 }
 
 export function validatePlatformSetup(value) {
@@ -143,7 +163,10 @@ export function validatePlatformSetup(value) {
     errors.audience = "请填写平台提供的受众标识（1–128 个字符）";
   try {
     const u = new URL(value.resource);
-    const plainIntranet = u.protocol === "http:" && isIntranetHost(u.hostname);
+    // 本机在控制台侧无条件放行（不要求开关），内网按真源规则判定
+    const plainIntranet =
+      u.protocol === "http:" &&
+      (isIntranetHost(u.hostname) || isLoopbackHost(u.hostname));
     if (
       (u.protocol !== "https:" && !plainIntranet) ||
       u.username ||
@@ -151,7 +174,8 @@ export function validatePlatformSetup(value) {
       u.pathname !== "/" ||
       u.search ||
       u.hash ||
-      value.resource.replace(/\/$/, "") !== u.origin
+      // URL 会把主机名小写化，比较时跟着归一：填 HTTPS://AKB.Example.com 不该被判为带多余东西
+      value.resource.replace(/\/$/, "").toLowerCase() !== u.origin
     )
       throw new Error();
   } catch {

@@ -1,0 +1,31 @@
+{
+  "$comment": "共享判定用例：后端 WorkloadIdentityAdminServiceTest 与前端 workload-identity.test.mjs 读同一份，任一边实现漂移都会红。intranet 不含 loopback——本机是单独的一类。",
+  "cases": [
+    { "host": "localhost", "loopback": true, "intranet": false },
+    { "host": "127.0.0.1", "loopback": true, "intranet": false },
+    { "host": "127.10.0.1", "loopback": true, "intranet": false },
+    { "host": "::1", "loopback": true, "intranet": false },
+    { "host": "[::1]", "loopback": true, "intranet": false },
+    { "host": "192.168.24.201", "loopback": false, "intranet": true },
+    { "host": "10.20.30.40", "loopback": false, "intranet": true },
+    { "host": "172.16.5.9", "loopback": false, "intranet": true },
+    { "host": "172.31.255.255", "loopback": false, "intranet": true },
+    { "host": "172.32.0.1", "loopback": false, "intranet": false },
+    { "host": "172.15.0.1", "loopback": false, "intranet": false },
+    { "host": "169.254.1.1", "loopback": false, "intranet": true },
+    { "host": "100.64.0.1", "loopback": false, "intranet": true },
+    { "host": "100.128.0.1", "loopback": false, "intranet": false },
+    { "host": "akb.internal", "loopback": false, "intranet": true },
+    { "host": "akb.corp", "loopback": false, "intranet": true },
+    { "host": "akb-gateway", "loopback": false, "intranet": true },
+    { "host": "AKB.INTERNAL", "loopback": false, "intranet": true },
+    { "host": "fd00::1", "loopback": false, "intranet": true },
+    { "host": "[fe80::1]", "loopback": false, "intranet": true },
+    { "host": "2001:db8::1", "loopback": false, "intranet": false },
+    { "host": "203.0.113.10", "loopback": false, "intranet": false },
+    { "host": "8.8.8.8", "loopback": false, "intranet": false },
+    { "host": "akb.example.com", "loopback": false, "intranet": false },
+    { "host": "example.internal.evil.com", "loopback": false, "intranet": false },
+    { "host": "", "loopback": false, "intranet": false }
+  ]
+}
