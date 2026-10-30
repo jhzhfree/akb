@@ -119,7 +119,15 @@ public class McpServerService {
         payload.put("protocolVersion", PROTOCOL_VERSION);
         payload.put("capabilities", capabilities);
         payload.put("serverInfo", serverInfo);
-        payload.put("instructions", "用 knowledge_query 提问会返回带引用的答案；knowledge_search 只做检索。"
+        // instructions 是模型决定「用不用工具、用哪个」的第一道输入：只写工具能做什么不够，
+        // 必须把路由规则写出来——前者是接口说明，后者才是选择依据。
+        payload.put("instructions", "这里是 AKB 企业知识库服务。"
+            + "凡是涉及公司制度、流程 SOP、产品文档、故障处理、项目资料、技术规范的问题，"
+            + "或用户要求「查一下 / 查文档 / 有没有规定 / 依据是什么」，"
+            + "优先用 knowledge_query 作答，并把返回的引用一并给出。"
+            + "只要原文片段、或要确认库里有没有某份资料时，用 knowledge_search。"
+            + "不知道该查哪个知识库时，先用 list_knowledge_bases 拿到 ID 与稳定编码。"
+            + "不要用这些工具做通用闲聊、计算或实时数据查询——库里没有答案就直说。"
             + "平台启用记忆服务且凭证允许 MEMORY_READ / MEMORY_WRITE 时，会显示对应记忆工具。"
             + "知识库范围、Agent 身份和记忆命名空间授权始终由服务端强制执行。");
         return payload;
@@ -153,53 +161,91 @@ public class McpServerService {
     public Map<String, Object> toolsList(ApiKey key) {
         List<Map<String, Object>> tools = new ArrayList<Map<String, Object>>();
         if (key == null || key.hasScope(ApiKey.SCOPE_QUERY)) {
-        tools.add(tool("knowledge_query",
-            "可追溯知识问答：返回答案、引用与 queryId，可用于后续溯源；答案可按 answerFormat 交付成 Markdown / 纯文本 / HTML",
+        // 描述按「能做什么 / 什么时候用 / 什么时候别用 / 例子」写：平台选工具靠的是语义匹配，
+        // 只写返回值格式的话，模型判断不出「用户问报销流程」该不该选它。
+        tools.add(tool("knowledge_query", "知识库问答",
+            "回答知识库中的问题，并返回可点击的引用来源（RAG 问答）。"
+                + "当用户询问公司制度、流程 SOP、产品文档、故障处理、项目资料、技术规范等"
+                + "「库里应该有答案」的问题时使用，也可用于事实查证与溯源。"
+                + "不要用于通用闲聊、计算或实时数据查询。"
+                + "例：knowledgeBaseCode=\"hr-policy\", question=\"年假怎么申请？\"",
             schema(properties(
-                prop("knowledgeBaseId", "integer", "知识库 ID，兼容旧调用"),
+                prop("knowledgeBaseId", "integer", "知识库 ID，兼容旧调用；不知道就先调 list_knowledge_bases"),
                 prop("knowledgeBaseCode", "string", "知识库稳定编码；绑定式 API Key 可省略此项"),
-                prop("question", "string", "要提问的问题"), prop("topK", "integer", "召回数量，默认 10"),
+                prop("question", "string", "要提问的问题，写成完整的自然语言问句"), prop("topK", "integer", "召回数量，默认 10"),
                 arrayProp("permissionTags", "可选的检索标签过滤；知识库 ACL 仍由服务端强制执行"),
                 prop("minScore", "number", "最低相关度分数（0~1）：低于该分数的候选不参与答案生成；不传即不过滤"),
                 prop("answerFormat", "string", "答案返回格式：default（不传即此项）/ markdown / text / html；返回值里的 answerFormat 是实际生效的那个")),
-                Arrays.asList("question"))));
+                Arrays.asList("question")), true, false));
         }
         if (key == null || key.hasScope(ApiKey.SCOPE_SEARCH)) {
-        tools.add(tool("knowledge_search",
-            "只做检索不生成答案：返回召回候选、重排结果与引用，便于自行装配上下文",
+        tools.add(tool("knowledge_search", "知识库检索",
+            "只在知识库里检索原文片段，不生成答案。"
+                + "当你需要引用原文、要自己组织答案，或想确认库里有没有某份资料时使用；"
+                + "要直接回答用户的问题则用 knowledge_query。检索语句用关键词比用整句命中率更高。"
+                + "例：knowledgeBaseCode=\"hr-policy\", query=\"年假 申请 流程\"",
             schema(properties(
-                prop("knowledgeBaseId", "integer", "知识库 ID，兼容旧调用"),
+                prop("knowledgeBaseId", "integer", "知识库 ID，兼容旧调用；不知道就先调 list_knowledge_bases"),
                 prop("knowledgeBaseCode", "string", "知识库稳定编码；绑定式 API Key 可省略此项"),
-                prop("query", "string", "检索语句"), prop("topK", "integer", "召回数量，默认 10"),
+                prop("query", "string", "检索语句，关键词或问题均可"), prop("topK", "integer", "召回数量，默认 10"),
                 arrayProp("permissionTags", "可选的检索标签过滤；知识库 ACL 仍由服务端强制执行"),
                 prop("minScore", "number", "最低相关度分数（0~1）：低于该分数的候选不返回；不传即不过滤。返回里的 returned 是过滤后实际给出的条数")),
-                Arrays.asList("query"))));
+                Arrays.asList("query")), true, false));
         }
         if (key == null || key.hasScope(ApiKey.SCOPE_LIST)) {
-        tools.add(tool("list_knowledge_bases", "列出当前 API Key 可见的知识库", schema(new LinkedHashMap<String, Object>(), new ArrayList<String>())));
+        tools.add(tool("list_knowledge_bases", "列出知识库",
+            "列出当前凭证可见的知识库（含 ID 与稳定编码）。"
+                + "当你不知道该查哪个知识库、或需要 knowledgeBaseId / knowledgeBaseCode 时先调它，"
+                + "它是其他知识工具的前置步骤。",
+            schema(new LinkedHashMap<String, Object>(), new ArrayList<String>()), true, false));
         }
         if (key == null || key.hasScope(ApiKey.SCOPE_READ_OBJECT)) {
-        tools.add(tool("list_knowledge_cards", "列出知识卡片（结构化标准答案，如 SOP）", schema(properties(prop("knowledgeBaseId", "integer", "知识库 ID")),
-            Arrays.asList("knowledgeBaseId"))));
-        tools.add(tool("get_knowledge_card", "按编码读取一张知识卡片的详情与证据链", schema(properties(prop("knowledgeBaseId", "integer", "知识库 ID"), prop("code",
-            "string", "知识卡片编码")), Arrays.asList("knowledgeBaseId", "code"))));
-        tools.add(tool("list_claims", "列出断言（可被判断真伪的结论性陈述）", schema(properties(prop("knowledgeBaseId", "integer", "知识库 ID")),
-            Arrays.asList("knowledgeBaseId"))));
-        tools.add(tool("get_claim", "按编码读取一条断言的详情", schema(properties(prop("knowledgeBaseId", "integer", "知识库 ID"), prop("code", "string", "断言编码")),
-            Arrays.asList("knowledgeBaseId", "code"))));
-        tools.add(tool("get_evidence", "按编码读取一条证据的原文与出处", schema(properties(prop("knowledgeBaseId", "integer", "知识库 ID"), prop("evidenceCode",
-            "string", "证据编码")), Arrays.asList("knowledgeBaseId", "evidenceCode"))));
-        tools.add(tool("graph_neighbors", "读取实体/知识对象的图谱邻域", schema(properties(prop("knowledgeBaseId", "integer", "知识库 ID"), prop("code", "string",
-            "对象编码"), prop("depth", "integer", "跳数，默认 2"), prop("limit", "integer", "返回上限，默认 50")), Arrays.asList("knowledgeBaseId", "code"))));
+        // 卡片 / 断言 / 证据原本是六个工具，职责高度重叠（都是「按编码读对象」），模型在它们
+        // 之间选错比选不中还常见。合成两个，用 objectType 区分；旧工具名在 tools/call 里继续
+        // 支持，硬编码的老调用方不受影响。
+        tools.add(tool("list_knowledge_objects", "列出知识对象",
+            "列出知识库中的结构化知识对象：CARD 知识卡片（标准答案、SOP）、CLAIM 断言（可判真伪的结论）。"
+                + "想浏览这类对象、或要拿到某个对象的编码时用；已经知道编码就用 get_knowledge_object 直接读"
+                + "（它还能按编码读 EVIDENCE 证据原文，证据没有列表）。"
+                + "例：objectType=\"CLAIM\"",
+            schema(properties(
+                prop("knowledgeBaseId", "integer", "知识库 ID；不知道就先调 list_knowledge_bases"),
+                prop("knowledgeBaseCode", "string", "知识库稳定编码；绑定式 API Key 可省略"),
+                enumProp("objectType", "对象类型，默认 CARD", "CARD", "CLAIM")),
+                new ArrayList<String>()), true, false));
+        tools.add(tool("get_knowledge_object", "读取知识对象",
+            "按编码读取一个知识对象的详情与证据链，类型由 objectType 指定：CARD 知识卡片 / CLAIM 断言 / EVIDENCE 证据。"
+                + "拿到引用里的编码后想看原文时用；不知道编码就先用 list_knowledge_objects 列出来。"
+                + "例：objectType=\"CARD\", code=\"SOP-001\"",
+            schema(properties(
+                prop("knowledgeBaseId", "integer", "知识库 ID；不知道就先调 list_knowledge_bases"),
+                prop("knowledgeBaseCode", "string", "知识库稳定编码；绑定式 API Key 可省略"),
+                enumProp("objectType", "对象类型，默认 CARD", "CARD", "CLAIM", "EVIDENCE"),
+                prop("code", "string", "对象编码；旧工具里的 evidenceCode 也接受")),
+                Arrays.asList("code")), true, false));
+        tools.add(tool("graph_neighbors", "图谱邻域",
+            "读取某个实体或知识对象的图谱邻域（多跳关系）。"
+                + "适合回答「A 影响了哪些服务」「X 依赖什么」这类关系型问题；"
+                + "纯文本型问题用 knowledge_query 更合适。",
+            schema(properties(prop("knowledgeBaseId", "integer", "知识库 ID；不知道就先调 list_knowledge_bases"),
+                prop("knowledgeBaseCode", "string", "知识库稳定编码；绑定式 API Key 可省略"),
+                prop("code", "string", "对象编码"), prop("depth", "integer", "跳数，默认 2"), prop("limit", "integer", "返回上限，默认 50")),
+                Arrays.asList("code")), true, false));
         }
         if (isMemoryEnabled() && key != null && key.hasScope(ApiKey.SCOPE_MEMORY_READ)) {
-            tools.add(tool("memory_recall", "按当前 Agent 或已授权团队/项目/任务/工作流/会话作用域召回记忆",
+            tools.add(tool("memory_recall", "召回记忆",
+                "按当前 Agent 或已授权团队 / 项目 / 任务 / 工作流 / 会话作用域召回记忆。"
+                    + "当用户提到「上次说过」「之前定的」「你记得吗」，或需要跨会话延续上下文时使用；"
+                    + "问的是知识库里的资料则用 knowledge_query。",
                 schema(properties(prop("query", "string", "待召回的关键词或问题"), prop("scopeType", "string", "AGENT（默认）/ TEAM / PROJECT / TASK / WORKFLOW / SESSION"),
                     prop("scopeCode", "string", "共享空间或会话编码；AGENT 身份由 API Key 确定"), prop("limit", "integer", "返回数量，默认 10，最多 50")),
-                    Arrays.asList("query"))));
+                    Arrays.asList("query")), true, false));
         }
         if (isMemoryEnabled() && key != null && key.hasScope(ApiKey.SCOPE_MEMORY_WRITE)) {
-            tools.add(tool("memory_capture", "保存有来源、作用域和有效期的 Agent 记忆",
+            tools.add(tool("memory_capture", "保存记忆",
+                "保存一条有来源、作用域和有效期的 Agent 记忆。"
+                    + "当用户说「记住这个」「以后都按这个来」，或任务产出了值得延续的结论时使用；"
+                    + "不要把知识库里已有的资料重复存进来。",
                 schema(properties(prop("memoryLevel", "string", "L0 会话片段 / L1 原子记忆 / L2 场景记忆 / L3 Agent 画像"),
                     prop("scopeType", "string", "AGENT / TEAM / PROJECT / TASK / WORKFLOW / SESSION"), prop("scopeCode", "string", "共享空间或会话编码"),
                     prop("content", "string", "需要持久化的经验或上下文"), arrayProp("tags", "可选标签"),
@@ -207,18 +253,24 @@ public class McpServerService {
                     prop("sourceRef", "string", "来源任务、流程或对象编码"), prop("idempotencyKey", "string", "调用重试时保持不变，避免重复写入"),
                     prop("confidence", "number", "可信度 0-1"),
                     prop("importance", "integer", "重要度 1-5"), prop("expiresInDays", "integer", "有效期 1-3650 天")),
-                    Arrays.asList("memoryLevel", "scopeType", "content"))));
-            tools.add(tool("memory_forget", "删除当前 Agent 私有记忆或已授权命名空间中的共享记忆",
-                schema(properties(prop("memoryCode", "string", "记忆编码")), Arrays.asList("memoryCode"))));
+                    Arrays.asList("memoryLevel", "scopeType", "content")), false, false));
+            tools.add(tool("memory_forget", "删除记忆",
+                "删除当前 Agent 私有记忆或已授权命名空间中的共享记忆。这是不可撤销的删除，"
+                    + "只在用户明确要求「忘掉 / 删掉这条记忆」时使用。",
+                schema(properties(prop("memoryCode", "string", "记忆编码")), Arrays.asList("memoryCode")), false, true));
         }
         if (key != null && key.hasScope(ApiKey.SCOPE_INGEST)) {
-            tools.add(tool("ingest_text", "把一段文本接入知识库（需要 INGEST 权限）",
+            tools.add(tool("ingest_text", "写入知识",
+                "把一段文本接入知识库，之后就能被检索和问答命中（需要 INGEST 权限）。"
+                    + "当用户要求「把这段存进知识库 / 记到文档里」时使用；"
+                    + "只是希望这次对话记住，用 memory_capture。",
                 schema(properties(
-                    prop("knowledgeBaseId", "integer", "知识库 ID"),
+                    prop("knowledgeBaseId", "integer", "知识库 ID；不知道就先调 list_knowledge_bases"),
+                    prop("knowledgeBaseCode", "string", "知识库稳定编码；绑定式 API Key 可省略"),
                     prop("title", "string", "标题，作为来源名"),
                     prop("text", "string", "正文内容"),
                     prop("permissionTags", "string", "权限标签，逗号分隔")),
-                    Arrays.asList("knowledgeBaseId", "text"))));
+                    Arrays.asList("text")), false, false));
         }
         Map<String, Object> payload = new LinkedHashMap<String, Object>();
         payload.put("tools", tools);
@@ -248,7 +300,17 @@ public class McpServerService {
         } else if ("list_knowledge_bases".equals(name)) {
             accessService.assertScope(key, ApiKey.SCOPE_LIST);
             value = facade.basesFor(key, accessService.grantedKnowledgeBases(key));
+        } else if ("list_knowledge_objects".equals(name)) {
+            accessService.assertScope(key, ApiKey.SCOPE_READ_OBJECT);
+            Long kb = resolve(key, args);
+            value = listObjects(key, kb, objectType(args, false));
+        } else if ("get_knowledge_object".equals(name)) {
+            accessService.assertScope(key, ApiKey.SCOPE_READ_OBJECT);
+            Long kb = resolve(key, args);
+            value = facade.objectDetail(kb, objectType(args, true), objectCode(args), facade.tagsFor(key, kb));
         } else if ("list_knowledge_cards".equals(name)) {
+            // 以下五个是合并成 list/get_knowledge_objects 之前的旧工具名：工具清单里已经不列出，
+            // 但硬编码过的调用方还在发这些名字，继续支持，免得一次改名把已经接好的客户端打挂。
             accessService.assertScope(key, ApiKey.SCOPE_READ_OBJECT);
             Long kb = resolve(key, args);
             value = facade.cards(kb, facade.tagsFor(key, kb));
@@ -397,6 +459,43 @@ public class McpServerService {
         return accessService.resolveKnowledgeBase(key, requested);
     }
 
+    /**
+     * 对象类型：只接受契约里的取值，默认 CARD。
+     *
+     * @param allowEvidence 是否允许 EVIDENCE——证据没有列表接口，所以只有读取允许
+     */
+    private String objectType(Map<String, Object> args, boolean allowEvidence) {
+        String raw = text(args, "objectType");
+        if (raw == null || raw.trim().isEmpty()) {
+            return "CARD";
+        }
+        String value = raw.trim().toUpperCase(java.util.Locale.ROOT);
+        if ("CARD".equals(value) || "CLAIM".equals(value)) {
+            return value;
+        }
+        if (allowEvidence && "EVIDENCE".equals(value)) {
+            return value;
+        }
+        throw new IllegalArgumentException("objectType 只能是 CARD / CLAIM" + (allowEvidence ? " / EVIDENCE" : ""));
+    }
+
+    /** 对象编码：旧工具用的 evidenceCode 也认，老调用方不用跟着改名。 */
+    private String objectCode(Map<String, Object> args) {
+        String code = text(args, "code");
+        if (code == null || code.trim().isEmpty()) {
+            code = text(args, "evidenceCode");
+        }
+        if (code == null || code.trim().isEmpty()) {
+            throw new IllegalArgumentException("缺少对象编码 code");
+        }
+        return code.trim();
+    }
+
+    private Object listObjects(ApiKey key, Long kb, String type) {
+        List<String> tags = facade.tagsFor(key, kb);
+        return "CLAIM".equals(type) ? facade.claims(kb, tags) : facade.cards(kb, tags);
+    }
+
     private void requireMemoryService() {
         if (memoryService == null) {
             throw new IllegalStateException("Agent 记忆服务不可用");
@@ -513,11 +612,23 @@ public class McpServerService {
         return response;
     }
 
-    private Map<String, Object> tool(String name, String description, Map<String, Object> inputSchema) {
+    /**
+     * 工具声明。title 与 annotations 不是装饰：客户端常拿 title 做展示名、拿 readOnlyHint
+     * 判断这个工具能不能自动执行，缺了它们有些平台会把工具排得很低，甚至不给自动调用。
+     */
+    private Map<String, Object> tool(String name, String title, String description, Map<String, Object> inputSchema,
+        boolean readOnly, boolean destructive) {
         Map<String, Object> tool = new LinkedHashMap<String, Object>();
         tool.put("name", name);
+        tool.put("title", title);
         tool.put("description", description);
         tool.put("inputSchema", inputSchema);
+        Map<String, Object> annotations = new LinkedHashMap<String, Object>();
+        annotations.put("readOnlyHint", Boolean.valueOf(readOnly));
+        annotations.put("destructiveHint", Boolean.valueOf(destructive));
+        // 只访问本平台知识库，不是开放互联网：声明出来，免得客户端按"会联网"处理
+        annotations.put("openWorldHint", Boolean.FALSE);
+        tool.put("annotations", annotations);
         return tool;
     }
 
@@ -541,6 +652,17 @@ public class McpServerService {
         Map<String, Object> prop = new LinkedHashMap<String, Object>();
         prop.put("type", type);
         prop.put("description", description);
+        Map<String, Object> wrapper = new LinkedHashMap<String, Object>();
+        wrapper.put(name, prop);
+        return wrapper;
+    }
+
+    /** 枚举参数：给模型的是有限选项而不是让它猜字符串，选择错误率明显更低。 */
+    private Map<String, Object> enumProp(String name, String description, String... values) {
+        Map<String, Object> prop = new LinkedHashMap<String, Object>();
+        prop.put("type", "string");
+        prop.put("description", description);
+        prop.put("enum", Arrays.asList(values));
         Map<String, Object> wrapper = new LinkedHashMap<String, Object>();
         wrapper.put(name, prop);
         return wrapper;

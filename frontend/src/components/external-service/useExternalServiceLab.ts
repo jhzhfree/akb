@@ -591,21 +591,21 @@ export function useExternalServiceLab(props: ExternalServiceLabProps) {
       body:() => ({ jsonrpc:'2.0', id:5, method:'tools/call', params:{ name:'list_knowledge_bases', arguments:{} } }),
     },
     {
-      key:'callCards', label:'tools/call list_knowledge_cards',
+      key:'callCards', label:'tools/call list_knowledge_objects（CARD）',
       body:() => ({ jsonrpc:'2.0', id:6, method:'tools/call', params:{
-        name:'list_knowledge_cards', arguments:{ knowledgeBaseId:cfg.knowledgeBaseId ?? 1 },
+        name:'list_knowledge_objects', arguments:{ knowledgeBaseId:cfg.knowledgeBaseId ?? 1, objectType:'CARD' },
       } }),
     },
     {
-      key:'callCard', label:'tools/call get_knowledge_card',
+      key:'callCard', label:'tools/call get_knowledge_object（CARD）',
       body:() => ({ jsonrpc:'2.0', id:7, method:'tools/call', params:{
-        name:'get_knowledge_card', arguments:{ knowledgeBaseId:cfg.knowledgeBaseId ?? 1, code:cfg.code || 'CARD-DEMO' },
+        name:'get_knowledge_object', arguments:{ knowledgeBaseId:cfg.knowledgeBaseId ?? 1, objectType:'CARD', code:cfg.code || 'CARD-DEMO' },
       } }),
     },
     {
-      key:'callClaims', label:'tools/call list_claims',
+      key:'callClaims', label:'tools/call list_knowledge_objects（CLAIM）',
       body:() => ({ jsonrpc:'2.0', id:8, method:'tools/call', params:{
-        name:'list_claims', arguments:{ knowledgeBaseId:cfg.knowledgeBaseId ?? 1 },
+        name:'list_knowledge_objects', arguments:{ knowledgeBaseId:cfg.knowledgeBaseId ?? 1, objectType:'CLAIM' },
       } }),
     },
     {

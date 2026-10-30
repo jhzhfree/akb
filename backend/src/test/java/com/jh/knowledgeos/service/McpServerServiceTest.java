@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
@@ -212,6 +213,124 @@ class McpServerServiceTest {
             eq(0.65d));
         assertEquals(Boolean.FALSE, result.get("isError"));
         assertEquals(expected, result.get("structuredContent"));
+    }
+
+    /**
+     * title 与 annotations 不是装饰：客户端拿 title 做展示名、拿 readOnlyHint 判断能否自动
+     * 执行。缺了它们，有些平台会把工具排得很低，表现就是「发布成功却不命中」。
+     */
+    @Test
+    void everyToolCarriesTitleAndAnnotations() {
+        McpServerService service = new McpServerService(null, null, new ObjectMapper());
+        List<Map<String, Object>> tools = (List<Map<String, Object>>) service.toolsList().get("tools");
+
+        assertFalse(tools.isEmpty());
+        for (Map<String, Object> tool : tools) {
+            String name = String.valueOf(tool.get("name"));
+            assertNotNull(tool.get("title"), name + " 缺 title");
+            Map<?, ?> annotations = (Map<?, ?>) tool.get("annotations");
+            assertNotNull(annotations, name + " 缺 annotations");
+            assertNotNull(annotations.get("readOnlyHint"), name + " 缺 readOnlyHint");
+        }
+    }
+
+    /**
+     * 卡片 / 断言 / 证据原本是六个工具，职责高度重叠（都是「按编码读对象」），模型在它们之间
+     * 选错比选不中还常见，所以合成两个。旧名字从清单里撤下，但调用仍然接受（见下一个用例）。
+     */
+    @Test
+    void fineGrainedObjectToolsAreMerged() {
+        ApiKey key = mock(ApiKey.class);
+        when(key.hasScope(org.mockito.ArgumentMatchers.anyString())).thenReturn(true);
+        McpServerService service = new McpServerService(null, null, new ObjectMapper());
+
+        List<String> names = new java.util.ArrayList<String>();
+        for (Map<String, Object> tool : (List<Map<String, Object>>) service.toolsList(key).get("tools")) {
+            names.add(String.valueOf(tool.get("name")));
+        }
+
+        assertTrue(names.contains("list_knowledge_objects"));
+        assertTrue(names.contains("get_knowledge_object"));
+        for (String legacy : Arrays.asList("list_knowledge_cards", "get_knowledge_card", "list_claims", "get_claim", "get_evidence")) {
+            assertFalse(names.contains(legacy), legacy + " 已合并，不该再出现在工具清单里");
+        }
+    }
+
+    /** 合并前的旧工具名仍要能调：已经接好的客户端不该因为一次改名就打挂。 */
+    @Test
+    void legacyObjectToolNamesStillResolve() throws Exception {
+        ExternalAccessService access = mock(ExternalAccessService.class);
+        ExternalKnowledgeFacade facade = mock(ExternalKnowledgeFacade.class);
+        ApiKey key = mock(ApiKey.class);
+        List<String> tags = Collections.emptyList();
+        when(access.resolveKnowledgeBase(key, 23L)).thenReturn(23L);
+        when(facade.tagsFor(key, 23L)).thenReturn(tags);
+        McpServerService service = new McpServerService(access, facade, new ObjectMapper());
+
+        Map<String, Object> card = new LinkedHashMap<String, Object>();
+        card.put("knowledgeBaseId", 23);
+        card.put("code", "SOP-001");
+        service.toolsCall(key, toolCall("get_knowledge_card", card));
+
+        Map<String, Object> evidence = new LinkedHashMap<String, Object>();
+        evidence.put("knowledgeBaseId", 23);
+        evidence.put("evidenceCode", "EV-001");
+        service.toolsCall(key, toolCall("get_evidence", evidence));
+
+        verify(facade).objectDetail(eq(23L), eq("CARD"), eq("SOP-001"), eq(tags));
+        verify(facade).objectDetail(eq(23L), eq("EVIDENCE"), eq("EV-001"), eq(tags));
+    }
+
+    /** 合并后的工具按 objectType 路由，大小写不敏感，并把旧字段 evidenceCode 当 code 收。 */
+    @Test
+    void mergedObjectToolRoutesByType() throws Exception {
+        ExternalAccessService access = mock(ExternalAccessService.class);
+        ExternalKnowledgeFacade facade = mock(ExternalKnowledgeFacade.class);
+        ApiKey key = mock(ApiKey.class);
+        List<String> tags = Collections.emptyList();
+        when(access.resolveKnowledgeBase(key, 23L)).thenReturn(23L);
+        when(facade.tagsFor(key, 23L)).thenReturn(tags);
+        McpServerService service = new McpServerService(access, facade, new ObjectMapper());
+
+        Map<String, Object> args = new LinkedHashMap<String, Object>();
+        args.put("knowledgeBaseId", 23);
+        args.put("objectType", "claim");
+        args.put("code", "CL-001");
+        service.toolsCall(key, toolCall("get_knowledge_object", args));
+
+        verify(facade).objectDetail(eq(23L), eq("CLAIM"), eq("CL-001"), eq(tags));
+
+        // 证据没有列表接口，列出来会误导模型以为有
+        Map<String, Object> listing = new LinkedHashMap<String, Object>();
+        listing.put("knowledgeBaseId", 23);
+        listing.put("objectType", "EVIDENCE");
+        assertThrows(IllegalArgumentException.class,
+            () -> service.toolsCall(key, toolCall("list_knowledge_objects", listing)));
+    }
+
+    /** knowledgeBaseId 不再必填：模型通常不知道 ID，必填会让它干脆不调这个工具。 */
+    @Test
+    void knowledgeBaseIdIsNoLongerRequired() {
+        McpServerService service = new McpServerService(null, null, new ObjectMapper());
+        List<Map<String, Object>> tools = (List<Map<String, Object>>) service.toolsList().get("tools");
+
+        assertFalse(tools.isEmpty());
+        for (Map<String, Object> tool : tools) {
+            List<?> required = (List<?>) ((Map<?, ?>) tool.get("inputSchema")).get("required");
+            assertFalse(required.contains("knowledgeBaseId"),
+                String.valueOf(tool.get("name")) + " 仍把 knowledgeBaseId 设为必填");
+        }
+    }
+
+    /** instructions 是模型决定「用不用工具」的第一道输入，要写路由规则而不是只介绍能力。 */
+    @Test
+    void instructionsStateWhenToUseWhichTool() {
+        McpServerService service = new McpServerService(null, null, new ObjectMapper());
+        String instructions = String.valueOf(service.initialize().get("instructions"));
+
+        assertTrue(instructions.contains("knowledge_query"));
+        assertTrue(instructions.contains("knowledge_search"));
+        assertTrue(instructions.contains("list_knowledge_bases"));
     }
 
     private Map<String, Object> toolCall(String name, Map<String, Object> arguments) {

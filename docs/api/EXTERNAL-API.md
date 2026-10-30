@@ -1283,16 +1283,24 @@ curl -X POST http://<host>:8080/api/mcp \
 
 | 工具 | 入参（加粗为必填） | 说明 |
 |---|---|---|
-| `knowledge_query` | **knowledgeBaseId**、**question**、topK、minScore（可选） | 可追溯问答，返回答案、引用与 queryId |
-| `knowledge_search` | **knowledgeBaseId**、**query**、topK、minScore（可选） | 只检索不生成答案 |
-| `list_knowledge_bases` | — | 列出当前 Key 可见知识库 |
-| `list_knowledge_cards` | **knowledgeBaseId** | 知识卡片清单 |
-| `get_knowledge_card` | **knowledgeBaseId**、**code** | 卡片详情与证据链 |
-| `list_claims` | **knowledgeBaseId** | 断言清单 |
-| `get_claim` | **knowledgeBaseId**、**code** | 断言详情 |
-| `get_evidence` | **knowledgeBaseId**、**evidenceCode** | 证据原文与出处 |
-| `graph_neighbors` | **knowledgeBaseId**、**code**、depth、limit | 图谱邻域 |
-| `ingest_text` | **knowledgeBaseId**、**text**、title、permissionTags | 文本接入（需 INGEST） |
+| `knowledge_query` | **question**、knowledgeBaseId / knowledgeBaseCode、topK、minScore、answerFormat | 知识库问答，返回答案、引用与 queryId |
+| `knowledge_search` | **query**、knowledgeBaseId / knowledgeBaseCode、topK、minScore | 只检索不生成答案 |
+| `list_knowledge_bases` | — | 列出当前 Key 可见知识库（含 ID 与稳定编码） |
+| `list_knowledge_objects` | objectType（CARD / CLAIM，默认 CARD）、knowledgeBaseId / knowledgeBaseCode | 结构化知识对象清单（证据没有列表） |
+| `get_knowledge_object` | **code**、objectType（CARD / CLAIM / EVIDENCE，默认 CARD）、knowledgeBaseId / knowledgeBaseCode | 对象详情与证据链 |
+| `graph_neighbors` | **code**、knowledgeBaseId / knowledgeBaseCode、depth、limit | 图谱邻域 |
+| `ingest_text` | **text**、knowledgeBaseId / knowledgeBaseCode、title、permissionTags | 文本接入（需 INGEST） |
+| `memory_recall` | **query**、scopeType、scopeCode、limit | 召回记忆（需 MEMORY_READ 且服务启用） |
+| `memory_capture` | **memoryLevel**、**scopeType**、**content**、scopeCode、tags、sourceType、sourceRef、idempotencyKey、confidence、importance、expiresInDays | 保存记忆（需 MEMORY_WRITE） |
+| `memory_forget` | **memoryCode** | 删除记忆（需 MEMORY_WRITE） |
+
+> 知识库定位：`knowledgeBaseId` 与 `knowledgeBaseCode` 给一个即可，绑定式 Key 两个都不用给。
+> 它们都不再是必填——调用方（尤其是 Agent）通常不知道 ID，必填只会让它干脆不调。
+>
+> 5.2 之前单列过 `list_knowledge_cards` / `get_knowledge_card` / `list_claims` / `get_claim` /
+> `get_evidence` 五个工具，职责重叠（都是按编码读对象），已合并为 `list_knowledge_objects`
+> 与 `get_knowledge_object`。旧名字在 `tools/call` 里仍然接受，已经接好的客户端不受影响，
+> 但 `tools/list` 不再列出它们。
 
 ### 5.3 调用工具
 
