@@ -31,6 +31,24 @@ class IntranetAddressRulesTest {
         assertNotNull(checked > 0 ? "" : null);
     }
 
+    /**
+     * 打包漏掉真源时走的是内置兜底（部署包没带上 contracts 目录就是这种）。兜底必须和真源
+     * 同口径，否则「改了规则却只生效一半」——所以这里用同一份用例把兜底也跑一遍。
+     */
+    @Test
+    void fallbackRulesMatchTheSharedContractToo() throws Exception {
+        JsonNode root = new ObjectMapper()
+            .readTree(Files.readAllBytes(contract("intranet-http.cases.json")));
+        IntranetAddressRules.Rules rules = IntranetAddressRules.fallback();
+        for (JsonNode item : root.withArray("cases")) {
+            String host = item.path("host").asText();
+            assertEquals(item.path("loopback").asBoolean(),
+                IntranetAddressRules.isLoopback(host, rules), "兜底 loopback 判定不一致: " + host);
+            assertEquals(item.path("intranet").asBoolean(),
+                IntranetAddressRules.isIntranetHost(host, rules), "兜底 intranet 判定不一致: " + host);
+        }
+    }
+
     /** 规则文件必须真在 classpath 上（pom 把 contracts 挂成了资源目录），否则线上起不来。 */
     @Test
     void rulesAreLoadedFromTheSharedContract() {

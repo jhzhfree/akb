@@ -180,3 +180,6 @@ python3 scripts/check-phase19-okf-v02.py
 
 echo "[53/53] Frontend secure-context API contract"
 python3 scripts/check-frontend-secure-context.py
+
+echo "[54/54] Contract resource packaging"
+python3 scripts/check-contract-resource-packaging.py

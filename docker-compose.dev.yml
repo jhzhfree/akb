@@ -161,7 +161,10 @@ services:
   # ---------------------------------------------------------------- Backend
   backend:
     profiles: ["app"]
-    build: ./backend
+    # 上下文必须是仓库根：后端镜像要带上 contracts/（判定规则真源，见 IntranetAddressRules）
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
     container_name: kos-dev-backend
     restart: unless-stopped
     env_file:

@@ -93,7 +93,10 @@ services:
     - neo4j
   backend:
     image: ${IMAGE_PREFIX:-knowledge-os}/backend:${VERSION:-1.1.0}
-    build: ../backend
+    # 上下文必须是仓库根：后端镜像要带上 contracts/（判定规则真源，见 IntranetAddressRules）
+    build:
+      context: ..
+      dockerfile: backend/Dockerfile
     restart: unless-stopped
     env_file: ../.env.production
     environment:
@@ -131,7 +134,10 @@ services:
         condition: service_healthy
   index-worker:
     image: ${IMAGE_PREFIX:-knowledge-os}/backend:${VERSION:-1.1.0}
-    build: ../backend
+    # 上下文必须是仓库根：后端镜像要带上 contracts/（判定规则真源，见 IntranetAddressRules）
+    build:
+      context: ..
+      dockerfile: backend/Dockerfile
     restart: unless-stopped
     env_file: ../.env.production
     environment:
