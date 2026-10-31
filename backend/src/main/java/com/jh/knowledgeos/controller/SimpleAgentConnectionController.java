@@ -35,6 +35,19 @@ public class SimpleAgentConnectionController {
     public ApiResponse<Object> agents(@PathVariable long id) { admin(); return ApiResponse.ok(service.agents(id)); }
     @PostMapping("/api/external/admin/agent-connections/{id}/agents")
     public ApiResponse<Object> register(@PathVariable long id, @RequestBody Map<String, Object> body) { return ApiResponse.ok(service.register(id, body, admin())); }
+    // 改接入：改名与改 AKB 对外地址。可读写范围走上面的 /scope，不在这里顺手改。
+    @PutMapping("/api/external/admin/agent-connections/{id}")
+    public ApiResponse<Object> update(@PathVariable long id, @RequestBody Map<String, Object> body) { return ApiResponse.ok(service.update(id, body, admin())); }
+    // 删除分两步：先撤销（终态，留痕），再彻底删除（物理清数据，只对已撤销的执行）。
+    @DeleteMapping("/api/external/admin/agent-connections/{id}")
+    public ApiResponse<Object> revoke(@PathVariable long id) { service.revoke(id, admin()); return ApiResponse.ok(true); }
+    @DeleteMapping("/api/external/admin/agent-connections/{id}/purge")
+    public ApiResponse<Object> purge(@PathVariable long id) { service.purge(id, admin()); return ApiResponse.ok(true); }
+    // 这条接入自己的调用记录：审计表里按应用主体筛。
+    @GetMapping("/api/external/admin/agent-connections/{id}/calls")
+    public ApiResponse<Object> calls(@PathVariable long id, @RequestParam(defaultValue = "50") int limit) {
+        admin(); return ApiResponse.ok(service.calls(id, limit));
+    }
     // 下面这几个原本挂在复杂版 /workload/policies/** 下，简化版界面在用。收归到自己的路径下，
     // 复杂版界面删掉后它们就是唯一入口。
     @PostMapping("/api/external/admin/agent-connections/{id}/keys")

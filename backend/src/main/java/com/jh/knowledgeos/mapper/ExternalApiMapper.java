@@ -149,7 +149,8 @@ public interface ExternalApiMapper {
 
     int insertApiCallAudit(ApiCallAudit audit);
 
-    List<ApiCallAudit> listApiCallAudits(@Param("keyId") Long keyId, @Param("limit") int limit);
+    List<ApiCallAudit> listApiCallAudits(@Param("keyId") Long keyId,
+        @Param("applicationPrincipalId") Long applicationPrincipalId, @Param("limit") int limit);
 
     /**
      * Calls of one channel (REST / SSE / MCP): each integration surface is inspected separately.

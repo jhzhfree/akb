@@ -9,9 +9,11 @@ import com.jh.knowledgeos.mapper.WorkloadIdentityRepository;
 import com.nimbusds.jose.jwk.RSAKey;
 import java.util.*;
 import org.junit.jupiter.api.*;
+import org.mockito.InOrder;
 
 class SimpleAgentConnectionServiceTest {
     WorkloadIdentityRepository repo;
+    WorkloadIdentityAdminService workload;
     ApiKeyService keys;
     SimpleAgentConnectionService service;
     ExternalApiMapper principals;
@@ -20,7 +22,8 @@ class SimpleAgentConnectionServiceTest {
     @BeforeEach void setup() {
         repo=mock(WorkloadIdentityRepository.class);keys=mock(ApiKeyService.class);
         principals=mock(ExternalApiMapper.class);
-        service=new SimpleAgentConnectionService(repo,mock(WorkloadIdentityAdminService.class),keys,principals,mock(ExternalRateLimiter.class));
+        workload=mock(WorkloadIdentityAdminService.class);
+        service=new SimpleAgentConnectionService(repo,workload,keys,principals,mock(ExternalRateLimiter.class));
         policy=new LinkedHashMap<>();policy.put("authorization_mode","SERVICE_SCOPE");policy.put("simple_mode",true);policy.put("proof_profile",AgentProofCrypto.V2);policy.put("status","ACTIVE");
         policy.put("application_principal_id",123L);policy.put("resource_origin","https://akb.example");
         policy.put("issuer","https://akb.local/agent-identity");policy.put("audience","akb");policy.put("platform_id","akb-service");policy.put("installation_id","install");policy.put("workspace_id","workspace");
@@ -87,4 +90,41 @@ class SimpleAgentConnectionServiceTest {
         assertThrows(IllegalArgumentException.class,()->service.reviewAuthorization(17,body,9));
     }
 
+    @Test void updateRenamesThePrincipalAndRevalidatesTheOrigin() {
+        when(workload.canonicalResourceOrigin("https://new.example")).thenReturn("https://new.example");
+        Map<String,Object> body=new LinkedHashMap<>();body.put("name","Renamed");body.put("resourceOrigin","https://new.example");
+        service.update(17,body,9);
+        verify(keys).updatePrincipal(123L,"Renamed",null,null);
+        verify(repo).updateResourceOrigin(17L,"https://new.example");
+        verify(repo).audit(eq(17L),eq("UPDATE_CONNECTION"),eq(9L),contains("https://new.example"));
+    }
+    /** 撤销不是删除：策略进终态，共享 Key 全部吊销，但记录都还在。 */
+    @Test void revokeTakesTheConnectionTerminalAndRevokesItsSharedKeys() {
+        Map<String,Object> key=new LinkedHashMap<>();key.put("id",55L);key.put("status","ACTIVE");
+        Map<String,Object> already=new LinkedHashMap<>();already.put("id",56L);already.put("status","REVOKED");
+        when(keys.listPrincipalKeys(123L)).thenReturn(Arrays.asList(key,already));
+        service.revoke(17,9);
+        verify(workload).status(eq(17L),isNull(),anyMap(),eq(9L));
+        verify(keys).revoke(55L);
+        verify(keys,never()).revoke(56L);
+        verify(repo).audit(eq(17L),eq("REVOKE_CONNECTION"),eq(9L),anyString());
+    }
+    /** 彻底删除只对已撤销的接入生效，且审计先落盘——顺序反了就没有留痕了。 */
+    @Test void purgeOnlyDeletesWhatHasAlreadyBeenRevokedAndAuditsFirst() {
+        assertThrows(IllegalArgumentException.class,()->service.purge(17,9));
+        verify(repo,never()).purgePolicy(anyLong());
+        policy.put("status","REVOKED");
+        service.purge(17,9);
+        InOrder order=inOrder(repo);
+        order.verify(repo).audit(eq(17L),eq("PURGE_CONNECTION"),eq(9L),anyString());
+        order.verify(repo).detachKeys(17L);
+        order.verify(repo).purgePolicy(17L);
+        verify(keys).updatePrincipal(123L,null,"DISABLED",null);
+    }
+    /** 日志按这条接入的应用主体筛；条数上限在服务端钳住，免得前端传个很大的数把库拖住。 */
+    @Test void callsAreScopedToTheConnectionsPrincipalAndCapped() {
+        when(principals.listApiCallAudits(any(),anyLong(),anyInt())).thenReturn(Collections.emptyList());
+        service.calls(17,500);
+        verify(principals).listApiCallAudits(null,123L,200);
+    }
 }

@@ -97,5 +97,19 @@ public class WorkloadIdentityRepository {
     public void cleanV2() {
         jdbc.update("DELETE FROM t_workload_v2_jti WHERE expires_at<CURRENT_TIMESTAMP LIMIT 1000");
     }
+    public void updateResourceOrigin(long policy, String origin) {
+        jdbc.update("UPDATE t_workload_policy SET resource_origin=? WHERE id=?", origin, policy);
+    }
+    /** 共享 Key 只解绑不删：t_api_key 被记忆与审计表外键引用，且并非全部级联。 */
+    public void detachKeys(long policy) {
+        jdbc.update("UPDATE t_api_key SET workload_policy_id=NULL WHERE workload_policy_id=?", policy);
+    }
+    /** 彻底删除策略及其从属；调用方须先确认该策略已撤销。 */
+    public void purgePolicy(long policy) {
+        jdbc.update("DELETE FROM t_workload_v2_jti WHERE policy_id=?", policy);
+        jdbc.update("DELETE FROM t_workload_agent_key WHERE policy_id=?", policy);
+        jdbc.update("DELETE FROM t_workload_agent_binding WHERE policy_id=?", policy);
+        jdbc.update("DELETE FROM t_workload_policy WHERE id=?", policy);
+    }
     private static Map<String, Object> first(List<Map<String, Object>> rows) { return rows.isEmpty() ? null : rows.get(0); }
 }

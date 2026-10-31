@@ -48,16 +48,9 @@ public class WorkloadIdentityAdminService {
         validateUrl("身份签发者地址（issuer）", issuer);
         long id = repository.createPolicy(application, issuer, null, text(body, "audience", 255),
             text(body, "installationId", 128), text(body, "workspaceId", 128), operator);
-        String platform = text(body, "platformId", 128), resource = text(body, "resourceOrigin", 255);
+        String platform = text(body, "platformId", 128);
         if (!platform.matches("[A-Za-z0-9_.:-]{1,128}")) throw new IllegalArgumentException("无效的平台标识");
-        validateUrl("AKB 对外访问地址（resourceOrigin）", resource);
-        URI origin = URI.create(resource);
-        String canonical;
-        try { canonical = new URI(origin.getScheme(), null, origin.getHost().toLowerCase(java.util.Locale.ROOT),
-            ("https".equals(origin.getScheme()) && origin.getPort() == 443) ? -1 : origin.getPort(), null, null, null).toASCIIString(); }
-        catch (java.net.URISyntaxException ex) { throw new IllegalArgumentException("无效的资源 origin"); }
-        if (!resource.equals(canonical)) throw new IllegalArgumentException("resourceOrigin 必须为规范 origin，无路径及默认端口");
-        repository.configureV2(id, platform, resource);
+        repository.configureV2(id, platform, canonicalResourceOrigin(text(body, "resourceOrigin", 255)));
         audit(id, "CREATE_POLICY", operator, body);
         return repository.policy(id);
     }
@@ -143,6 +136,20 @@ public class WorkloadIdentityAdminService {
             + "（WORKLOAD_ALLOW_LOOPBACK_HTTP=" + allowLoopback + "）与内网地址"
             + "（WORKLOAD_ALLOW_INTRANET_HTTP=" + allowIntranetHttp + "）。"
             + "当前 " + value + " 的主机 " + uri.getHost() + " 被判定为公网。");
+    }
+    /**
+     * AKB 对外地址的校验与规范化，新建和修改共用。抽出来是因为改地址时必须走同一套判定——
+     * 复制一份就会出现「新建拒绝、修改放行」的口子。
+     */
+    public String canonicalResourceOrigin(String value) {
+        validateUrl("AKB 对外访问地址（resourceOrigin）", value);
+        URI origin = URI.create(value);
+        try {
+            String canonical = new URI(origin.getScheme(), null, origin.getHost().toLowerCase(java.util.Locale.ROOT),
+                ("https".equals(origin.getScheme()) && origin.getPort() == 443) ? -1 : origin.getPort(), null, null, null).toASCIIString();
+            if (!value.equals(canonical)) throw new IllegalArgumentException("resourceOrigin 必须为规范 origin，无路径及默认端口");
+            return canonical;
+        } catch (java.net.URISyntaxException ex) { throw new IllegalArgumentException("无效的资源 origin"); }
     }
     private void audit(long policy, String action, long operator, Object detail) {
         try { repository.audit(policy, action, operator, json.writeValueAsString(detail)); }
