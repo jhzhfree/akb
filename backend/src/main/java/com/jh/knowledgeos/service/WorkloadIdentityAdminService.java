@@ -84,6 +84,8 @@ public class WorkloadIdentityAdminService {
     public void status(long policy, Long binding, Map<String, Object> body, long operator) {
         requirePolicyExists(policy);
         String status = text(body, "status", 16);
+        if ("ACTIVE".equals(status) && "REVIEW_REQUIRED".equals(requirePolicyExists(policy).get("authorization_mode")))
+            throw new IllegalArgumentException("请先确认历史接入的授权方式");
         if (!Arrays.asList("ACTIVE", "SUSPENDED", "REVOKED").contains(status)) throw new IllegalArgumentException("无效状态");
         int changed = binding == null ? repository.policyStatus(policy, status) : repository.bindingStatus(policy, binding, status);
         if (changed != 1) throw new IllegalArgumentException("登记不存在或已永久撤销");

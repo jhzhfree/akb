@@ -48,7 +48,7 @@ class AgentKeyProofVerifierTest {
         repository = mock(WorkloadIdentityRepository.class); service = new WorkloadIdentityService(repository);
         credential = new ApiKey(); credential.setPrincipalId(123L); credential.setPrincipalType("APPLICATION");
         credential.setIdentityMode("APPLICATION_WORKLOAD"); credential.setWorkloadPolicyId(17L);
-        when(repository.policy(17L)).thenReturn(map("id",17L,"application_principal_id",123L,"status","ACTIVE","proof_profile",AgentProofCrypto.V2,
+        when(repository.policy(17L)).thenReturn(map("id",17L,"application_principal_id",123L,"status","ACTIVE","authorization_mode","AGENT_INTERSECTION","proof_profile",AgentProofCrypto.V2,
             "issuer","https://issuer.example/test","audience","akb","platform_id","test-platform","installation_id","install","workspace_id","workspace","resource_origin","https://akb.example"));
         when(repository.binding(17L,A,"build")).thenReturn(map("id",21L,"agent_principal_id",4L));
         when(repository.binding(17L,B,"review")).thenReturn(map("id",22L,"agent_principal_id",5L));
@@ -84,12 +84,17 @@ class AgentKeyProofVerifierTest {
         assertEquals(a.getKeyID(),one.getSigningKid()); assertEquals(AgentProofCrypto.V2,one.getProofProfile());
         assertEquals("message",one.getMessageId()); assertEquals(123L,credential.getPrincipalId());
     }
-    @Test void onlyServerStoredSimpleModeEnablesInheritance() throws Exception {
+    @Test void onlyExplicitServerStoredAuthorizationModeEnablesInheritance() throws Exception {
         assertFalse(service.authenticate(request(sign(claims(A),a)),credential).isServiceGrantsInherited());
-        repository.policy(17L).put("simple_mode",true);
+        repository.policy(17L).put("authorization_mode","SERVICE_SCOPE");
         assertTrue(service.authenticate(request(sign(claims(A),a)),credential).isServiceGrantsInherited());
-        Map<String,Object> forged=claims(B); forged.put("simple_mode",true);
+        Map<String,Object> forged=claims(B); forged.put("authorization_mode","SERVICE_SCOPE");
         assertThrows(WorkloadProofException.class,()->service.authenticate(request(sign(forged,a)),credential));
+    }
+    @Test void unreviewedHistoricalPoliciesFailClosedEvenIfActive() throws Exception {
+        repository.policy(17L).put("authorization_mode", "REVIEW_REQUIRED");
+        assertThrows(com.jh.knowledgeos.exception.UnauthorizedException.class, () -> service.authenticate(request(sign(claims(A),a)),credential));
+        verify(repository,never()).consumeV2(anyLong(),anyString(),anyString(),any());
     }
     @Test void validASignatureCannotImpersonateBAndDoesNotConsumeANonce() throws Exception {
         assertThrows(WorkloadProofException.class,()->service.authenticate(request(sign(claims(B),a)),credential));

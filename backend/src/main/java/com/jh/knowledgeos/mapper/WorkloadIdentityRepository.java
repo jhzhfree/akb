@@ -58,9 +58,17 @@ public class WorkloadIdentityRepository {
         jdbc.update("INSERT INTO t_workload_admin_audit(policy_id,action,operator_id,detail) VALUES(?,?,?,CAST(? AS JSON))", policy, action, operator, detail);
     }
 
-    public void enableSimple(long policy) { jdbc.update("UPDATE t_workload_policy SET simple_mode=TRUE WHERE id=?", policy); }
+    public void enableSimple(long policy) {
+        jdbc.update("UPDATE t_workload_policy SET simple_mode=TRUE,authorization_mode='SERVICE_SCOPE' WHERE id=?", policy);
+    }
+    public int reviewAuthorization(long policy, String mode, String platform) {
+        return jdbc.update("UPDATE t_workload_policy SET authorization_mode=?,platform_type=? WHERE id=? AND status<>'REVOKED' AND authorization_mode='REVIEW_REQUIRED'", mode, platform, policy);
+    }
+    public void platformType(long policy, String platform) {
+        jdbc.update("UPDATE t_workload_policy SET platform_type=? WHERE id=?", platform, policy);
+    }
     public void configureV2(long policy, String platform, String resource) {
-        jdbc.update("UPDATE t_workload_policy SET proof_profile='AGENT_KEY_RS256_V2',platform_id=?,resource_origin=? WHERE id=?", platform, resource, policy);
+        jdbc.update("UPDATE t_workload_policy SET proof_profile='AGENT_KEY_RS256_V2',authorization_mode='AGENT_INTERSECTION',platform_id=?,resource_origin=? WHERE id=?", platform, resource, policy);
     }
     public Map<String, Object> bindingById(long policy, long binding, boolean lock) {
         return first(jdbc.queryForList("SELECT * FROM t_workload_agent_binding WHERE policy_id=? AND id=?" + (lock ? " FOR UPDATE" : ""), policy, binding));

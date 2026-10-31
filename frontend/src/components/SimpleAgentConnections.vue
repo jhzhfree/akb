@@ -54,6 +54,41 @@
             {{ selected.name }} <el-tag>{{ selected.status }}</el-tag>
           </h2>
           <p class="kb-muted mt-2">AKB 地址：{{ selected.resource_origin }}</p>
+          <p class="kb-muted mt-2">
+            连接 #{{ selected.id }} · 平台 {{ selected.platform_type }} ·
+            {{ authorizationLabel(selected.authorization_mode) }}
+          </p>
+          <el-alert
+            v-if="selected.authorization_mode === 'REVIEW_REQUIRED'"
+            type="warning"
+            :closable="false"
+            class="mt-3"
+            title="历史授权方式待确认。升级无法可靠恢复原模式，连接已暂停；请核对备份和授权记录，确认后再单独启用。"
+          />
+          <div
+            v-if="selected.authorization_mode === 'REVIEW_REQUIRED'"
+            class="mt-3"
+          >
+            <el-select v-model="reviewMode"
+              ><el-option
+                label="平台与 Agent 权限交集（保留独立限制）"
+                value="AGENT_INTERSECTION" /><el-option
+                label="继承平台权限（所有 Agent 共享）"
+                value="SERVICE_SCOPE"
+            /></el-select>
+            <el-input
+              v-model="reviewReason"
+              placeholder="填写确认依据；选择共享权限可能扩大访问范围"
+              maxlength="500"
+              class="mt-2"
+            />
+            <el-button
+              class="mt-2"
+              :disabled="!reviewReason.trim()"
+              @click="reviewAuthorization"
+              >确认授权方式（不自动启用）</el-button
+            >
+          </div>
           <div class="mt-2">
             <el-button link @click="runCheck">接入自检</el-button>
             <ul v-if="checklist.length" class="mt-1 kb-muted">
@@ -74,8 +109,8 @@
               :value="base.id"
           /></el-select>
           <p class="kb-muted mt-2">
-            简化版默认读取所选知识库中未设置权限标签的内容。变更后立即对该接入下所有
-            Agent 生效。
+            平台可读范围是所有 Agent 的访问上限；交集模式还受各 Agent
+            现有授权限制。默认只读无权限标签的内容。
           </p>
           <el-button
             class="mt-3"
@@ -85,7 +120,10 @@
           >
           <el-button
             class="mt-3"
-            :disabled="selected.status === 'REVOKED'"
+            :disabled="
+              selected.status === 'REVOKED' ||
+              selected.authorization_mode === 'REVIEW_REQUIRED'
+            "
             @click="connectionStatus"
             >{{
               selected.status === "ACTIVE" ? "停用接入" : "启用接入"
@@ -178,6 +216,13 @@
     </template>
     <el-dialog v-model="createOpen" title="新建服务接入" width="540px"
       ><el-form label-position="top"
+        ><el-form-item label="平台类型"
+          ><el-select v-model="platformType"
+            ><el-option label="Octop" value="octop" /><el-option
+              label="OpenCode"
+              value="opencode" /><el-option
+              label="其他平台"
+              value="custom" /></el-select></el-form-item
         ><el-form-item label="接入名称"
           ><el-input
             v-model="newName"
@@ -190,7 +235,8 @@
           /><small
             >填写调用平台实际访问的根地址，不要附加 /api
             路径。需与调用平台一致。</small
-          ><p v-if="loopbackHint" class="mt-1 text-[11px] text-amber-600">
+          >
+          <p v-if="loopbackHint" class="mt-1 text-[11px] text-amber-600">
             {{ loopbackHint }}
           </p></el-form-item
         ><el-form-item label="可读知识库"
@@ -287,6 +333,22 @@ import { confirmAction, errorMessage } from "../utils/feedback";
 import { copyText } from "../utils/clipboard";
 import intranetRules from "../utils/intranet-rules.mjs";
 defineProps<{ bases: KnowledgeBase[] }>();
+const reviewMode = ref<"SERVICE_SCOPE" | "AGENT_INTERSECTION">(
+  "AGENT_INTERSECTION",
+);
+const reviewReason = ref("");
+const platformType = ref("custom");
+function authorizationLabel(mode: string) {
+  return (
+    (
+      {
+        SERVICE_SCOPE: "继承平台权限",
+        AGENT_INTERSECTION: "平台与 Agent 权限交集",
+        REVIEW_REQUIRED: "待确认",
+      } as Record<string, string>
+    )[mode] ?? "未知授权方式"
+  );
+}
 type Connection = WorkloadPolicy & { name: string; knowledgeBaseIds: number[] };
 type Agent = WorkloadAgent & { name: string; keys: WorkloadAgentKey[] };
 const root = "/api/external/admin/agent-connections";
@@ -330,9 +392,11 @@ const loopbackHint = computed(() => {
     (loopback.hosts ?? []).some((h) => host === h.toLowerCase()) ||
     (loopback.ipv4Prefixes ?? []).some((prefix) => host.startsWith(prefix));
   if (!isLoopback) return "";
-  return `这是本机地址：后端要开启 WORKLOAD_ALLOW_LOOPBACK_HTTP=true 才会接受；而且「本机」`
-    + `是相对平台而言的——平台与 AKB 不在同一台主机时，localhost 指向的是平台自己，`
-    + `请改填 AKB 实际可达的地址。`;
+  return (
+    `这是本机地址：后端要开启 WORKLOAD_ALLOW_LOOPBACK_HTTP=true 才会接受；而且「本机」` +
+    `是相对平台而言的——平台与 AKB 不在同一台主机时，localhost 指向的是平台自己，` +
+    `请改填 AKB 实际可达的地址。`
+  );
 });
 async function act(fn: () => Promise<void>) {
   if (busy.value) return;
@@ -359,6 +423,8 @@ async function load(id?: number) {
   checklist.value = [];
   if (next) {
     scopeIds.value = [...next.knowledgeBaseIds];
+    reviewMode.value = "AGENT_INTERSECTION";
+    reviewReason.value = "";
     const [a, k] = await Promise.all([
       axios.get(`${root}/${next.id}/agents`),
       listPrincipalKeys(next.application_principal_id),
@@ -378,12 +444,33 @@ async function create() {
   await act(async () => {
     const r = await axios.post(root, {
       name: newName.value,
+      platformType: platformType.value,
       resourceOrigin: origin.value.trim().replace(/\/$/, ""),
       knowledgeBaseIds: newScope.value,
     });
     createOpen.value = false;
     showSecret(r.data.data.key.secret);
     await load(r.data.data.id);
+  });
+}
+async function reviewAuthorization() {
+  await act(async () => {
+    if (!selected.value) return;
+    try {
+      await confirmAction({
+        title: "确认授权方式",
+        message:
+          "继承平台权限会取消 Agent 独立权限限制。此操作将记录审计，且不会自动启用连接。",
+      });
+    } catch {
+      return;
+    }
+    await axios.put(`${root}/${selected.value.id}/authorization`, {
+      authorizationMode: reviewMode.value,
+      reason: reviewReason.value.trim(),
+      platformType: selected.value.platform_type,
+    });
+    await load();
   });
 }
 async function saveScope() {

@@ -295,7 +295,9 @@ public class ExternalAuditService {
             return null;
         }
         if (key.getName() != null && !key.getName().trim().isEmpty()) {
-            return key.getName().trim();
+            String name = key.getName().trim();
+            if (key.getWorkloadIdentity() != null) name = truncate(name, 80) + " · Agent " + key.getWorkloadIdentity().getExternalAgentId();
+            return truncate(name, 128);
         }
         return key.getKeyCode();
     }

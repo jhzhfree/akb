@@ -63,7 +63,7 @@ public final class AgentKeyProofVerifier {
             if (millis - previous > 60000 && cleanup.compareAndSet(previous, millis)) repository.cleanV2();
             WorkloadIdentity identity = new WorkloadIdentity(((Number) binding.get("agent_principal_id")).longValue(), session, invocation,
                 AgentProofCrypto.V2, kid, ((Number) registered.get("id")).longValue(), message, (String) c.get("platform_id"), external, String.valueOf(registered.get("status")));
-            if (SimpleAgentConnectionService.simple(policy)) identity = identity.inheritServiceGrants();
+            if ("SERVICE_SCOPE".equals(policy.get("authorization_mode"))) identity = identity.inheritServiceGrants();
             return identity;
         } catch (IllegalArgumentException | DuplicateKeyException ex) { throw new WorkloadProofException(); }
     }

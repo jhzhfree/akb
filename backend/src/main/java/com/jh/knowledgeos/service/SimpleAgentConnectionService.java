@@ -26,17 +26,14 @@ public class SimpleAgentConnectionService {
         ApiKeyService keys, ExternalApiMapper principals, ExternalRateLimiter limiter) {
         this.repository = repository; this.workload = workload; this.keys = keys; this.principals = principals; this.limiter = limiter;
     }
-    public static boolean simple(Map<String, Object> p) {
-        return p != null && (Boolean.TRUE.equals(p.get("simple_mode")) || Integer.valueOf(1).equals(p.get("simple_mode")));
-    }
     public Map<String, Object> require(long id) {
         Map<String, Object> p = repository.policy(id);
-        if (!simple(p) || !AgentProofCrypto.V2.equals(p.get("proof_profile"))) throw new IllegalArgumentException("简化服务接入不存在");
+        if (p == null || !AgentProofCrypto.V2.equals(p.get("proof_profile"))) throw new IllegalArgumentException("简化服务接入不存在");
         return p;
     }
     public List<Map<String, Object>> list() {
         List<Map<String, Object>> result = new ArrayList<>();
-        for (Map<String, Object> p : repository.policies()) if (simple(p)) {
+        for (Map<String, Object> p : repository.policies()) if (AgentProofCrypto.V2.equals(p.get("proof_profile"))) {
             Map<String, Object> row = new LinkedHashMap<>(p);
             long principal = ((Number) p.get("application_principal_id")).longValue();
             ExternalPrincipal app = principals.getPrincipal(principal);
@@ -59,6 +56,7 @@ public class SimpleAgentConnectionService {
         Map<String, Object> policy = workload.createPolicy(fields, operator);
         long policyId = ((Number) policy.get("id")).longValue();
         repository.enableSimple(policyId);
+        repository.platformType(policyId, platform(body));
         scope(policyId, body, operator);
         ExternalKeyRequest request = new ExternalKeyRequest(); request.setName(name);
         request.setExpiresAt(LocalDateTime.now().plusDays(365).minusMinutes(1).toString());
@@ -157,14 +155,24 @@ public class SimpleAgentConnectionService {
         Map<String, Object> policy = require(id);
         long principal = ((Number) policy.get("application_principal_id")).longValue();
         boolean agentActive = false, keyActive = false;
+        Instant now = Instant.now();
         for (Map<String, Object> binding : repository.bindings(id)) {
-            if ("ACTIVE".equals(binding.get("status"))) agentActive = true;
+            ExternalPrincipal agent = principals.getPrincipal(((Number) binding.get("agent_principal_id")).longValue());
+            if (!"ACTIVE".equals(binding.get("status")) || agent == null || !"ACTIVE".equals(agent.getStatus())) continue;
+            agentActive = true;
             for (Map<String, Object> registered : repository.agentKeys(id, ((Number) binding.get("id")).longValue())) {
-                if ("ACTIVE".equals(registered.get("status"))) keyActive = true;
+                String status = String.valueOf(registered.get("status"));
+                if (!("ACTIVE".equals(status) || "RETIRING".equals(status))) continue;
+                if (registered.get("valid_from") != null && AgentProofCrypto.instant(registered.get("valid_from")).isAfter(now)) continue;
+                if ("RETIRING".equals(status) && registered.get("valid_until") == null) continue;
+                if (registered.get("valid_until") != null && !AgentProofCrypto.instant(registered.get("valid_until")).isAfter(now)) continue;
+                keyActive = true;
             }
         }
+        ExternalPrincipal app = principals.getPrincipal(principal);
         List<Map<String, Object>> items = new ArrayList<>();
-        items.add(check("服务接入处于启用状态", "ACTIVE".equals(policy.get("status")), "点「启用接入」"));
+        items.add(check("服务接入及应用主体处于启用状态", "ACTIVE".equals(policy.get("status")) && app != null && "ACTIVE".equals(app.getStatus()), "点「启用接入」"));
+        items.add(check("授权方式已确认", !"REVIEW_REQUIRED".equals(policy.get("authorization_mode")), "确认历史授权方式后再启用连接"));
         items.add(check("已授权至少一个可读知识库", !keys.grantedKnowledgeBases(principal).isEmpty(), "在上方选择知识库并保存可读范围"));
         items.add(check("已登记至少一个启用的 Agent", agentActive, "登记 Agent 公钥"));
         items.add(check("至少有一把生效中的公钥", keyActive, "导入该 Agent 的 public.jwk"));
@@ -175,19 +183,43 @@ public class SimpleAgentConnectionService {
         row.put("item", item); row.put("ok", Boolean.valueOf(ok)); row.put("hint", hint);
         return row;
     }
+    /** Historical migration review changes authority explicitly, never as a side effect of listing. */
+    @Transactional
+    public void reviewAuthorization(long id, Map<String, Object> body, long operator) {
+        require(id);
+        String mode = AgentProofCrypto.text(body, "authorizationMode", 32);
+        if (!("SERVICE_SCOPE".equals(mode) || "AGENT_INTERSECTION".equals(mode))) throw new IllegalArgumentException("无效授权方式");
+        String reason = AgentProofCrypto.text(body, "reason", 500);
+        if (repository.reviewAuthorization(id, mode, platform(body)) != 1) throw new IllegalArgumentException("连接已确认或已撤销，请刷新状态");
+        repository.audit(id, "REVIEW_AUTHORIZATION", operator, new com.fasterxml.jackson.databind.ObjectMapper().createObjectNode()
+            .put("authorizationMode", mode).put("reason", reason).toString());
+    }
+    private static String platform(Map<String, Object> body) {
+        String type = body.get("platformType") == null ? "custom" : AgentProofCrypto.text(body, "platformType", 32);
+        if (!Arrays.asList("octop", "opencode", "custom").contains(type)) throw new IllegalArgumentException("无效平台类型");
+        return type;
+    }
     /** Key-only discovery returns public signing coordinates, never authority to read knowledge. */
     public Map<String, Object> configuration(String secret, String external) {
         ApiKey key = secret == null ? null : keys.authenticate(secret);
         if (key == null || !key.isWorkloadCredential() || key.getWorkloadPolicyId() == null) throw new UnauthorizedException("共享服务 Key 无效或已过期");
         limiter.check(key);
         Map<String, Object> p = require(key.getWorkloadPolicyId());
-        if (!"ACTIVE".equals(p.get("status")) || !key.getPrincipalId().equals(((Number)p.get("application_principal_id")).longValue())) throw new UnauthorizedException("服务接入已停用");
+        if (!"ACTIVE".equals(p.get("status")) || "REVIEW_REQUIRED".equals(p.get("authorization_mode")) || !key.getPrincipalId().equals(((Number)p.get("application_principal_id")).longValue())) throw new UnauthorizedException("服务接入已停用");
         String agent = AgentProofCrypto.uuid(external);
         Map<String, Object> b = repository.binding(key.getWorkloadPolicyId(), agent, agent);
+        if (b == null) {
+            for (Map<String,Object> existing : repository.bindings(key.getWorkloadPolicyId())) {
+                if (agent.equals(existing.get("external_agent_id"))) {
+                    b = repository.binding(key.getWorkloadPolicyId(), agent, String.valueOf(existing.get("runtime_agent_key")));
+                    break;
+                }
+            }
+        }
         if (b == null) throw new SecurityException("请先在 AKB 登记该 Agent ID 和公钥");
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("policyId", String.valueOf(key.getWorkloadPolicyId())); result.put("applicationPrincipalId", String.valueOf(key.getPrincipalId()));
-        result.put("bindingId", String.valueOf(b.get("id"))); result.put("externalAgentId", agent); result.put("runtimeAgentKey", agent);
+        result.put("bindingId", String.valueOf(b.get("id"))); result.put("externalAgentId", agent); result.put("runtimeAgentKey", b.get("runtime_agent_key") == null ? agent : b.get("runtime_agent_key"));
         String[][] fields = {{"issuer","issuer"},{"audience","audience"},{"resource","resource_origin"},{"platformId","platform_id"},{"installationId","installation_id"},{"workspaceId","workspace_id"}};
         for (String[] field : fields) result.put(field[0], p.get(field[1]));
         return result;

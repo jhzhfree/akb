@@ -40,7 +40,8 @@ public class WorkloadIdentityService {
         Map<String, Object> policy = repository.policy(key.getWorkloadPolicyId());
         if (policy == null || !"ACTIVE".equals(policy.get("status"))
             || !key.getPrincipalId().equals(number(policy.get("application_principal_id")))) throw unauthorized();
-        if (!AgentProofCrypto.V2.equals(policy.get("proof_profile"))) throw unauthorized();
+        if (!AgentProofCrypto.V2.equals(policy.get("proof_profile"))
+            || !("SERVICE_SCOPE".equals(policy.get("authorization_mode")) || "AGENT_INTERSECTION".equals(policy.get("authorization_mode")))) throw unauthorized();
         return v2.authenticate(request, key, policy);
     }
     public static String sha256(byte[] bytes) {

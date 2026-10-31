@@ -25,6 +25,10 @@ public class SimpleAgentConnectionController {
     public ApiResponse<Object> list() { admin(); return ApiResponse.ok(service.list()); }
     @PostMapping("/api/external/admin/agent-connections")
     public ApiResponse<Object> create(@RequestBody Map<String, Object> body) { return ApiResponse.ok(service.create(body, admin())); }
+    @PutMapping("/api/external/admin/agent-connections/{id}/authorization")
+    public ApiResponse<Object> authorization(@PathVariable long id, @RequestBody Map<String, Object> body) {
+        service.reviewAuthorization(id, body, admin()); return ApiResponse.ok(true);
+    }
     @PutMapping("/api/external/admin/agent-connections/{id}/scope")
     public ApiResponse<Object> scope(@PathVariable long id, @RequestBody Map<String, Object> body) { service.scope(id, body, admin()); return ApiResponse.ok(true); }
     @GetMapping("/api/external/admin/agent-connections/{id}/agents")

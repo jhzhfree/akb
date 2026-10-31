@@ -24,6 +24,12 @@ class WorkloadIdentityAdminServiceTest {
         Map<String,Object> p = new HashMap<String,Object>(); p.put("application_principal_id", 1L); p.put("status", "ACTIVE"); p.put("installation_id", "install");
         when(repository.policy(7L)).thenReturn(p); when(principals.getPrincipal(1L)).thenReturn(principal(1, "APPLICATION")); return p;
     }
+    @Test void unreviewedHistoricalConnectionsCannotBeReenabled() {
+        policy().put("authorization_mode", "REVIEW_REQUIRED");
+        assertThrows(IllegalArgumentException.class, () -> service.status(7,null,Collections.singletonMap("status","ACTIVE"),9));
+        verify(repository,never()).policyStatus(anyLong(),anyString());
+        verify(repository,never()).bindingStatus(anyLong(),anyLong(),anyString());
+    }
     @Test void issuingStrictKeySetsPolicyAtomicallyAndDoesNotAuditSecret() {
         policy(); Map<String,Object> issued = new HashMap<String,Object>(); issued.put("id", 2L); issued.put("secret", "only-once-secret");
         when(keys.createServiceKey(anyLong(), any(), anyList(), any(), any(), any(), anyLong())).thenReturn(issued);

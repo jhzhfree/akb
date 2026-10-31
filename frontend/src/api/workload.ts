@@ -5,6 +5,9 @@
  */
 export interface WorkloadPolicy {
   simple_mode?: boolean;
+  authorization_mode:
+    "SERVICE_SCOPE" | "AGENT_INTERSECTION" | "REVIEW_REQUIRED";
+  platform_type: "octop" | "opencode" | "custom";
   id: number;
   application_principal_id: number;
   issuer: string;

@@ -14,12 +14,14 @@ class SimpleAgentConnectionServiceTest {
     WorkloadIdentityRepository repo;
     ApiKeyService keys;
     SimpleAgentConnectionService service;
+    ExternalApiMapper principals;
     Map<String,Object> policy;
     static final String AGENT="e21cce9c-1b16-4ab8-a76a-bb761df919b8";
     @BeforeEach void setup() {
         repo=mock(WorkloadIdentityRepository.class);keys=mock(ApiKeyService.class);
-        service=new SimpleAgentConnectionService(repo,mock(WorkloadIdentityAdminService.class),keys,mock(ExternalApiMapper.class),mock(ExternalRateLimiter.class));
-        policy=new LinkedHashMap<>();policy.put("simple_mode",true);policy.put("proof_profile",AgentProofCrypto.V2);policy.put("status","ACTIVE");
+        principals=mock(ExternalApiMapper.class);
+        service=new SimpleAgentConnectionService(repo,mock(WorkloadIdentityAdminService.class),keys,principals,mock(ExternalRateLimiter.class));
+        policy=new LinkedHashMap<>();policy.put("authorization_mode","SERVICE_SCOPE");policy.put("simple_mode",true);policy.put("proof_profile",AgentProofCrypto.V2);policy.put("status","ACTIVE");
         policy.put("application_principal_id",123L);policy.put("resource_origin","https://akb.example");
         policy.put("issuer","https://akb.local/agent-identity");policy.put("audience","akb");policy.put("platform_id","akb-service");policy.put("installation_id","install");policy.put("workspace_id","workspace");
         when(repo.policy(17)).thenReturn(policy);
@@ -36,8 +38,11 @@ class SimpleAgentConnectionServiceTest {
         assertEquals("17",result.get("policyId"));assertEquals(AGENT,result.get("runtimeAgentKey"));assertFalse(result.containsKey("secret"));assertFalse(result.containsKey("publicJwk"));
         policy.put("status","SUSPENDED");assertThrows(RuntimeException.class,()->service.configuration("shared",AGENT));
     }
-    @Test void advancedPolicyCannotUseSimplifiedEnrollmentOrInheritance() {
-        policy.put("simple_mode",false);assertThrows(IllegalArgumentException.class,()->service.require(17));
+    @Test void advancedPolicyIsVisibleWithoutChangingItsAuthorizationMode() {
+        policy.put("simple_mode",false);policy.put("authorization_mode","AGENT_INTERSECTION");
+        when(repo.policies()).thenReturn(Collections.singletonList(policy));
+        assertSame(policy, service.require(17));
+        assertEquals("AGENT_INTERSECTION",service.list().get(0).get("authorization_mode"));
         verify(repo,never()).registerKey(anyLong(),anyLong(),anyString(),anyString(),anyLong());
     }
     @Test void administratorRegistersPublicKeyWithoutChallengeButCannotResurrectIt() throws Exception {
@@ -55,4 +60,31 @@ class SimpleAgentConnectionServiceTest {
         assertThrows(IllegalArgumentException.class,()->service.scope(17,Collections.singletonMap("knowledgeBaseIds",Collections.emptyList()),9));
         verifyNoInteractions(keys);
     }
+    @Test void checklistRequiresAKeyOnTheSameActiveAgentAndHonorsValidity() {
+        com.jh.knowledgeos.domain.ExternalPrincipal agent = new com.jh.knowledgeos.domain.ExternalPrincipal(); agent.setStatus("ACTIVE");
+        when(principals.getPrincipal(anyLong())).thenReturn(agent);
+        Map<String,Object> a=new LinkedHashMap<>();a.put("id",21L);a.put("agent_principal_id",10L);a.put("status","ACTIVE");
+        Map<String,Object> b=new LinkedHashMap<>();b.put("id",22L);b.put("agent_principal_id",11L);b.put("status","SUSPENDED");
+        when(repo.bindings(17)).thenReturn(Arrays.asList(a,b));
+        when(repo.agentKeys(17,22)).thenReturn(Collections.singletonList(Collections.singletonMap("status","ACTIVE")));
+        assertFalse((Boolean)service.checklist(17).get(4).get("ok"));
+        Map<String,Object> key=new LinkedHashMap<>();key.put("status","ACTIVE");key.put("valid_until",java.sql.Timestamp.from(java.time.Instant.now().minusSeconds(1)));
+        when(repo.agentKeys(17,21)).thenReturn(Collections.singletonList(key));
+        assertFalse((Boolean)service.checklist(17).get(4).get("ok"));
+        key.put("valid_until",java.sql.Timestamp.from(java.time.Instant.now().plusSeconds(120)));
+        assertTrue((Boolean)service.checklist(17).get(4).get("ok"));
+        key.put("valid_from",java.sql.Timestamp.from(java.time.Instant.now().plusSeconds(60)));
+        assertFalse((Boolean)service.checklist(17).get(4).get("ok"));
+    }
+    @Test void authorizationReviewIsExplicitAuditedAndNeverAutomaticallyEnables() {
+        policy.put("authorization_mode","REVIEW_REQUIRED");
+        Map<String,Object> body=new LinkedHashMap<>();body.put("authorizationMode","AGENT_INTERSECTION");body.put("reason","Verified pre-upgrade grants");body.put("platformType","octop");
+        when(repo.reviewAuthorization(17,"AGENT_INTERSECTION","octop")).thenReturn(1);
+        service.reviewAuthorization(17,body,9);
+        verify(repo).audit(eq(17L),eq("REVIEW_AUTHORIZATION"),eq(9L),contains("AGENT_INTERSECTION"));
+        verify(repo,never()).policyStatus(anyLong(),anyString());
+        when(repo.reviewAuthorization(17,"AGENT_INTERSECTION","octop")).thenReturn(0);
+        assertThrows(IllegalArgumentException.class,()->service.reviewAuthorization(17,body,9));
+    }
+
 }
