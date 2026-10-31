@@ -15,6 +15,8 @@ import org.springframework.dao.DuplicateKeyException;
 /** Agent-bound public keys, with no remote key discovery or downgrade path. */
 public final class AgentKeyProofVerifier {
     private final WorkloadIdentityRepository repository;
+    private String publicPathPrefix = "";
+    public void setPublicPathPrefix(String prefix) { publicPathPrefix = prefix; }
     private final AtomicLong cleanup = new AtomicLong();
     public AgentKeyProofVerifier(WorkloadIdentityRepository repository) { this.repository = repository; }
 
@@ -49,7 +51,7 @@ public final class AgentKeyProofVerifier {
                 AgentProofCrypto.text(c, "credential_sha256", 64))) throw AgentProofCrypto.invalid();
             if (!(c.get("request_binding") instanceof Map)) throw AgentProofCrypto.invalid();
             Map<String, Object> bound = (Map<String, Object>) c.get("request_binding");
-            String target = request.getRequestURI() + (request.getQueryString() == null ? "" : "?" + request.getQueryString());
+            String target = publicPathPrefix + request.getRequestURI() + (request.getQueryString() == null ? "" : "?" + request.getQueryString());
             Object raw = request.getAttribute(WorkloadRequestFilter.BODY);
             if (!(raw instanceof byte[]) || target.length() > 2048 || !("GET".equals(request.getMethod()) || "POST".equals(request.getMethod()))
                 || !request.getMethod().equals(bound.get("method")) || !target.equals(bound.get("target"))

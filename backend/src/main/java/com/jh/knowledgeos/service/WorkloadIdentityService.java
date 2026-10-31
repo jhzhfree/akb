@@ -25,6 +25,11 @@ public class WorkloadIdentityService {
     private final AgentKeyProofVerifier v2;
     public WorkloadIdentityService(WorkloadIdentityRepository repository) { this.repository = repository; this.v2 = new AgentKeyProofVerifier(repository); }
 
+    @org.springframework.beans.factory.annotation.Autowired
+    public void configurePublicPath(com.jh.knowledgeos.config.KnowledgeProperties properties) {
+        v2.setPublicPathPrefix(properties.external().getPublicPathPrefix());
+    }
+
     public WorkloadIdentity authenticate(HttpServletRequest request, ApiKey key) {
         try { return authenticateStored(request, key); }
         catch (DataAccessException ex) { throw new WorkloadUnavailableException(); }

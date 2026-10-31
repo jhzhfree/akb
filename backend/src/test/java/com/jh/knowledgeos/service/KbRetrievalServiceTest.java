@@ -39,6 +39,17 @@ class KbRetrievalServiceTest {
     }
 
     @Test
+    void agentRetrievalPinsTheResourceInTheSignedBody() {
+        ApiKey key = new ApiKey(); key.setIdentityMode("APPLICATION_WORKLOAD");
+        KnowledgeBase a = new KnowledgeBase(); a.setId(41L);
+        KnowledgeBase b = new KnowledgeBase(); b.setId(42L);
+        when(bases.get(41L)).thenReturn(a); when(bases.get(42L)).thenReturn(b);
+        assertThrows(KbRetrievalException.class, () -> service.resolveKnowledgeBase(key, "41", null));
+        assertThrows(KbRetrievalException.class, () -> service.resolveKnowledgeBase(key, "42", "41"));
+        assertEquals(41L,service.resolveKnowledgeBase(key,"41","41"));
+    }
+
+    @Test
     void boundKeyUsesItsKnowledgeBaseWhenHeaderIsOmitted() {
         ApiKey key = new ApiKey();
         key.setKnowledgeBaseId(41L);

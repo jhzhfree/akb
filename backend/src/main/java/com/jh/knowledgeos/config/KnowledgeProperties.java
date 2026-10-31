@@ -286,6 +286,17 @@ public class KnowledgeProperties {
 
         private boolean mcpEnabled = true;
 
+        /** Administrator-configured public gateway prefix used by exact-byte Agent proofs. */
+        private String publicPathPrefix = "";
+        public String getPublicPathPrefix() { return publicPathPrefix; }
+        public void setPublicPathPrefix(String value) {
+            String prefix = value == null ? "" : value.trim();
+            if (!prefix.isEmpty() && (!prefix.matches("(/[A-Za-z0-9_-]+)+") || prefix.length() > 256)) {
+                throw new IllegalArgumentException("publicPathPrefix must be a canonical absolute path prefix");
+            }
+            publicPathPrefix = prefix;
+        }
+
         private boolean sseEnabled = true;
 
         /** Emergency deployment-wide switch for the Agent memory APIs and MCP tools. */

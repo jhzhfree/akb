@@ -77,6 +77,27 @@ class AgentKeyProofVerifierTest {
         request.addHeader("X-API-Key","shared-test-key"); request.addHeader(WorkloadRequestFilter.HEADER,token);
         request.setAttribute(WorkloadRequestFilter.BODY,body); return request;
     }
+    @Test void pythonNativeProofUsesTheSameV2SignatureAndExactByteContract() throws Exception {
+        Map<String,Object> fixture = JSON.readValue(getClass().getResourceAsStream("/identity/python-v2-proof.json"), Map.class);
+        AgentProofCrypto.Proof proof = AgentProofCrypto.parse(String.valueOf(fixture.get("proof")), "akb-agent-proof+jwt");
+        Map<String,Object> jwk = (Map<String,Object>) fixture.get("publicJwk");
+        proof.verify(AgentProofCrypto.publicKey(jwk));
+        assertEquals(jwk.get("kid"), proof.header.get("kid"));
+        Map<String,Object> bound = (Map<String,Object>) proof.claims.get("request_binding");
+        assertEquals(fixture.get("target"), bound.get("target"));
+        assertEquals(WorkloadIdentityService.sha256(String.valueOf(fixture.get("body")).getBytes(StandardCharsets.UTF_8)), bound.get("body_sha256"));
+        assertEquals("agent:"+A, proof.claims.get("sub"));
+    }
+    @Test void gatewayPrefixIsAdministratorConfiguredAndCannotBeForgedByHeaders() throws Exception {
+        com.jh.knowledgeos.config.KnowledgeProperties properties = new com.jh.knowledgeos.config.KnowledgeProperties();
+        properties.external().setPublicPathPrefix("/gateway"); service.configurePublicPath(properties);
+        Map<String,Object> c = claims(A);
+        c.put("request_binding", map("method","POST","target","/gateway/api/mcp","body_sha256",WorkloadIdentityService.sha256(body)));
+        assertEquals(4L,service.authenticate(request(sign(c,a)),credential).getAgentPrincipalId());
+        MockHttpServletRequest forged = request(sign(claims(A),a)); forged.addHeader("X-Forwarded-Prefix", "/gateway");
+        assertThrows(WorkloadProofException.class,()->service.authenticate(forged,credential));
+        assertThrows(IllegalArgumentException.class,()->properties.external().setPublicPathPrefix("/gateway/../other"));
+    }
     @Test void signedTerminalNameIsRetainedAndUnsignedTamperingIsRejected() throws Exception {
         Map<String, Object> c = claims(A); c.put("terminal_agent", "builder");
         WorkloadIdentity identity = service.authenticate(request(sign(c, a)), credential);

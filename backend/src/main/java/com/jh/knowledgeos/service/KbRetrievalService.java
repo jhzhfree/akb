@@ -45,6 +45,16 @@ public class KbRetrievalService {
      */
     public Long resolveKnowledgeBase(ApiKey key, String headerKbId, Object bodyKbId) {
         String raw = text(headerKbId);
+        String bodyReference = text(bodyKbId);
+        if (key != null && key.isWorkloadCredential() && bodyReference == null) {
+            throw KbRetrievalException.invalidArgument("Agent 验签检索必须在签名正文中指定 knowledgeBaseId");
+        }
+        if (raw != null && bodyReference != null && !raw.equals(bodyReference)) {
+            Long header = resolveKnowledgeBase(key, raw, raw);
+            Long body = resolveKnowledgeBase(key, null, bodyReference);
+            if (!header.equals(body)) throw KbRetrievalException.invalidArgument("请求头与签名正文中的知识库标识不一致");
+            return body;
+        }
         if (raw == null) {
             raw = text(bodyKbId);
         }
