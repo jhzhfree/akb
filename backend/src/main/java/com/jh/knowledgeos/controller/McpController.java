@@ -66,7 +66,9 @@ public class McpController {
         Object params = isMemoryTool(auditedMethod) ? memoryAuditRequest(auditedMethod) : auditService.mcpRequestParams(body);
         Long knowledgeBaseId = auditService.mcpKnowledgeBaseId(body);
         try {
-            key = accessService.authenticate(request);
+            boolean discovery = "initialize".equals(method) || "ping".equals(method)
+                || "tools/list".equals(method) || "notifications/initialized".equals(method);
+            key = discovery ? accessService.authenticateMcpDiscovery(request) : accessService.authenticate(request);
             Map<String, Object> response = mcpServerService.handle(body == null ? new java.util.LinkedHashMap<String, Object>() : body, key);
             // 协议层错误（鉴权、限流）由全局异常处理，这里只审计进入协议之后的结果。
             Object responseData = auditService.mcpResponseData(response);

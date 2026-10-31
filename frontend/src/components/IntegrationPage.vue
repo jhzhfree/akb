@@ -15,7 +15,7 @@
     <el-tab-pane label="服务凭证" name="keys">
       <ExternalServicePanel v-if="credentialTab==='keys'" :bases="bases" focus="credentials" />
     </el-tab-pane>
-    <el-tab-pane label="Agent 身份接入" name="identity">
+    <el-tab-pane label="Agent 凭证" name="identity">
       <SimpleAgentConnections v-if="credentialTab==='identity'" :bases="bases" />
     </el-tab-pane>
   </el-tabs>

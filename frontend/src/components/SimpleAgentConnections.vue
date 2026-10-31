@@ -3,10 +3,12 @@
     <header class="kb-section-head">
       <div>
         <div class="kb-eyebrow">接口服务</div>
-        <h1 class="kb-title mt-1">Agent 身份接入</h1>
+        <h1 class="kb-title mt-1">Agent 凭证</h1>
         <p class="kb-muted mt-1">
-          一条接入 = 一个调用平台（应用主体）+ 它的共享服务 Key + 若干已登记 Agent。点「详情」
-          查看 Agent、共享 Key、接入自检与这条接入的调用记录。撤销后列表默认隐藏，可勾选查看；
+          每条 Agent 凭证包含服务 Key、可查询知识库和已登记 Agent。服务 Key
+          可用于 MCP 连接与工具发现， 调用工具时必须提供有效的 Agent
+          身份签名。点「详情」管理服务 Key、知识库范围和
+          Agent。撤销后列表默认隐藏，可勾选查看；
           撤销只是停用并留痕，彻底删除才会把数据清掉。
         </p>
       </div>
@@ -22,10 +24,10 @@
 
     <article class="kb-card mt-4">
       <div class="kb-card-head">
-        <b class="text-sm">接入列表</b>
+        <b class="text-sm">凭证列表</b>
         <span class="kb-muted">{{ visibleRows.length }} 条</span>
         <button class="kb-btn-primary" :disabled="busy" @click="openCreate">
-          新建接入
+          新建凭证
         </button>
       </div>
       <div class="p-3">
@@ -33,15 +35,15 @@
           :loading="busy && !rows.length"
           :error="error"
           :empty="!visibleRows.length"
-          empty-text="还没有 Agent 接入"
-          empty-hint="新建接入后，把生成的共享服务 Key 填到调用平台，再登记 Agent 公钥"
+          empty-text="还没有 Agent 凭证"
+          empty-hint="新建凭证后，把生成的服务 Key 填到调用平台，再登记 Agent 公钥"
           retryable
           @retry="load"
         >
           <el-table :data="visibleRows" border size="small">
             <el-table-column
               prop="name"
-              label="接入名称"
+              label="凭证名称"
               min-width="160"
               show-overflow-tooltip
             />
@@ -72,7 +74,7 @@
                 baseNames(row.knowledgeBaseIds) || "—"
               }}</template>
             </el-table-column>
-            <el-table-column label="共享 Key" width="110">
+            <el-table-column label="服务 Key" width="110">
               <template #default="{ row }">{{ activeKeyCount(row) }}</template>
             </el-table-column>
             <el-table-column label="操作" width="260" fixed="right">
@@ -112,7 +114,7 @@
 
     <el-drawer
       v-model="detailOpen"
-      :title="detail ? detail.name : '接入详情'"
+      :title="detail ? detail.name : '凭证详情'"
       size="62%"
       @closed="detail = null"
     >
@@ -149,40 +151,20 @@
                   class="mt-2"
                   placeholder="确认原因（必填，写入审计）"
                 />
-                <el-button class="mt-2" size="small" @click="reviewAuthorization"
-                  >提交确认</el-button
-                >
-              </div>
-
-              <div>
-                <b class="text-[12px]">可读知识库</b>
-                <el-select
-                  v-model="scopeIds"
-                  multiple
-                  filterable
-                  class="mt-2 w-full"
-                  placeholder="选择该接入可读的知识库"
-                >
-                  <el-option
-                    v-for="b in bases"
-                    :key="b.id"
-                    :label="b.name"
-                    :value="b.id"
-                  />
-                </el-select>
                 <el-button
                   class="mt-2"
                   size="small"
-                  type="primary"
-                  @click="saveScope"
-                  >保存可读范围</el-button
+                  @click="reviewAuthorization"
+                  >提交确认</el-button
                 >
               </div>
 
               <div>
                 <div class="flex items-center gap-2">
                   <b class="text-[12px]">接入自检</b>
-                  <el-button link size="small" @click="runCheck">检查</el-button>
+                  <el-button link size="small" @click="runCheck"
+                    >检查</el-button
+                  >
                 </div>
                 <ul v-if="checklist.length" class="mt-2 kb-muted">
                   <li v-for="item in checklist" :key="item.item">
@@ -205,11 +187,42 @@
             </div>
           </el-tab-pane>
 
-          <el-tab-pane label="共享服务 Key" name="keys">
+          <el-tab-pane label="服务 Key" name="keys">
             <div class="space-y-3">
+              <div>
+                <p class="kb-muted mb-2">
+                  本凭证下的服务 Key 共用此范围；修改后立即生效，Agent
+                  访问仍受此范围限制。
+                </p>
+                <b class="text-[12px]">服务 Key 可查询知识库</b>
+                <el-select
+                  v-model="scopeIds"
+                  multiple
+                  filterable
+                  class="mt-2 w-full"
+                  placeholder="选择可查询的知识库（可多选、可修改）"
+                >
+                  <el-option
+                    v-for="b in bases"
+                    :key="b.id"
+                    :label="b.name"
+                    :value="b.id"
+                  />
+                </el-select>
+                <el-button
+                  class="mt-2"
+                  size="small"
+                  type="primary"
+                  @click="saveScope"
+                  >保存知识库范围</el-button
+                >
+              </div>
+
               <div class="flex items-center justify-between">
                 <span class="kb-muted"
-                  >一个接入共用一把服务 Key，明文只在签发时显示一次。</span
+                  >服务 Key
+                  明文只在签发时显示一次；可用于连接与工具列表发现，执行工具仍需
+                  Agent 验签。</span
                 >
                 <el-button size="small" type="primary" @click="issue"
                   >签发新 Key</el-button
@@ -267,10 +280,7 @@
                 <span class="kb-muted"
                   >登记 Agent 的公钥，可同时保留两把便于轮换。</span
                 >
-                <el-button
-                  size="small"
-                  type="primary"
-                  @click="agentOpen = true"
+                <el-button size="small" type="primary" @click="agentOpen = true"
                   >登记 Agent</el-button
                 >
               </div>
@@ -405,11 +415,11 @@
 
     <el-dialog
       v-model="formOpen"
-      :title="editing ? '编辑接入' : '新建接入'"
+      :title="editing ? '编辑凭证' : '新建凭证'"
       width="560px"
     >
       <el-form label-position="top">
-        <el-form-item label="接入名称"
+        <el-form-item label="凭证名称"
           ><el-input v-model="formName" maxlength="128"
         /></el-form-item>
         <el-form-item label="AKB 对外地址"
@@ -419,7 +429,8 @@
           /><small
             >填写调用平台实际访问的根地址，不要附加 /api
             路径，需与调用平台一致。</small
-          ><p v-if="loopbackHint" class="mt-1 text-[11px] text-amber-600">
+          >
+          <p v-if="loopbackHint" class="mt-1 text-[11px] text-amber-600">
             {{ loopbackHint }}
           </p></el-form-item
         >
@@ -466,8 +477,7 @@
           ><input
             type="file"
             accept=".jwk,.json"
-            @change="readPublic"
-          /><el-input
+            @change="readPublic" /><el-input
             v-model="publicText"
             type="textarea"
             :rows="5"
@@ -490,7 +500,7 @@
 
     <el-dialog
       v-model="secretOpen"
-      title="请现在保存共享服务 Key"
+      title="请现在保存服务 Key"
       width="560px"
       @closed="secret = ''"
       :close-on-click-modal="false"
@@ -587,10 +597,13 @@ const visibleRows = computed(() =>
 );
 function statusLabel(status?: string) {
   return (
-    ({ ACTIVE: "启用", SUSPENDED: "停用", REVOKED: "已撤销" } as Record<
-      string,
-      string
-    >)[status ?? ""] ?? (status || "未知")
+    (
+      { ACTIVE: "启用", SUSPENDED: "停用", REVOKED: "已撤销" } as Record<
+        string,
+        string
+      >
+    )[status ?? ""] ??
+    (status || "未知")
   );
 }
 function authorizationLabel(mode: string) {
@@ -668,7 +681,7 @@ async function load() {
     }
   }
 }
-/** 抽屉数据按需加载：Agent、共享 Key 各一次请求；切到「调用日志」时才拉日志。 */
+/** 抽屉数据按需加载：Agent、服务 Key 各一次请求；切到「调用日志」时才拉日志。 */
 async function loadDetail() {
   const current = detail.value;
   if (!current) return;
@@ -700,7 +713,10 @@ async function openDetail(row: Connection) {
 }
 /** 切到「调用日志」才拉：大多数时候用户只是看概览，没必要每次开抽屉都查一遍审计。 */
 function onTabChange(name: string | number) {
-  if (name === "calls") void act(async () => { await loadCalls(); });
+  if (name === "calls")
+    void act(async () => {
+      await loadCalls();
+    });
 }
 async function loadCalls() {
   if (!detail.value) return;
@@ -753,13 +769,13 @@ async function submitForm() {
   });
 }
 /**
- * 删除分两步：撤销只是停用并吊销共享 Key（留痕，还能查到它做过什么），彻底删除才把策略与
+ * 删除分两步：撤销只是停用并吊销服务 Key（留痕，还能查到它做过什么），彻底删除才把策略与
  * Agent 登记清掉。所以撤销之后列表里仍能看到它，只是默认隐藏。
  */
 async function revokeConnection(row: Connection) {
   if (
     !(await confirm(
-      `撤销「${row.name}」后它将立即停用，其共享 Key 一并吊销，调用平台会连接失败。此操作不可恢复，但记录会保留。`,
+      `撤销「${row.name}」后它将立即停用，其服务 Key 一并吊销，调用平台会连接失败。此操作不可恢复，但记录会保留。`,
     ))
   )
     return;
@@ -772,7 +788,7 @@ async function revokeConnection(row: Connection) {
 async function purgeConnection(row: Connection) {
   if (
     !(await confirm(
-      `彻底删除「${row.name}」会清掉它的策略与 Agent 登记（共享 Key 不删，只解绑）。此操作不可逆，确定继续？`,
+      `彻底删除「${row.name}」会清掉它的策略与 Agent 登记（服务 Key 不删，只解绑）。此操作不可逆，确定继续？`,
     ))
   )
     return;
