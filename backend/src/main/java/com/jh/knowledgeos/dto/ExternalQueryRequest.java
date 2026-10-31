@@ -12,7 +12,8 @@ import java.util.List;
  */
 public class ExternalQueryRequest {
 
-    private Long knowledgeBaseId;
+    /** 知识库编码（{@code KB_xxxx}）；过渡期也收数字主键。 */
+    private String knowledgeBaseId;
 
     /**
      * 提问内容。留空时回退到知识库建库时配的「默认问题」——两者都没有才算参数错误。
@@ -85,11 +86,11 @@ public class ExternalQueryRequest {
         this.includeMemory = includeMemory;
     }
 
-    public Long getKnowledgeBaseId() {
+    public String getKnowledgeBaseId() {
         return knowledgeBaseId;
     }
 
-    public void setKnowledgeBaseId(Long knowledgeBaseId) {
+    public void setKnowledgeBaseId(String knowledgeBaseId) {
         this.knowledgeBaseId = knowledgeBaseId;
     }
 

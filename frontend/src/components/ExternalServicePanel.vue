@@ -149,7 +149,7 @@
                 <span v-if="row.grantedKnowledgeBaseCount" class="text-xs">
                   {{ row.grantedKnowledgeBaseCount }} 个授权库
                 </span>
-                <span v-else>{{ row.knowledgeBaseName || (row.knowledgeBaseId ? `知识库 #${row.knowledgeBaseId}` : '公开库') }}</span>
+                <span v-else>{{ row.knowledgeBaseName || (row.knowledgeBaseId ? `知识库 ${row.knowledgeBaseId}` : '公开库') }}</span>
               </template>
             </el-table-column>
             <el-table-column label="记忆身份" min-width="200">
@@ -448,7 +448,7 @@
         </el-form-item>
         <el-form-item label="知识库范围">
           <el-select v-model="form.knowledgeBaseId" clearable class="w-full" placeholder="不绑定=仅可见公开库">
-            <el-option v-for="base in bases" :key="base.id" :value="base.id" :label="base.name" />
+            <el-option v-for="base in bases" :key="base.id" :value="base.baseCode" :label="base.name" />
           </el-select>
         </el-form-item>
         <el-form-item label="权限">
@@ -503,21 +503,21 @@
         </el-alert>
         <el-select v-model="selectedKnowledgeBaseIds" class="w-full" multiple filterable clearable
           collapse-tags collapse-tags-tooltip placeholder="选择一个或多个知识库">
-          <el-option v-for="base in bases" :key="base.id" :value="base.id" :label="base.name" />
+          <el-option v-for="base in bases" :key="base.id" :value="base.baseCode" :label="base.name" />
         </el-select>
         <div v-if="selectedGrantBases.length" class="space-y-2">
           <div v-for="base in selectedGrantBases" :key="base.id" class="space-y-2 rounded border border-ink-100 p-2">
             <div class="grid grid-cols-12 items-center gap-2">
               <span class="col-span-4 truncate text-xs" :title="base.name">{{ base.name }}</span>
               <span class="col-span-2 text-[11px] text-ink-500">授权到期</span>
-              <el-date-picker v-model="grantExpiryByKnowledgeBase[base.id]" class="col-span-6 w-full" type="datetime"
+              <el-date-picker v-model="grantExpiryByKnowledgeBase[base.baseCode]" class="col-span-6 w-full" type="datetime"
                 value-format="YYYY-MM-DDTHH:mm:ss" format="YYYY-MM-DD HH:mm:ss" clearable placeholder="不设置=长期有效" />
             </div>
             <div class="flex items-center gap-2">
-              <el-checkbox v-model="grantPublicOnlyByKnowledgeBase[base.id]" @change="onGrantPublicOnlyChange(base.id, $event)">仅公开资料</el-checkbox>
-              <el-select v-if="!grantPublicOnlyByKnowledgeBase[base.id]" v-model="grantTagsByKnowledgeBase[base.id]"
+              <el-checkbox v-model="grantPublicOnlyByKnowledgeBase[base.baseCode]" @change="onGrantPublicOnlyChange(base.id, $event)">仅公开资料</el-checkbox>
+              <el-select v-if="!grantPublicOnlyByKnowledgeBase[base.baseCode]" v-model="grantTagsByKnowledgeBase[base.baseCode]"
                 class="flex-1" multiple filterable allow-create default-first-option placeholder="资料标签授权；留空继承 API Key 标签范围">
-                <el-option v-for="tag in grantTagsByKnowledgeBase[base.id] || []" :key="tag" :value="tag" :label="tag" />
+                <el-option v-for="tag in grantTagsByKnowledgeBase[base.baseCode] || []" :key="tag" :value="tag" :label="tag" />
               </el-select>
             </div>
           </div>
@@ -768,12 +768,12 @@ const principalChangeReason = ref('')
 const knowledgeBaseGrantVisible = ref(false)
 const knowledgeBaseGrantSaving = ref(false)
 const knowledgeBaseGrantKey = ref<ExternalKeyRow | null>(null)
-const selectedKnowledgeBaseIds = ref<number[]>([])
-const grantExpiryByKnowledgeBase = ref<Record<number, string>>({})
-const grantTagsByKnowledgeBase = ref<Record<number, string[]>>({})
-const grantPublicOnlyByKnowledgeBase = ref<Record<number, boolean>>({})
+const selectedKnowledgeBaseIds = ref<string[]>([])
+const grantExpiryByKnowledgeBase = ref<Record<string, string>>({})
+const grantTagsByKnowledgeBase = ref<Record<string, string[]>>({})
+const grantPublicOnlyByKnowledgeBase = ref<Record<string, boolean>>({})
 const knowledgeBaseGrantReason = ref('')
-const selectedGrantBases = computed(() => props.bases.filter(base => selectedKnowledgeBaseIds.value.includes(base.id)))
+const selectedGrantBases = computed(() => props.bases.filter(base => selectedKnowledgeBaseIds.value.includes(base.baseCode)))
 const memoryAccessVisible = ref(false)
 const memoryAccessSaving = ref(false)
 const memoryAccessKey = ref<ExternalKeyRow | null>(null)
@@ -802,7 +802,7 @@ const rotateTarget = ref<ExternalKeyRow | null>(null)
 const rotateExpiresAt = ref('')
 const rotateSaving = ref(false)
 const form = ref<{
-  name:string; knowledgeBaseId:number | null; scopes:string[]
+  name:string; knowledgeBaseId:string | null; scopes:string[]
   rateLimitPerMinute:number; expiresAt:string; memoryNamespace:string; memoryAgentCode:string
 }>({ name:'', knowledgeBaseId:null, scopes:['READ'], rateLimitPerMinute:60, expiresAt:'', memoryNamespace:'', memoryAgentCode:'' })
 
@@ -815,7 +815,7 @@ const probeOk = ref(false)
 const restExample = computed(() => `curl -X POST '${origin()}/api/v1/external/query' \\
   -H 'Content-Type: application/json' \\
   -H 'X-API-Key: <YOUR_API_KEY>' \\
-  -d '{"knowledgeBaseId":1,"question":"报销流程是什么？","topK":10,"answerFormat":"markdown","minScore":0.6,"responseMode":"full"}'`)
+  -d '{"knowledgeBaseId":"${props.bases[0]?.baseCode ?? 'KB_xxxx'}","question":"报销流程是什么？","topK":10,"answerFormat":"markdown","minScore":0.6,"responseMode":"full"}'`)
 /** answerFormat 可整个省掉（不传即默认格式）：default / markdown / text / html。 */
 const answerFormatHint = '答案返回格式：default（不传即此项，模型原文）/ markdown（正文 + 引用原文章节）/ text（纯文本）/ html（含引用原文）；响应里的 answerFormat 是实际生效的那个'
 /** minScore 同样可整个省掉：不传即不过滤，与以前完全一致。 */
@@ -835,7 +835,7 @@ const mcpExample = computed(() => `{
 # tools: knowledge_query / knowledge_search / list_knowledge_bases ...
 # tools/call 的 arguments 支持 minScore（0~1，最低相关度）`)
 const sseExample = computed(() => `const es = new EventSource(
-  '${origin()}/api/v1/external/stream/query?knowledgeBaseId=1'
+  '${origin()}/api/v1/external/stream/query?knowledgeBaseId=' + encodeURIComponent(props.bases[0]?.baseCode ?? 'KB_xxxx')
   + '&question=' + encodeURIComponent('报销流程是什么？')
   + '&answerFormat=markdown'
   + '&content=final'   // stream=逐片推 delta；final=只推检索过程，答案在 done 里整体交付

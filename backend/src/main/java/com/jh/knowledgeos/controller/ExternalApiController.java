@@ -96,41 +96,41 @@ public class ExternalApiController {
 
     @GetMapping("/cards")
     @Operation(summary = "知识卡片清单")
-    public ApiResponse<Object> cards(HttpServletRequest request, @RequestParam(value = "knowledgeBaseId", required = false) Long kb) throws Exception {
+    public ApiResponse<Object> cards(HttpServletRequest request, @RequestParam(value = "knowledgeBaseId", required = false) String kb) throws Exception {
         return call(request, "GET /cards", kb, (key, resolved) -> facade.cards(resolved, facade.tagsFor(key, resolved)));
     }
 
     @GetMapping("/cards/{code}")
     @Operation(summary = "知识卡片详情（含证据链）")
     public ApiResponse<Object> card(HttpServletRequest request, @PathVariable String code, @RequestParam(value = "knowledgeBaseId", required = false)
-        Long kb) throws Exception {
+        String kb) throws Exception {
         return call(request, "GET /cards/{code}", kb, (key, resolved) -> facade.objectDetail(resolved, "CARD", code, facade.tagsFor(key, resolved)));
     }
 
     @GetMapping("/claims")
     @Operation(summary = "断言清单")
-    public ApiResponse<Object> claims(HttpServletRequest request, @RequestParam(value = "knowledgeBaseId", required = false) Long kb) throws Exception {
+    public ApiResponse<Object> claims(HttpServletRequest request, @RequestParam(value = "knowledgeBaseId", required = false) String kb) throws Exception {
         return call(request, "GET /claims", kb, (key, resolved) -> facade.claims(resolved, facade.tagsFor(key, resolved)));
     }
 
     @GetMapping("/claims/{code}")
     @Operation(summary = "断言详情")
     public ApiResponse<Object> claim(HttpServletRequest request, @PathVariable String code, @RequestParam(value = "knowledgeBaseId", required = false)
-        Long kb) throws Exception {
+        String kb) throws Exception {
         return call(request, "GET /claims/{code}", kb, (key, resolved) -> facade.objectDetail(resolved, "CLAIM", code, facade.tagsFor(key, resolved)));
     }
 
     @GetMapping("/evidence/{code}")
     @Operation(summary = "证据原文与出处")
     public ApiResponse<Object> evidence(HttpServletRequest request, @PathVariable String code, @RequestParam(value = "knowledgeBaseId", required =
-        false) Long kb) throws Exception {
+        false) String kb) throws Exception {
         return call(request, "GET /evidence/{code}", kb, (key, resolved) -> facade.objectDetail(resolved, "EVIDENCE", code, facade.tagsFor(key, resolved)));
     }
 
     @GetMapping("/graph/{code}")
     @Operation(summary = "实体 / 知识对象的图谱邻域")
     public ApiResponse<Object> graph(HttpServletRequest request, @PathVariable String code, @RequestParam(value = "knowledgeBaseId", required = false)
-        Long kb, @RequestParam(value = "depth", required = false) Integer depth, @RequestParam(value = "limit", required = false) Integer limit)
+        String kb, @RequestParam(value = "depth", required = false) Integer depth, @RequestParam(value = "limit", required = false) Integer limit)
         throws Exception {
         return call(request, "GET /graph/{code}", kb, (key, resolved) -> facade.graph(resolved, code, depth, limit, facade.tagsFor(key, resolved)));
     }
@@ -143,7 +143,7 @@ public class ExternalApiController {
 
     @GetMapping("/overview")
     @Operation(summary = "知识库概览计数")
-    public ApiResponse<Object> overview(HttpServletRequest request, @RequestParam(value = "knowledgeBaseId", required = false) Long kb) throws Exception {
+    public ApiResponse<Object> overview(HttpServletRequest request, @RequestParam(value = "knowledgeBaseId", required = false) String kb) throws Exception {
         return call(request, "GET /overview", kb, (key, resolved) -> facade.overview(resolved, facade.tagsFor(key, resolved)));
     }
 
@@ -298,13 +298,15 @@ public class ExternalApiController {
     /**
      * One gate for the whole channel: enabled, credential, scope, quota, then audit.
      */
-    private ApiResponse<Object> call(HttpServletRequest request, String method, Long requestedKb, ExternalCall body) throws Exception {
+    private ApiResponse<Object> call(HttpServletRequest request, String method, Object requestedKb, ExternalCall body) throws Exception {
         long start = System.currentTimeMillis();
         ApiKey key = null;
         // Read once, then hand it to every outcome below. Messages that "缺少 knowledgeBaseId" are
         // only actionable next to the parameters the caller actually sent, so failures carry the
         // same payload successes do.
         boolean memoryCall = method.contains("/memories/");
+        // 失败分支里授权结果还没出来，但"调用方指了哪个库"已经能从入参定下来，先留一份给审计。
+        Long auditedKb = accessService.knowledgeBaseIdOf(requestedKb);
         Object params = memoryCall ? memoryAuditRequest(method) : auditService.requestParamsOf(request);
         try {
             if (!properties.isEnabled()) {
@@ -322,24 +324,24 @@ public class ExternalApiController {
                 memoryCall ? memoryAuditResponse(method, data) : data, ExternalAccessService.embedTokenOf(request));
             return ApiResponse.ok(data);
         } catch (UnauthorizedException e) {
-            auditService.record(key, ApiCallAudit.CHANNEL_REST, method, requestedKb, 401, System.currentTimeMillis() - start, e.getMessage(), params,
+            auditService.record(key, ApiCallAudit.CHANNEL_REST, method, auditedKb, 401, System.currentTimeMillis() - start, e.getMessage(), params,
                 errorBody(401, e), ExternalAccessService.embedTokenOf(request));
             throw e;
         } catch (SecurityException e) {
-            auditService.record(key, ApiCallAudit.CHANNEL_REST, method, requestedKb, 403, System.currentTimeMillis() - start, e.getMessage(), params,
+            auditService.record(key, ApiCallAudit.CHANNEL_REST, method, auditedKb, 403, System.currentTimeMillis() - start, e.getMessage(), params,
                 errorBody(403, e), ExternalAccessService.embedTokenOf(request));
             throw e;
         } catch (RateLimitException e) {
-            auditService.record(key, ApiCallAudit.CHANNEL_REST, method, requestedKb, 429, System.currentTimeMillis() - start, e.getMessage(), params,
+            auditService.record(key, ApiCallAudit.CHANNEL_REST, method, auditedKb, 429, System.currentTimeMillis() - start, e.getMessage(), params,
                 errorBody(429, e), ExternalAccessService.embedTokenOf(request));
             throw e;
         } catch (IllegalArgumentException e) {
             // 调用方漏传 knowledgeBaseId 或参数非法属于 400，不应记成服务端故障。
-            auditService.record(key, ApiCallAudit.CHANNEL_REST, method, requestedKb, 400, System.currentTimeMillis() - start, e.getMessage(), params,
+            auditService.record(key, ApiCallAudit.CHANNEL_REST, method, auditedKb, 400, System.currentTimeMillis() - start, e.getMessage(), params,
                 errorBody(400, e), ExternalAccessService.embedTokenOf(request));
             throw e;
         } catch (Exception e) {
-            auditService.record(key, ApiCallAudit.CHANNEL_REST, method, requestedKb, 500, System.currentTimeMillis() - start, e.getMessage(), params,
+            auditService.record(key, ApiCallAudit.CHANNEL_REST, method, auditedKb, 500, System.currentTimeMillis() - start, e.getMessage(), params,
                 errorBody(500, e), ExternalAccessService.embedTokenOf(request));
             throw e;
         }

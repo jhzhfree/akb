@@ -72,7 +72,7 @@ public class EmbedController {
 
     @PostMapping("/token")
     @Operation(summary = "用 API Key 换取嵌入组件令牌（可指定有效期，令牌绑定知识库与来源站点）")
-    public ApiResponse<Object> issueToken(HttpServletRequest request, @RequestParam(value = "knowledgeBaseId", required = false) Long knowledgeBaseId,
+    public ApiResponse<Object> issueToken(HttpServletRequest request, @RequestParam(value = "knowledgeBaseId", required = false) String knowledgeBaseId,
         @RequestParam(value = "origin", required = false) String origin,
         @RequestParam(value = "expiresInSeconds", required = false) Long expiresInSeconds,
         @RequestParam(value = "permanent", required = false) Boolean permanent) {
@@ -82,7 +82,7 @@ public class EmbedController {
     @GetMapping("/token")
     @Operation(summary = "同上的 GET 形式，便于页面直接以 URL 方式获取")
     public ApiResponse<Object> issueTokenGet(HttpServletRequest request,
-        @RequestParam(value = "knowledgeBaseId", required = false) Long knowledgeBaseId,
+        @RequestParam(value = "knowledgeBaseId", required = false) String knowledgeBaseId,
         @RequestParam(value = "origin", required = false) String origin,
         @RequestParam(value = "expiresInSeconds", required = false) Long expiresInSeconds,
         @RequestParam(value = "permanent", required = false) Boolean permanent) {
@@ -91,7 +91,7 @@ public class EmbedController {
 
     @GetMapping("/config")
     @Operation(summary = "组件配置：知识库名称、可展示的检索阶段定义与参数上限")
-    public ApiResponse<Object> config(HttpServletRequest request, @RequestParam(value = "knowledgeBaseId", required = false) Long knowledgeBaseId) {
+    public ApiResponse<Object> config(HttpServletRequest request, @RequestParam(value = "knowledgeBaseId", required = false) String knowledgeBaseId) {
         ApiKey key = accessService.authenticateEmbed(request);
         accessService.assertScope(key, ApiKey.SCOPE_READ_OBJECT);
         Long kb = accessService.resolveKnowledgeBase(key, knowledgeBaseId);
@@ -110,7 +110,7 @@ public class EmbedController {
         return ApiResponse.ok(data);
     }
 
-    private Map<String, Object> token(HttpServletRequest request, Long knowledgeBaseId, String origin, Long expiresInSeconds, Boolean permanent) {
+    private Map<String, Object> token(HttpServletRequest request, String knowledgeBaseId, String origin, Long expiresInSeconds, Boolean permanent) {
         long start = System.currentTimeMillis();
         if (!properties.isEnabled()) {
             throw new IllegalStateException("对外接口服务未启用");

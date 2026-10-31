@@ -206,7 +206,7 @@
                     v-for="b in bases"
                     :key="b.id"
                     :label="b.name"
-                    :value="b.id"
+                    :value="b.baseCode"
                   />
                 </el-select>
                 <el-button
@@ -445,7 +445,7 @@
               v-for="b in bases"
               :key="b.id"
               :label="b.name"
-              :value="b.id" /></el-select
+              :value="b.baseCode" /></el-select
         ></el-form-item>
       </el-form>
       <template #footer
@@ -546,7 +546,7 @@ const reviewReason = ref("");
 const platformType = ref("custom");
 type Connection = WorkloadPolicy & {
   name: string;
-  knowledgeBaseIds: number[];
+  knowledgeBaseIds: string[];
   platform_type?: string;
   authorization_mode?: string;
   keys?: { status?: string }[];
@@ -578,12 +578,12 @@ const detail = ref<Connection | null>(null),
   calls = ref<CallRow[]>([]),
   callsLoading = ref(false),
   callLimit = ref(50);
-const scopeIds = ref<number[]>([]),
+const scopeIds = ref<string[]>([]),
   formOpen = ref(false),
   editing = ref<Connection | null>(null),
   formName = ref(""),
   formOrigin = ref(window.location.origin),
-  formScope = ref<number[]>([]);
+  formScope = ref<string[]>([]);
 const agentOpen = ref(false),
   secretOpen = ref(false),
   secret = ref(""),
@@ -617,9 +617,9 @@ function authorizationLabel(mode: string) {
     )[mode] ?? "未设置"
   );
 }
-function baseNames(ids: number[]) {
-  return (ids ?? [])
-    .map((id) => props.bases.find((b) => b.id === id)?.name)
+function baseNames(codes: string[]) {
+  return (codes ?? [])
+    .map((code) => props.bases.find((b) => b.baseCode === code)?.name)
     .filter(Boolean)
     .join("、");
 }

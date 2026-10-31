@@ -381,4 +381,40 @@ class McpServerServiceTest {
         metadata.put("baseCode", "ops-runbook");
         return metadata;
     }
+
+    /** knowledgeBaseId 直接给知识库编码也能定位到库；解析后照旧过一次授权。 */
+    @Test
+    void knowledgeBaseIdAcceptsStableCode() throws Exception {
+        ExternalAccessService access = mock(ExternalAccessService.class);
+        ExternalKnowledgeFacade facade = mock(ExternalKnowledgeFacade.class);
+        ApiKey key = mock(ApiKey.class);
+        List<String> tags = Collections.emptyList();
+        when(access.knowledgeBaseIdOf("KB_OPS")).thenReturn(23L);
+        when(access.resolveKnowledgeBase(key, 23L)).thenReturn(23L);
+        when(facade.tagsFor(key, 23L)).thenReturn(tags);
+        McpServerService service = new McpServerService(access, facade, new ObjectMapper());
+
+        Map<String, Object> args = new LinkedHashMap<String, Object>();
+        args.put("knowledgeBaseId", "KB_OPS");
+        args.put("code", "SOP-001");
+        service.toolsCall(key, toolCall("get_knowledge_card", args));
+
+        verify(access).resolveKnowledgeBase(key, 23L);
+        verify(facade).objectDetail(eq(23L), eq("CARD"), eq("SOP-001"), eq(tags));
+    }
+
+    /** 编码认不出来要报错：静默退到默认库会让调用方查通了却查的是另一个库。 */
+    @Test
+    void unknownCodeFailsInsteadOfFallingBack() {
+        ExternalAccessService access = mock(ExternalAccessService.class);
+        ExternalKnowledgeFacade facade = mock(ExternalKnowledgeFacade.class);
+        ApiKey key = mock(ApiKey.class);
+        when(access.knowledgeBaseIdOf("KB_NOPE")).thenReturn(null);
+        McpServerService service = new McpServerService(access, facade, new ObjectMapper());
+
+        Map<String, Object> args = new LinkedHashMap<String, Object>();
+        args.put("knowledgeBaseId", "KB_NOPE");
+        args.put("code", "SOP-001");
+        assertThrows(IllegalArgumentException.class, () -> service.toolsCall(key, toolCall("get_knowledge_card", args)));
+    }
 }

@@ -37,23 +37,23 @@ export const listExternalPrincipals = ():Promise<ApiResponse<ExternalPrincipalSu
 export const assignExternalPrincipal = (keyId:number, body:{principalId?:number|null;name?:string|null;reason:string}):Promise<ApiResponse<ExternalKeyRow>> =>
   axios.post(`/api/external/admin/keys/${keyId}/principal`, body)
 export const createExternalKey = (payload:{
-  name?:string; knowledgeBaseId?:number|null; scopes?:string[]; rateLimitPerMinute?:number
+  name?:string; knowledgeBaseId?:string|null; scopes?:string[]; rateLimitPerMinute?:number
   expiresAt?:string|null; memoryNamespace?:string|null; memoryAgentCode?:string|null
 }):Promise<ApiResponse<ExternalKeyRow>> => axios.post('/api/external/admin/keys', payload)
 export interface KnowledgeBaseGrant {
-  knowledgeBaseId:number
+  knowledgeBaseId:string
 }
 export const getKnowledgeBaseGrants = (id:number):Promise<ApiResponse<KnowledgeBaseGrant[]>> =>
   axios.get(`/api/external/admin/keys/${id}/knowledge-base-grants`)
-export const replaceKnowledgeBaseGrants = (id:number, knowledgeBaseIds:number[]):Promise<ApiResponse<KnowledgeBaseGrant[]>> =>
+export const replaceKnowledgeBaseGrants = (id:number, knowledgeBaseIds:string[]):Promise<ApiResponse<KnowledgeBaseGrant[]>> =>
   axios.put(`/api/external/admin/keys/${id}/knowledge-base-grants`, knowledgeBaseIds)
 export interface KnowledgeBaseGrantConfig {
-  knowledgeBaseId:number; expiresAt:string|null; reason:string|null; status:string; createdTime:string; permissionTags:string[]|null
+  knowledgeBaseId:string; expiresAt:string|null; reason:string|null; status:string; createdTime:string; permissionTags:string[]|null
 }
 export const getKnowledgeBaseGrantConfig = (id:number):Promise<ApiResponse<KnowledgeBaseGrantConfig[]>> =>
   axios.get(`/api/external/admin/keys/${id}/knowledge-base-grants/config`)
 export const replaceKnowledgeBaseGrantConfig = (id:number, grants:Array<{
-  knowledgeBaseId:number; expiresAt:string|null; reason:string|null; permissionTags:string[]|null
+  knowledgeBaseId:string; expiresAt:string|null; reason:string|null; permissionTags:string[]|null
 }>):Promise<ApiResponse<KnowledgeBaseGrantConfig[]>> =>
   axios.put(`/api/external/admin/keys/${id}/knowledge-base-grants/config`, grants)
 export const revokeExternalKey = (id:number):Promise<ApiResponse<ExternalKeyRow>> =>
@@ -76,7 +76,7 @@ export const updateExternalPrincipal = (id:number, payload:{
 export const assignPrincipalOwnerUser = (id:number, userId:number):Promise<ApiResponse<ExternalPrincipalSummary>> =>
   axios.put(`/api/external/admin/principals/${id}/owner-user`, { userId })
 export const createPrincipalKey = (principalId:number, payload:{
-  name?:string; knowledgeBaseId?:number|null; scopes?:string[]; rateLimitPerMinute?:number; expiresAt?:string|null
+  name?:string; knowledgeBaseId?:string|null; scopes?:string[]; rateLimitPerMinute?:number; expiresAt?:string|null
 }):Promise<ApiResponse<ExternalKeyRow>> =>
   axios.post(`/api/external/admin/principals/${principalId}/keys`, payload)
 
@@ -173,7 +173,7 @@ export interface EmbedTokenResult {
   /** 长期令牌为 null */
   expiresInSeconds: number | null
   permanent?: boolean
-  knowledgeBaseId: number | null
+  knowledgeBaseId: string | null
   origin: string
   /** 令牌唯一 ID：吊销与调用日志都按它定位 */
   jti?: string
@@ -188,7 +188,7 @@ export interface EmbedTokenResult {
  * @param ttlSeconds 有效期秒数；不传沿用部署默认，传 -1（或任意 <= 0）签发长期有效令牌。
  */
 export const issueEmbedToken = (
-  secret: string, knowledgeBaseId?: number | null, origin?: string, ttlSeconds?: number | null,
+  secret: string, knowledgeBaseId?: string | null, origin?: string, ttlSeconds?: number | null,
 ): Promise<ApiResponse<EmbedTokenResult>> =>
   axios.post('/api/v1/external/embed/token', null, {
     params: {
@@ -207,7 +207,7 @@ export interface EmbedTokenSummary {
   displayId: string
   keyId: number | null
   keyCode: string | null
-  knowledgeBaseId: number | null
+  knowledgeBaseId: string | null
   origin: string | null
   calls: number
   errors: number
@@ -229,7 +229,7 @@ export interface EmbedTokenCall {
   origin: string | null
   channel: string
   method: string
-  knowledgeBaseId: number | null
+  knowledgeBaseId: string | null
   statusCode: number | null
   durationMs: number | null
   message: string | null
@@ -243,7 +243,7 @@ export interface EmbedTokenRevocationItem {
   jti: string
   keyId: number | null
   keyCode: string | null
-  knowledgeBaseId: number | null
+  knowledgeBaseId: string | null
   origin: string | null
   reason: string | null
   operatorId: number | null
@@ -273,7 +273,7 @@ export const revokeEmbedToken = (body: {
   jti: string
   keyId?: number | null
   keyCode?: string | null
-  knowledgeBaseId?: number | null
+  knowledgeBaseId?: string | null
   origin?: string | null
   reason?: string | null
 }): Promise<ApiResponse<EmbedTokenRevocationItem>> =>
@@ -332,7 +332,7 @@ export const fetchPlatformEventTypes = (): Promise<ApiResponse<string[]>> =>
   axios.get('/api/internal/platform/events/types')
 
 export const fetchPlatformEventHistory = (params: {
-  knowledgeBaseId?: number | null
+  knowledgeBaseId?: string | null
   types?: string[]
   sinceId?: number | null
   untilId?: number | null

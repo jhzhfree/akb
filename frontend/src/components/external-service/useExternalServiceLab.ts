@@ -24,7 +24,7 @@ export function useExternalServiceLab(props: ExternalServiceLabProps) {
     baseUrl:'/api',
     apiKey:'',
     authMode:'header' as 'header' | 'bearer' | 'query',
-    knowledgeBaseId:null as number | null,
+    knowledgeBaseId:null as string | null,
     /** 留空：由当前知识库的「默认问题」回填（见下方 watch）。在这里写死一句，库里配好的
         问句在联调台上就永远用不上，控制台与接口发出的也就不是同一句话。 */
     question:'',
@@ -43,13 +43,13 @@ export function useExternalServiceLab(props: ExternalServiceLabProps) {
 
   /** 未指定知识库时沿用控制台当前选择的库，避免默认请求直接报“缺少 knowledgeBaseId”。 */
   watch(() => props.bases, list => {
-    if (cfg.knowledgeBaseId == null && list.length) cfg.knowledgeBaseId = list[0].id
+    if (cfg.knowledgeBaseId == null && list.length) cfg.knowledgeBaseId = list[0].baseCode
   }, { immediate:true })
 
   /** 换库时把该库配的默认问题填进提问框：联调台与控制台发出的应当是同一句话，否则库里
       配好的问句在这里永远用不上，试出来的结果也就不能代表一次真实调用。 */
   watch(() => cfg.knowledgeBaseId, id => {
-    const base = (props.bases || []).find(v => v.id === id)
+    const base = (props.bases || []).find(v => v.baseCode === id)
     cfg.question = base?.defaultQuery || ''
   }, { immediate:true })
 
@@ -572,7 +572,7 @@ export function useExternalServiceLab(props: ExternalServiceLabProps) {
       key:'callQuery', label:'tools/call knowledge_query',
       body:() => ({ jsonrpc:'2.0', id:3, method:'tools/call', params:{
         name:'knowledge_query', arguments:{
-          knowledgeBaseId:cfg.knowledgeBaseId ?? 1, question:cfg.question, topK:cfg.topK, answerFormat:cfg.answerFormat,
+          knowledgeBaseId:cfg.knowledgeBaseId ?? '', question:cfg.question, topK:cfg.topK, answerFormat:cfg.answerFormat,
           ...(Number.isFinite(cfg.minScore) ? { minScore:cfg.minScore } : {}),
         },
       } }),
@@ -581,7 +581,7 @@ export function useExternalServiceLab(props: ExternalServiceLabProps) {
       key:'callSearch', label:'tools/call knowledge_search',
       body:() => ({ jsonrpc:'2.0', id:4, method:'tools/call', params:{
         name:'knowledge_search', arguments:{
-          knowledgeBaseId:cfg.knowledgeBaseId ?? 1, query:cfg.question, topK:cfg.topK,
+          knowledgeBaseId:cfg.knowledgeBaseId ?? '', query:cfg.question, topK:cfg.topK,
           ...(Number.isFinite(cfg.minScore) ? { minScore:cfg.minScore } : {}),
         },
       } }),
@@ -593,19 +593,19 @@ export function useExternalServiceLab(props: ExternalServiceLabProps) {
     {
       key:'callCards', label:'tools/call list_knowledge_objects（CARD）',
       body:() => ({ jsonrpc:'2.0', id:6, method:'tools/call', params:{
-        name:'list_knowledge_objects', arguments:{ knowledgeBaseId:cfg.knowledgeBaseId ?? 1, objectType:'CARD' },
+        name:'list_knowledge_objects', arguments:{ knowledgeBaseId:cfg.knowledgeBaseId ?? '', objectType:'CARD' },
       } }),
     },
     {
       key:'callCard', label:'tools/call get_knowledge_object（CARD）',
       body:() => ({ jsonrpc:'2.0', id:7, method:'tools/call', params:{
-        name:'get_knowledge_object', arguments:{ knowledgeBaseId:cfg.knowledgeBaseId ?? 1, objectType:'CARD', code:cfg.code || 'CARD-DEMO' },
+        name:'get_knowledge_object', arguments:{ knowledgeBaseId:cfg.knowledgeBaseId ?? '', objectType:'CARD', code:cfg.code || 'CARD-DEMO' },
       } }),
     },
     {
       key:'callClaims', label:'tools/call list_knowledge_objects（CLAIM）',
       body:() => ({ jsonrpc:'2.0', id:8, method:'tools/call', params:{
-        name:'list_knowledge_objects', arguments:{ knowledgeBaseId:cfg.knowledgeBaseId ?? 1, objectType:'CLAIM' },
+        name:'list_knowledge_objects', arguments:{ knowledgeBaseId:cfg.knowledgeBaseId ?? '', objectType:'CLAIM' },
       } }),
     },
     {
@@ -626,7 +626,7 @@ export function useExternalServiceLab(props: ExternalServiceLabProps) {
     {
       key:'resourcesRead', label:'resources/read',
       body:() => ({ jsonrpc:'2.0', id:12, method:'resources/read', params:{
-        uri:`knowledge://kb/${cfg.knowledgeBaseId ?? 1}`,
+        uri:`knowledge://kb/${cfg.knowledgeBaseId ?? ''}`,
       } }),
     },
     { key:'ping', label:'ping', body:() => ({ jsonrpc:'2.0', id:13, method:'ping', params:{} }) },
@@ -795,7 +795,7 @@ export function useExternalServiceLab(props: ExternalServiceLabProps) {
       const call = await rawMcp({
         jsonrpc:'2.0', id:3, method:'tools/call', params:{
           name:'knowledge_query',
-          arguments:{ knowledgeBaseId:cfg.knowledgeBaseId ?? 1, question:cfg.question, topK:cfg.topK,
+          arguments:{ knowledgeBaseId:cfg.knowledgeBaseId ?? '', question:cfg.question, topK:cfg.topK,
             ...(Number.isFinite(cfg.minScore) ? { minScore:cfg.minScore } : {}) },
         },
       })
