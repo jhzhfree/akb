@@ -283,6 +283,9 @@ public class McpServerService {
     }
 
     public Map<String, Object> toolsCall(ApiKey key, Map<String, Object> params) throws Exception {
+        if (key != null && key.isWorkloadCredential() && key.getWorkloadIdentity() == null) {
+            throw new SecurityException("Agent 凭证调用工具必须提供已验证的 Agent 身份");
+        }
         String name = params == null ? null : String.valueOf(params.get("name"));
         Map<String, Object> args = new LinkedHashMap<String, Object>();
         if (params != null && params.get("arguments") instanceof Map) {

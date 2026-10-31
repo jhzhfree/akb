@@ -37,12 +37,24 @@ public class WorkloadIdentityService {
             || request.getHeader(ExternalAccessService.OCTOP_ASSERTION_HEADER) != null) {
             throw unauthorized();
         }
+        return v2.authenticate(request, key, activePolicy(key));
+    }
+    /** Validate the service part only. This grants no Agent identity or business access. */
+    public void authenticateDiscovery(HttpServletRequest request, ApiKey key) {
+        if (!key.isWorkloadCredential() || !"APPLICATION".equals(key.getPrincipalType())
+            || key.getWorkloadPolicyId() == null || key.getPrincipalId() == null
+            || request.getHeader(WorkloadRequestFilter.HEADER) != null
+            || request.getHeader(ExternalAccessService.OCTOP_ASSERTION_HEADER) != null) throw unauthorized();
+        try { activePolicy(key); }
+        catch (DataAccessException ex) { throw new WorkloadUnavailableException(); }
+    }
+    private Map<String, Object> activePolicy(ApiKey key) {
         Map<String, Object> policy = repository.policy(key.getWorkloadPolicyId());
         if (policy == null || !"ACTIVE".equals(policy.get("status"))
             || !key.getPrincipalId().equals(number(policy.get("application_principal_id")))) throw unauthorized();
         if (!AgentProofCrypto.V2.equals(policy.get("proof_profile"))
             || !("SERVICE_SCOPE".equals(policy.get("authorization_mode")) || "AGENT_INTERSECTION".equals(policy.get("authorization_mode")))) throw unauthorized();
-        return v2.authenticate(request, key, policy);
+        return policy;
     }
     public static String sha256(byte[] bytes) {
         try {

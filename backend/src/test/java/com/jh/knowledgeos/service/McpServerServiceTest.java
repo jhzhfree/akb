@@ -25,6 +25,15 @@ import org.junit.jupiter.api.Test;
 class McpServerServiceTest {
 
     @Test
+    void unsignedAgentCredentialCanListToolsButCannotInvokeDispatcherDirectly() {
+        ApiKey key = new ApiKey();
+        key.setIdentityMode("APPLICATION_WORKLOAD"); key.setScopes(ApiKey.SCOPE_LIST);
+        McpServerService service = new McpServerService(null, null, new ObjectMapper());
+        assertFalse(((List<?>) service.toolsList(key).get("tools")).isEmpty());
+        assertThrows(SecurityException.class, () -> service.toolsCall(key, toolCall("list_knowledge_bases", Collections.emptyMap())));
+    }
+
+    @Test
     void identityToolReceivesVerifiedRequestIdentityAndRejectsArgumentSpoofing() throws Exception {
         ExternalAccessService access = mock(ExternalAccessService.class);
         ApiKey key = new ApiKey(); key.setScopes(ApiKey.SCOPE_LIST); key.setPrincipalId(123L); key.setWorkloadPolicyId(17L);

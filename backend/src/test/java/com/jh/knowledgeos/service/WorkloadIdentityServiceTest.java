@@ -33,6 +33,24 @@ class WorkloadIdentityServiceTest {
         key = new ApiKey(); key.setPrincipalId(1L); key.setPrincipalType("APPLICATION");
         key.setIdentityMode("APPLICATION_WORKLOAD"); key.setWorkloadPolicyId(7L);
     }
+    @Test void discoveryRequiresActiveV2PolicyButDoesNotCreateAgentIdentity() {
+        Map<String, Object> policy = repository.policy(7L);
+        policy.put("authorization_mode", "SERVICE_SCOPE");
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        assertDoesNotThrow(() -> service.authenticateDiscovery(request, key));
+        assertNull(key.getWorkloadIdentity());
+        assertThrows(UnauthorizedException.class, () -> service.authenticate(request, key));
+        policy.put("status", "SUSPENDED");
+        assertThrows(UnauthorizedException.class, () -> service.authenticateDiscovery(request, key));
+        policy.put("status", "ACTIVE"); policy.put("authorization_mode", "REVIEW_REQUIRED");
+        assertThrows(UnauthorizedException.class, () -> service.authenticateDiscovery(request, key));
+    }
+    @Test void discoveryCannotIgnoreAPresentProofOrDelegatedAssertion() {
+        assertThrows(UnauthorizedException.class, () -> service.authenticateDiscovery(request(), key));
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        request.addHeader(ExternalAccessService.OCTOP_ASSERTION_HEADER, "invalid");
+        assertThrows(UnauthorizedException.class, () -> service.authenticateDiscovery(request, key));
+    }
     private MockHttpServletRequest request() {
         MockHttpServletRequest request = new MockHttpServletRequest("POST", "/api/v1/external/search");
         request.addHeader(ExternalAccessService.HEADER, "synthetic-test-service-key");

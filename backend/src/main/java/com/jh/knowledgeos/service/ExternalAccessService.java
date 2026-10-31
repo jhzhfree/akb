@@ -75,6 +75,15 @@ public class ExternalAccessService {
      * Resolves the presented credential, enforcing status, expiry and the per-minute quota.
      */
     public ApiKey authenticate(HttpServletRequest request) {
+        return authenticate(request, false);
+    }
+
+    /** Only the MCP controller's explicit protocol-discovery allowlist may use this. */
+    public ApiKey authenticateMcpDiscovery(HttpServletRequest request) {
+        return authenticate(request, true);
+    }
+
+    private ApiKey authenticate(HttpServletRequest request, boolean discovery) {
         String octopAssertion = request.getHeader(OCTOP_ASSERTION_HEADER);
         if (delegatedIdentityEnabled() || (octopAssertion != null && !octopAssertion.trim().isEmpty())) {
             String apiKeyHeader = request.getHeader(HEADER);
@@ -92,7 +101,13 @@ public class ExternalAccessService {
         }
         if (key.isWorkloadCredential()) {
             if (workloadIdentityService == null) throw new UnauthorizedException("工作负载认证不可用");
-            key.setWorkloadIdentity(workloadIdentityService.authenticate(request, key));
+            if (discovery && request.getHeader(com.jh.knowledgeos.config.WorkloadRequestFilter.HEADER) == null
+                && octopAssertion == null) {
+                workloadIdentityService.authenticateDiscovery(request, key);
+                key.setWorkloadIdentity(null);
+            } else {
+                key.setWorkloadIdentity(workloadIdentityService.authenticate(request, key));
+            }
             rateLimiter.check(key);
             return key;
         }
@@ -119,6 +134,9 @@ public class ExternalAccessService {
     }
 
     public void assertScope(ApiKey key, String scope) {
+        if (key.isWorkloadCredential() && key.getWorkloadIdentity() == null) {
+            throw new SecurityException("Agent 凭证调用工具必须提供已验证的 Agent 身份");
+        }
         if (!key.hasScope(scope)) {
             throw new SecurityException("该 API Key 未授权 " + scope + " 权限");
         }

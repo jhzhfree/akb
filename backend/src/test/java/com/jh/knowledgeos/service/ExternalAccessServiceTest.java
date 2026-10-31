@@ -84,6 +84,37 @@ class ExternalAccessServiceTest {
         assertThrows(com.jh.knowledgeos.exception.UnauthorizedException.class, () -> delegated.authenticate(missingAgentKey));
     }
 
+    @Test
+    void discoveryDoesNotGrantToolAccessAndPresentProofIsAlwaysVerified() {
+        WorkloadIdentityService identity = mock(WorkloadIdentityService.class);
+        service.setWorkloadIdentityService(identity);
+        ApiKey key = key(19L, null);
+        key.setPrincipalType("APPLICATION");
+        key.setIdentityMode("APPLICATION_WORKLOAD");
+        when(keys.authenticate("agent-secret")).thenReturn(key);
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        request.addHeader(ExternalAccessService.HEADER, "agent-secret");
+        assertEquals(key, service.authenticateMcpDiscovery(request));
+        verify(identity).authenticateDiscovery(request, key);
+        assertThrows(SecurityException.class, () -> service.assertScope(key, ApiKey.SCOPE_QUERY));
+        request.addHeader(com.jh.knowledgeos.config.WorkloadRequestFilter.HEADER, "invalid");
+        org.mockito.Mockito.doThrow(new com.jh.knowledgeos.exception.UnauthorizedException("bad proof"))
+            .when(identity).authenticate(request, key);
+        assertThrows(com.jh.knowledgeos.exception.UnauthorizedException.class,
+            () -> service.authenticateMcpDiscovery(request));
+    }
+
+    @Test
+    void ordinaryServiceCredentialNeedsNoAgentIdentity() {
+        ApiKey key = key(19L, null);
+        key.setScopes(ApiKey.SCOPE_QUERY);
+        when(keys.authenticate("service-secret")).thenReturn(key);
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        request.addHeader("Authorization", "Bearer service-secret");
+        assertEquals(key, service.authenticate(request));
+        service.assertScope(key, ApiKey.SCOPE_QUERY);
+    }
+
     private ApiKey key(Long principalId, Long knowledgeBaseId) {
         ApiKey key = new ApiKey();
         key.setPrincipalId(principalId);

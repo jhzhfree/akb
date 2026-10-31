@@ -66,7 +66,7 @@ class McpControllerAuditTest {
         properties.external().setEnabled(true);
         properties.external().setMcpEnabled(true);
         ApiKey key = new ApiKey();
-        when(access.authenticate(any())).thenReturn(key);
+        when(access.authenticateMcpDiscovery(any())).thenReturn(key);
         when(server.handle(any(), eq(key))).thenReturn(row("jsonrpc", "2.0", "id", 1, "result", row("pong", true)));
         McpController controller = new McpController(access, server, audit, properties);
 
