@@ -1,5 +1,6 @@
 package com.jh.knowledgeos.service;
 
+import com.jh.knowledgeos.domain.ApiCallAudit;
 import com.jh.knowledgeos.domain.ApiKey;
 import com.jh.knowledgeos.domain.ExternalPrincipal;
 import com.jh.knowledgeos.dto.ExternalKeyRequest;
@@ -34,14 +35,20 @@ public class SimpleAgentConnectionService {
     public List<Map<String, Object>> list() {
         List<Map<String, Object>> result = new ArrayList<>();
         for (Map<String, Object> p : repository.policies()) if (AgentProofCrypto.V2.equals(p.get("proof_profile"))) {
-            Map<String, Object> row = new LinkedHashMap<>(p);
-            long principal = ((Number) p.get("application_principal_id")).longValue();
-            ExternalPrincipal app = principals.getPrincipal(principal);
-            row.put("name", app == null ? "已停用接入" : app.getName());
-            row.put("knowledgeBaseIds", keys.grantedKnowledgeBases(principal));
-            result.add(row);
+            result.add(present(p));
         }
         return result;
+    }
+    public Map<String, Object> detail(long id) { return present(require(id)); }
+    /** 列表行与详情共用：名字在主体上，可读写范围与共享 Key 由主体推出来。 */
+    private Map<String, Object> present(Map<String, Object> p) {
+        Map<String, Object> row = new LinkedHashMap<>(p);
+        long principal = ((Number) p.get("application_principal_id")).longValue();
+        ExternalPrincipal app = principals.getPrincipal(principal);
+        row.put("name", app == null ? "已停用接入" : app.getName());
+        row.put("knowledgeBaseIds", keys.grantedKnowledgeBases(principal));
+        row.put("keys", keys.listPrincipalKeys(principal));
+        return row;
     }
     @Transactional
     public Map<String, Object> create(Map<String, Object> body, long operator) {
@@ -146,6 +153,52 @@ public class SimpleAgentConnectionService {
         String reason = body.get("reason") == null ? null : AgentProofCrypto.text(body, "reason", 500);
         if (repository.keyStatus(id, binding, kid, status, until, operator, reason) != 1) throw new IllegalArgumentException("密钥不存在、已撤销或状态转换无效");
         repository.audit(id, "AGENT_KEY_" + status, operator, "{\"kid\":\"" + kid + "\"}");
+    }
+    /** 改名与改 AKB 对外地址。可读写范围有独立端点，不在这里顺手改。 */
+    @Transactional
+    public Map<String, Object> update(long id, Map<String, Object> body, long operator) {
+        Map<String, Object> policy = require(id);
+        long principal = ((Number) policy.get("application_principal_id")).longValue();
+        if (body.containsKey("name")) keys.updatePrincipal(principal, AgentProofCrypto.text(body, "name", 128), null, null);
+        if (body.containsKey("resourceOrigin")) {
+            String origin = workload.canonicalResourceOrigin(AgentProofCrypto.text(body, "resourceOrigin", 255));
+            repository.updateResourceOrigin(id, origin);
+            repository.audit(id, "UPDATE_CONNECTION", operator, "{\"resourceOrigin\":\"" + origin + "\"}");
+        }
+        return detail(id);
+    }
+    /**
+     * 撤销接入：策略进入终态（不能再启用），共享 Key 一并吊销。
+     * 不物理删除——删了以后这条接入做过什么就没有记录了，而且共享 Key 被记忆与审计表外键引用，
+     * 物理删会撞约束。要彻底清掉用 purge，且只能对已撤销的执行。
+     */
+    @Transactional
+    public void revoke(long id, long operator) {
+        Map<String, Object> policy = require(id);
+        long principal = ((Number) policy.get("application_principal_id")).longValue();
+        Map<String, Object> body = new LinkedHashMap<>(); body.put("status", "REVOKED");
+        workload.status(id, null, body, operator);
+        for (Map<String, Object> key : keys.listPrincipalKeys(principal)) {
+            if (!"REVOKED".equals(String.valueOf(key.get("status")))) keys.revoke(((Number) key.get("id")).longValue());
+        }
+        repository.audit(id, "REVOKE_CONNECTION", operator, "{\"principalId\":" + principal + "}");
+    }
+    /** 彻底删除：只接受已撤销的接入。审计先落盘，再解绑 Key、删策略及其从属，最后停用它主体。 */
+    @Transactional
+    public void purge(long id, long operator) {
+        Map<String, Object> policy = require(id);
+        if (!"REVOKED".equals(policy.get("status"))) throw new IllegalArgumentException("请先撤销该接入，再执行彻底删除");
+        long principal = ((Number) policy.get("application_principal_id")).longValue();
+        repository.audit(id, "PURGE_CONNECTION", operator, "{\"principalId\":" + principal + "}");
+        repository.detachKeys(id);
+        repository.purgePolicy(id);
+        keys.updatePrincipal(principal, null, "DISABLED", null);
+    }
+    /** 这条接入最近的调用记录：一个接入对应一个应用主体，审计表里记的就是它。 */
+    public List<ApiCallAudit> calls(long id, int limit) {
+        Map<String, Object> policy = require(id);
+        long principal = ((Number) policy.get("application_principal_id")).longValue();
+        return principals.listApiCallAudits(null, principal, Math.min(Math.max(limit, 1), 200));
     }
     /**
      * 接入自检。不碰私钥，也不假装能验证连通——能不能调通取决于平台那边有没有配好私钥，

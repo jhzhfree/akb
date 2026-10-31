@@ -273,7 +273,7 @@ public class ExternalAuditService {
     }
 
     public List<ApiCallAudit> recent(Long keyId, int limit) {
-        return mapper.listApiCallAudits(keyId, Math.min(Math.max(limit, 1), 200));
+        return mapper.listApiCallAudits(keyId, null, Math.min(Math.max(limit, 1), 200));
     }
 
     /**

@@ -228,6 +228,7 @@
 <select id="listApiCallAudits" resultType="com.jh.knowledgeos.domain.ApiCallAudit">SELECT * FROM t_api_call_audit
   <where>
     <if test="keyId != null">key_id=#{keyId}</if>
+    <if test="applicationPrincipalId != null">AND application_principal_id=#{applicationPrincipalId}</if>
   </where>
   ORDER BY created_time DESC, id DESC LIMIT #{limit}</select>
 
