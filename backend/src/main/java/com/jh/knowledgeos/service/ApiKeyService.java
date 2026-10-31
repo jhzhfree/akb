@@ -61,6 +61,21 @@ public class ApiKeyService {
 
     private final AclPersistenceMapper aclMapper;
 
+    /** 可选注入：授权接口收知识库编码，靠它换成主键。 */
+    private KnowledgeBaseService knowledgeBases;
+
+    @Autowired(required = false)
+    public void setKnowledgeBases(KnowledgeBaseService service) { this.knowledgeBases = service; }
+
+    /** 授权接口的知识库标识：知识库编码优先，过渡期也收数字主键。 */
+    public Long resolveKnowledgeBaseId(Object raw) {
+        if (raw == null) { return null; }
+        String text = String.valueOf(raw).trim();
+        if (text.isEmpty()) { return null; }
+        if (knowledgeBases != null) { return knowledgeBases.resolveId(text); }
+        return text.matches("\\d+") ? Long.valueOf(text) : null;
+    }
+
     public ApiKeyService(ExternalApiMapper mapper, IdGenerator ids) {
         this(mapper, ids, new ObjectMapper(), null, null);
     }
@@ -761,7 +776,7 @@ public class ApiKeyService {
                     continue;
                 }
                 ExternalKnowledgeBaseGrantRequest grant = new ExternalKnowledgeBaseGrantRequest();
-                grant.setKnowledgeBaseId(knowledgeBaseId);
+                grant.setKnowledgeBaseId(String.valueOf(knowledgeBaseId));
                 uniqueGrants.put(knowledgeBaseId, grant);
             }
         }
@@ -795,9 +810,9 @@ public class ApiKeyService {
                 throw new IllegalArgumentException("单个主体最多授权 100 个知识库");
             }
             for (ExternalKnowledgeBaseGrantRequest grant : grants) {
-                Long knowledgeBaseId = grant == null ? null : grant.getKnowledgeBaseId();
+                Long knowledgeBaseId = resolveKnowledgeBaseId(grant == null ? null : grant.getKnowledgeBaseId());
                 if (knowledgeBaseId == null || knowledgeBaseId.longValue() <= 0) {
-                    throw new IllegalArgumentException("knowledgeBaseIds 只接受正整数");
+                    throw new IllegalArgumentException("请填写知识库编码（KB_xxxx），过渡期也接受数字主键");
                 }
                 if (expirations.containsKey(knowledgeBaseId)) {
                     throw new IllegalArgumentException("知识库授权不能重复：" + knowledgeBaseId);

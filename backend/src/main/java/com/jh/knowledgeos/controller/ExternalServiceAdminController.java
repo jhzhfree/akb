@@ -442,10 +442,19 @@ public class ExternalServiceAdminController {
 
     @PutMapping("/keys/{id}/knowledge-base-grants")
     @Operation(summary = "原子替换 API Key 所属主体的知识库授权；空数组表示全部撤销")
-    public ApiResponse<Object> replaceKnowledgeBaseGrants(@PathVariable Long id, @RequestBody(required = false) List<Long> knowledgeBaseIds) {
+    public ApiResponse<Object> replaceKnowledgeBaseGrants(@PathVariable Long id, @RequestBody(required = false) List<String> knowledgeBaseIds) {
         User operator = requireManager();
-        return ApiResponse.ok(apiKeyService.replaceKnowledgeBaseGrants(id,
-            knowledgeBaseIds == null ? Collections.<Long>emptyList() : knowledgeBaseIds, operator.getId()));
+        List<Long> ids = new ArrayList<Long>();
+        if (knowledgeBaseIds != null) {
+            for (String value : knowledgeBaseIds) {
+                Long resolved = apiKeyService.resolveKnowledgeBaseId(value);
+                if (resolved == null || resolved.longValue() <= 0) {
+                    throw new IllegalArgumentException("请填写知识库编码（KB_xxxx），过渡期也接受数字主键");
+                }
+                ids.add(resolved);
+            }
+        }
+        return ApiResponse.ok(apiKeyService.replaceKnowledgeBaseGrants(id, ids, operator.getId()));
     }
 
     @GetMapping("/keys/{id}/knowledge-base-grants/config")

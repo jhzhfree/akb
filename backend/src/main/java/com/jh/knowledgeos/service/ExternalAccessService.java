@@ -53,6 +53,12 @@ public class ExternalAccessService {
 
     private final DelegatedIdentityService delegatedIdentityService;
 
+    /** 可选注入：没有它时退回纯数字解析，保持最小装配可用。 */
+    private KnowledgeBaseService knowledgeBases;
+
+    @Autowired(required = false)
+    public void setKnowledgeBases(KnowledgeBaseService service) { this.knowledgeBases = service; }
+
     public ExternalAccessService(ApiKeyService apiKeyService, ExternalRateLimiter rateLimiter, KnowledgeBaseAccessService accessService,
         EmbedTokenService embedTokens, EmbedTokenLifecycleService tokenLifecycle, KnowledgeProperties properties) {
         this(apiKeyService, rateLimiter, accessService, embedTokens, tokenLifecycle, properties, null);
@@ -168,6 +174,42 @@ public class ExternalAccessService {
      * migrated key. A legacy key without a principal keeps its one-workspace binding; an unbound
      * key without explicit grants continues to use the public-workspace sharing rule.</p>
      */
+    /**
+     * 解析对外传入的知识库标识后再走授权判定：数字是内部主键，其余按知识库编码。
+     *
+     * <p>先把编码换成主键，再进下面那套 {@code grants.contains} 判断——顺序反过来的话，
+     * 编码会绕过授权直接落到库上。</p>
+     */
+    public Long resolveKnowledgeBase(ApiKey key, Object requested) {
+        if (knowledgeBases == null) {
+            return resolveKnowledgeBase(key, numericId(requested));
+        }
+        return resolveKnowledgeBase(key, knowledgeBases.resolveId(requested));
+    }
+
+    private static Long numericId(Object raw) {
+        if (raw == null) { return null; }
+        if (raw instanceof Number) { return ((Number) raw).longValue(); }
+        String text = String.valueOf(raw).trim();
+        if (text.isEmpty()) { return null; }
+        if (text.matches("\\d+")) { return Long.valueOf(text); }
+        throw new IllegalArgumentException("知识库不存在或不可用：" + text);
+    }
+
+    /**
+     * 只做标识到主键的转换，不做授权判断。
+     *
+     * <p>审计行要在鉴权失败时也留下"调用方指了哪个库"：那时授权结果还没有，但库是哪一个已经
+     * 能从入参定下来。认不出来就返回 null，绝不让审计把一次调用整行丢掉。</p>
+     */
+    public Long knowledgeBaseIdOf(Object raw) {
+        try {
+            return knowledgeBases == null ? numericId(raw) : knowledgeBases.resolveId(raw);
+        } catch (RuntimeException e) {
+            return null;
+        }
+    }
+
     public Long resolveKnowledgeBase(ApiKey key, Long requested) {
         Long bound = key.getKnowledgeBaseId();
         List<Long> grants = grantedKnowledgeBases(key);

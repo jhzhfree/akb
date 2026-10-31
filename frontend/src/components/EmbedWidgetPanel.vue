@@ -16,7 +16,7 @@
           <h3>1. 选择知识库与外观</h3>
           <label>知识库</label>
           <el-select v-model="kbId" placeholder="选择知识库" style="width:100%">
-            <el-option v-for="b in bases" :key="b.id" :label="b.name" :value="b.id" />
+            <el-option v-for="b in bases" :key="b.id" :label="b.name" :value="b.baseCode" />
           </el-select>
 
           <label>组件标题</label>
@@ -121,7 +121,7 @@ import { copyText } from '../utils/clipboard'
 
 const props = defineProps<{ bases: KnowledgeBase[] }>()
 
-const kbId = ref<number>(props.bases[0]?.id ?? 0)
+const kbId = ref<string>(props.bases[0]?.baseCode ?? '')
 const title = ref('知识库助手')
 const primary = ref('#2f6bff')
 const samples = ref('')

@@ -67,7 +67,7 @@ public class ExternalStreamController {
 
     @GetMapping(value = "/query", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     @Operation(summary = "流式问答：stage 推送检索过程；content=stream 时逐片推送 delta，content=final 时答案在 done 里整体交付")
-    public SseEmitter streamQuery(HttpServletRequest request, @RequestParam(value = "knowledgeBaseId", required = false) Long knowledgeBaseId,
+    public SseEmitter streamQuery(HttpServletRequest request, @RequestParam(value = "knowledgeBaseId", required = false) String knowledgeBaseId,
         @RequestParam("question") String question, @RequestParam(value = "topK", required = false) Integer topK,
         @RequestParam(value = "answerFormat", required = false) String answerFormat,
         @RequestParam(value = "content", required = false) String content,
@@ -106,7 +106,7 @@ public class ExternalStreamController {
      */
     @GetMapping(value = "/events", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     @Operation(summary = "知识库事件订阅：知识库/卡片/检索/权限等事件，支持 types、断线续传")
-    public SseEmitter streamEvents(HttpServletRequest request, @RequestParam(value = "knowledgeBaseId", required = false) Long knowledgeBaseId,
+    public SseEmitter streamEvents(HttpServletRequest request, @RequestParam(value = "knowledgeBaseId", required = false) String knowledgeBaseId,
         @RequestParam(value = "types", required = false) String types, @RequestParam(value = "sinceEventId", required = false) Long sinceEventId,
         @RequestParam(value = "legacy", defaultValue = "false") boolean legacy) {
         Long since = sinceEventId != null ? sinceEventId : lastEventId(request);
@@ -157,7 +157,7 @@ public class ExternalStreamController {
     /**
      * Same credential gate as REST, but audited once when the stream opens.
      */
-    private ApiKey open(HttpServletRequest request, String method, Long knowledgeBaseId, Map<String, Object> responseData) {
+    private ApiKey open(HttpServletRequest request, String method, String knowledgeBaseId, Map<String, Object> responseData) {
         if (!properties.isEnabled() || !properties.isSseEnabled()) {
             throw new SecurityException("SSE 推送服务已关闭");
         }
@@ -170,7 +170,7 @@ public class ExternalStreamController {
         // result says what the subscription actually resolved to (types, resume point). Without the
         // second half a row can only prove a stream was opened, never what it was opened for.
         Map<String, Object> params = auditService.requestParamsOf(request);
-        auditService.record(key, ApiCallAudit.CHANNEL_SSE, method, knowledgeBaseId, 200, System.currentTimeMillis() - start, "stream opened", params,
+        auditService.record(key, ApiCallAudit.CHANNEL_SSE, method, accessService.knowledgeBaseIdOf(knowledgeBaseId), 200, System.currentTimeMillis() - start, "stream opened", params,
             responseData, ExternalAccessService.embedTokenOf(request));
         return key;
     }

@@ -8,7 +8,8 @@ import java.util.List;
  */
 public class ExternalIngestRequest {
 
-    private Long knowledgeBaseId;
+    /** 知识库编码（{@code KB_xxxx}）；过渡期也收数字主键。 */
+    private String knowledgeBaseId;
 
     @NotBlank
     private String text;
@@ -17,11 +18,11 @@ public class ExternalIngestRequest {
 
     private List<String> permissionTags;
 
-    public Long getKnowledgeBaseId() {
+    public String getKnowledgeBaseId() {
         return knowledgeBaseId;
     }
 
-    public void setKnowledgeBaseId(Long knowledgeBaseId) {
+    public void setKnowledgeBaseId(String knowledgeBaseId) {
         this.knowledgeBaseId = knowledgeBaseId;
     }
 

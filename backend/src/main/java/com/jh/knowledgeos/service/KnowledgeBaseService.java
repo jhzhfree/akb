@@ -58,6 +58,25 @@ public class KnowledgeBaseService {
      */
     public KnowledgeBase getExternalByCode(String code) { return mapper.getExternalKnowledgeBaseByCode(code); }
 
+    /**
+     * 对外接口传进来的知识库标识：纯数字按内部主键，其余按知识库编码（{@code KB_xxxx}）。
+     *
+     * <p>对外契约只认编码，但已经发出的脚本还在传数字，所以过渡期两条都收。解析结果一律是
+     * 内部主键——授权判定、审计、检索都只在主键上做一次，编码不往里传。</p>
+     */
+    public Long resolveId(Object raw) {
+        if (raw == null) { return null; }
+        if (raw instanceof Number) { return ((Number) raw).longValue(); }
+        String text = String.valueOf(raw).trim();
+        if (text.isEmpty()) { return null; }
+        if (text.matches("\\d+")) { return Long.valueOf(text); }
+        KnowledgeBase base = getExternalByCode(text);
+        if (base == null || base.getId() == null) {
+            throw new IllegalArgumentException("知识库不存在或不可用：" + text);
+        }
+        return base.getId();
+    }
+
     public KnowledgeBase get(Long id) {
         return id == null ? null : mapper.getKnowledgeBase(id);
     }

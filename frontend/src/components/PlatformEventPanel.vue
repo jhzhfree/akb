@@ -163,7 +163,7 @@ const PAGE_SIZE = 100
 
 const types = ref<string[]>([])
 const selectedTypes = ref<string[]>([])
-const kb = ref<number | null>(props.knowledgeBaseId ?? null)
+const kb = ref<string | null>(codeOf(props.knowledgeBaseId))
 const keyword = ref('')
 const items = ref<PlatformEventItem[]>([])
 /** 实时事件先落在这里：直接插进列表会让正在阅读的历史往下跳。 */
@@ -236,7 +236,7 @@ async function loadMore() {
 }
 
 function resetFilters() {
-  kb.value = props.knowledgeBaseId ?? null
+  kb.value = codeOf(props.knowledgeBaseId)
   keyword.value = ''
   selectedTypes.value = []
   load()
@@ -352,6 +352,11 @@ function toggle(id: number) {
   open[id] = !open[id]
 }
 
+/** 对外接口收知识库编码；控制台当前选的是内部主键，发请求前换一次。 */
+function codeOf(id: number | null | undefined): string | null {
+  if (id == null) return null
+  return props.bases.find(base => base.id === id)?.baseCode ?? String(id)
+}
 function baseName(id: number | null): string {
   if (id == null) return '平台级'
   return props.bases.find(base => base.id === id)?.name || `#${id}`

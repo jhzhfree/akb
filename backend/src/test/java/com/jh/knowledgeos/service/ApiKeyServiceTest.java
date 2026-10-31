@@ -148,7 +148,7 @@ class ApiKeyServiceTest {
         when(mapper.listPrincipalKnowledgeBaseGrantDetails(71L)).thenReturn(Collections.emptyList());
 
         com.jh.knowledgeos.dto.ExternalKnowledgeBaseGrantRequest grant = new com.jh.knowledgeos.dto.ExternalKnowledgeBaseGrantRequest();
-        grant.setKnowledgeBaseId(7L);
+        grant.setKnowledgeBaseId("7");
         grant.setExpiresAt(expiresAt.toString());
         grant.setReason("项目验收期临时授权");
         service.replaceKnowledgeBaseGrantDetails(9L, Arrays.asList(grant), 2L);
@@ -166,7 +166,7 @@ class ApiKeyServiceTest {
         when(mapper.countKnowledgeBase(7L)).thenReturn(1);
         when(mapper.listPrincipalKnowledgeBaseGrantDetails(71L)).thenReturn(Collections.emptyList());
         com.jh.knowledgeos.dto.ExternalKnowledgeBaseGrantRequest grant = new com.jh.knowledgeos.dto.ExternalKnowledgeBaseGrantRequest();
-        grant.setKnowledgeBaseId(7L);
+        grant.setKnowledgeBaseId("7");
         grant.setPermissionTags(Arrays.asList("team-a", " team-b ", "team-a"));
 
         service.replaceKnowledgeBaseGrantDetails(9L, Arrays.asList(grant), 2L);
@@ -196,7 +196,7 @@ class ApiKeyServiceTest {
         when(mapper.getApiKey(9L)).thenReturn(key);
         when(mapper.countKnowledgeBase(7L)).thenReturn(1);
         com.jh.knowledgeos.dto.ExternalKnowledgeBaseGrantRequest grant = new com.jh.knowledgeos.dto.ExternalKnowledgeBaseGrantRequest();
-        grant.setKnowledgeBaseId(7L);
+        grant.setKnowledgeBaseId("7");
         grant.setExpiresAt(LocalDateTime.now().minusMinutes(1).toString());
 
         assertThrows(IllegalArgumentException.class,

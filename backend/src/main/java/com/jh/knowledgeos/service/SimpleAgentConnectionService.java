@@ -1,5 +1,7 @@
 package com.jh.knowledgeos.service;
 
+import org.springframework.beans.factory.annotation.Autowired;
+
 import com.jh.knowledgeos.domain.ApiCallAudit;
 import com.jh.knowledgeos.domain.ApiKey;
 import com.jh.knowledgeos.domain.ExternalPrincipal;
@@ -18,6 +20,12 @@ import org.springframework.transaction.annotation.Transactional;
 /** Simple UI over the existing strict V2 request proof. No private material is accepted. */
 @Service
 public class SimpleAgentConnectionService {
+
+    /** 可选注入：可读范围收知识库编码，靠它把编码换成主键。 */
+    private KnowledgeBaseService knowledgeBases;
+
+    @Autowired(required = false)
+    public void setKnowledgeBases(KnowledgeBaseService service) { this.knowledgeBases = service; }
     private final WorkloadIdentityRepository repository;
     private final WorkloadIdentityAdminService workload;
     private final ApiKeyService keys;
@@ -78,9 +86,13 @@ public class SimpleAgentConnectionService {
         if (!(raw instanceof List) || ((List<?>) raw).isEmpty()) throw new IllegalArgumentException("请至少选择一个可读知识库");
         List<ExternalKnowledgeBaseGrantRequest> grants = new ArrayList<>();
         for (Object value : (List<?>) raw) {
-            if (!(value instanceof Number) || ((Number)value).longValue() <= 0 || ((Number)value).doubleValue() != ((Number)value).longValue()) throw new IllegalArgumentException("无效的知识库 ID");
+            String code = value == null ? "" : String.valueOf(value).trim();
+            if (code.isEmpty()) throw new IllegalArgumentException("无效的知识库：不能为空");
+            // 认编码；认不出来就抛错，绝不静默跳过——跳过等于库没授权但页面显示已选。
+            if (knowledgeBases != null) { knowledgeBases.resolveId(code); }
+            else if (!code.matches("\\d+")) throw new IllegalArgumentException("未知的知识库编码：" + code);
             ExternalKnowledgeBaseGrantRequest g = new ExternalKnowledgeBaseGrantRequest();
-            g.setKnowledgeBaseId(((Number)value).longValue());
+            g.setKnowledgeBaseId(code);
             // Only untagged resources by default; never silently grant classified data.
             g.setPermissionTags(Collections.emptyList()); g.setReason("Agent 服务接入可读范围"); grants.add(g);
         }

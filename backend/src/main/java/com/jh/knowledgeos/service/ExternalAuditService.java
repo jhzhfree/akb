@@ -1,5 +1,7 @@
 package com.jh.knowledgeos.service;
 
+import org.springframework.beans.factory.annotation.Autowired;
+
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.jh.knowledgeos.common.ClientIpResolver;
 import com.jh.knowledgeos.config.ExternalCallPayloadFilter;
@@ -64,6 +66,12 @@ public class ExternalAuditService {
     private final int payloadLimit;
 
     private final ClientIpResolver clientIps;
+
+    /** 可选注入：审计只用它把知识库编码换成主键。 */
+    private KnowledgeBaseService knowledgeBases;
+
+    @Autowired(required = false)
+    public void setKnowledgeBases(KnowledgeBaseService service) { this.knowledgeBases = service; }
 
     public ExternalAuditService(ExternalApiMapper mapper, ObjectMapper json, ClientIpResolver clientIps,
         @Value("${knowledge.external.audit-payload-chars:10000}") int payloadChars) {
@@ -263,7 +271,9 @@ public class ExternalAuditService {
         try {
             return Long.valueOf(String.valueOf(raw).trim());
         } catch (NumberFormatException e) {
-            return null;
+            // 不是数字就按知识库编码解析：否则传编码的调用在审计里连查的是哪个库都看不出来。
+            if (knowledgeBases == null) { return null; }
+            try { return knowledgeBases.resolveId(raw); } catch (RuntimeException ignored) { return null; }
         }
     }
 
