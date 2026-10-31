@@ -57,12 +57,15 @@ public final class AgentKeyProofVerifier {
             String session = AgentProofCrypto.text(c, "session_id", 128);
             String invocation = AgentProofCrypto.uuid(AgentProofCrypto.text(c, "invocation_id", 36));
             String message = c.containsKey("message_id") ? AgentProofCrypto.text(c, "message_id", 128) : null;
+            String terminal = c.containsKey("terminal_agent") ? AgentProofCrypto.text(c, "terminal_agent", 128) : null;
+            if (terminal != null && !terminal.matches("[A-Za-z0-9_.:-]{1,128}")) throw AgentProofCrypto.invalid();
             String jti = AgentProofCrypto.uuid(AgentProofCrypto.text(c, "jti", 36));
             repository.consumeV2(key.getWorkloadPolicyId(), kid, jti, expires);
             long previous = cleanup.get(), millis = System.currentTimeMillis();
             if (millis - previous > 60000 && cleanup.compareAndSet(previous, millis)) repository.cleanV2();
             WorkloadIdentity identity = new WorkloadIdentity(((Number) binding.get("agent_principal_id")).longValue(), session, invocation,
                 AgentProofCrypto.V2, kid, ((Number) registered.get("id")).longValue(), message, (String) c.get("platform_id"), external, String.valueOf(registered.get("status")));
+            identity = identity.withAgentNames(runtime, terminal);
             if ("SERVICE_SCOPE".equals(policy.get("authorization_mode"))) identity = identity.inheritServiceGrants();
             return identity;
         } catch (IllegalArgumentException | DuplicateKeyException ex) { throw new WorkloadProofException(); }

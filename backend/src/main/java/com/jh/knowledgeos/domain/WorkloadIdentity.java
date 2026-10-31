@@ -8,19 +8,27 @@ public final class WorkloadIdentity {
     private final String proofProfile, signingKid, messageId, platformId, externalAgentId;
     private final Long keyRegistrationId;
     private final String keyStatus;
+    private final String runtimeAgentKey, terminalAgentName;
+    public String getRuntimeAgentKey() { return runtimeAgentKey; }
+    public String getTerminalAgentName() { return terminalAgentName; }
+    public WorkloadIdentity withAgentNames(String runtime, String terminal) {
+        return new WorkloadIdentity(agentPrincipalId, sessionId, invocationId, proofProfile, signingKid,
+            keyRegistrationId, messageId, platformId, externalAgentId, keyStatus, serviceGrantsInherited, runtime, terminal);
+    }
     private final boolean serviceGrantsInherited;
     public boolean isServiceGrantsInherited() { return serviceGrantsInherited; }
     public WorkloadIdentity inheritServiceGrants() {
         return new WorkloadIdentity(agentPrincipalId, sessionId, invocationId, proofProfile, signingKid,
-            keyRegistrationId, messageId, platformId, externalAgentId, keyStatus, true);
+            keyRegistrationId, messageId, platformId, externalAgentId, keyStatus, true, runtimeAgentKey, terminalAgentName);
     }
 
     public WorkloadIdentity(Long agentPrincipalId, String sessionId, String invocationId, String profile, String kid,
         Long registration, String message, String platform, String external, String keyStatus) {
-        this(agentPrincipalId, sessionId, invocationId, profile, kid, registration, message, platform, external, keyStatus, false);
+        this(agentPrincipalId, sessionId, invocationId, profile, kid, registration, message, platform, external, keyStatus, false, null, null);
     }
     private WorkloadIdentity(Long agentPrincipalId, String sessionId, String invocationId, String profile, String kid,
-        Long registration, String message, String platform, String external, String keyStatus, boolean inherited) {
+        Long registration, String message, String platform, String external, String keyStatus, boolean inherited, String runtime, String terminal) {
+        this.runtimeAgentKey = runtime; this.terminalAgentName = terminal;
         this.serviceGrantsInherited = inherited;
         this.agentPrincipalId = agentPrincipalId;
         this.sessionId = sessionId;

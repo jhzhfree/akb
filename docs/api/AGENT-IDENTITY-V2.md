@@ -127,14 +127,15 @@ X-API-Key: <shared key>
 X-AKB-Workload-Assertion: <候选Agent密钥签发的V2请求证明>
 ```
 
-要求 LIST scope，不读取知识库。响应 data 仅含 agentId、agentPrincipalId、applicationPrincipalId、policyId、kid、proofProfile、keyStatus。SDK key select 命令先核对此探针为预期 Agent、kid、V2 及 ACTIVE，再原子选中本地密钥。
+要求 LIST scope，不读取知识库。响应 data 含 agentId、agentPrincipalId、applicationPrincipalId、policyId、kid、proofProfile、keyStatus，并提供 runtimeAgentKey、可选 terminalAgentName、platformId、sessionId、invocationId 诊断信息。MCP 可通过同样要求 LIST scope 的 `get_agent_identity` 工具读取已验签身份，详见 [Windows 终端身份](WINDOWS-TERMINAL-IDENTITY.md)。SDK key select 命令先核对此探针为预期 Agent、kid、V2 及 ACTIVE，再原子选中本地密钥。
 
 ## 6. 业务请求协议
 
 每次请求同时携共享 Key 与逐请求签名。Header：`alg=RS256`、`typ=akb-agent-proof+jwt`、`kid=<fingerprint>`。
 
-声明包括 ver=2、iss、单字符串 aud、resource、policy_id、azp、sub、platform_id、installation_id、workspace_id、runtime_agent、session_id、可选 message_id、invocation_id、iat、exp、jti、credential_sha256 及 request_binding。
+声明包括 ver=2、iss、单字符串 aud、resource、policy_id、azp、sub、platform_id、installation_id、workspace_id、runtime_agent、可选 terminal_agent、session_id、可选 message_id、invocation_id、iat、exp、jti、credential_sha256 及 request_binding。
 
+- `terminal_agent` 为可选的已签名宿主 Agent 名称，最多 128 字符，只允许 `[A-Za-z0-9_.:-]`；仅供诊断，不参与主体或权限选择。旧客户端可以省略。
 - 公钥必须属于当前策略及 Agent 绑定；A 私钥即使签了 B 的 sub 也拒绝。
 - TTL 最长 60 秒，iat 最多未来 30 秒；exp 严格晚于当前时间。
 - 每 HTTP 请求独立 jti，数据库原子消费；MCP initialize/tools-call 不能复用证明。
