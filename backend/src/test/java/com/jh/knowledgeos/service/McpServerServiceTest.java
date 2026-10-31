@@ -25,6 +25,32 @@ import org.junit.jupiter.api.Test;
 class McpServerServiceTest {
 
     @Test
+    void identityToolReceivesVerifiedRequestIdentityAndRejectsArgumentSpoofing() throws Exception {
+        ExternalAccessService access = mock(ExternalAccessService.class);
+        ApiKey key = new ApiKey(); key.setScopes(ApiKey.SCOPE_LIST); key.setPrincipalId(123L); key.setWorkloadPolicyId(17L);
+        key.setWorkloadIdentity(new com.jh.knowledgeos.domain.WorkloadIdentity(4L, "session", "invocation",
+            AgentProofCrypto.V2, "kid", 31L, null, "opencode", "trust-uuid", "ACTIVE")
+            .withAgentNames("registered-agent", "builder").inheritServiceGrants());
+        McpServerService service = new McpServerService(access, null, new ObjectMapper());
+        List<Map<String, Object>> tools = (List<Map<String, Object>>) service.toolsList(key).get("tools");
+        assertTrue(tools.stream().anyMatch(tool -> "get_agent_identity".equals(tool.get("name"))));
+        Map<String, Object> params = new LinkedHashMap<String, Object>(); params.put("name", "get_agent_identity");
+        params.put("arguments", Collections.emptyMap());
+        Map<?, ?> identity = (Map<?, ?>) service.toolsCall(key, params).get("structuredContent");
+        assertEquals("trust-uuid", identity.get("agentId"));
+        assertEquals("registered-agent", identity.get("runtimeAgentKey"));
+        assertEquals("builder", identity.get("terminalAgentName"));
+        assertEquals(4L, identity.get("agentPrincipalId"));
+        verify(access).assertScope(key, ApiKey.SCOPE_LIST);
+        params.put("arguments", Collections.singletonMap("agentId", "someone-else"));
+        assertThrows(IllegalArgumentException.class, () -> service.toolsCall(key, params));
+        params.put("arguments", Collections.emptyMap()); key.setWorkloadIdentity(null);
+        assertThrows(SecurityException.class, () -> service.toolsCall(key, params));
+        assertFalse(((List<Map<String, Object>>) service.toolsList(key).get("tools")).stream()
+            .anyMatch(tool -> "get_agent_identity".equals(tool.get("name"))));
+    }
+
+    @Test
     void toolsExposePermissionTagFiltersForSearchAndQuery() {
         McpServerService service = new McpServerService(null, null, new ObjectMapper());
         List<Map<String, Object>> tools = (List<Map<String, Object>>) service.toolsList().get("tools");

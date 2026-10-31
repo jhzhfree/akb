@@ -77,6 +77,19 @@ class AgentKeyProofVerifierTest {
         request.addHeader("X-API-Key","shared-test-key"); request.addHeader(WorkloadRequestFilter.HEADER,token);
         request.setAttribute(WorkloadRequestFilter.BODY,body); return request;
     }
+    @Test void signedTerminalNameIsRetainedAndUnsignedTamperingIsRejected() throws Exception {
+        Map<String, Object> c = claims(A); c.put("terminal_agent", "builder");
+        WorkloadIdentity identity = service.authenticate(request(sign(c, a)), credential);
+        assertEquals("build", identity.getRuntimeAgentKey());
+        assertEquals("builder", identity.getTerminalAgentName());
+        assertEquals("builder", identity.inheritServiceGrants().getTerminalAgentName());
+        String token = sign(c, a); String[] parts = token.split("\\.");
+        c.put("terminal_agent", "reviewer");
+        String tampered = parts[0] + "." + Base64.getUrlEncoder().withoutPadding().encodeToString(JSON.writeValueAsBytes(c)) + "." + parts[2];
+        assertThrows(WorkloadProofException.class, () -> service.authenticate(request(tampered), credential));
+        c.put("terminal_agent", "invalid/name");
+        assertThrows(WorkloadProofException.class, () -> service.authenticate(request(sign(c, a)), credential));
+    }
     @Test void sameCredentialAuthenticatesTwoIndependentAgentKeys() throws Exception {
         WorkloadIdentity one = service.authenticate(request(sign(claims(A),a)),credential);
         WorkloadIdentity two = service.authenticate(request(sign(claims(B),b)),credential);

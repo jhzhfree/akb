@@ -160,6 +160,11 @@ public class McpServerService {
 
     public Map<String, Object> toolsList(ApiKey key) {
         List<Map<String, Object>> tools = new ArrayList<Map<String, Object>>();
+        if (key != null && key.getWorkloadIdentity() != null && AgentProofCrypto.V2.equals(key.getWorkloadIdentity().getProofProfile()) && key.hasScope(ApiKey.SCOPE_LIST)) {
+            tools.add(tool("get_agent_identity", "当前终端身份",
+                "返回服务端验签后的当前 Agent 身份，用于检查终端到 MCP 工具的身份传递；不接受客户端身份参数。",
+                schema(new LinkedHashMap<String, Object>(), new ArrayList<String>()), true, false));
+        }
         if (key == null || key.hasScope(ApiKey.SCOPE_QUERY)) {
         // 描述按「能做什么 / 什么时候用 / 什么时候别用 / 例子」写：平台选工具靠的是语义匹配，
         // 只写返回值格式的话，模型判断不出「用户问报销流程」该不该选它。
@@ -287,7 +292,11 @@ public class McpServerService {
             throw new IllegalArgumentException("缺少工具名称");
         }
         Object value;
-        if ("knowledge_query".equals(name)) {
+        if ("get_agent_identity".equals(name)) {
+            accessService.assertScope(key, ApiKey.SCOPE_LIST);
+            if (!args.isEmpty()) throw new IllegalArgumentException("身份工具不接受参数");
+            value = VerifiedAgentIdentity.describe(key);
+        } else if ("knowledge_query".equals(name)) {
             accessService.assertScope(key, ApiKey.SCOPE_QUERY);
             Long kb = resolve(key, args);
             value = facade.query(key, kb, text(args, "question"), integer(args, "topK"), strings(args, "permissionTags"),
