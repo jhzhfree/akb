@@ -135,6 +135,19 @@
                 }}</span>
               </div>
 
+              <el-alert
+                v-if="detail.authorization_mode === 'SERVICE_SCOPE'"
+                type="warning"
+                :closable="false"
+                title="所有已登记 Agent 共享服务授权范围"
+                description="身份认证用于确认与审计调用者；本接入下所有 Agent 可访问服务 Key 获准的知识库。需要逐 Agent 隔离时，应使用平台与 Agent 权限交集的接入。"
+              />
+              <el-alert
+                type="info"
+                :closable="false"
+                title="以下仅检查服务端配置，不代表客户端真实请求已验证"
+                description="请在 Octop 或终端完成签名验证及实际知识库检索，再结合调用记录确认接入成功。"
+              />
               <div
                 v-if="detail.authorization_mode === 'REVIEW_REQUIRED'"
                 class="rounded border border-black/10 p-3"

@@ -115,6 +115,21 @@ class ExternalAccessServiceTest {
         service.assertScope(key, ApiKey.SCOPE_QUERY);
     }
 
+    @Test void invalidProofStillConsumesBudgetBeforeExpensiveVerification() {
+        ExternalRateLimiter limiter = mock(ExternalRateLimiter.class);
+        WorkloadIdentityService identity = mock(WorkloadIdentityService.class);
+        ExternalAccessService access = new ExternalAccessService(keys, limiter, kbAccess, mock(EmbedTokenService.class), mock(EmbedTokenLifecycleService.class), new KnowledgeProperties());
+        access.setWorkloadIdentityService(identity);
+        ApiKey key = key(19L, null); key.setIdentityMode("APPLICATION_WORKLOAD"); key.setWorkloadPolicyId(7L);
+        when(keys.authenticate("synthetic")).thenReturn(key);
+        MockHttpServletRequest request = new MockHttpServletRequest(); request.addHeader(ExternalAccessService.HEADER, "synthetic");
+        org.mockito.Mockito.doThrow(new com.jh.knowledgeos.exception.WorkloadProofException()).when(identity).authenticate(request,key);
+        assertThrows(com.jh.knowledgeos.exception.UnauthorizedException.class, () -> access.authenticate(request));
+        org.mockito.InOrder order = org.mockito.Mockito.inOrder(limiter, identity);
+        order.verify(limiter).check(key); order.verify(identity).authenticate(request,key);
+        verify(limiter,never()).checkAgent(key);
+    }
+
     private ApiKey key(Long principalId, Long knowledgeBaseId) {
         ApiKey key = new ApiKey();
         key.setPrincipalId(principalId);

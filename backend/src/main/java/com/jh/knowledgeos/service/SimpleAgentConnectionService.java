@@ -241,6 +241,14 @@ public class SimpleAgentConnectionService {
         items.add(check("已授权至少一个可读知识库", !keys.grantedKnowledgeBases(principal).isEmpty(), "在上方选择知识库并保存可读范围"));
         items.add(check("已登记至少一个启用的 Agent", agentActive, "登记 Agent 公钥"));
         items.add(check("至少有一把生效中的公钥", keyActive, "导入该 Agent 的 public.jwk"));
+        boolean serviceKeyActive = false;
+        for (Map<String, Object> credential : keys.listPrincipalKeys(principal)) {
+            if (!"ACTIVE".equals(credential.get("status")) || !"APPLICATION_WORKLOAD".equals(credential.get("identityMode"))) continue;
+            Object expiry = credential.get("expiresAt");
+            if (expiry != null && !LocalDateTime.parse(String.valueOf(expiry)).isAfter(LocalDateTime.now())) continue;
+            serviceKeyActive = true;
+        }
+        items.add(check("至少有一把未过期的服务 Key", serviceKeyActive, "签发或轮换服务 Key；配置检查不代表真实请求已验证"));
         return items;
     }
     private static Map<String, Object> check(String item, boolean ok, String hint) {

@@ -21,15 +21,28 @@ public class ExternalRateLimiter {
 
     private static final long WINDOW_MILLIS = 60_000L;
 
-    private final Map<Long, Deque<Long>> windows = new ConcurrentHashMap<Long, Deque<Long>>();
+    private final Map<String, Deque<Long>> windows = new ConcurrentHashMap<String, Deque<Long>>();
 
     public void check(ApiKey key) {
         int limit = key.getRateLimitPerMinute() == null ? 60 : Math.max(key.getRateLimitPerMinute(), 0);
         if (limit <= 0) {
             return;
         }
+        consume("key:" + key.getId(), limit);
+    }
+
+    @org.springframework.beans.factory.annotation.Value("${knowledge.external.agent-rate-limit-per-minute:30}")
+    private int agentLimit = 30;
+
+    /** Verified identity only. Rotation of a service Key does not reset this budget. */
+    public void checkAgent(ApiKey key) {
+        if (key.getWorkloadIdentity() == null) throw new IllegalArgumentException("Verified Agent required");
+        if (agentLimit > 0) consume("agent:" + key.getWorkloadPolicyId() + ":" + key.getWorkloadIdentity().getAgentPrincipalId(), agentLimit);
+    }
+
+    private void consume(String bucket, int limit) {
         long now = System.currentTimeMillis();
-        Deque<Long> window = windows.computeIfAbsent(key.getId(), id -> new ArrayDeque<Long>());
+        Deque<Long> window = windows.computeIfAbsent(bucket, id -> new ArrayDeque<Long>());
         synchronized (window) {
             while (!window.isEmpty() && now - window.peekFirst() > WINDOW_MILLIS) {
                 window.pollFirst();
@@ -48,7 +61,7 @@ public class ExternalRateLimiter {
      * 长期不调用的历史窗口会持续占用内存，阈值触发时统一清理空窗口。
      */
     private void evictIdleWindows(long now) {
-        Iterator<Map.Entry<Long, Deque<Long>>> iterator = windows.entrySet().iterator();
+        Iterator<Map.Entry<String, Deque<Long>>> iterator = windows.entrySet().iterator();
         while (iterator.hasNext()) {
             Deque<Long> window = iterator.next().getValue();
             synchronized (window) {

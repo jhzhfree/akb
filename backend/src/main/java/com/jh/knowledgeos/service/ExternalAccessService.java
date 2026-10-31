@@ -80,6 +80,8 @@ public class ExternalAccessService {
     /**
      * Resolves the presented credential, enforcing status, expiry and the per-minute quota.
      */
+    public static final String AUTHENTICATED_KEY_ATTRIBUTE = ExternalAccessService.class.getName() + ".authenticatedKey";
+
     public ApiKey authenticate(HttpServletRequest request) {
         return authenticate(request, false);
     }
@@ -105,6 +107,9 @@ public class ExternalAccessService {
         if (key == null) {
             throw new UnauthorizedException("API Key 无效、已吊销或已过期");
         }
+        request.setAttribute(AUTHENTICATED_KEY_ATTRIBUTE, key);
+        // Bound the expensive proof work even when the submitted proof is invalid.
+        rateLimiter.check(key);
         if (key.isWorkloadCredential()) {
             if (workloadIdentityService == null) throw new UnauthorizedException("工作负载认证不可用");
             if (discovery && request.getHeader(com.jh.knowledgeos.config.WorkloadRequestFilter.HEADER) == null
@@ -114,7 +119,7 @@ public class ExternalAccessService {
             } else {
                 key.setWorkloadIdentity(workloadIdentityService.authenticate(request, key));
             }
-            rateLimiter.check(key);
+            if (key.getWorkloadIdentity() != null) rateLimiter.checkAgent(key);
             return key;
         }
         if (request.getHeader(com.jh.knowledgeos.config.WorkloadRequestFilter.HEADER) != null) {
@@ -135,7 +140,6 @@ public class ExternalAccessService {
             Long employeePrincipalId = delegatedIdentityService.authenticateBearer(request.getHeader("Authorization"));
             key.setDelegatedPrincipalId(employeePrincipalId);
         }
-        rateLimiter.check(key);
         return key;
     }
 

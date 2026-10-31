@@ -95,9 +95,15 @@ public class McpController {
             // Streamable HTTP notifications are accepted without a JSON-RPC response body.
             if (notification && response == null) { return ResponseEntity.accepted().build(); }
             return ResponseEntity.ok(response);
+        } catch (com.jh.knowledgeos.exception.RateLimitException e) {
+            auditService.record(authenticatedKey(request, key), ApiCallAudit.CHANNEL_MCP, auditedMethod, knowledgeBaseId, 429, System.currentTimeMillis() - start, e.getMessage(), params, errorBody(429, e));
+            throw e;
+        } catch (com.jh.knowledgeos.exception.WorkloadUnavailableException e) {
+            auditService.record(authenticatedKey(request, key), ApiCallAudit.CHANNEL_MCP, auditedMethod, knowledgeBaseId, 503, System.currentTimeMillis() - start, e.getMessage(), params, errorBody(503, e));
+            throw e;
         } catch (UnauthorizedException e) {
             // 凭证无效时调用者也应当出现在日志里：否则"谁在拿错 key 打我们的 MCP"根本无从查起。
-            auditService.record(key, ApiCallAudit.CHANNEL_MCP, auditedMethod, knowledgeBaseId, 401, System.currentTimeMillis() - start, e.getMessage(),
+            auditService.record(authenticatedKey(request, key), ApiCallAudit.CHANNEL_MCP, auditedMethod, knowledgeBaseId, 401, System.currentTimeMillis() - start, e.getMessage(),
                 params, errorBody(401, e));
             throw e;
         } catch (SecurityException e) {
@@ -109,6 +115,11 @@ public class McpController {
                 params, errorBody(500, e));
             throw e;
         }
+    }
+
+    private ApiKey authenticatedKey(HttpServletRequest request, ApiKey key) {
+        Object validated = request.getAttribute(ExternalAccessService.AUTHENTICATED_KEY_ATTRIBUTE);
+        return key != null ? key : validated instanceof ApiKey ? (ApiKey) validated : null;
     }
 
     /**

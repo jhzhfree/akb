@@ -78,6 +78,21 @@ class McpControllerAuditTest {
         assertFalse(((Map<?, ?>) auditedResponse.getValue()).containsKey("rpcErrorMessage"));
     }
 
+    @Test void authenticationFailuresRetainValidatedServiceOwnershipAndCorrectStatus() {
+        RuntimeException[] failures = {new com.jh.knowledgeos.exception.WorkloadProofException(), new com.jh.knowledgeos.exception.RateLimitException(30), new com.jh.knowledgeos.exception.WorkloadUnavailableException()};
+        int[] statuses = {401,429,503};
+        for (int i=0;i<failures.length;i++) {
+            ExternalAccessService access=mock(ExternalAccessService.class); ExternalAuditService audit=mock(ExternalAuditService.class);
+            KnowledgeProperties properties=new KnowledgeProperties(); properties.external().setEnabled(true); properties.external().setMcpEnabled(true);
+            ApiKey key=new ApiKey(); MockHttpServletRequest request=new MockHttpServletRequest(); RuntimeException failure=failures[i];
+            org.mockito.Mockito.doAnswer(call -> {request.setAttribute(ExternalAccessService.AUTHENTICATED_KEY_ATTRIBUTE,key);throw failure;}).when(access).authenticate(request);
+            McpController controller=new McpController(access,mock(McpServerService.class),audit,properties);
+            org.junit.jupiter.api.Assertions.assertThrows(failure.getClass(), () -> controller.handle(request,row("method","unknown","id",1)));
+            verify(audit).record(eq(key),eq(ApiCallAudit.CHANNEL_MCP),eq("unknown"),any(),eq(statuses[i]),anyLong(),eq(failure.getMessage()),any(),any());
+            org.junit.jupiter.api.Assertions.assertNull(key.getWorkloadIdentity());
+        }
+    }
+
     private Map<String, Object> row(Object... values) {
         Map<String, Object> result = new LinkedHashMap<String, Object>();
         for (int i = 0; i < values.length; i += 2) { result.put((String) values[i], values[i + 1]); }

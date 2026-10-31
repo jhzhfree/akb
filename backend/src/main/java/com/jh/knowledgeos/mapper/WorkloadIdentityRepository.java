@@ -94,8 +94,12 @@ public class WorkloadIdentityRepository {
     public void consumeV2(long policy, String kid, String jti, Instant expires) {
         jdbc.update("INSERT INTO t_workload_v2_jti(policy_id,kid,jti,expires_at) VALUES(?,?,?,?)", policy, kid, jti, Timestamp.from(expires.plusSeconds(120)));
     }
-    public void cleanV2() {
-        jdbc.update("DELETE FROM t_workload_v2_jti WHERE expires_at<CURRENT_TIMESTAMP LIMIT 1000");
+    public int cleanV2() {
+        return jdbc.update("DELETE FROM t_workload_v2_jti WHERE expires_at<CURRENT_TIMESTAMP LIMIT 1000");
+    }
+    public long expiredV2Count() {
+        Long count = jdbc.queryForObject("SELECT COUNT(*) FROM t_workload_v2_jti WHERE expires_at<CURRENT_TIMESTAMP", Long.class);
+        return count == null ? 0 : count;
     }
     public void updateResourceOrigin(long policy, String origin) {
         jdbc.update("UPDATE t_workload_policy SET resource_origin=? WHERE id=?", origin, policy);

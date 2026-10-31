@@ -79,6 +79,15 @@ class SimpleAgentConnectionServiceTest {
         key.put("valid_from",java.sql.Timestamp.from(java.time.Instant.now().plusSeconds(60)));
         assertFalse((Boolean)service.checklist(17).get(4).get("ok"));
     }
+    @Test void checklistRequiresAnUnexpiredWorkloadServiceKey() {
+        Map<String,Object> credential=new LinkedHashMap<>(); credential.put("status","ACTIVE");credential.put("identityMode","APPLICATION_WORKLOAD");credential.put("expiresAt",java.time.LocalDateTime.now().minusMinutes(1));
+        when(keys.listPrincipalKeys(123L)).thenReturn(Collections.singletonList(credential));
+        assertFalse((Boolean)service.checklist(17).get(5).get("ok"));
+        credential.put("expiresAt",java.time.LocalDateTime.now().plusDays(1));
+        assertTrue((Boolean)service.checklist(17).get(5).get("ok"));
+        credential.put("status","REVOKED");
+        assertFalse((Boolean)service.checklist(17).get(5).get("ok"));
+    }
     @Test void authorizationReviewIsExplicitAuditedAndNeverAutomaticallyEnables() {
         policy.put("authorization_mode","REVIEW_REQUIRED");
         Map<String,Object> body=new LinkedHashMap<>();body.put("authorizationMode","AGENT_INTERSECTION");body.put("reason","Verified pre-upgrade grants");body.put("platformType","octop");
