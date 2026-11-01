@@ -1,15 +1,79 @@
 """Embedding provider abstraction with deterministic fallback and optional external model provider."""
 
+import asyncio
 import hashlib
+import logging
 import re
 import time
 from functools import lru_cache
+from urllib.parse import urlparse
 from typing import Any
 
 import httpx
 import numpy as np
 
+from app.core.contracts import UpstreamRateLimitedError, UpstreamServiceError
 from app.core.runtime_settings import EmbeddingSettings, load_model_settings
+
+logger = logging.getLogger("llmkb.embedding")
+
+# 限流和 5xx 抖动能自愈，等一下再来一次通常就成了；4xx 是配置问题，重试多少次都一样。
+_RETRYABLE_STATUS = frozenset({429, 500, 502, 503, 504})
+_MAX_ATTEMPTS = 3
+
+
+def _retry_delay(response: httpx.Response | None, attempt: int) -> float:
+    """Respect Retry-After when the vendor sends one, otherwise back off exponentially."""
+    if response is not None:
+        header = response.headers.get("Retry-After")
+        if header:
+            try:
+                return min(float(header), 30.0)
+            except ValueError:
+                pass
+    return 0.5 * (2 ** (attempt - 1))
+
+
+def _raise_upstream(response: httpx.Response, provider: str, model: str, endpoint: str = "") -> None:
+    """Turn a vendor response into a typed error: 429 is recoverable, everything else is a fault."""
+    status = response.status_code
+    # 响应体只进日志，不外传：里面可能是供应商的原始报文。
+    logger.error("embedding provider=%s model=%s status=%s body=%s", provider, model, status,
+                 (response.text or "")[:300])
+    if status == 429:
+        raise UpstreamRateLimitedError(provider, model, _retry_delay(response, 1), endpoint)
+    raise UpstreamServiceError(provider, model, status, "", endpoint)
+
+
+async def _post_with_retry(client: httpx.AsyncClient, url: str, payload: dict, provider: str, model: str,
+                           raise_on_failure: bool = True) -> httpx.Response:
+    # 供应商地址一起带出去：只报 "openai" 看不出配的是哪家，排查时会先猜错方向。
+    endpoint = urlparse(url).netloc
+    """Post once, retrying rate limits and transient 5xx with backoff.
+
+    ``raise_on_failure=False`` hands the last response back so callers with a legacy
+    fallback path can still take it; otherwise a vendor failure becomes a typed error
+    instead of an opaque 500 further up.
+    """
+    for attempt in range(1, _MAX_ATTEMPTS + 1):
+        try:
+            response = await client.post(url, json=payload)
+        except httpx.RequestError as exc:
+            if attempt == _MAX_ATTEMPTS:
+                raise UpstreamServiceError(provider, model, None, "请求未到达供应商：%s" % exc,
+                                           endpoint) from exc
+            logger.warning("embedding provider=%s unreachable attempt=%s error=%s", provider, attempt, exc)
+        else:
+            if response.status_code < 400:
+                return response
+            if response.status_code not in _RETRYABLE_STATUS or attempt == _MAX_ATTEMPTS:
+                if not raise_on_failure:
+                    return response
+                _raise_upstream(response, provider, model, endpoint)
+            logger.warning("embedding provider=%s status=%s attempt=%s retrying", provider,
+                           response.status_code, attempt)
+        await asyncio.sleep(_retry_delay(None, attempt))
+    raise UpstreamServiceError(provider, model, None, "重试结束仍未拿到可用响应", urlparse(url).netloc)
 
 
 class EmbeddingProvider:
@@ -73,9 +137,11 @@ class OllamaEmbeddingProvider(EmbeddingProvider):
         # keeps a socket that dies unnoticed when the network blinks, and every later index
         # run then fails for a reason that never reaches the log.
         async with httpx.AsyncClient(timeout=self._config.timeout) as client:
-            response = await client.post(
-                self._base_url + "/api/embed",
-                json={"model": self._config.model, "input": texts},
+            # 主端点失败不急着报错：老版本 Ollama 只认下面那个端点，要留机会走兼容分支。
+            response = await _post_with_retry(
+                client, self._base_url + "/api/embed",
+                {"model": self._config.model, "input": texts}, self.name, self.model,
+                raise_on_failure=False,
             )
             if response.status_code < 400:
                 return response.json().get("embeddings", [])
@@ -83,11 +149,10 @@ class OllamaEmbeddingProvider(EmbeddingProvider):
             # Compatibility fallback for older Ollama versions.
             output = []
             for text in texts:
-                response = await client.post(
-                    self._base_url + "/api/embeddings",
-                    json={"model": self._config.model, "prompt": text},
+                response = await _post_with_retry(
+                    client, self._base_url + "/api/embeddings",
+                    {"model": self._config.model, "prompt": text}, self.name, self.model,
                 )
-                response.raise_for_status()
                 output.append(response.json()["embedding"])
         return output
 
@@ -108,11 +173,11 @@ class OpenAIEmbeddingProvider(EmbeddingProvider):
 
     async def embed(self, texts):
         async with httpx.AsyncClient(timeout=self._config.timeout, headers=self._headers) as client:
-            response = await client.post(
-                self._url,
-                json={"model": self._config.model, "input": texts},
+            response = await _post_with_retry(
+                client, self._url, {"model": self._config.model, "input": texts}, self.name, self.model,
             )
-        response.raise_for_status()
+        if response.status_code >= 400:
+            _raise_upstream(response, self.name, self.model)
         rows = sorted(response.json().get("data") or [], key=lambda row: row.get("index", 0))
         vectors = [row.get("embedding") or [] for row in rows]
         self._assert_dimension(vectors)

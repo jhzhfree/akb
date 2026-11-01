@@ -5,6 +5,41 @@ ERROR_UNSUPPORTED_DOCUMENT = "AI-400-002"
 ERROR_INTERNAL = "AI-500-001"
 # 检索的一致性屏障：ES / Milvus / 图库的结果必须同属一个索引世代，混了就拒绝返回。
 ERROR_GENERATION_MISMATCH = "AI-409-001"
+# 外部模型供应商的限流与故障：这不是本服务的内部错误，报 500 只会让人去翻日志。
+ERROR_UPSTREAM_RATE_LIMITED = "AI-429-001"
+ERROR_UPSTREAM_UNAVAILABLE = "AI-502-001"
+
+
+class UpstreamRateLimitedError(RuntimeError):
+    """模型供应商返回限流（429）。
+
+    配额或速率打满是可恢复的外部状态，调用方该知道"稍后再试"或者"配额不够了"，
+    而不是收到一个 internal server error。
+    """
+
+    def __init__(self, provider: str, model: str = "", retry_after: float | None = None,
+                 endpoint: str = "") -> None:
+        super().__init__("UPSTREAM_RATE_LIMITED")
+        self.provider = provider
+        self.model = model
+        self.retry_after = retry_after
+        self.endpoint = endpoint
+
+
+class UpstreamServiceError(RuntimeError):
+    """模型供应商不可用：5xx、连不上，或者 4xx 配置类错误。
+
+    status 为 None 表示请求根本没到供应商（超时 / 网络错误）。
+    """
+
+    def __init__(self, provider: str, model: str = "", status: int | None = None, detail: str = "",
+                 endpoint: str = "") -> None:
+        super().__init__("UPSTREAM_SERVICE_ERROR")
+        self.provider = provider
+        self.model = model
+        self.status = status
+        self.detail = detail
+        self.endpoint = endpoint
 
 
 class GenerationMismatchError(RuntimeError):

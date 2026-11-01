@@ -7,7 +7,19 @@ from app.services.indexer import KnowledgeIndexer
 from app.services.query_engine import QueryEngine
 
 
-def test_pipeline(tmp_path: Path):
+def test_pipeline(tmp_path: Path, monkeypatch):
+    # 这条用例跑的是完整流水线，不该依赖外部模型供应商是否可用——供应商限流时它会莫名失败。
+    # 把 embedding 换成本地确定性实现：离线、结果稳定。
+    from app.core.runtime_settings import load_model_settings
+    from app.services import embedding as embedding_module
+    from app.services.embedding import HashEmbeddingProvider
+
+    monkeypatch.setattr(
+        embedding_module,
+        "_build_embedding_provider",
+        lambda *_args, **_kwargs: HashEmbeddingProvider(load_model_settings().embedding),
+    )
+
     sample = tmp_path / "sample.md"
     sample.write_text(
         "# 知识裁决\n\n候选知识发布前必须执行重复检测、冲突检测、证据评分和知识裁决。"

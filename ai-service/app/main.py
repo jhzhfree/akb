@@ -10,7 +10,14 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
 from app.core.config import settings
-from app.core.contracts import ERROR_GENERATION_MISMATCH, GenerationMismatchError
+from app.core.contracts import (
+    ERROR_GENERATION_MISMATCH,
+    ERROR_UPSTREAM_RATE_LIMITED,
+    ERROR_UPSTREAM_UNAVAILABLE,
+    GenerationMismatchError,
+    UpstreamRateLimitedError,
+    UpstreamServiceError,
+)
 from app.core.retrieval_settings import apply_retrieval_settings
 from app.core.runtime_settings import load_model_settings
 from app.derivation_routes import router as derivation_router
@@ -84,6 +91,41 @@ async def request_context(request: Request, call_next):
                 "errorCode": ERROR_GENERATION_MISMATCH,
                 "message": "检索索引世代不一致，请重建该知识库的索引",
                 "generationIds": exc.generations,
+                "traceId": trace_id,
+            },
+            headers={"X-Trace-Id": trace_id},
+        )
+    except UpstreamRateLimitedError as exc:
+        # 配额或速率打满是外部状态，重试或加配额就能恢复。报 500 会把"去查配额"这条
+        # 唯一有用的信息埋掉，调用方只能来翻日志，所以单独回应并把重试间隔带出去。
+        logger.warning(
+            "trace_id=%s upstream rate limited path=%s provider=%s model=%s retry_after=%s",
+            trace_id, request.url.path, exc.provider, exc.model, exc.retry_after,
+        )
+        content = {
+            "errorCode": ERROR_UPSTREAM_RATE_LIMITED,
+            "message": "模型供应商限流（%s 返回 429），请稍后重试或检查配额"
+                       % (exc.endpoint or exc.provider),
+            "provider": exc.provider,
+            "traceId": trace_id,
+        }
+        headers = {"X-Trace-Id": trace_id}
+        if exc.retry_after:
+            content["retryAfterSeconds"] = exc.retry_after
+            headers["Retry-After"] = str(int(exc.retry_after) + 1)
+        return JSONResponse(status_code=429, content=content, headers=headers)
+    except UpstreamServiceError as exc:
+        logger.error(
+            "trace_id=%s upstream unavailable path=%s provider=%s model=%s status=%s detail=%s",
+            trace_id, request.url.path, exc.provider, exc.model, exc.status, exc.detail,
+        )
+        return JSONResponse(
+            status_code=502,
+            content={
+                "errorCode": ERROR_UPSTREAM_UNAVAILABLE,
+                "message": "模型供应商不可用（%s %s），请稍后重试或检查供应商配置"
+                           % (exc.endpoint or exc.provider, exc.status or "网络不可达"),
+                "provider": exc.provider,
                 "traceId": trace_id,
             },
             headers={"X-Trace-Id": trace_id},
