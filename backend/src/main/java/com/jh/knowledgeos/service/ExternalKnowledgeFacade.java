@@ -330,7 +330,9 @@ public class ExternalKnowledgeFacade {
     private Map<String, Object> payload(ApiKey key, Long kb, String question, Integer topK, List<String> permissionTags,
         String source, String answerFormat, Double minScore) {
         Map<String, Object> payload = new LinkedHashMap<String, Object>();
-        payload.put("knowledgeBaseId", publicId(kb));
+        // 发给 AI 服务的是内部主键：它这个字段的契约是整数，传编码会直接 422。
+        // 编码只出现在回给调用方的响应里（见 search），不在对内请求里。
+        payload.put("knowledgeBaseId", kb);
         payload.put("query", resolveQuestion(kb, question));
         payload.put("topK", effectiveTopK(topK));
         payload.put("source", source == null ? PlatformEventPublisher.SOURCE_REST : source);
