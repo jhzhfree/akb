@@ -1,5 +1,7 @@
 package com.jh.knowledgeos.service;
 
+import com.jh.knowledgeos.domain.KnowledgeBase;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -125,6 +127,15 @@ class ApiKeyServiceTest {
         when(mapper.listPrincipalKnowledgeBaseGrantDetails(71L)).thenReturn(Arrays.asList(
             grantRow(3L, "[\"team-a\"]"), grantRow(4L, null)));
 
+        // 对外返回的是知识库编码，不是内部编号：前端按编码索引，返回编号会让回显对不上。
+        KnowledgeBaseService bases = mock(KnowledgeBaseService.class);
+        KnowledgeBase ops = new KnowledgeBase(); ops.setId(7L); ops.setBaseCode("KB_OPS");
+        when(bases.get(7L)).thenReturn(ops);
+        // 内部仍按主键流转：数字文本要能被解析回主键
+        when(bases.resolveId("7")).thenReturn(7L);
+        when(bases.resolveId("8")).thenReturn(8L);
+        service.setKnowledgeBases(bases);
+
         Map<String, Object> result = service.replaceKnowledgeBaseGrants(9L, Arrays.asList(7L, 7L, 8L), 2L).get(0);
 
         verify(mapper).deletePrincipalKnowledgeBaseGrants(71L);
@@ -133,7 +144,7 @@ class ApiKeyServiceTest {
         verify(mapper).insertPrincipalKnowledgeBaseGrantAudit(71L, 3L, "REVOKE", 2L, "控制台替换授权配置", "[\"team-a\"]");
         verify(mapper).insertPrincipalKnowledgeBaseGrantAudit(71L, 4L, "REVOKE", 2L, "控制台替换授权配置", null);
         verify(mapper).insertPrincipalKnowledgeBaseGrantAudit(71L, 7L, "GRANT", 2L, "控制台配置授权", null);
-        assertEquals(7L, result.get("knowledgeBaseId"));
+        assertEquals("KB_OPS", result.get("knowledgeBaseId"));
     }
 
     @Test

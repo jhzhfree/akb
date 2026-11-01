@@ -1,5 +1,7 @@
 package com.jh.knowledgeos.service;
 
+import com.jh.knowledgeos.domain.KnowledgeBase;
+
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.jh.knowledgeos.domain.ApiKey;
@@ -66,6 +68,14 @@ public class ApiKeyService {
 
     @Autowired(required = false)
     public void setKnowledgeBases(KnowledgeBaseService service) { this.knowledgeBases = service; }
+
+    /** 对外返回的知识库一律给编码：编号是主键，前端按编码索引，返回编号会让回显对不上。 */
+    private String codeOf(Long id) {
+        if (id == null) { return null; }
+        if (knowledgeBases == null) { return String.valueOf(id); }
+        KnowledgeBase base = knowledgeBases.get(id);
+        return base == null || base.getBaseCode() == null ? String.valueOf(id) : base.getBaseCode();
+    }
 
     /** 授权接口的知识库标识：知识库编码优先，过渡期也收数字主键。 */
     public Long resolveKnowledgeBaseId(Object raw) {
@@ -707,7 +717,7 @@ public class ApiKeyService {
         row.put("identityMode", key.getIdentityMode());
         row.put("workloadPolicyId", key.getWorkloadPolicyId());
         row.put("ownerUserId", key.getOwnerUserId());
-        row.put("knowledgeBaseId", key.getKnowledgeBaseId());
+        row.put("knowledgeBaseId", codeOf(key.getKnowledgeBaseId()));
         row.put("knowledgeBaseName", key.getKnowledgeBaseName());
         row.put("principalId", key.getPrincipalId());
         row.put("principalName", key.getPrincipalName());
@@ -758,6 +768,8 @@ public class ApiKeyService {
             Map<String, Object> row = new LinkedHashMap<String, Object>(detail);
             Object rawTags = row.remove("permissionTagsJson");
             row.put("permissionTags", parsePermissionTags(rawTags));
+            Object rawId = row.get("knowledgeBaseId");
+            row.put("knowledgeBaseId", codeOf(rawId == null ? null : ((Number) rawId).longValue()));
             result.add(row);
         }
         return result;
@@ -861,7 +873,7 @@ public class ApiKeyService {
         List<Map<String, Object>> result = new ArrayList<Map<String, Object>>();
         for (Long id : grantedKnowledgeBases(principalId)) {
             Map<String, Object> grant = new LinkedHashMap<String, Object>();
-            grant.put("knowledgeBaseId", id);
+            grant.put("knowledgeBaseId", codeOf(id));
             result.add(grant);
         }
         return result;

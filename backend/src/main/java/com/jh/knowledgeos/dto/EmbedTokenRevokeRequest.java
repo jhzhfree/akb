@@ -15,7 +15,8 @@ public class EmbedTokenRevokeRequest {
 
     private String keyCode;
 
-    private Long knowledgeBaseId;
+    /** 知识库编码（{@code KB_xxxx}）；过渡期也收数字主键。 */
+    private String knowledgeBaseId;
 
     private String origin;
 
@@ -45,11 +46,11 @@ public class EmbedTokenRevokeRequest {
         this.keyCode = keyCode;
     }
 
-    public Long getKnowledgeBaseId() {
+    public String getKnowledgeBaseId() {
         return knowledgeBaseId;
     }
 
-    public void setKnowledgeBaseId(Long knowledgeBaseId) {
+    public void setKnowledgeBaseId(String knowledgeBaseId) {
         this.knowledgeBaseId = knowledgeBaseId;
     }
 

@@ -412,8 +412,10 @@ public class ExternalServiceAdminController {
         LocalDateTime expiresAt = parseExpiresAt(request.getExpiresAt(), properties.isServiceKeyExpiryRequired());
         validateServiceKeyExpiry(expiresAt);
         Integer limit = request.getRateLimitPerMinute() == null ? properties.getDefaultRateLimitPerMinute() : request.getRateLimitPerMinute();
-        return ApiResponse.ok(apiKeyService.create(request.getName(), request.getKnowledgeBaseId(), request.getScopes(), limit, expiresAt,
-            operator.getId(), request.getAllowedOrigins(), request.getMemoryNamespace(), request.getMemoryAgentCode()));
+        // 建 Key 时绑定的库：入参是编码，进 Service 前换成主键（不绑定=仅可见公开库，传 null）
+        return ApiResponse.ok(apiKeyService.create(request.getName(), apiKeyService.resolveKnowledgeBaseId(request.getKnowledgeBaseId()),
+            request.getScopes(), limit, expiresAt, operator.getId(), request.getAllowedOrigins(), request.getMemoryNamespace(),
+            request.getMemoryAgentCode()));
     }
 
     @PostMapping("/keys/{id}/revoke")
@@ -580,8 +582,8 @@ public class ExternalServiceAdminController {
     public ApiResponse<Object> revokeEmbedToken(@RequestBody(required = false) EmbedTokenRevokeRequest body) {
         User operator = requireManager();
         EmbedTokenRevokeRequest request = body == null ? new EmbedTokenRevokeRequest() : body;
-        return ApiResponse.ok(tokenLifecycle.revoke(request.getJti(), request.getKeyId(), request.getKeyCode(), request.getKnowledgeBaseId(),
-            request.getOrigin(), request.getReason(), operator.getId()));
+        return ApiResponse.ok(tokenLifecycle.revoke(request.getJti(), request.getKeyId(), request.getKeyCode(),
+            apiKeyService.resolveKnowledgeBaseId(request.getKnowledgeBaseId()), request.getOrigin(), request.getReason(), operator.getId()));
     }
 
     @PostMapping("/embed/tokens/{jti}/restore")
