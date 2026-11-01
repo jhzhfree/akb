@@ -42,7 +42,10 @@
         </label>
         <label class="block">
           <span class="kb-field-label">知识库 ID</span>
-          <input v-model.number="cfg.knowledgeBaseId" type="number" class="kb-input mt-1" placeholder="留空则依赖凭证绑定" />
+          <select v-model="cfg.knowledgeBaseId" class="kb-input mt-1">
+            <option :value="null" disabled>请选择知识库</option>
+            <option v-for="base in props.bases" :key="base.baseCode" :value="base.baseCode">{{ base.name }}（{{ base.baseCode }}）</option>
+          </select>
         </label>
         <label class="block xl:col-span-2">
           <span class="kb-field-label">问题</span>

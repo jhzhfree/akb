@@ -179,25 +179,14 @@ public class ExternalAccessService {
      * key without explicit grants continues to use the public-workspace sharing rule.</p>
      */
     /**
-     * 解析对外传入的知识库标识后再走授权判定：数字是内部主键，其余按知识库编码。
+     * 解析对外传入的知识库标识后再走授权判定：只接受 KB_ 开头的系统知识库 ID。
      *
      * <p>先把编码换成主键，再进下面那套 {@code grants.contains} 判断——顺序反过来的话，
      * 编码会绕过授权直接落到库上。</p>
      */
     public Long resolveKnowledgeBase(ApiKey key, Object requested) {
-        if (knowledgeBases == null) {
-            return resolveKnowledgeBase(key, numericId(requested));
-        }
+        if (knowledgeBases == null) { throw new IllegalStateException("知识库标识解析服务不可用"); }
         return resolveKnowledgeBase(key, knowledgeBases.resolveId(requested));
-    }
-
-    private static Long numericId(Object raw) {
-        if (raw == null) { return null; }
-        if (raw instanceof Number) { return ((Number) raw).longValue(); }
-        String text = String.valueOf(raw).trim();
-        if (text.isEmpty()) { return null; }
-        if (text.matches("\\d+")) { return Long.valueOf(text); }
-        throw new IllegalArgumentException("知识库不存在或不可用：" + text);
     }
 
     /**
@@ -208,7 +197,7 @@ public class ExternalAccessService {
      */
     public Long knowledgeBaseIdOf(Object raw) {
         try {
-            return knowledgeBases == null ? numericId(raw) : knowledgeBases.resolveId(raw);
+            return knowledgeBases == null ? null : knowledgeBases.resolveId(raw);
         } catch (RuntimeException e) {
             return null;
         }

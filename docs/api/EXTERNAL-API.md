@@ -4,6 +4,8 @@
 > 面向读者：需要把知识库能力接进自建业务系统 / 智能体 / IDE 的外部调用方
 > 文中所有返回样例均取自真实环境的实测响应（敏感 ID 已做替换）
 
+> 知识库参数契约：REST、MCP、SSE 检索统一使用 `knowledgeBaseId`，值取自知识库列表的同名字段，格式为 `KB_...`。数字数据库主键、旧编码参数不再支持。接口演示页通过选择知识库自动加载此 ID。示例中的 `KB_1` 等均为占位值，请替换为列表中的真实 ID。
+
 知识集成对外提供**三条通道**，共用同一个 API Key、同一套权限与同一份调用审计：
 
 | 通道 | 入口 | 适用场景 |
@@ -28,7 +30,7 @@ curl -X POST http://<host>:8080/api/external/admin/keys \
   -H 'Cookie: <控制台登录会话>' \
   -d '{
         "name": "客服工单系统",
-        "knowledgeBaseId": 1,
+        "knowledgeBaseId": "KB_1",
         "scopes": ["READ", "INGEST"],
         "rateLimitPerMinute": 120,
         "expiresAt": "2026-12-31T23:59:59"
@@ -47,7 +49,7 @@ curl -X POST http://<host>:8080/api/external/admin/keys \
     "keyCode": "AK_20260921xxxx",
     "name": "客服工单系统",
     "keyPrefix": "kos_ak_S9MP25",
-    "knowledgeBaseId": 1,
+    "knowledgeBaseId": "KB_1",
     "knowledgeBaseName": "默认知识库",
     "scopes": "READ,INGEST",
     "rateLimitPerMinute": 120,
@@ -78,8 +80,7 @@ curl -H 'X-API-Key: kos_ak_S9MP25n3HNv8hgr6VHPrTXkgK2iSBwwC' \
   "traceId": "a58c0813546648e981d5e17ef422fc8f",
   "data": [
     {
-      "id": 1,
-      "baseCode": "KB_DEFAULT",
+      "knowledgeBaseId": "KB_DEFAULT",
       "name": "默认知识库",
       "description": null,
       "status": "ACTIVE",
@@ -96,7 +97,7 @@ curl -H 'X-API-Key: kos_ak_S9MP25n3HNv8hgr6VHPrTXkgK2iSBwwC' \
 curl -X POST http://<host>:8080/api/v1/external/query \
   -H 'X-API-Key: kos_ak_xxx' \
   -H 'Content-Type: application/json' \
-  -d '{"knowledgeBaseId": 1, "question": "知识库如何做权限控制", "topK": 3, "answerFormat": "markdown"}'
+  -d '{"knowledgeBaseId": "KB_1", "question": "知识库如何做权限控制", "topK": 3, "answerFormat": "markdown"}'
 ```
 
 返回的 `data.answer` 是答案，`data.citations` 是逐条引用，`data.queryId` 可用于链路回放（见 §4.10）。
@@ -169,8 +170,8 @@ Content-Type: application/json
 
 ```json
 [
-  { "knowledgeBaseId": 12, "expiresAt": "2026-12-31T23:59:59", "reason": "项目验收期临时授权" },
-  { "knowledgeBaseId": 18, "expiresAt": null, "reason": "长期业务接入" }
+  { "knowledgeBaseId": "KB_12", "expiresAt": "2026-12-31T23:59:59", "reason": "项目验收期临时授权" },
+  { "knowledgeBaseId": "KB_18", "expiresAt": null, "reason": "长期业务接入" }
 ]
 ```
 
@@ -209,7 +210,7 @@ Content-Type: application/json
 PUT /api/external/admin/principals/{id}/knowledge-base-grants/config
 Content-Type: application/json
 
-[{ "knowledgeBaseId": 12, "permissionTags": ["team-a"], "reason": "员工业务范围" }]
+[{ "knowledgeBaseId": "KB_12", "permissionTags": ["team-a"], "reason": "员工业务范围" }]
 ```
 
 实际知识库范围取 API Key 所属 Agent 主体与 JWT 映射员工主体的有效 grant 交集；任一方无授权都拒绝访问，PUBLIC 库也不能绕过交集。检索标签继续与 Key 全局范围、Agent grant 标签和员工 grant 标签取交集。管理员可用 `GET /api/external/admin/principals/{id}/identities` 查看绑定，并用 `POST /api/external/admin/principal-identities/{identityId}/revoke` 即时吊销。此版本的业务操作 Scope 仍由 Agent API Key 控制，员工动作级 Scope 与资料级 ACL 仍在后续 P2。
@@ -499,7 +500,7 @@ curl -H 'X-API-Key: kos_ak_xxx' http://<host>:8080/api/v1/external/bases
 ```bash
 curl -X POST http://<host>:8080/api/v1/external/query \
   -H 'X-API-Key: kos_ak_xxx' -H 'Content-Type: application/json' \
-  -d '{"knowledgeBaseId":1,"question":"知识库如何做权限控制","topK":3,"answerFormat":"markdown"}'
+  -d '{"knowledgeBaseId":"KB_1","question":"知识库如何做权限控制","topK":3,"answerFormat":"markdown"}'
 ```
 
 相同的问题、只改 `answerFormat`，拿到的就是三种不同形状的答案：
@@ -933,7 +934,7 @@ curl -X POST http://<host>:8080/api/v1/external/query \
 ```bash
 curl -X POST http://<host>:8080/api/v1/external/search \
   -H 'X-API-Key: kos_ak_xxx' -H 'Content-Type: application/json' \
-  -d '{"knowledgeBaseId":1,"question":"星河项目的交付范围？","topK":3,"minScore":0.3}'
+  -d '{"knowledgeBaseId":"KB_1","question":"星河项目的交付范围？","topK":3,"minScore":0.3}'
 ```
 
 真实响应（`recall` 各通道、`candidates`、`citations` 已裁剪，实际按召回条数下发）：
@@ -946,7 +947,7 @@ curl -X POST http://<host>:8080/api/v1/external/search \
   "traceId": "7a1e0b2f3c9d4f5e8b6a1c2d3e4f5a6b",
   "data": {
     "queryId": "Q_874eb67fadc143b49cfcf2a4d9cfa270",
-    "knowledgeBaseId": 1,
+    "knowledgeBaseId": "KB_1",
     "question": "星河项目的交付范围？",
     "topK": 3,
     "effectiveTopK": 3,
@@ -1071,7 +1072,7 @@ curl -X POST http://<host>:8080/api/v1/external/search \
 
 ```bash
 curl -H 'X-API-Key: kos_ak_xxx' \
-  'http://<host>:8080/api/v1/external/cards?knowledgeBaseId=1'
+  'http://<host>:8080/api/v1/external/cards?knowledgeBaseId=KB_1'
 ```
 
 ### 4.5 GET /cards/{code} — 知识卡片详情（含证据链）
@@ -1103,7 +1104,7 @@ curl -H 'X-API-Key: kos_ak_xxx' \
 
 ```bash
 curl -H 'X-API-Key: kos_ak_xxx' \
-  'http://<host>:8080/api/v1/external/graph/K_263631…?knowledgeBaseId=1&depth=2&limit=50'
+  'http://<host>:8080/api/v1/external/graph/K_263631…?knowledgeBaseId=KB_1&depth=2&limit=50'
 ```
 
 ### 4.10 GET /queries/{queryId} — 问答链路回放
@@ -1137,7 +1138,7 @@ curl -H 'X-API-Key: kos_ak_xxx' \
   "success": true,
   "code": "OK",
   "data": {
-    "knowledgeBaseId": 1,
+    "knowledgeBaseId": "KB_1",
     "sourceCount": 15,
     "documentCount": 19,
     "chunkCount": 51,
@@ -1172,7 +1173,7 @@ curl -H 'X-API-Key: kos_ak_xxx' \
 curl -X POST http://<host>:8080/api/v1/external/documents/text \
   -H 'X-API-Key: kos_ak_xxx' -H 'Content-Type: application/json' \
   -d '{
-        "knowledgeBaseId": 1,
+        "knowledgeBaseId": "KB_1",
         "title": "2026-09 客服话术更新",
         "text": "一、退款时效：……\n二、升级路径：……",
         "permissionTags": ["客服组"]
@@ -1283,18 +1284,18 @@ curl -X POST http://<host>:8080/api/mcp \
 
 | 工具 | 入参（加粗为必填） | 说明 |
 |---|---|---|
-| `knowledge_query` | **question**、knowledgeBaseId / knowledgeBaseCode、topK、minScore、answerFormat | 知识库问答，返回答案、引用与 queryId |
-| `knowledge_search` | **query**、knowledgeBaseId / knowledgeBaseCode、topK、minScore | 只检索不生成答案 |
+| `knowledge_query` | **question**、knowledgeBaseId、topK、minScore、answerFormat | 知识库问答，返回答案、引用与 queryId |
+| `knowledge_search` | **query**、knowledgeBaseId、topK、minScore | 只检索不生成答案 |
 | `list_knowledge_bases` | — | 列出当前 Key 可见知识库（含 ID 与稳定编码） |
-| `list_knowledge_objects` | objectType（CARD / CLAIM，默认 CARD）、knowledgeBaseId / knowledgeBaseCode | 结构化知识对象清单（证据没有列表） |
-| `get_knowledge_object` | **code**、objectType（CARD / CLAIM / EVIDENCE，默认 CARD）、knowledgeBaseId / knowledgeBaseCode | 对象详情与证据链 |
-| `graph_neighbors` | **code**、knowledgeBaseId / knowledgeBaseCode、depth、limit | 图谱邻域 |
-| `ingest_text` | **text**、knowledgeBaseId / knowledgeBaseCode、title、permissionTags | 文本接入（需 INGEST） |
+| `list_knowledge_objects` | objectType（CARD / CLAIM，默认 CARD）、knowledgeBaseId | 结构化知识对象清单（证据没有列表） |
+| `get_knowledge_object` | **code**、objectType（CARD / CLAIM / EVIDENCE，默认 CARD）、knowledgeBaseId | 对象详情与证据链 |
+| `graph_neighbors` | **code**、knowledgeBaseId、depth、limit | 图谱邻域 |
+| `ingest_text` | **text**、knowledgeBaseId、title、permissionTags | 文本接入（需 INGEST） |
 | `memory_recall` | **query**、scopeType、scopeCode、limit | 召回记忆（需 MEMORY_READ 且服务启用） |
 | `memory_capture` | **memoryLevel**、**scopeType**、**content**、scopeCode、tags、sourceType、sourceRef、idempotencyKey、confidence、importance、expiresInDays | 保存记忆（需 MEMORY_WRITE） |
 | `memory_forget` | **memoryCode** | 删除记忆（需 MEMORY_WRITE） |
 
-> 知识库定位：`knowledgeBaseId` 与 `knowledgeBaseCode` 给一个即可，绑定式 Key 两个都不用给。
+> 知识库定位：`knowledgeBaseId` 必填，仅接受系统生成的 `KB_...` ID；不支持数字主键和旧选择参数。
 > 它们都不再是必填——调用方（尤其是 Agent）通常不知道 ID，必填只会让它干脆不调。
 >
 > 5.2 之前单列过 `list_knowledge_cards` / `get_knowledge_card` / `list_claims` / `get_claim` /
@@ -1311,7 +1312,7 @@ curl -X POST http://<host>:8080/api/mcp \
         "jsonrpc":"2.0","id":2,"method":"tools/call",
         "params":{
           "name":"knowledge_query",
-          "arguments":{"knowledgeBaseId":1,"question":"退款时效是多久","topK":5,"answerFormat":"markdown","minScore":0.6}
+          "arguments":{"knowledgeBaseId":"KB_1","question":"退款时效是多久","topK":5,"answerFormat":"markdown","minScore":0.6}
         }
       }'
 ```
@@ -1386,7 +1387,7 @@ curl -X POST http://<host>:8080/api/mcp \
 | 事件 | 载荷 | 说明 |
 |---|---|---|
 | `open` | `{knowledgeBaseId, question, topK, effectiveTopK, answerFormat, content, stages:[{key,label}], time}` | 握手帧，先告知将要执行哪些阶段；`content` 是服务端实际生效的交付方式（`final` = 答案整体在 `done` 里，`stream` = 逐字推 `delta`），`topK` 与 `effectiveTopK` 的口径同 `/query` |
-| `stage` | `{"knowledgeBaseId":1,"stage":"REWRITE","time":1789970566684}` | 依次 REWRITE → RECALL → FUSION → RERANK → ANSWER |
+| `stage` | `{"knowledgeBaseId":"KB_1","stage":"REWRITE","time":1789970566684}` | 依次 REWRITE → RECALL → FUSION → RERANK → ANSWER |
 | `delta` | 字符串（答案切片） | 逐片输出答案正文，按 `answerFormat` 交付（不传即默认格式）。切片内含换行时，按 SSE 规范拆成**多条 `data:` 字段**，客户端需用 `\n` 拼回 —— `EventSource` 会自动拼好，手写解析器也必须照做，否则换行会被当成帧结束、后半截被丢弃（表现为整段答案挤成一行）。当 `content=final` 时不推送 `delta` 事件，答案在 `done.answer` 里整体交付 —— 与阻塞式 `/api/v1/external/query` 拿到的内容同源 |
 | `citation` | `{"citations":[ … ]}` | 引用一次性下发，字段同 `/query` 的 `citations` |
 | `done` | `{queryId, knowledgeBaseId, question, answer, answerFormat, model, trace, confidence, durationMs, channels, strategies, reranked, questionTypeLabel, rewrittenQuery, conclusionSource, answerQualification, contextChars}` | 完成帧，`answerFormat` 为实际生效的交付格式；`conclusionSource` / `answerQualification` 与 `/query` 同构，客户端可以复用同一套渲染 |
@@ -1398,22 +1399,22 @@ curl -X POST http://<host>:8080/api/mcp \
 
 ```
 event:stage
-data:{"knowledgeBaseId":1,"stage":"REWRITE","time":1789970566684}
+data:{"knowledgeBaseId":"KB_1","stage":"REWRITE","time":1789970566684}
 
 event:stage
-data:{"knowledgeBaseId":1,"stage":"RECALL","time":1789970566685}
+data:{"knowledgeBaseId":"KB_1","stage":"RECALL","time":1789970566685}
 ```
 
 ```bash
 curl -N -H 'X-API-Key: kos_ak_xxx' -H 'Accept: text/event-stream' \
-  'http://<host>:8080/api/v1/external/stream/query?knowledgeBaseId=1&question=%E7%9F%A5%E8%AF%86%E5%BA%93%E6%9D%83%E9%99%90&topK=3&answerFormat=markdown'
+  'http://<host>:8080/api/v1/external/stream/query?knowledgeBaseId=KB_1&question=%E7%9F%A5%E8%AF%86%E5%BA%93%E6%9D%83%E9%99%90&topK=3&answerFormat=markdown'
 ```
 
 浏览器端：
 
 ```javascript
 const es = new EventSource(
-  'http://<host>:8080/api/v1/external/stream/query?knowledgeBaseId=1&question=' +
+  'http://<host>:8080/api/v1/external/stream/query?knowledgeBaseId=KB_1&question=' +
     encodeURIComponent('知识库如何做权限控制') + '&answerFormat=markdown'
 );
 // 注意：浏览器 EventSource 不能自定义请求头，请使用 ?apiKey= 或经网关注入鉴权头
@@ -1438,7 +1439,7 @@ es.addEventListener('error', e => { console.error('失败', e.data); es.close();
 
 ```
 event:open
-data:{"subscriptionId":"SUB-1789970566710-0","knowledgeBaseId":1,"types":"ALL","replayFrom":56,"maxMinutes":30}
+data:{"subscriptionId":"SUB-1789970566710-0","knowledgeBaseId":"KB_1","types":"ALL","replayFrom":56,"maxMinutes":30}
 retry:15000
 ```
 
@@ -1457,7 +1458,7 @@ retry:15000
 
 ```bash
 curl -N -H 'X-API-Key: kos_ak_xxx' \
-  'http://<host>:8080/api/v1/external/stream/events?knowledgeBaseId=1&types=INGESTION_COMPLETED,KNOWLEDGE_OBJECT_CREATED'
+  'http://<host>:8080/api/v1/external/stream/events?knowledgeBaseId=KB_1&types=INGESTION_COMPLETED,KNOWLEDGE_OBJECT_CREATED'
 ```
 
 ---
@@ -1628,7 +1629,7 @@ r = requests.post(
     f"{BASE}/documents/text",
     headers=HEADERS,
     json={
-        "knowledgeBaseId": 1,
+        "knowledgeBaseId": "KB_1",
         "title": "2026-09 客服话术更新",
         "text": "一、退款时效：……\n二、升级路径：……",
         "permissionTags": ["客服组"],
@@ -1646,7 +1647,7 @@ import json, requests
 r = requests.get(
     "http://<host>:8080/api/v1/external/stream/events",
     headers={"X-API-Key": KEY, "Accept": "text/event-stream"},
-    params={"knowledgeBaseId": 1, "types": "INGESTION_COMPLETED,KNOWLEDGE_OBJECT_CREATED"},
+    params={"knowledgeBaseId": "KB_1", "types": "INGESTION_COMPLETED,KNOWLEDGE_OBJECT_CREATED"},
     stream=True,
     timeout=None,
 )
@@ -1732,7 +1733,7 @@ knowledge:
 ```http
 POST /api/v1/external/kb/retrievals
 Authorization: Bearer {apiKey}
-X-Knowledge-Base-Id: 10
+X-Knowledge-Base-Id: KB_10
 Content-Type: application/json
 
 { "question": "年假政策是什么？", "topK": 5, "includeAnswer": false }
@@ -1744,7 +1745,7 @@ Content-Type: application/json
 | `topK` | 否 | 期望条数上限；超出 50 取 50（不算错误），不传取 10 |
 | `includeAnswer` | 否 | 默认 `false`：只召回、跳过答案生成。`true` 时连本系统生成的答案一起给，耗时更长 |
 
-知识库由 `X-Knowledge-Base-Id` 指定：纯数字按知识库 id，其余按库编码 `base_code`；
+知识库由 `X-Knowledge-Base-Id` 指定：仅接受 `KB_...` 系统知识库 ID，不能使用数字主键；
 查不到返回 404 `KB_NOT_FOUND`。
 
 **响应**

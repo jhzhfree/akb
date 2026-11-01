@@ -87,6 +87,7 @@ class ExternalQueryRequestTest {
     private static Set<ConstraintViolation<ExternalQueryRequest>> violationsOf(ExternalQueryRequest r, double value) {
         // @NotBlank on `question` would otherwise add its own violation and throw off counts.
         r.setQuestion("q");
+        r.setKnowledgeBaseId("KB_TEST");
         r.setMinScore(value);
         return validator.validate(r);
     }

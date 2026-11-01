@@ -5,7 +5,7 @@ import java.util.List;
 /** Per-knowledge-base grant settings managed by a platform administrator. */
 public class ExternalKnowledgeBaseGrantRequest {
 
-    /** 知识库编码（{@code KB_xxxx}）；过渡期也收数字主键。 */
+    /** 知识库编码（{@code KB_xxxx}）；仅接受 KB_ 开头的系统标识。 */
     private String knowledgeBaseId;
     private String expiresAt;
     private String reason;

@@ -57,7 +57,7 @@ public class ExternalApiController {
 
     private final KnowledgeProperties.External properties;
 
-    /** 第三方检索协议用请求头指库（NovaWork standard）：数字 id 或库编码。 */
+    /** 第三方检索协议用请求头指库（NovaWork standard）：KB_ 开头的系统 ID。 */
     private static final String KB_ID_HEADER = "X-Knowledge-Base-Id";
 
     public ExternalApiController(ExternalAccessService accessService, ExternalKnowledgeFacade facade, ExternalAuditService auditService,
@@ -197,7 +197,7 @@ public class ExternalApiController {
      */
     @PostMapping("/kb/retrievals")
     @Operation(summary = "第三方检索协议：召回片段，可选附带答案",
-        description = "请求头 X-Knowledge-Base-Id 指定知识库（数字 id 或库编码）；"
+        description = "请求头 X-Knowledge-Base-Id 指定知识库（KB_ 开头的系统 ID）；"
             + "请求体 includeAnswer=true 时额外返回 answer（会走答案生成，耗时更长）")
     public ResponseEntity<Object> retrievals(HttpServletRequest request,
         @RequestBody(required = false) Map<String, Object> body) {
@@ -220,6 +220,9 @@ public class ExternalApiController {
             accessService.assertScope(key, ApiKey.SCOPE_SEARCH);
             if (withAnswer) {
                 accessService.assertScope(key, ApiKey.SCOPE_QUERY);
+            }
+            if (body != null && body.containsKey("knowledgeBaseCode")) {
+                throw KbRetrievalException.invalidArgument("请仅使用 knowledgeBaseId（KB_ 开头）");
             }
             kb = retrievals.resolveKnowledgeBase(key, request.getHeader(KB_ID_HEADER),
                 body == null ? null : body.get("knowledgeBaseId"));
@@ -316,6 +319,9 @@ public class ExternalApiController {
             String requiredScope = requiredScope(method);
             if (requiredScope != null) {
                 accessService.assertScope(key, requiredScope);
+            }
+            if (request.getParameter("knowledgeBaseCode") != null) {
+                throw new IllegalArgumentException("请仅使用 knowledgeBaseId（KB_ 开头）");
             }
             Long kb = requestedKb == null && (!key.isWorkloadCredential() || "GET /bases".equals(method))
                 ? null : accessService.resolveKnowledgeBase(key, requestedKb);

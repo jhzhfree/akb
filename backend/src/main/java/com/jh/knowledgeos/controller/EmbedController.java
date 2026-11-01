@@ -96,7 +96,7 @@ public class EmbedController {
         accessService.assertScope(key, ApiKey.SCOPE_READ_OBJECT);
         Long kb = accessService.resolveKnowledgeBase(key, knowledgeBaseId);
         Map<String, Object> data = new LinkedHashMap<String, Object>();
-        data.put("knowledgeBaseId", kb);
+        data.put("knowledgeBaseId", knowledgeBaseId);
         data.put("knowledgeBaseName", knowledgeBaseName(key, kb));
         data.put("knowledgeBaseDefaultQuery", knowledgeBaseDefaultQuery(key, kb));
         data.put("stages", stages());
@@ -137,7 +137,7 @@ public class EmbedController {
         data.put("permanent", issued.isPermanent());
         data.put("expiresAt", issued.isPermanent() ? null : issued.getExpiresAt());
         data.put("expiresInSeconds", issued.isPermanent() ? null : Math.max(0L, (issued.getExpiresAt() - System.currentTimeMillis()) / 1000L));
-        data.put("knowledgeBaseId", kb);
+        data.put("knowledgeBaseId", knowledgeBaseId);
         data.put("origin", site);
         data.put("scope", ApiKey.SCOPE_QUERY);
         return data;
@@ -146,7 +146,7 @@ public class EmbedController {
     private String knowledgeBaseName(ApiKey key, Long kb) {
         try {
             for (Map<String, Object> base : facade.basesFor(key, accessService.grantedKnowledgeBases(key))) {
-                Object id = base.get("id");
+                Object id = accessService.knowledgeBaseIdOf(base.get("knowledgeBaseId"));
                 if (id != null && String.valueOf(id).equals(String.valueOf(kb))) {
                     return String.valueOf(base.get("name"));
                 }
@@ -163,7 +163,7 @@ public class EmbedController {
     private String knowledgeBaseDefaultQuery(ApiKey key, Long kb) {
         try {
             for (Map<String, Object> base : facade.basesFor(key, accessService.grantedKnowledgeBases(key))) {
-                Object id = base.get("id");
+                Object id = accessService.knowledgeBaseIdOf(base.get("knowledgeBaseId"));
                 if (id != null && String.valueOf(id).equals(String.valueOf(kb))) {
                     Object query = base.get("defaultQuery");
                     return query == null ? "" : String.valueOf(query);

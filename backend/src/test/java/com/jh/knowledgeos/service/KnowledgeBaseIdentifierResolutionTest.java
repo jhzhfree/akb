@@ -1,7 +1,6 @@
 package com.jh.knowledgeos.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -10,7 +9,7 @@ import com.jh.knowledgeos.domain.KnowledgeBase;
 import com.jh.knowledgeos.mapper.KnowledgeMapper;
 import org.junit.jupiter.api.Test;
 
-/** 对外接口里的知识库标识：数字是内部主键，其余按知识库编码。 */
+/** 对外接口里的知识库标识：仅接受 KB_ 开头的系统 ID。 */
 class KnowledgeBaseIdentifierResolutionTest {
 
     private KnowledgeBaseService service(KnowledgeMapper mapper) {
@@ -25,19 +24,11 @@ class KnowledgeBaseIdentifierResolutionTest {
         return base;
     }
 
-    /** 没传就是没传：不能拿 0 之类的默认值冒充"调用方指定了库"。 */
-    @Test void absentIdentifierStaysNull() {
+    @Test void rejectsMissingNumericAndAliasIdentifiers() {
         KnowledgeBaseService service = service(mock(KnowledgeMapper.class));
-        assertNull(service.resolveId(null));
-        assertNull(service.resolveId(""));
-        assertNull(service.resolveId("   "));
-    }
-
-    /** 数字按主键走，与改造前完全一致——已经发出去的脚本不该因为这次改动失效。 */
-    @Test void numericIdentifierIsTreatedAsPrimaryKey() {
-        assertEquals(6L, service(mock(KnowledgeMapper.class)).resolveId(6L));
-        assertEquals(6L, service(mock(KnowledgeMapper.class)).resolveId("6"));
-        assertEquals(6L, service(mock(KnowledgeMapper.class)).resolveId(" 6 "));
+        for (Object invalid : new Object[] {null, "", "   ", 6L, "6", "HR-POLICY"}) {
+            assertThrows(IllegalArgumentException.class, () -> service.resolveId(invalid));
+        }
     }
 
     @Test void codeResolvesThroughBaseCode() {

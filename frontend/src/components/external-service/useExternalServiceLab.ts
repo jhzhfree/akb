@@ -156,9 +156,9 @@ export function useExternalServiceLab(props: ExternalServiceLabProps) {
       + 'responseMode（minimal / basic / full，默认 full：minimal 只给答案与数量口径，basic 补回 candidates 与 selectedContext）',
     search:'同 /query（answerFormat 与 responseMode 都对返回生效：minimal 只给证据，basic 补回 candidates）· '
       + 'minScore（0~1，可选）过滤候选，返回的 returned 是过滤后条数',
-    // 协议的库标识是请求头 X-Knowledge-Base-Id（数字 id 或库编码）；联调台不带自定义头，
+    // 协议的库标识是请求头 X-Knowledge-Base-Id（KB_ 开头的知识库 ID）；联调台不带自定义头，
     // 所以模板里用 body 的 knowledgeBaseId——服务端两个入口都认，效果一样。
-    retrievals:'X-Knowledge-Base-Id 头（必填，数字 id 或库编码；联调台可用 body 的 knowledgeBaseId）· '
+    retrievals:'X-Knowledge-Base-Id 头（必填，KB_ 开头的知识库 ID；联调台可用 body 的 knowledgeBaseId）· '
       + 'question（必填）· topK（1–50，默认 10）· '
       + 'includeAnswer（默认 false：只召回，约 0.4s；true 时额外返回 answer，约 6s）',
     cards:'knowledgeBaseId（可选）',
@@ -611,14 +611,14 @@ export function useExternalServiceLab(props: ExternalServiceLabProps) {
     {
       key:'callGraph', label:'tools/call graph_neighbors',
       body:() => ({ jsonrpc:'2.0', id:9, method:'tools/call', params:{
-        name:'graph_neighbors', arguments:{ knowledgeBaseId:cfg.knowledgeBaseId ?? 1, code:cfg.code || 'CARD-DEMO', depth:2, limit:50 },
+        name:'graph_neighbors', arguments:{ knowledgeBaseId:cfg.knowledgeBaseId ?? '', code:cfg.code || 'CARD-DEMO', depth:2, limit:50 },
       } }),
     },
     {
       key:'callIngest', label:'tools/call ingest_text（需 INGEST 权限）',
       body:() => ({ jsonrpc:'2.0', id:10, method:'tools/call', params:{
         name:'ingest_text', arguments:{
-          knowledgeBaseId:cfg.knowledgeBaseId ?? 1, title:'联调台 MCP 接入', text:'这是一段来自 MCP 的测试文本。',
+          knowledgeBaseId:cfg.knowledgeBaseId ?? '', title:'联调台 MCP 接入', text:'这是一段来自 MCP 的测试文本。',
         },
       } }),
     },

@@ -73,8 +73,8 @@ class McpServerServiceTest {
 
         assertNotNull(((Map<?, ?>) ((Map<?, ?>) search.get("inputSchema")).get("properties")).get("permissionTags"));
         assertNotNull(((Map<?, ?>) ((Map<?, ?>) query.get("inputSchema")).get("properties")).get("permissionTags"));
-        assertFalse(((List<?>) ((Map<?, ?>) search.get("inputSchema")).get("required")).contains("knowledgeBaseId"));
-        assertNotNull(((Map<?, ?>) ((Map<?, ?>) search.get("inputSchema")).get("properties")).get("knowledgeBaseCode"));
+        assertTrue(((List<?>) ((Map<?, ?>) search.get("inputSchema")).get("required")).contains("knowledgeBaseId"));
+        assertEquals(null, ((Map<?, ?>) ((Map<?, ?>) search.get("inputSchema")).get("properties")).get("knowledgeBaseCode"));
     }
 
     @Test
@@ -149,7 +149,7 @@ class McpServerServiceTest {
     }
 
     @Test
-    void searchAcceptsStableKnowledgeBaseCodeAndStillChecksApiKeyScope() throws Exception {
+    void searchUsesCanonicalKnowledgeBaseIdAndStillChecksApiKeyScope() throws Exception {
         ExternalAccessService access = mock(ExternalAccessService.class);
         ExternalKnowledgeFacade facade = mock(ExternalKnowledgeFacade.class);
         ApiKey key = mock(ApiKey.class);
@@ -157,18 +157,18 @@ class McpServerServiceTest {
         List<Long> grantedIds = Collections.singletonList(23L);
         when(access.grantedKnowledgeBases(key)).thenReturn(grantedIds);
         when(facade.basesFor(key, grantedIds)).thenReturn(Arrays.asList(knowledgeBaseMetadata()));
-        when(access.resolveKnowledgeBase(key, 23L)).thenReturn(23L);
+        when(access.resolveKnowledgeBase(key, (Object) "KB_OPS")).thenReturn(23L);
         when(facade.search(eq(key), eq(23L), eq("leave policy"), eq((Integer) null), eq(Collections.emptyList()), eq(PlatformEventPublisher.SOURCE_MCP),
             eq((Double) null))).thenReturn(Collections.<String, Object>singletonMap("queryId", "q-code"));
 
         McpServerService service = new McpServerService(access, facade, new ObjectMapper());
         Map<String, Object> args = new LinkedHashMap<String, Object>();
-        args.put("knowledgeBaseCode", "ops-runbook");
+        args.put("knowledgeBaseId", "KB_OPS");
         args.put("query", "leave policy");
 
         Map<String, Object> result = service.toolsCall(key, toolCall("knowledge_search", args));
 
-        verify(access).resolveKnowledgeBase(key, 23L);
+        verify(access).resolveKnowledgeBase(key, (Object) "KB_OPS");
         verify(access).assertScope(key, ApiKey.SCOPE_SEARCH);
         assertEquals("q-code", ((Map<?, ?>) result.get("structuredContent")).get("queryId"));
     }
@@ -227,7 +227,7 @@ class McpServerServiceTest {
         ExternalAccessService access = mock(ExternalAccessService.class);
         ExternalKnowledgeFacade facade = mock(ExternalKnowledgeFacade.class);
         ApiKey key = mock(ApiKey.class);
-        when(access.resolveKnowledgeBase(key, 23L)).thenReturn(23L);
+        when(access.resolveKnowledgeBase(key, (Object) "KB_OPS")).thenReturn(23L);
         Map<String, Object> expected = new LinkedHashMap<String, Object>();
         expected.put("queryId", "q-1");
         when(facade.search(eq(key), eq(23L), eq("leave policy"), eq(5), eq(Arrays.asList("hr")), eq(PlatformEventPublisher.SOURCE_MCP),
@@ -235,7 +235,7 @@ class McpServerServiceTest {
 
         McpServerService service = new McpServerService(access, facade, new ObjectMapper());
         Map<String, Object> args = new LinkedHashMap<String, Object>();
-        args.put("knowledgeBaseId", 23);
+        args.put("knowledgeBaseId", "KB_OPS");
         args.put("query", "leave policy");
         args.put("topK", 5);
         args.put("permissionTags", Arrays.asList(" hr ", " "));
@@ -298,17 +298,17 @@ class McpServerServiceTest {
         ExternalKnowledgeFacade facade = mock(ExternalKnowledgeFacade.class);
         ApiKey key = mock(ApiKey.class);
         List<String> tags = Collections.emptyList();
-        when(access.resolveKnowledgeBase(key, 23L)).thenReturn(23L);
+        when(access.resolveKnowledgeBase(key, (Object) "KB_OPS")).thenReturn(23L);
         when(facade.tagsFor(key, 23L)).thenReturn(tags);
         McpServerService service = new McpServerService(access, facade, new ObjectMapper());
 
         Map<String, Object> card = new LinkedHashMap<String, Object>();
-        card.put("knowledgeBaseId", 23);
+        card.put("knowledgeBaseId", "KB_OPS");
         card.put("code", "SOP-001");
         service.toolsCall(key, toolCall("get_knowledge_card", card));
 
         Map<String, Object> evidence = new LinkedHashMap<String, Object>();
-        evidence.put("knowledgeBaseId", 23);
+        evidence.put("knowledgeBaseId", "KB_OPS");
         evidence.put("evidenceCode", "EV-001");
         service.toolsCall(key, toolCall("get_evidence", evidence));
 
@@ -323,12 +323,12 @@ class McpServerServiceTest {
         ExternalKnowledgeFacade facade = mock(ExternalKnowledgeFacade.class);
         ApiKey key = mock(ApiKey.class);
         List<String> tags = Collections.emptyList();
-        when(access.resolveKnowledgeBase(key, 23L)).thenReturn(23L);
+        when(access.resolveKnowledgeBase(key, (Object) "KB_OPS")).thenReturn(23L);
         when(facade.tagsFor(key, 23L)).thenReturn(tags);
         McpServerService service = new McpServerService(access, facade, new ObjectMapper());
 
         Map<String, Object> args = new LinkedHashMap<String, Object>();
-        args.put("knowledgeBaseId", 23);
+        args.put("knowledgeBaseId", "KB_OPS");
         args.put("objectType", "claim");
         args.put("code", "CL-001");
         service.toolsCall(key, toolCall("get_knowledge_object", args));
@@ -337,23 +337,21 @@ class McpServerServiceTest {
 
         // 证据没有列表接口，列出来会误导模型以为有
         Map<String, Object> listing = new LinkedHashMap<String, Object>();
-        listing.put("knowledgeBaseId", 23);
+        listing.put("knowledgeBaseId", "KB_OPS");
         listing.put("objectType", "EVIDENCE");
         assertThrows(IllegalArgumentException.class,
             () -> service.toolsCall(key, toolCall("list_knowledge_objects", listing)));
     }
 
-    /** knowledgeBaseId 不再必填：模型通常不知道 ID，必填会让它干脆不调这个工具。 */
     @Test
-    void knowledgeBaseIdIsNoLongerRequired() {
+    void knowledgeBaseIdIsRequiredOnlyForKnowledgeTools() {
         McpServerService service = new McpServerService(null, null, new ObjectMapper());
         List<Map<String, Object>> tools = (List<Map<String, Object>>) service.toolsList().get("tools");
-
-        assertFalse(tools.isEmpty());
         for (Map<String, Object> tool : tools) {
-            List<?> required = (List<?>) ((Map<?, ?>) tool.get("inputSchema")).get("required");
-            assertFalse(required.contains("knowledgeBaseId"),
-                String.valueOf(tool.get("name")) + " 仍把 knowledgeBaseId 设为必填");
+            Map<?, ?> schema = (Map<?, ?>) tool.get("inputSchema");
+            if (((Map<?, ?>) schema.get("properties")).containsKey("knowledgeBaseId")) {
+                assertTrue(((List<?>) schema.get("required")).contains("knowledgeBaseId"));
+            }
         }
     }
 
@@ -390,7 +388,7 @@ class McpServerServiceTest {
         ApiKey key = mock(ApiKey.class);
         List<String> tags = Collections.emptyList();
         when(access.knowledgeBaseIdOf("KB_OPS")).thenReturn(23L);
-        when(access.resolveKnowledgeBase(key, 23L)).thenReturn(23L);
+        when(access.resolveKnowledgeBase(key, (Object) "KB_OPS")).thenReturn(23L);
         when(facade.tagsFor(key, 23L)).thenReturn(tags);
         McpServerService service = new McpServerService(access, facade, new ObjectMapper());
 
@@ -399,7 +397,7 @@ class McpServerServiceTest {
         args.put("code", "SOP-001");
         service.toolsCall(key, toolCall("get_knowledge_card", args));
 
-        verify(access).resolveKnowledgeBase(key, 23L);
+        verify(access).resolveKnowledgeBase(key, (Object) "KB_OPS");
         verify(facade).objectDetail(eq(23L), eq("CARD"), eq("SOP-001"), eq(tags));
     }
 
@@ -409,7 +407,7 @@ class McpServerServiceTest {
         ExternalAccessService access = mock(ExternalAccessService.class);
         ExternalKnowledgeFacade facade = mock(ExternalKnowledgeFacade.class);
         ApiKey key = mock(ApiKey.class);
-        when(access.knowledgeBaseIdOf("KB_NOPE")).thenReturn(null);
+        when(access.resolveKnowledgeBase(key, (Object) "KB_NOPE")).thenThrow(new IllegalArgumentException("unknown knowledge base"));
         McpServerService service = new McpServerService(access, facade, new ObjectMapper());
 
         Map<String, Object> args = new LinkedHashMap<String, Object>();

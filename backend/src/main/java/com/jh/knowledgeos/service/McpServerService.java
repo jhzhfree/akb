@@ -126,7 +126,7 @@ public class McpServerService {
             + "或用户要求「查一下 / 查文档 / 有没有规定 / 依据是什么」，"
             + "优先用 knowledge_query 作答，并把返回的引用一并给出。"
             + "只要原文片段、或要确认库里有没有某份资料时，用 knowledge_search。"
-            + "不知道该查哪个知识库时，先用 list_knowledge_bases 拿到 ID 与稳定编码。"
+            + "不知道该查哪个知识库时，先用 list_knowledge_bases 拿到 knowledgeBaseId（KB_ 开头）。"
             + "不要用这些工具做通用闲聊、计算或实时数据查询——库里没有答案就直说。"
             + "平台启用记忆服务且凭证允许 MEMORY_READ / MEMORY_WRITE 时，会显示对应记忆工具。"
             + "知识库范围、Agent 身份和记忆命名空间授权始终由服务端强制执行。");
@@ -173,34 +173,32 @@ public class McpServerService {
                 + "当用户询问公司制度、流程 SOP、产品文档、故障处理、项目资料、技术规范等"
                 + "「库里应该有答案」的问题时使用，也可用于事实查证与溯源。"
                 + "不要用于通用闲聊、计算或实时数据查询。"
-                + "例：knowledgeBaseCode=\"hr-policy\", question=\"年假怎么申请？\"",
+                + "例：knowledgeBaseId=\"KB_xxxx\", question=\"年假怎么申请？\"",
             schema(properties(
-                prop("knowledgeBaseId", "string", "知识库编码（KB_xxxx）；过渡期也收数字主键。不知道就先调 list_knowledge_bases"),
-                prop("knowledgeBaseCode", "string", "知识库稳定编码；绑定式 API Key 可省略此项"),
+                prop("knowledgeBaseId", "string", "知识库 ID（KB_ 开头的系统标识），先调 list_knowledge_bases 获取"),
                 prop("question", "string", "要提问的问题，写成完整的自然语言问句"), prop("topK", "integer", "召回数量，默认 10"),
                 arrayProp("permissionTags", "可选的检索标签过滤；知识库 ACL 仍由服务端强制执行"),
                 prop("minScore", "number", "最低相关度分数（0~1）：低于该分数的候选不参与答案生成；不传即不过滤"),
                 prop("answerFormat", "string", "答案返回格式：default（不传即此项）/ markdown / text / html；返回值里的 answerFormat 是实际生效的那个")),
-                Arrays.asList("question")), true, false));
+                Arrays.asList("knowledgeBaseId", "question")), true, false));
         }
         if (key == null || key.hasScope(ApiKey.SCOPE_SEARCH)) {
         tools.add(tool("knowledge_search", "知识库检索",
             "只在知识库里检索原文片段，不生成答案。"
                 + "当你需要引用原文、要自己组织答案，或想确认库里有没有某份资料时使用；"
                 + "要直接回答用户的问题则用 knowledge_query。检索语句用关键词比用整句命中率更高。"
-                + "例：knowledgeBaseCode=\"hr-policy\", query=\"年假 申请 流程\"",
+                + "例：knowledgeBaseId=\"KB_xxxx\", query=\"年假 申请 流程\"",
             schema(properties(
-                prop("knowledgeBaseId", "string", "知识库编码（KB_xxxx）；过渡期也收数字主键。不知道就先调 list_knowledge_bases"),
-                prop("knowledgeBaseCode", "string", "知识库稳定编码；绑定式 API Key 可省略此项"),
+                prop("knowledgeBaseId", "string", "知识库 ID（KB_ 开头的系统标识），先调 list_knowledge_bases 获取"),
                 prop("query", "string", "检索语句，关键词或问题均可"), prop("topK", "integer", "召回数量，默认 10"),
                 arrayProp("permissionTags", "可选的检索标签过滤；知识库 ACL 仍由服务端强制执行"),
                 prop("minScore", "number", "最低相关度分数（0~1）：低于该分数的候选不返回；不传即不过滤。返回里的 returned 是过滤后实际给出的条数")),
-                Arrays.asList("query")), true, false));
+                Arrays.asList("knowledgeBaseId", "query")), true, false));
         }
         if (key == null || key.hasScope(ApiKey.SCOPE_LIST)) {
         tools.add(tool("list_knowledge_bases", "列出知识库",
-            "列出当前凭证可见的知识库（含 ID 与稳定编码）。"
-                + "当你不知道该查哪个知识库、或需要 knowledgeBaseId / knowledgeBaseCode 时先调它，"
+            "列出当前凭证可见的知识库（含 knowledgeBaseId）。"
+                + "当你不知道该查哪个知识库、或需要 knowledgeBaseId 时先调它，"
                 + "它是其他知识工具的前置步骤。",
             schema(new LinkedHashMap<String, Object>(), new ArrayList<String>()), true, false));
         }
@@ -214,8 +212,7 @@ public class McpServerService {
                 + "（它还能按编码读 EVIDENCE 证据原文，证据没有列表）。"
                 + "例：objectType=\"CLAIM\"",
             schema(properties(
-                prop("knowledgeBaseId", "string", "知识库编码（KB_xxxx）；过渡期也收数字主键。不知道就先调 list_knowledge_bases"),
-                prop("knowledgeBaseCode", "string", "知识库稳定编码；绑定式 API Key 可省略"),
+                prop("knowledgeBaseId", "string", "知识库 ID（KB_ 开头的系统标识），先调 list_knowledge_bases 获取"),
                 enumProp("objectType", "对象类型，默认 CARD", "CARD", "CLAIM")),
                 new ArrayList<String>()), true, false));
         tools.add(tool("get_knowledge_object", "读取知识对象",
@@ -223,8 +220,7 @@ public class McpServerService {
                 + "拿到引用里的编码后想看原文时用；不知道编码就先用 list_knowledge_objects 列出来。"
                 + "例：objectType=\"CARD\", code=\"SOP-001\"",
             schema(properties(
-                prop("knowledgeBaseId", "string", "知识库编码（KB_xxxx）；过渡期也收数字主键。不知道就先调 list_knowledge_bases"),
-                prop("knowledgeBaseCode", "string", "知识库稳定编码；绑定式 API Key 可省略"),
+                prop("knowledgeBaseId", "string", "知识库 ID（KB_ 开头的系统标识），先调 list_knowledge_bases 获取"),
                 enumProp("objectType", "对象类型，默认 CARD", "CARD", "CLAIM", "EVIDENCE"),
                 prop("code", "string", "对象编码；旧工具里的 evidenceCode 也接受")),
                 Arrays.asList("code")), true, false));
@@ -232,8 +228,7 @@ public class McpServerService {
             "读取某个实体或知识对象的图谱邻域（多跳关系）。"
                 + "适合回答「A 影响了哪些服务」「X 依赖什么」这类关系型问题；"
                 + "纯文本型问题用 knowledge_query 更合适。",
-            schema(properties(prop("knowledgeBaseId", "string", "知识库编码（KB_xxxx）；过渡期也收数字主键。不知道就先调 list_knowledge_bases"),
-                prop("knowledgeBaseCode", "string", "知识库稳定编码；绑定式 API Key 可省略"),
+            schema(properties(prop("knowledgeBaseId", "string", "知识库 ID（KB_ 开头的系统标识），先调 list_knowledge_bases 获取"),
                 prop("code", "string", "对象编码"), prop("depth", "integer", "跳数，默认 2"), prop("limit", "integer", "返回上限，默认 50")),
                 Arrays.asList("code")), true, false));
         }
@@ -270,8 +265,7 @@ public class McpServerService {
                     + "当用户要求「把这段存进知识库 / 记到文档里」时使用；"
                     + "只是希望这次对话记住，用 memory_capture。",
                 schema(properties(
-                    prop("knowledgeBaseId", "string", "知识库编码（KB_xxxx）；过渡期也收数字主键。不知道就先调 list_knowledge_bases"),
-                    prop("knowledgeBaseCode", "string", "知识库稳定编码；绑定式 API Key 可省略"),
+                    prop("knowledgeBaseId", "string", "知识库 ID（KB_ 开头的系统标识），先调 list_knowledge_bases 获取"),
                     prop("title", "string", "标题，作为来源名"),
                     prop("text", "string", "正文内容"),
                     prop("permissionTags", "string", "权限标签，逗号分隔")),
@@ -391,9 +385,9 @@ public class McpServerService {
         List<Map<String, Object>> resources = new ArrayList<Map<String, Object>>();
         for (Map<String, Object> base : facade.basesFor(key, accessService.grantedKnowledgeBases(key))) {
             Map<String, Object> resource = new LinkedHashMap<String, Object>();
-            resource.put("uri", "knowledge://kb/" + base.get("baseCode"));
+            resource.put("uri", "knowledge://kb/" + base.get("knowledgeBaseId"));
             resource.put("name", String.valueOf(base.get("name")));
-            String description = "知识库概览：" + base.get("baseCode") + "（可见范围 " + base.get("visibility") + "）";
+            String description = "知识库概览：" + base.get("knowledgeBaseId") + "（可见范围 " + base.get("visibility") + "）";
             Object sample = base.get("defaultQuery");
             if (sample != null && !String.valueOf(sample).trim().isEmpty()) {
                 description = description + "，示例问句：" + String.valueOf(sample).trim();
@@ -414,9 +408,9 @@ public class McpServerService {
             throw new IllegalArgumentException("不支持的资源 URI：" + uri);
         }
         String[] parts = uri.substring("knowledge://".length()).split("/");
-        // knowledge://kb/{baseCode}[/cards/{code}|/claims/{code}]——数字主键过渡期仍认
+        // knowledge://kb/{knowledgeBaseId}[/cards/{code}|/claims/{code}]
         Object kb = parts.length > 1 ? parts[1] : null;
-        Long resolved = accessService.resolveKnowledgeBase(key, accessService.knowledgeBaseIdOf(kb));
+        Long resolved = accessService.resolveKnowledgeBase(key, kb);
         Object value;
         String type = parts.length > 2 ? parts[2] : "";
         String code = parts.length > 3 ? parts[3] : "";
@@ -437,42 +431,14 @@ public class McpServerService {
     }
 
     private Long resolve(ApiKey key, Map<String, Object> args) {
-        Long requested = null;
-        Object raw = args.get("knowledgeBaseId");
-        if (raw instanceof Number) {
-            requested = ((Number) raw).longValue();
-        } else if (raw != null && !String.valueOf(raw).trim().isEmpty()) {
-            // 字符串：数字文本按主键、其余按知识库编码。认不出来就明确报错——静默走默认库
-            // 会让调用方拿到"能查通但查的是另一个库"的结果，比报错难排查得多。
-            Long id = accessService.knowledgeBaseIdOf(raw);
-            if (id == null || id.longValue() <= 0) { throw new IllegalArgumentException("知识库不存在或不可用：" + raw); }
-            requested = id;
+        if (args.containsKey("knowledgeBaseCode")) {
+            throw new IllegalArgumentException("请仅使用 knowledgeBaseId（KB_ 开头），不支持旧知识库参数");
         }
-        Object rawCode = args.get("knowledgeBaseCode");
-        if (rawCode != null && !String.valueOf(rawCode).trim().isEmpty()) {
-            String code = String.valueOf(rawCode).trim();
-            if (code.length() > 128) {
-                throw new IllegalArgumentException("knowledgeBaseCode 超出长度限制");
-            }
-            Long codeMatch = null;
-            for (Map<String, Object> base : facade.basesFor(key, accessService.grantedKnowledgeBases(key))) {
-                if (code.equals(String.valueOf(base.get("baseCode")))) {
-                    Object id = base.get("id");
-                    if (id instanceof Number) {
-                        codeMatch = ((Number) id).longValue();
-                    }
-                    break;
-                }
-            }
-            if (codeMatch == null) {
-                throw new IllegalArgumentException("knowledgeBaseCode 不存在或当前 API Key 不可访问");
-            }
-            if (requested != null && !requested.equals(codeMatch)) {
-                throw new IllegalArgumentException("knowledgeBaseId 与 knowledgeBaseCode 不匹配");
-            }
-            requested = codeMatch;
+        Object id = args.get("knowledgeBaseId");
+        if (!(id instanceof String) || !((String) id).matches("KB_[A-Za-z0-9]{1,125}")) {
+            throw new IllegalArgumentException("knowledgeBaseId 必须是 KB_ 开头的知识库 ID");
         }
-        return accessService.resolveKnowledgeBase(key, requested);
+        return accessService.resolveKnowledgeBase(key, id);
     }
 
     /**
@@ -652,7 +618,9 @@ public class McpServerService {
         Map<String, Object> schema = new LinkedHashMap<String, Object>();
         schema.put("type", "object");
         schema.put("properties", properties);
-        schema.put("required", required);
+        List<String> fields = new ArrayList<String>(required);
+        if (properties.containsKey("knowledgeBaseId") && !fields.contains("knowledgeBaseId")) fields.add("knowledgeBaseId");
+        schema.put("required", fields);
         return schema;
     }
 

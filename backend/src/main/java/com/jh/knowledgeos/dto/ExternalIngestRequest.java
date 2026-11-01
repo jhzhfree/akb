@@ -8,7 +8,9 @@ import java.util.List;
  */
 public class ExternalIngestRequest {
 
-    /** 知识库编码（{@code KB_xxxx}）；过渡期也收数字主键。 */
+    /** 知识库编码（{@code KB_xxxx}）；仅接受 KB_ 开头的系统标识。 */
+    @javax.validation.constraints.NotBlank
+    @javax.validation.constraints.Pattern(regexp = "KB_[A-Za-z0-9]{1,125}")
     private String knowledgeBaseId;
 
     @NotBlank
@@ -17,6 +19,11 @@ public class ExternalIngestRequest {
     private String title;
 
     private List<String> permissionTags;
+
+    @com.fasterxml.jackson.annotation.JsonSetter("knowledgeBaseCode")
+    public void rejectRemovedSelector(Object ignored) {
+        throw new IllegalArgumentException("请仅使用 knowledgeBaseId（KB_ 开头）");
+    }
 
     public String getKnowledgeBaseId() {
         return knowledgeBaseId;

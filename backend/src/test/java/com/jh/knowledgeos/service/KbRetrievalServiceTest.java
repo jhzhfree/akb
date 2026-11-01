@@ -43,30 +43,30 @@ class KbRetrievalServiceTest {
         ApiKey key = new ApiKey(); key.setIdentityMode("APPLICATION_WORKLOAD");
         KnowledgeBase a = new KnowledgeBase(); a.setId(41L);
         KnowledgeBase b = new KnowledgeBase(); b.setId(42L);
-        when(bases.get(41L)).thenReturn(a); when(bases.get(42L)).thenReturn(b);
-        assertThrows(KbRetrievalException.class, () -> service.resolveKnowledgeBase(key, "41", null));
-        assertThrows(KbRetrievalException.class, () -> service.resolveKnowledgeBase(key, "42", "41"));
-        assertEquals(41L,service.resolveKnowledgeBase(key,"41","41"));
+        when(bases.getExternalByCode("KB_A")).thenReturn(a); when(bases.getExternalByCode("KB_B")).thenReturn(b);
+        assertThrows(KbRetrievalException.class, () -> service.resolveKnowledgeBase(key, "KB_A", null));
+        assertThrows(KbRetrievalException.class, () -> service.resolveKnowledgeBase(key, "KB_B", "KB_A"));
+        assertEquals(41L,service.resolveKnowledgeBase(key,"KB_A","KB_A"));
     }
 
     @Test
-    void boundKeyUsesItsKnowledgeBaseWhenHeaderIsOmitted() {
+    void missingIdCannotFallBackToBoundKey() {
         ApiKey key = new ApiKey();
         key.setKnowledgeBaseId(41L);
 
-        assertEquals(Long.valueOf(41L), service.resolveKnowledgeBase(key, null, null));
+        assertThrows(KbRetrievalException.class, () -> service.resolveKnowledgeBase(key, null, null));
     }
 
     @Test
-    void resolvesNumericIdAndBaseCode() {
+    void resolvesCanonicalIdFromHeaderOrBody() {
         KnowledgeBase base = new KnowledgeBase();
         base.setId(41L);
-        base.setBaseCode("HR-POLICY");
+        base.setBaseCode("KB_HR");
         when(bases.get(41L)).thenReturn(base);
-        when(bases.getExternalByCode("hr-policy")).thenReturn(base);
+        when(bases.getExternalByCode("KB_HR")).thenReturn(base);
 
-        assertEquals(Long.valueOf(41L), service.resolveKnowledgeBase(null, "41", null));
-        assertEquals(Long.valueOf(41L), service.resolveKnowledgeBase(null, null, "hr-policy"));
+        assertEquals(Long.valueOf(41L), service.resolveKnowledgeBase(null, "KB_HR", null));
+        assertEquals(Long.valueOf(41L), service.resolveKnowledgeBase(null, null, "KB_HR"));
     }
 
     @Test
@@ -77,7 +77,7 @@ class KbRetrievalServiceTest {
         assertEquals("INVALID_ARGUMENT", missing.getCode());
 
         KbRetrievalException unknown = assertThrows(KbRetrievalException.class,
-            () -> service.resolveKnowledgeBase(null, "999", null));
+            () -> service.resolveKnowledgeBase(null, "KB_MISSING", null));
         assertEquals(404, unknown.getStatus());
         assertEquals("KB_NOT_FOUND", unknown.getCode());
     }

@@ -36,48 +36,26 @@ public class KbRetrievalService {
         this.bases = bases;
     }
 
-    /**
-     * 定位目标知识库：请求头优先，其次请求体；纯数字按 id，其余按 baseCode。
-     *
-     * <p>NovaWork 侧配置的是"外部知识库 id"原文，数字 id 传十进制文本，但也可能配成库的编码，
-     * 所以两条路都支持。绑定过库的 Key 只能访问自己那个库——与 {@code /query} 同一条规则，
-     * 这里不另开例外。</p>
-     */
+    /** Resolve the canonical public ID; header and signed body must agree. */
     public Long resolveKnowledgeBase(ApiKey key, String headerKbId, Object bodyKbId) {
-        String raw = text(headerKbId);
-        String bodyReference = text(bodyKbId);
-        if (key != null && key.isWorkloadCredential() && bodyReference == null) {
+        if (bodyKbId != null && !(bodyKbId instanceof String)) {
+            throw KbRetrievalException.invalidArgument("knowledgeBaseId 必须是 KB_ 开头的字符串");
+        }
+        String header = text(headerKbId);
+        String body = text(bodyKbId);
+        if (key != null && key.isWorkloadCredential() && body == null) {
             throw KbRetrievalException.invalidArgument("Agent 验签检索必须在签名正文中指定 knowledgeBaseId");
         }
-        if (raw != null && bodyReference != null && !raw.equals(bodyReference)) {
-            Long header = resolveKnowledgeBase(key, raw, raw);
-            Long body = resolveKnowledgeBase(key, null, bodyReference);
-            if (!header.equals(body)) throw KbRetrievalException.invalidArgument("请求头与签名正文中的知识库标识不一致");
-            return body;
+        if (header != null && body != null && !header.equals(body)) {
+            throw KbRetrievalException.invalidArgument("请求头与签名正文中的知识库 ID 不一致");
         }
-        if (raw == null) {
-            raw = text(bodyKbId);
+        String id = body != null ? body : header;
+        if (id == null || !id.matches("KB_[A-Za-z0-9]{1,125}")) {
+            throw KbRetrievalException.invalidArgument("knowledgeBaseId 必须是 KB_ 开头的知识库 ID");
         }
-        Long bound = key == null ? null : key.getKnowledgeBaseId();
-        if (raw == null) {
-            // 协议把这个头列为必填，但绑过库的 Key 本来就只能访问那一个库，此时不传不算错。
-            if (bound != null) {
-                return bound;
-            }
-            throw KbRetrievalException.invalidArgument("缺少 X-Knowledge-Base-Id 请求头，也没有 knowledgeBaseId 参数");
-        }
-        // 指定了就得认这个库：配错 id 要按协议回 404 让调用方看见，而不是悄悄退回绑定库——
-        // 那样对方拿到的是"能查通但查的是别的库"，比报错难排查得多。
-        if (raw.matches("\\d+")) {
-            Long id = Long.valueOf(raw);
-            if (bases.get(id) == null) {
-                throw KbRetrievalException.kbNotFound(raw);
-            }
-            return id;
-        }
-        KnowledgeBase base = bases.getExternalByCode(raw);
-        if (base != null) return base.getId();
-        throw KbRetrievalException.kbNotFound(raw);
+        KnowledgeBase base = bases.getExternalByCode(id);
+        if (base == null) throw KbRetrievalException.kbNotFound(id);
+        return base.getId();
     }
 
     /**

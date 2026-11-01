@@ -330,7 +330,7 @@ public class ExternalKnowledgeFacade {
     private Map<String, Object> payload(ApiKey key, Long kb, String question, Integer topK, List<String> permissionTags,
         String source, String answerFormat, Double minScore) {
         Map<String, Object> payload = new LinkedHashMap<String, Object>();
-        payload.put("knowledgeBaseId", kb);
+        payload.put("knowledgeBaseId", publicId(kb));
         payload.put("query", resolveQuestion(kb, question));
         payload.put("topK", effectiveTopK(topK));
         payload.put("source", source == null ? PlatformEventPublisher.SOURCE_REST : source);
@@ -407,7 +407,7 @@ public class ExternalKnowledgeFacade {
         Map<String, Object> result = query(key, kb, question, topK, permissionTags, source, AnswerFormat.DEFAULT, minScore);
         Map<String, Object> search = new LinkedHashMap<String, Object>();
         search.put("queryId", result.get("queryId"));
-        search.put("knowledgeBaseId", kb);
+        search.put("knowledgeBaseId", publicId(kb));
         search.put("question", question);
         // `topK` 沿用 AI 服务的语义（本次生效的召回上限），夹取后的请求值另放在 effectiveTopK。
         search.put("topK", result.get("topK"));
@@ -536,10 +536,14 @@ public class ExternalKnowledgeFacade {
         return permissionTags == null ? new ArrayList<String>() : permissionTags;
     }
 
+    private String publicId(Long id) {
+        KnowledgeBase base = knowledgeBaseService.get(id);
+        return base == null ? null : base.getBaseCode();
+    }
+
     private Map<String, Object> toBaseRow(KnowledgeBase base) {
         Map<String, Object> row = new LinkedHashMap<String, Object>();
-        row.put("id", base.getId());
-        row.put("baseCode", base.getBaseCode());
+        row.put("knowledgeBaseId", base.getBaseCode());
         row.put("name", base.getName());
         row.put("description", base.getDescription());
         row.put("status", base.getStatus());

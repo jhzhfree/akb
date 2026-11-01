@@ -12,7 +12,7 @@ AKB 可作为 Octop 的企业知识来源，通过 AKB MCP Server 让 Agent 使�
 | 建议权限 | 按需 `SEARCH`、`QUERY`；需要列出知识库时增加 `LIST`，读取卡片/证据时增加 `READ_OBJECT` |
 | MCP 工具 | `knowledge_search`、`knowledge_query`、`list_knowledge_bases` 等 |
 
-建议为每个知识空间创建绑定的 API Key，并按 Agent 使用方式授予细分 scope：仅生成答案授予 `QUERY`，仅检索候选授予 `SEARCH`，需要展示知识库目录授予 `LIST`，读取知识卡片或证据详情再授予 `READ_OBJECT`。MCP `tools/list` 会按授权过滤工具，服务端也会在每次调用时复核 scope。旧 Key 的 `READ` 仍兼容为上述四项读取权限。绑定 Key 会限制可访问的知识库。旧调用可继续传 `knowledgeBaseId`；新调用可用稳定的 `knowledgeBaseCode`（即知识库 `baseCode`），绑定 Key 也可省略两者。AKB 只会在该 Key 可见的知识库中解析编码，再执行原有绑定、scope 与 ACL 检查；同时传入不匹配的 ID 和编码会被拒绝。API Key 不应写入 Agent Prompt、业务文档或代码仓库。
+建议为每个知识空间创建绑定的 API Key，并按 Agent 使用方式授予细分 scope：仅生成答案授予 `QUERY`，仅检索候选授予 `SEARCH`，需要展示知识库目录授予 `LIST`，读取知识卡片或证据详情再授予 `READ_OBJECT`。MCP `tools/list` 会按授权过滤工具，服务端也会在每次调用时复核 scope。旧 Key 的 `READ` 仍兼容为上述四项读取权限。绑定 Key 会限制可访问的知识库。对外检索仅接受 `knowledgeBaseId`，值为知识库列表返回的 `KB_...` 系统 ID；不接受数字主键或旧编码参数。解析后仍执行知识库绑定、scope 与 ACL 检查。API Key 不应写入 Agent Prompt、业务文档或代码仓库。
 
 在 Octop 的 **Agent → Connectors → 自定义 MCP** 中选择 **添加 AKB 知识库**，填写 MCP URL 与 `X-API-Key`，保存后执行探测。将该连接加入目标 Agent 的 MCP 配置，再由 Agent 调用 `knowledge_search` 获取段落、候选与引用，或调用 `knowledge_query` 获取带引用答案。
 
@@ -24,7 +24,7 @@ AKB 可作为 Octop 的企业知识来源，通过 AKB MCP Server 让 Agent 使�
 
 ```json
 {
-  "knowledgeBaseCode": "HR-POLICY",
+  "knowledgeBaseId": "KB_xxxx",
   "query": "员工年假政策",
   "topK": 5,
   "permissionTags": ["hr"],
@@ -32,7 +32,7 @@ AKB 可作为 Octop 的企业知识来源，通过 AKB MCP Server 让 Agent 使�
 }
 ```
 
-`knowledge_query` 使用 `question` 代替 `query`，并可指定 `answerFormat`。`knowledgeBaseId` 与 `knowledgeBaseCode` 至少选一个（绑定 Key 可都省略）。`permissionTags` 是检索过滤条件，不能代替知识库 ACL。返回中的 `queryId` 和 `citations` 可用于追踪与展示知识来源；MCP 查询也会在 AKB 记录为 MCP 来源。
+`knowledge_query` 使用 `question` 代替 `query`，并可指定 `answerFormat`。`knowledgeBaseId` 必填，值从 `list_knowledge_bases` 返回的同名字段中选择。`permissionTags` 是检索过滤条件，不能代替知识库 ACL。返回中的 `queryId` 和 `citations` 可用于追踪与展示知识来源；MCP 查询也会在 AKB 记录为 MCP 来源。
 
 ## 联调检查
 
