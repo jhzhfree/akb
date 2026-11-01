@@ -65,6 +65,12 @@ curl -X POST http://<host>:8080/api/external/admin/keys \
 
 数据库只存 SHA-256 摘要与展示用前缀，明文不可再次找回；`keyPrefix` 用于在控制台辨认是哪一把 Key。
 
+### 1.2a 独立检查连接与服务凭证
+
+`GET /api/v1/external/connection` 通过 `X-API-Key` 或 `Authorization: Bearer` 检查服务凭证。返回 `connected` 与 `agentIdentityRequired`，不验证 Agent 身份，不查询知识库。Agent 模式仍需完成身份登记并在资源检索时提供有效签名。连接成功不能替代身份或资源检索成功。接口调用会记录审计。
+
+联调台不会复用控制台登录凭证：请填写服务 Key，再输入非空问题执行检索。故意测试无效凭证的负例不受该交互校验影响。
+
 ### 1.2 第一次调用
 
 ```bash

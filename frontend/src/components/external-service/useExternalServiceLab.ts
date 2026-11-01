@@ -125,6 +125,7 @@ export function useExternalServiceLab(props: ExternalServiceLabProps) {
 
   interface RestEndpoint { key:string; method:'GET' | 'POST' | 'DELETE'; path:string; summary:string }
   const REST_ENDPOINTS:RestEndpoint[] = [
+    { key:'connection', method:'GET', path:'/v1/external/connection', summary:'检查连接与服务凭证（不验证身份、不检索）' },
     { key:'bases', method:'GET', path:'/v1/external/bases', summary:'可见知识库列表' },
     { key:'overview', method:'GET', path:'/v1/external/overview', summary:'知识库概览计数' },
     { key:'query', method:'POST', path:'/v1/external/query', summary:'可追溯问答' },
@@ -148,6 +149,7 @@ export function useExternalServiceLab(props: ExternalServiceLabProps) {
    * 否则"看到的参数"和"发出去的参数"会各说一套，调不通时最难排查的就是这个。
    */
   const REST_PARAM_DOCS:Record<string, string> = {
+    connection:'无需知识库 ID 或问题；仅验证服务 Key，不验证 Agent 身份及检索权限',
     bases:'无参数；knowledgeBaseId 由凭证绑定解析',
     overview:'knowledgeBaseId（可选）',
     query: 'knowledgeBaseId（可选）· question（必填）· topK（1–50，默认 10）· '
@@ -443,6 +445,11 @@ export function useExternalServiceLab(props: ExternalServiceLabProps) {
 
   async function sendRest(endpoint:RestEndpoint | null, expect?:number) {
     if (!endpoint) return
+    if (!expect && !cfg.apiKey.trim()) { ElMessage.warning('请先填写 API 密钥；控制台登录不会自动提供服务凭证'); return }
+    if (!expect && ['query', 'search', 'retrievals'].includes(endpoint.key)) {
+      const question = asRecord(safeJson(restBody.value)).question
+      if (typeof question !== 'string' || !question.trim()) { ElMessage.warning('请在请求正文中填写非空 question'); return }
+    }
     sending.value = true
     const label = `${endpoint.method} ${endpoint.path} — ${endpoint.summary}`
     // 立刻落一条记录：拿到响应前的等待也要看得见，否则慢接口和“点了没反应”无法区分。
@@ -714,8 +721,15 @@ export function useExternalServiceLab(props: ExternalServiceLabProps) {
   }
 
   async function sendMcp() {
+    if (!cfg.apiKey.trim()) { ElMessage.warning('请先填写 API 密钥'); return }
     mcpSending.value = true
     const payload = safeJson(mcpBody.value) ?? {}
+    const params = asRecord(asRecord(payload).params)
+    if (['knowledge_search', 'knowledge_query'].includes(String(params.name))) {
+      const args = asRecord(params.arguments)
+      const question = params.name === 'knowledge_search' ? args.query : args.question
+      if (typeof question !== 'string' || !question.trim()) { ElMessage.warning('请在工具参数中填写非空检索问题'); mcpSending.value = false; return }
+    }
     const method = String(asRecord(payload).method || '—')
     const id = pushLog({
       channel:'MCP', label:`MCP ${method}`, method:'POST', url:`${prefix()}/mcp`, status:0, durationMs:0,
@@ -881,6 +895,8 @@ export function useExternalServiceLab(props: ExternalServiceLabProps) {
   }
 
   async function startSse() {
+    if (!cfg.apiKey.trim()) { ElMessage.warning('请先填写 API 密钥'); return }
+    if (sseKind.value === 'query' && !cfg.question.trim()) { ElMessage.warning('请填写用于检索的问题'); return }
     if (sseRunning.value) return
     const url = sseUrl()
     sseEvents.value = []

@@ -70,6 +70,17 @@ public class ExternalApiController {
         this.properties = properties.external();
     }
 
+    @GetMapping("/connection")
+    @Operation(summary = "检查服务连接与凭证，不验证 Agent 身份或执行知识库检索")
+    public ApiResponse<Object> connection(HttpServletRequest request) throws Exception {
+        return call(request, "GET /connection", null, (key, kb) -> {
+            Map<String, Object> status = new LinkedHashMap<String, Object>();
+            status.put("connected", Boolean.TRUE);
+            status.put("agentIdentityRequired", key.isWorkloadCredential());
+            return status;
+        });
+    }
+
     @GetMapping("/bases")
     @Operation(summary = "列出当前 API Key 可见的知识库")
     public ApiResponse<Object> bases(HttpServletRequest request) throws Exception {
@@ -315,7 +326,7 @@ public class ExternalApiController {
             if (!properties.isEnabled()) {
                 throw new SecurityException("对外接口服务已关闭");
             }
-            key = accessService.authenticateEmbed(request);
+            key = "GET /connection".equals(method) ? accessService.authenticateMcpDiscovery(request) : accessService.authenticateEmbed(request);
             String requiredScope = requiredScope(method);
             if (requiredScope != null) {
                 accessService.assertScope(key, requiredScope);
@@ -323,7 +334,7 @@ public class ExternalApiController {
             if (request.getParameter("knowledgeBaseCode") != null) {
                 throw new IllegalArgumentException("请仅使用 knowledgeBaseId（KB_ 开头）");
             }
-            Long kb = requestedKb == null && (!key.isWorkloadCredential() || "GET /bases".equals(method))
+            Long kb = requestedKb == null && (!key.isWorkloadCredential() || "GET /bases".equals(method) || "GET /connection".equals(method))
                 ? null : accessService.resolveKnowledgeBase(key, requestedKb);
             Object data = body.run(key, kb);
             auditService.record(key, ApiCallAudit.CHANNEL_REST, method, kb, 200, System.currentTimeMillis() - start, null, params,

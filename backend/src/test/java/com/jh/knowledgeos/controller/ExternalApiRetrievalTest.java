@@ -50,6 +50,28 @@ class ExternalApiRetrievalTest {
     }
 
     @Test
+    void connectionDiscoveryDoesNotRequireAgentOrKnowledgeBase() throws Exception {
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        key.setIdentityMode("APPLICATION_WORKLOAD");
+        when(access.authenticateMcpDiscovery(request)).thenReturn(key);
+        Map<?, ?> status = (Map<?, ?>) controller.connection(request).getData();
+        assertEquals(Boolean.TRUE, status.get("connected"));
+        assertEquals(Boolean.TRUE, status.get("agentIdentityRequired"));
+        verify(access).authenticateMcpDiscovery(request);
+        verify(access, never()).authenticateEmbed(request);
+        verify(access, never()).assertScope(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.anyString());
+        org.mockito.Mockito.verifyNoInteractions(retrievals);
+    }
+
+    @Test
+    void connectionDiscoveryStillRejectsMissingServiceKey() {
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        when(access.authenticateMcpDiscovery(request)).thenThrow(new com.jh.knowledgeos.exception.UnauthorizedException("missing API Key"));
+        org.junit.jupiter.api.Assertions.assertThrows(com.jh.knowledgeos.exception.UnauthorizedException.class, () -> controller.connection(request));
+        org.mockito.Mockito.verifyNoInteractions(retrievals);
+    }
+
+    @Test
     void successReturnsProtocolChunksAndUsesAuthorizedKnowledgeBase() throws Exception {
         MockHttpServletRequest request = new MockHttpServletRequest();
         when(access.authenticateEmbed(request)).thenReturn(key);
