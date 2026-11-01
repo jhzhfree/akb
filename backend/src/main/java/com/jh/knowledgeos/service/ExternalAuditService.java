@@ -7,6 +7,7 @@ import com.jh.knowledgeos.common.ClientIpResolver;
 import com.jh.knowledgeos.config.ExternalCallPayloadFilter;
 import com.jh.knowledgeos.domain.ApiCallAudit;
 import com.jh.knowledgeos.domain.ApiKey;
+import com.jh.knowledgeos.domain.WorkloadIdentity;
 import com.jh.knowledgeos.mapper.ExternalApiMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -293,12 +294,19 @@ public class ExternalAuditService {
         return mapper.listChannelAudits(channel, Math.min(Math.max(limit, 1), 200));
     }
 
+    /** Missing segments keep their column: a row that silently drops one cannot be aligned. */
+    private static String segment(String value) {
+        return value == null || value.trim().isEmpty() ? "—" : value.trim();
+    }
+
     /**
-     * How the caller knows itself.
+     * How the caller knows itself: 服务凭证名称 * Agent名称 * UUID.
      *
      * <p>The credential name is the integration's own label — "结算中心", "客服助手" — which is what
-     * an operator scanning the log recognises. The key code stays on the row as the stable
-     * identifier for joins, but it was never meant to be read by humans.</p>
+     * an operator scanning the log recognises. Agent calls add the Agent that signed and its
+     * UUID: one credential carries several Agents, and without them the row cannot tell which
+     * one made the call. The key code stays on the row as the stable identifier for joins, but
+     * it was never meant to be read by humans.</p>
      */
     private String callerName(ApiKey key) {
         if (key == null) {
@@ -306,7 +314,12 @@ public class ExternalAuditService {
         }
         if (key.getName() != null && !key.getName().trim().isEmpty()) {
             String name = key.getName().trim();
-            if (key.getWorkloadIdentity() != null) name = truncate(name, 80) + " · Agent " + key.getWorkloadIdentity().getExternalAgentId();
+            if (key.getWorkloadIdentity() != null) {
+                WorkloadIdentity identity = key.getWorkloadIdentity();
+                name = truncate(name, 80)
+                    + " * " + segment(identity.getTerminalAgentName())
+                    + " * " + segment(identity.getExternalAgentId());
+            }
             return truncate(name, 128);
         }
         return key.getKeyCode();

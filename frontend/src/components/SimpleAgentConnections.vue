@@ -5,9 +5,9 @@
         <div class="kb-eyebrow">接口服务</div>
         <h1 class="kb-title mt-1">Agent 凭证</h1>
         <p class="kb-muted mt-1">
-          每条 Agent 凭证包含服务 Key、可查询知识库和已登记 Agent。服务 Key
+          每条 Agent 凭证包含服务凭证、可查询知识库和已登记 Agent。服务凭证
           可用于 MCP 连接与工具发现， 调用工具时必须提供有效的 Agent
-          身份签名。点「详情」管理服务 Key、知识库范围和
+          身份签名。点「详情」管理服务凭证、知识库范围和
           Agent。撤销后列表默认隐藏，可勾选查看；
           撤销只是停用并留痕，彻底删除才会把数据清掉。
         </p>
@@ -27,7 +27,7 @@
         <b class="text-sm">凭证列表</b>
         <span class="kb-muted">{{ visibleRows.length }} 条</span>
         <button class="kb-btn-primary" :disabled="busy" @click="openCreate">
-          新建凭证
+          新建服务凭证
         </button>
       </div>
       <div class="p-3">
@@ -36,14 +36,14 @@
           :error="error"
           :empty="!visibleRows.length"
           empty-text="还没有 Agent 凭证"
-          empty-hint="新建凭证后，把生成的服务 Key 填到调用平台，再登记 Agent 公钥"
+          empty-hint="新建服务凭证后，把生成的服务凭证 填到调用平台，再登记 Agent 公钥"
           retryable
           @retry="load"
         >
           <el-table :data="visibleRows" border size="small">
             <el-table-column
               prop="name"
-              label="凭证名称"
+              label="服务凭证名称"
               min-width="160"
               show-overflow-tooltip
             />
@@ -74,7 +74,7 @@
                 baseNames(row.knowledgeBaseIds) || "—"
               }}</template>
             </el-table-column>
-            <el-table-column label="服务 Key" width="110">
+            <el-table-column label="服务凭证" width="110">
               <template #default="{ row }">{{ activeKeyCount(row) }}</template>
             </el-table-column>
             <el-table-column label="操作" width="260" fixed="right">
@@ -140,7 +140,7 @@
                 type="warning"
                 :closable="false"
                 title="所有已登记 Agent 共享服务授权范围"
-                description="身份认证用于确认与审计调用者；本接入下所有 Agent 可访问服务 Key 获准的知识库。需要逐 Agent 隔离时，应使用平台与 Agent 权限交集的接入。"
+                description="身份认证用于确认与审计调用者；本接入下所有 Agent 可访问服务凭证 获准的知识库。需要逐 Agent 隔离时，应使用平台与 Agent 权限交集的接入。"
               />
               <el-alert
                 type="info"
@@ -200,14 +200,14 @@
             </div>
           </el-tab-pane>
 
-          <el-tab-pane label="服务 Key" name="keys">
+          <el-tab-pane label="服务凭证" name="keys">
             <div class="space-y-3">
               <div>
                 <p class="kb-muted mb-2">
-                  本凭证下的服务 Key 共用此范围；修改后立即生效，Agent
+                  本凭证下的服务凭证 共用此范围；修改后立即生效，Agent
                   访问仍受此范围限制。
                 </p>
-                <b class="text-[12px]">服务 Key 可查询知识库</b>
+                <b class="text-[12px]">服务凭证 可查询知识库</b>
                 <el-select
                   v-model="scopeIds"
                   multiple
@@ -233,7 +233,7 @@
 
               <div class="flex items-center justify-between">
                 <span class="kb-muted"
-                  >服务 Key
+                  >服务凭证
                   明文只在签发时显示一次；可用于连接与工具列表发现，执行工具仍需
                   Agent 验签。</span
                 >
@@ -244,7 +244,7 @@
               <el-table :data="serviceKeys" border size="small">
                 <el-table-column
                   prop="name"
-                  label="名称"
+                  label="服务凭证名称"
                   min-width="140"
                   show-overflow-tooltip
                 />
@@ -300,7 +300,7 @@
               <el-table :data="agents" border size="small">
                 <el-table-column
                   prop="name"
-                  label="Agent"
+                  label="Agent名称"
                   min-width="140"
                   show-overflow-tooltip
                 />
@@ -428,11 +428,11 @@
 
     <el-dialog
       v-model="formOpen"
-      :title="editing ? '编辑凭证' : '新建凭证'"
+      :title="editing ? '编辑服务凭证' : '新建服务凭证'"
       width="560px"
     >
       <el-form label-position="top">
-        <el-form-item label="凭证名称"
+        <el-form-item label="服务凭证名称"
           ><el-input v-model="formName" maxlength="128"
         /></el-form-item>
         <el-form-item label="AKB 对外地址"
@@ -513,7 +513,7 @@
 
     <el-dialog
       v-model="secretOpen"
-      title="请现在保存服务 Key"
+      title="请现在保存服务凭证"
       width="560px"
       @closed="secret = ''"
       :close-on-click-modal="false"
@@ -694,7 +694,7 @@ async function load() {
     }
   }
 }
-/** 抽屉数据按需加载：Agent、服务 Key 各一次请求；切到「调用日志」时才拉日志。 */
+/** 抽屉数据按需加载：Agent、服务凭证 各一次请求；切到「调用日志」时才拉日志。 */
 async function loadDetail() {
   const current = detail.value;
   if (!current) return;
@@ -782,13 +782,13 @@ async function submitForm() {
   });
 }
 /**
- * 删除分两步：撤销只是停用并吊销服务 Key（留痕，还能查到它做过什么），彻底删除才把策略与
+ * 删除分两步：撤销只是停用并吊销服务凭证（留痕，还能查到它做过什么），彻底删除才把策略与
  * Agent 登记清掉。所以撤销之后列表里仍能看到它，只是默认隐藏。
  */
 async function revokeConnection(row: Connection) {
   if (
     !(await confirm(
-      `撤销「${row.name}」后它将立即停用，其服务 Key 一并吊销，调用平台会连接失败。此操作不可恢复，但记录会保留。`,
+      `撤销「${row.name}」后它将立即停用，其服务凭证 一并吊销，调用平台会连接失败。此操作不可恢复，但记录会保留。`,
     ))
   )
     return;
@@ -801,7 +801,7 @@ async function revokeConnection(row: Connection) {
 async function purgeConnection(row: Connection) {
   if (
     !(await confirm(
-      `彻底删除「${row.name}」会清掉它的策略与 Agent 登记（服务 Key 不删，只解绑）。此操作不可逆，确定继续？`,
+      `彻底删除「${row.name}」会清掉它的策略与 Agent 登记（服务凭证 不删，只解绑）。此操作不可逆，确定继续？`,
     ))
   )
     return;

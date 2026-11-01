@@ -78,7 +78,7 @@
               <template #default="{ row }">{{ row.time ? String(row.time).slice(0,19) : '—' }}</template>
             </el-table-column>
             <el-table-column prop="protocol" label="通道" width="90" />
-            <el-table-column label="调用方" width="140" show-overflow-tooltip>
+            <el-table-column label="调用方" width="240" show-overflow-tooltip>
               <template #default="{ row }">{{ row.caller || '—' }}</template>
             </el-table-column>
             <el-table-column prop="client" label="凭证" width="140" show-overflow-tooltip />
