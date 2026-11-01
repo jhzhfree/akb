@@ -168,4 +168,18 @@ class AgentKeyProofVerifierTest {
         String changed = Base64.getUrlEncoder().withoutPadding().encodeToString(header.getBytes(StandardCharsets.UTF_8))+"."+parts[1]+"."+parts[2];
         assertThrows(WorkloadProofException.class,()->service.authenticate(request(changed),credential));
     }
+
+    /** 声明是可选的（Octop 的 MCP 调用就不带 terminal_agent），这时用登记的 Agent 名兜底。 */
+    @Test void undeclaredTerminalFallsBackToTheRegisteredAgentName() throws Exception {
+        when(repository.binding(17L, A, "build")).thenReturn(map("id", 21L, "agent_principal_id", 4L, "agent_name", "构建助手"));
+        WorkloadIdentity identity = service.authenticate(request(sign(claims(A), a)), credential);
+        assertEquals("构建助手", identity.getTerminalAgentName());
+    }
+
+    /** 声明了就以声明为准：登记名只是兜底，不覆盖客户端自报的终端。 */
+    @Test void declaredTerminalWinsOverTheRegisteredName() throws Exception {
+        when(repository.binding(17L, A, "build")).thenReturn(map("id", 21L, "agent_principal_id", 4L, "agent_name", "构建助手"));
+        Map<String, Object> c = claims(A); c.put("terminal_agent", "builder");
+        assertEquals("builder", service.authenticate(request(sign(c, a)), credential).getTerminalAgentName());
+    }
 }

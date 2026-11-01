@@ -75,6 +75,13 @@ public final class AgentKeyProofVerifier {
             String message = c.containsKey("message_id") ? AgentProofCrypto.text(c, "message_id", 128) : null;
             String terminal = c.containsKey("terminal_agent") ? AgentProofCrypto.text(c, "terminal_agent", 128) : null;
             if (terminal != null && !terminal.matches("[A-Za-z0-9_.:-]{1,128}")) throw AgentProofCrypto.invalid();
+            // 声明是可选的（Octop 的 MCP 调用就不带 terminal_agent），但调用日志要能说出是哪个
+            // Agent：这时用登记的 Agent 名兜底。它出自自己的库，不走上面那套客户端字符校验。
+            if (terminal == null || terminal.trim().isEmpty()) {
+                Object named = binding.get("agent_name");
+                String text = named == null ? "" : String.valueOf(named).trim();
+                terminal = text.isEmpty() ? null : text.substring(0, Math.min(text.length(), 128));
+            }
             String jti = AgentProofCrypto.uuid(AgentProofCrypto.text(c, "jti", 36));
             stage = "REPLAY";
             repository.consumeV2(key.getWorkloadPolicyId(), kid, jti, expires);

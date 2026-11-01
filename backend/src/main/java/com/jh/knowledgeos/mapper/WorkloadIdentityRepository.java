@@ -38,7 +38,9 @@ public class WorkloadIdentityRepository {
     }
     public Map<String, Object> binding(long policy, String external, String runtime) {
         List<Map<String, Object>> rows = jdbc.queryForList(
-            "SELECT b.* FROM t_workload_agent_binding b JOIN t_principal p ON p.id=b.agent_principal_id WHERE b.policy_id=? AND b.external_agent_id=? AND b.runtime_agent_key=? AND b.status='ACTIVE' AND p.status='ACTIVE' AND p.principal_type='AGENT'",
+            // JOIN 已经落在 t_principal 上，顺手把登记的 Agent 名带出来：证明里可以不声明
+            // terminal_agent，但调用日志不该因此说不出是哪个 Agent 调的。
+            "SELECT b.*, p.name AS agent_name FROM t_workload_agent_binding b JOIN t_principal p ON p.id=b.agent_principal_id WHERE b.policy_id=? AND b.external_agent_id=? AND b.runtime_agent_key=? AND b.status='ACTIVE' AND p.status='ACTIVE' AND p.principal_type='AGENT'",
             policy, external, runtime);
         return rows.isEmpty() ? null : rows.get(0);
     }
