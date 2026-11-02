@@ -74,7 +74,7 @@ public class ExternalStreamService {
         Double minScore, boolean includeMemory, SseEmitter emitter) {
         // 记忆在入口取一次：流式与降级是同一问答的两条路，各读一次就会出现"降级前后依据不同"。
         final String memoryContext = includeMemory ? facade.memoryContext(key, question) : "";
-        executor.execute(() -> {
+        executor.execute(CallerContext.wrap(() -> {
             try {
                 // The plan is announced up front so a UI can draw the whole pipeline and then
                 // fill it in: a reader sees what is about to happen instead of a blank pane.
@@ -97,7 +97,7 @@ public class ExternalStreamService {
             } catch (Exception e) {
                 fail(emitter, e);
             }
-        });
+        }));
     }
 
     /**
@@ -252,7 +252,7 @@ public class ExternalStreamService {
         emitter.onCompletion(() -> running.set(false));
         emitter.onTimeout(() -> running.set(false));
         emitter.onError(e -> running.set(false));
-        executor.execute(() -> {
+        executor.execute(CallerContext.wrap(() -> {
             long deadline = System.currentTimeMillis() + Math.max(properties.getSseMaxMinutes(), 1) * 60_000L;
             long lastHeartbeat = System.currentTimeMillis();
             String lastRunSignature = "";
@@ -282,7 +282,7 @@ public class ExternalStreamService {
                     fail(emitter, e);
                 }
             }
-        });
+        }));
     }
 
     private String ingestionSignature(Long kb) {

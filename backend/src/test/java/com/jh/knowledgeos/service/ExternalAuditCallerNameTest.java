@@ -11,6 +11,7 @@ import com.jh.knowledgeos.domain.ApiKey;
 import com.jh.knowledgeos.domain.WorkloadIdentity;
 import com.jh.knowledgeos.mapper.ExternalApiMapper;
 import org.junit.jupiter.api.Test;
+import java.util.Map;
 import org.mockito.ArgumentCaptor;
 
 /**
@@ -44,6 +45,20 @@ class ExternalAuditCallerNameTest {
         WorkloadIdentity identity = new WorkloadIdentity(5L, "session-1", "invocation-1", "DIGEST_HMAC",
             "kid-1", 9L, "message-1", "platform-1", uuid, "ACTIVE");
         return identity.withAgentNames("runtime-agent", agentName);
+    }
+
+    @Test void auditRecordsAuthorizationOutcomeWithoutTreatingIdentityReadAsAuthorization() throws Exception {
+        ApiKey key = credential("service"); key.setIdentityMode("APPLICATION_WORKLOAD");
+        key.setWorkloadIdentity(agent("build", UUID_TEXT));
+        try (CallerContext.Scope ignored = CallerContext.open(key)) {
+            CallerContext.current();
+            CallerContext.decision("SEARCH", 6L, false, "RESOURCE_DENIED");
+            Map<?,?> data = new ObjectMapper().readValue(record(key).getResponseData(), Map.class);
+            Map<?,?> context = (Map<?,?>) data.get("callerContext");
+            org.junit.jupiter.api.Assertions.assertNotNull(context);
+            java.util.List<?> decisions = (java.util.List<?>) context.get("authorizationDecisions");
+            assertEquals("deny", ((Map<?,?>)decisions.get(0)).get("decision"));
+        }
     }
 
     @Test void workloadCallNamesCredentialThenAgentThenUuid() {

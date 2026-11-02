@@ -10,7 +10,8 @@ public final class VerifiedAgentIdentity {
     private VerifiedAgentIdentity() { }
 
     public static Map<String, Object> describe(ApiKey key) {
-        WorkloadIdentity identity = key == null ? null : key.getWorkloadIdentity();
+        WorkloadIdentity identity = CallerContext.hasCaller() ? CallerContext.requireAgent()
+            : key == null ? null : key.getWorkloadIdentity();
         if (identity == null || !AgentProofCrypto.V2.equals(identity.getProofProfile())) {
             throw new SecurityException("仅支持已验签的 V2 Agent 凭据");
         }

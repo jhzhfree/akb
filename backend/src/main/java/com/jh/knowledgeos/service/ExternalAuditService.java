@@ -133,7 +133,14 @@ public class ExternalAuditService {
         audit.setKnowledgeBaseId(knowledgeBaseId);
         audit.setRequestParams(payload(requestParams));
         audit.setStatusCode(statusCode);
-        audit.setResponseData(payload(responseData));
+        Map<String, Object> callerAudit = CallerContext.audit();
+        Object auditedResponse = responseData;
+        if (!callerAudit.isEmpty()) {
+            Map<String, Object> envelope = new LinkedHashMap<>();
+            envelope.put("result", responseData); envelope.put("callerContext", callerAudit);
+            auditedResponse = envelope;
+        }
+        audit.setResponseData(payload(auditedResponse));
         audit.setDurationMs((int) Math.min(Math.max(durationMillis, 0), Integer.MAX_VALUE));
         audit.setTraceId(MDC.get("traceId"));
         audit.setMessage(truncate(message, MESSAGE_LIMIT));

@@ -32,6 +32,21 @@ class ExternalAccessServiceTest {
     }
 
     @Test
+    void contextRecordsRealResourceDecisionsWithoutRequiringIdentityReads() {
+        ApiKey key = key(19L, 10L);
+        when(keys.grantedKnowledgeBases(key)).thenReturn(Arrays.asList(10L, 11L));
+        try (CallerContext.Scope ignored = CallerContext.open(key)) {
+            assertEquals(11L, service.resolveKnowledgeBase(key, 11L));
+            assertThrows(SecurityException.class, () -> service.resolveKnowledgeBase(key, 12L));
+            java.util.List<?> decisions = (java.util.List<?>) CallerContext.audit().get("authorizationDecisions");
+            assertEquals(2, decisions.size());
+            assertEquals("allow", ((java.util.Map<?, ?>) decisions.get(0)).get("decision"));
+            assertEquals("deny", ((java.util.Map<?, ?>) decisions.get(1)).get("decision"));
+            assertEquals(0, CallerContext.audit().get("identityReads"));
+        }
+    }
+
+    @Test
     void revokingLegacyBoundGrantDoesNotFallBackToTheOldBoundColumn() {
         ApiKey key = key(19L, 10L);
         when(keys.grantedKnowledgeBases(key)).thenReturn(Collections.<Long>emptyList());

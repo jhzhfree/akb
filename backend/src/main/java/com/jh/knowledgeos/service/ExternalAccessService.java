@@ -108,6 +108,7 @@ public class ExternalAccessService {
             throw new UnauthorizedException("API Key 无效、已吊销或已过期");
         }
         request.setAttribute(AUTHENTICATED_KEY_ATTRIBUTE, key);
+        CallerContext.authenticated(key);
         // Bound the expensive proof work even when the submitted proof is invalid.
         rateLimiter.check(key);
         if (key.isWorkloadCredential()) {
@@ -120,6 +121,7 @@ public class ExternalAccessService {
                 key.setWorkloadIdentity(workloadIdentityService.authenticate(request, key));
             }
             if (key.getWorkloadIdentity() != null) rateLimiter.checkAgent(key);
+            CallerContext.authenticated(key);
             return key;
         }
         if (request.getHeader(com.jh.knowledgeos.config.WorkloadRequestFilter.HEADER) != null) {
@@ -140,15 +142,22 @@ public class ExternalAccessService {
             Long employeePrincipalId = delegatedIdentityService.authenticateBearer(request.getHeader("Authorization"));
             key.setDelegatedPrincipalId(employeePrincipalId);
         }
+        CallerContext.authenticated(key);
         return key;
     }
 
     public void assertScope(ApiKey key, String scope) {
+        try {
         if (key.isWorkloadCredential() && key.getWorkloadIdentity() == null) {
             throw new SecurityException("Agent 凭证调用工具必须提供已验证的 Agent 身份");
         }
         if (!key.hasScope(scope)) {
             throw new SecurityException("该 API Key 未授权 " + scope + " 权限");
+        }
+            CallerContext.decision(scope, null, true, "SCOPE_GRANTED");
+        } catch (SecurityException failure) {
+            CallerContext.decision(scope, null, false, "SCOPE_DENIED");
+            throw failure;
         }
     }
 
@@ -204,6 +213,17 @@ public class ExternalAccessService {
     }
 
     public Long resolveKnowledgeBase(ApiKey key, Long requested) {
+        try {
+            Long resolved = resolveAuthorizedKnowledgeBase(key, requested);
+            CallerContext.decision("KNOWLEDGE_BASE_ACCESS", resolved, true, "RESOURCE_GRANTED");
+            return resolved;
+        } catch (SecurityException | IllegalArgumentException failure) {
+            CallerContext.decision("KNOWLEDGE_BASE_ACCESS", requested, false, "RESOURCE_DENIED");
+            throw failure;
+        }
+    }
+
+    private Long resolveAuthorizedKnowledgeBase(ApiKey key, Long requested) {
         Long bound = key.getKnowledgeBaseId();
         List<Long> grants = grantedKnowledgeBases(key);
         Long kb = requested;
@@ -253,6 +273,7 @@ public class ExternalAccessService {
             if (key == null) {
                 throw new UnauthorizedException("嵌入令牌无效、已过期或来源不匹配");
             }
+            CallerContext.authenticated(key);
             return key;
         }
         ApiKey key = authenticate(request);
