@@ -131,7 +131,7 @@
 <KnowledgeBaseDialog
   :visible="showBases" :bases="bases" :groups="groups" :active-id="knowledgeBaseId"
   :can-manage="canCreateBase" :current-user-id="me?.user?.id??null"
-  @close="showBases=false" @select="selectBase" @create="createBase" @update="updateBase"/>
+  @close="showBases=false" @select="selectBase" @create="createBase" @update="updateBase" @refresh="loadBases"/>
 <PersonalAccessTokenDialog v-model:visible="showPersonalAccessTokens"/>
 <TaskCenterDrawer v-model:visible="taskCenterVisible" :key="knowledgeBaseId" :knowledge-base-id="knowledgeBaseId"
   @navigate="navigate" @open-run="openRun"/>

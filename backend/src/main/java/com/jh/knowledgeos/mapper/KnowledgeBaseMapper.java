@@ -50,4 +50,12 @@ public interface KnowledgeBaseMapper {
         @Param("updatedBy") String updatedBy);
 
     int resetKbScenario(@Param("kb") Long kb);
+
+    /**
+     * 删库时解开"单库绑定"的 API Key：留着指向已删库只会变成脏数据（V61 迁移就撞过 1452）。
+     *
+     * <p>置空而不是删除 Key：Key 能访问哪些库由主体授权表决定，那张表随库级联删除，
+     * 所以置空不会放宽任何范围。</p>
+     */
+    int detachKnowledgeBaseFromApiKeys(@Param("kb") Long kb);
 }

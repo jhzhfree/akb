@@ -167,6 +167,20 @@ public class KnowledgeIngestionController {
     }
 
 
+    @PostMapping("/bases/{id}/disable")
+    @Operation(summary = "禁用知识库：对外立即不可用，数据保留，可随时启用")
+    public ApiResponse<Object> disableBase(@PathVariable Long id) {
+        return ApiResponse.ok(knowledgeBaseService.disable(id));
+    }
+
+
+    @PostMapping("/bases/{id}/enable")
+    @Operation(summary = "启用知识库")
+    public ApiResponse<Object> enableBase(@PathVariable Long id) {
+        return ApiResponse.ok(knowledgeBaseService.enable(id));
+    }
+
+
     @PostMapping("/bases/{id}/purge")
     @Operation(summary = "清空知识库内的全部知识数据（保留知识库本身）")
     public ApiResponse<Object> purgeBase(@PathVariable Long id, @RequestParam(value = "dryRun", required = false, defaultValue = "false") boolean

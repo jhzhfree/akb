@@ -24,7 +24,8 @@ class WorkloadAuthorizationTest {
         assertEquals(2L, access.resolveKnowledgeBase(key, 2L));
         when(keys.grantedKnowledgeBases(10L)).thenReturn(Collections.emptyList());
         assertThrows(SecurityException.class, () -> access.resolveKnowledgeBase(key, 1L));
-        verifyNoInteractions(bases);
+        // 这里要钉住的是"不回落到公开库那条判定"；停用检查会调一次 assertEnabled，不算回落。
+        verify(bases, never()).assertExternalAccess(anyLong(), anyBoolean());
     }
     @Test void workloadCredentialsCannotUseLegacyWriteOrMemoryAliases() {
         ApiKey key = new ApiKey(); key.setIdentityMode("APPLICATION_WORKLOAD"); key.setScopes("READ,WRITE,MEMORY_MANAGE");

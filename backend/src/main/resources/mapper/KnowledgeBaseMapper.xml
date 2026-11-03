@@ -25,4 +25,6 @@
 
 <delete id="resetKbScenario">DELETE FROM t_kb_scenario WHERE knowledge_base_id=#{kb}</delete>
 
+<update id="detachKnowledgeBaseFromApiKeys">UPDATE t_api_key SET knowledge_base_id=NULL WHERE knowledge_base_id=#{kb}</update>
+
 </mapper>

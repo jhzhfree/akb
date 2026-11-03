@@ -233,8 +233,52 @@ public class KnowledgeBaseService {
         return updated;
     }
 
+    /**
+     * 停用一个知识库：对外立即不可用，数据一条不动。
+     *
+     * <p>这是删除前的必经一步。删除不可逆，而停用是可逆的——停用期间调用方会拿到"库不可用"，
+     * 运营能立刻发现，数据却还在，误操作的代价只是重新启用一次。</p>
+     */
+    public KnowledgeBase disable(Long id) {
+        return changeStatus(id, "DISABLED", PlatformEventTypes.KNOWLEDGE_BASE_DISABLED, "禁用");
+    }
+
+    /** 从停用恢复：数据一直在，恢复即可用。 */
+    public KnowledgeBase enable(Long id) {
+        return changeStatus(id, "ACTIVE", PlatformEventTypes.KNOWLEDGE_BASE_ENABLED, "启用");
+    }
+
+    private KnowledgeBase changeStatus(Long id, String status, String eventType, String action) {
+        User user = AuthContext.get();
+        KnowledgeBase base = mapper.getKnowledgeBase(id);
+        if (base == null) {
+            throw new IllegalArgumentException("知识库不存在：" + id);
+        }
+        if ("ARCHIVED".equalsIgnoreCase(base.getStatus())) {
+            throw new IllegalStateException("已归档的知识库不可" + action);
+        }
+        if (!canManage(user, base)) {
+            throw new SecurityException("只有知识库创建人或管理员可以" + action + "该知识库");
+        }
+        // 已经是目标状态就原样返回：重复点击不该报错，也不该再发一次事件。
+        if (status.equalsIgnoreCase(base.getStatus())) {
+            return base;
+        }
+        mapper.updateKnowledgeBaseStatus(id, status);
+        KnowledgeBase updated = mapper.getKnowledgeBase(id);
+        Map<String, Object> detail = describe(updated);
+        publisher.emitUser(eventType, id, PlatformEventPublisher.SOURCE_UI, "KNOWLEDGE_BASE",
+            updated.getBaseCode(), action + "知识库：" + updated.getName(), detail);
+        return updated;
+    }
+
     public KnowledgeBase archive(Long id) {
         KnowledgeBase base = mapper.getKnowledgeBase(id);
+        // 归档同样是对整个工作区的动作，须与编辑、删除同一条权限口径：原先这里没有校验，
+        // 任何登录用户都能把别人的库归档掉（归档后列表看不见，等于软删）。
+        if (base != null && !canManage(AuthContext.get(), base)) {
+            throw new SecurityException("只有知识库创建人或管理员可以归档该知识库");
+        }
         mapper.updateKnowledgeBaseStatus(id, "ARCHIVED");
         KnowledgeBase updated = mapper.getKnowledgeBase(id);
         publisher.emitUser(PlatformEventTypes.KNOWLEDGE_BASE_ARCHIVED, id, PlatformEventPublisher.SOURCE_UI, "KNOWLEDGE_BASE", base == null ?

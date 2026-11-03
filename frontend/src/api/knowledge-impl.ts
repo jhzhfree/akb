@@ -53,6 +53,18 @@ export const updateKnowledgeBaseAccess = (
   axios.post(`/api/knowledge/bases/${id}/access`, { visibility, ownerGroupId })
 export const archiveKnowledgeBase = (id:number):Promise<ApiResponse<KnowledgeBase>> =>
   axios.post(`/api/knowledge/bases/${id}/archive`)
+
+/** 禁用：对外立即不可用，数据一条不动，随时可以启用回来。彻底删除的前置步骤。 */
+export const disableKnowledgeBase = (id:number):Promise<ApiResponse<KnowledgeBase>> =>
+  axios.post(`/api/knowledge/bases/${id}/disable`)
+
+/** 启用：从禁用恢复，数据一直在。 */
+export const enableKnowledgeBase = (id:number):Promise<ApiResponse<KnowledgeBase>> =>
+  axios.post(`/api/knowledge/bases/${id}/enable`)
+
+/** 彻底删除：只接受已禁用的库；confirm 须等于名称或 id。不可逆，给足超时。 */
+export const deleteKnowledgeBase = (id:number, confirm:string):Promise<ApiResponse<Record<string,unknown>>> =>
+  axios.delete(`/api/knowledge/bases/${id}`, { params:{ confirm }, timeout:LONG_TIMEOUT_MS })
 /** 清空知识库内的全部知识数据；dryRun=true 时只返回将删除的规模，供二次确认展示。 */
 export const purgeKnowledgeBase = (
   kb:number, dryRun=false, purgeIndex=true,

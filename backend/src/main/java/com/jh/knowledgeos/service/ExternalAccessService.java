@@ -236,6 +236,8 @@ public class ExternalAccessService {
         if (kb == null) {
             throw new IllegalArgumentException("缺少 knowledgeBaseId 参数");
         }
+        // 授权还在不等于现在能用：库被禁用期间对外一律拒绝，这一条要早于各分支的 return。
+        accessService.assertEnabled(kb);
         if (key.isWorkloadCredential() || key.getDelegatedPrincipalId() != null) {
             if (grants.contains(kb)) {
                 return kb;

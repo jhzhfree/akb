@@ -52,6 +52,26 @@ public class KnowledgeBasePurgeService {
         // 先删候选与运行记录，再删规则本身。
         "t_derived_candidate", "t_derivation_run", "t_derivation_rule"));
 
+    /**
+     * 只属于工作区本身的表：切分策略、场景配置、反馈队列、评测集、任务与告警、连接器绑定、
+     * 抽取后处理状态、嵌入令牌吊销、库级 schema。
+     *
+     * <p>与 {@link #PURGE_TABLES} 分开，是因为"清空知识"不该把配置一起删掉——重导语料的人
+     * 不希望切分策略和场景模板也回到默认。只有"彻底删除工作区"才清这些。</p>
+     *
+     * <p>{@code t_schema_type} 里 knowledge_base_id=0 是平台默认 schema，这里按 id 过滤，
+     * 不会碰到它；{@code t_alert_rule.knowledge_base_id} 可为 NULL 表示平台级规则，同理不受影响。</p>
+     */
+    private static final List<String> WORKSPACE_TABLES = Collections.unmodifiableList(Arrays.asList(
+        "t_query_feedback", "t_evaluation_run", "t_evaluation_dataset",
+        // 任务与告警：先事件后规则
+        "t_task_run", "t_alert_event", "t_alert_rule",
+        "t_connector_item_binding", "t_connector_source", "t_extraction_post_stage",
+        "t_embed_token_revocation",
+        // 库级 schema：先发布记录再类型定义
+        "t_schema_release", "t_schema_type",
+        "t_chunk_policy", "t_kb_scenario"));
+
     private final KnowledgeMapper mapper;
 
     private final IndexMapper indexMapper;
@@ -120,16 +140,31 @@ public class KnowledgeBasePurgeService {
         if (!admin && !owner) {
             throw new IllegalArgumentException("只有知识库创建人或管理员可以删除该工作区");
         }
+        // 删除不可逆，必须先经过可逆的禁用：禁用期间调用方拿不到这个库，误删在不可逆之前
+        // 就会暴露出来。已归档的库也算停用（归档后列表就看不见了，不会再被正常使用）。
+        String status = base.getStatus() == null ? "" : base.getStatus().trim().toUpperCase(java.util.Locale.ROOT);
+        if (!"DISABLED".equals(status) && !"ARCHIVED".equals(status)) {
+            throw new IllegalStateException("请先禁用该知识库，再执行彻底删除");
+        }
         boolean confirmed = confirm != null
             && (confirm.equals(String.valueOf(kb)) || confirm.equalsIgnoreCase(String.valueOf(base.getName())));
         if (!confirmed) {
             throw new IllegalArgumentException("删除需要显式确认：confirm 传知识库 id 或名称");
         }
         Map<String, Object> result = purgeKnowledge(kb);
+        deleteWorkspaceConfig(kb);
         result.put("knowledgeBaseId", kb);
         result.put("knowledgeBaseName", base.getName());
         result.put("workspaceRemoved", mapper.deleteKnowledgeBase(kb) > 0);
         return result;
+    }
+
+    /** 清掉只属于工作区的配置，并把单库绑定的 Key 解开——这两步只在彻底删除时做。 */
+    private void deleteWorkspaceConfig(Long kb) {
+        for (String table : WORKSPACE_TABLES) {
+            mapper.purgeKnowledgeBaseTable(table, kb);
+        }
+        mapper.detachKnowledgeBaseFromApiKeys(kb);
     }
 
     @Transactional

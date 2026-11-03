@@ -63,8 +63,36 @@ public class KnowledgeBaseAccessService {
             if (!canWrite(user, base)) {
                 throw new SecurityException("当前账号无权修改该知识库：" + base.getName());
             }
-        } else if (!canRead(user, base)) {
+            return;
+        }
+        // 停用的库（禁用 / 归档）对读操作关闭——否则"禁用"只是列表上的一个标签，检索照旧能查到。
+        // 写操作刻意放行：要能把它启用回来，也要能执行彻底删除。
+        assertNotStopped(base);
+        if (!canRead(user, base)) {
             throw new SecurityException("当前账号无权访问该知识库：" + base.getName());
+        }
+    }
+
+    /**
+     * 库被停用时拒绝对外使用。
+     *
+     * <p>外部 API / MCP 走的是另一条解析路径（只看授权关系），必须单独调这里，
+     * 否则同一枚 Key 在内网管理接口被拦住、在对外接口却能查到。</p>
+     */
+    public void assertEnabled(Long kb) {
+        if (kb == null) {
+            return;
+        }
+        KnowledgeBase base = mapper.getKnowledgeBase(kb);
+        if (base != null) {
+            assertNotStopped(base);
+        }
+    }
+
+    private void assertNotStopped(KnowledgeBase base) {
+        String status = base.getStatus();
+        if ("DISABLED".equalsIgnoreCase(status) || "ARCHIVED".equalsIgnoreCase(status)) {
+            throw new IllegalStateException("知识库已停用：" + base.getName() + "（禁用或归档后不可检索，请先启用）");
         }
     }
 

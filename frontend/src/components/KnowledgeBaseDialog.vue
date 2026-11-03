@@ -26,10 +26,16 @@
             <el-tag size="small" effect="plain">{{visibilityLabel(base.visibility)}}</el-tag>
           </span>
           <el-tag v-if="base.id===activeId" size="small">当前</el-tag>
+          <el-tag v-if="base.status==='DISABLED'" size="small" type="warning">已禁用</el-tag>
           <span class="kb-code kb-copyable" title="点击复制知识库ID"
             @click.stop="copy('知识库ID',base.baseCode)">{{base.baseCode}}</span>
         </button>
-        <el-button v-if="canEdit(base)" size="small" text type="primary" class="kb-edit" @click.stop="startEdit(base)">编辑</el-button>
+        <span class="kb-actions">
+          <el-button v-if="canEdit(base)" size="small" text type="primary" class="kb-edit" @click.stop="startEdit(base)">编辑</el-button>
+          <el-button v-if="canEdit(base)" size="small" text class="kb-edit" @click.stop="toggleDisabled(base)">{{base.status==='DISABLED'?'启用':'禁用'}}</el-button>
+          <el-button v-if="canEdit(base)&&base.status==='DISABLED'" size="small" text type="danger"
+            class="kb-edit" @click.stop="removeBase(base)">彻底删除</el-button>
+        </span>
       </div>
       <p v-if="!filteredBases.length" class="kb-empty">
         {{keyword?'没有匹配「'+keyword+'」的知识库':'还没有知识库，点击右上角新建。'}}
@@ -245,8 +251,10 @@ import{computed,ref,watch}from'vue'
 import type{KnowledgeBase,UserGroupRow}from'../types'
 import type{KbScenarioProfile,KbScenarioSchema,KbScenarioTemplate}from'../types/knowledge'
 import{visibilityLabel}from'../types'
-import{ElMessage}from'element-plus'
+import{ElMessage,ElMessageBox}from'element-plus'
 import{copyText}from'../utils/clipboard'
+import{confirmAction,notifyError,notifySuccess}from'../utils/feedback'
+import{disableKnowledgeBase,enableKnowledgeBase,deleteKnowledgeBase}from'../api/knowledge-impl'
 import{getKbScenario,saveKbScenario,resetKbScenario}from'../api/knowledge/base'
 const VISIBILITIES=['PUBLIC','PRIVATE','GROUP'] as const
 type BasePayload={
@@ -265,6 +273,8 @@ const emit=defineEmits<{
   select:[id:number]
   create:[payload:BasePayload]
   update:[payload:BasePayload&{id:number}]
+  /** 禁用 / 启用 / 彻底删除之后，父组件需要重新拉列表。 */
+  refresh:[]
 }>()
 /** list = 知识库列表（进入弹窗的默认视图）；form = 新建 / 编辑表单。 */
 const viewMode=ref<'list'|'form'>('list')
@@ -454,6 +464,52 @@ watch(()=>props.visible,async v=>{
   }
   else{reset();viewMode.value='list'}
 })
+/**
+ * 禁用 / 启用：禁用是对外立刻不可用、数据一条不动，也是彻底删除前的必经一步。
+ *
+ * <p>先禁用是有意的：删除不可逆，而禁用可逆——停用期间调用方会拿到"库不可用"，
+ * 误操作在这里就能发现，不必等到数据没了。</p>
+ */
+async function toggleDisabled(base:KnowledgeBase){
+  const disabling=base.status!=='DISABLED'
+  try{
+    if(disabling){
+      await confirmAction({
+        title:'禁用知识库',
+        message:`禁用后「${base.name}」对外立即不可用（检索与问答都会被拒绝），数据全部保留，随时可以启用。继续？`,
+        confirmText:'禁用',danger:true,
+      })
+      await disableKnowledgeBase(base.id)
+      notifySuccess('已禁用：数据保留，可随时启用')
+    }else{
+      await enableKnowledgeBase(base.id)
+      notifySuccess('已启用')
+    }
+    emit('refresh')
+  }catch(e){
+    if(e instanceof Error&&e.message==='cancel') return
+    notifyError(e,disabling?'禁用失败':'启用失败')
+  }
+}
+
+/** 彻底删除：只对已禁用的库开放，且要把名称原样打一遍——不可逆的事不该靠一次点击完成。 */
+async function removeBase(base:KnowledgeBase){
+  try{
+    const {value}=await ElMessageBox.prompt(
+      `知识、检索索引与上传文件都会清掉，不可恢复。请输入知识库名称「${base.name}」确认。`,
+      '彻底删除知识库',
+      {confirmButtonText:'彻底删除',cancelButtonText:'取消',type:'warning',inputPlaceholder:base.name,
+        inputValidator:(text:string)=>text===base.name||'名称不一致，未执行删除'},
+    )
+    await deleteKnowledgeBase(base.id,value)
+    notifySuccess('已彻底删除')
+    emit('refresh')
+  }catch(e){
+    if(e==='cancel'||e==='close'||(e instanceof Error&&e.message==='cancel')) return
+    notifyError(e,'删除失败')
+  }
+}
+
 /** 列表里的字段值要能直接取走：知识库ID 这种串手抄会抄错，点一下比拖选再复制可靠。 */
 async function copy(label:string,text?:string|null){
   if(!text){ElMessage.warning('没有可复制的'+label);return}
@@ -609,6 +665,7 @@ font-style:normal}
 /* 可点复制：给个指针与悬停色，否则没人知道这些文字能点 */
 .kb-copyable{cursor:pointer}
 .kb-copyable:hover{color:var(--accent-text)}
+.kb-actions{display:flex;align-items:center;flex-shrink:0}
 .kb-edit{margin-left:8px;
 padding:0}
 /* 列表工具栏：搜索 + 新建 */
