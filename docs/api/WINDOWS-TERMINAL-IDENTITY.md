@@ -1,6 +1,6 @@
 # Windows 终端身份与 MCP 工具上下文
 
-本次变更兼容现有 `AGENT_KEY_RS256_V2`。终端 SDK/插件制作 CLI 位于 Octop 仓库的 `integrations/agent-identity-sdk` 与 `integrations/opencode-identity`；Windows 使用步骤见适配器的 `WINDOWS.md`。
+AKB 服务端继续使用现有 `AGENT_KEY_RS256_V2` 验签与授权。OpenCode 插件制作、生成器、独立演示服务和安装包由[外部 opencode-identity 工程](https://github.com/jhzhfree/opencode-identity)维护，AKB 仓库不再保存或交付其源码包/运行包。通用身份 SDK 仍可用于第三方平台接入。
 
 终端为每个 Agent 保存稳定互信 UUID 与独立 RSA 私钥；AKB 登记同一 UUID 的公钥。每个请求发送 `X-API-Key` 和 `X-AKB-Workload-Assertion`。签名不仅包含 Agent UUID/运行绑定，还绑定方法、路径、正文、Service Key 摘要、60 秒时间窗和唯一 jti，沿用现有防重放机制。
 
@@ -52,4 +52,4 @@ OpenCode 可信 ToolContext.agent
 
 运行后端 `mvn test`；新增测试覆盖签名名称保留、改名后签名失效、非法名称拒绝、身份工具参数伪造拒绝及无身份请求拒绝。SDK 测试独立检查 JWS 签名与请求绑定；插件测试检查并发 Agent、真实审批 Effect、拒绝时无请求，以及审计不可用时无业务请求。
 
-现场先登记公钥与 UUID，再运行 `akb-plugin-builder verify <identity.json> <workspace> <agent-name>`。该命令分别验证 REST 和 MCP，任何一步不匹配都不能返回 verified。最后必须从目标 Windows 的真实 OpenCode Agent 发起业务工具调用，并结合 AKB 审计核对 UUID、kid 与授权结果。没有真实 Windows/AKB 环境时不能声称完成现场验收。
+现场先在 AKB 登记公钥与 UUID，再使用外部工程提供的身份验证与分阶段检查。分别验证 REST 身份状态、MCP 身份工具、知识库目录与实际检索；连接成功不能替代身份验签或资源授权。最后必须从目标 Windows 的真实 OpenCode Agent 发起业务工具调用，并结合 AKB 审计核对 UUID、kid 与授权结果。没有真实 Windows/AKB 环境时不能声称完成现场验收。

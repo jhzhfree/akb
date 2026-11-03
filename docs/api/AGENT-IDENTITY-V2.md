@@ -10,7 +10,7 @@
 
 仅数据库 `simple_mode` 明确开启的新接入继承服务范围；原接入保持应用与 Agent 权限交集，客户端参数不能开启继承。默认无权限标签授权不会扩大到带标签内容。
 
-密钥工具目前在 Octop 的独立可打包工程 `tools/agent-keygen`；可单独交付，不依赖 Octop 服务。调用平台需使用支持简化发现的 SDK 0.4.0；OpenCode 适配器 0.3.0 支持 configVersion 3。
+密钥工具目前在 Octop 的独立可打包工程 `tools/agent-keygen`；可单独交付，不依赖 Octop 服务。调用平台需使用支持简化发现和 V2 逐请求签名的 SDK；OpenCode 插件制作与版本兼容由[外部工程](https://github.com/jhzhfree/opencode-identity)维护。AKB 仓库不保存独立插件制作源码或安装包。
 
 部署需同时更新后端（Flyway V76）和前端。生产使用 HTTPS。旧接入见下文的高级协议，页面底部保留兼容入口，不自动迁移。
 
