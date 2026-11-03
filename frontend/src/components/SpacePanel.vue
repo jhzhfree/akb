@@ -49,7 +49,7 @@
               </div>
               <p class="kb-muted mt-1 line-clamp-2 min-h-[32px]">{{ base.description || '暂无描述' }}</p>
               <div class="kb-muted mt-2 flex flex-wrap items-center gap-x-3 gap-y-1">
-                <span>编码 {{ base.baseCode }}</span>
+                <span>知识库ID {{ base.baseCode }}</span>
                 <span v-if="base.ownerGroupName">用户组 {{ base.ownerGroupName }}</span>
                 <span v-else-if="base.createdByName">创建人 {{ base.createdByName }}</span>
                 <span v-if="base.createdTime">{{ base.createdTime }}</span>

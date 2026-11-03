@@ -16,8 +16,9 @@
           :aria-label="`切换到知识库：${base.name}`" @click="$emit('select',base.id)">
           <span class="kb-icon">📚</span>
           <span class="kb-copy">
-            <b>{{base.name}}</b>
-            <small>{{base.description||base.baseCode}}</small>
+            <b class="kb-copyable" title="点击复制名称" @click.stop="copy('名称',base.name)">{{base.name}}</b>
+            <small class="kb-copyable" title="点击复制用途 / 描述"
+            @click.stop="copy('用途',base.description||base.baseCode)">{{base.description||base.baseCode}}</small>
           </span>
           <span class="kb-meta">
             <em class="kb-owner">创建人：{{base.createdByName||'—'}}</em>
@@ -25,7 +26,8 @@
             <el-tag size="small" effect="plain">{{visibilityLabel(base.visibility)}}</el-tag>
           </span>
           <el-tag v-if="base.id===activeId" size="small">当前</el-tag>
-          <span class="kb-code">{{base.baseCode}}</span>
+          <span class="kb-code kb-copyable" title="点击复制知识库ID"
+            @click.stop="copy('知识库ID',base.baseCode)">{{base.baseCode}}</span>
         </button>
         <el-button v-if="canEdit(base)" size="small" text type="primary" class="kb-edit" @click.stop="startEdit(base)">编辑</el-button>
       </div>
@@ -243,6 +245,8 @@ import{computed,ref,watch}from'vue'
 import type{KnowledgeBase,UserGroupRow}from'../types'
 import type{KbScenarioProfile,KbScenarioSchema,KbScenarioTemplate}from'../types/knowledge'
 import{visibilityLabel}from'../types'
+import{ElMessage}from'element-plus'
+import{copyText}from'../utils/clipboard'
 import{getKbScenario,saveKbScenario,resetKbScenario}from'../api/knowledge/base'
 const VISIBILITIES=['PUBLIC','PRIVATE','GROUP'] as const
 type BasePayload={
@@ -450,6 +454,13 @@ watch(()=>props.visible,async v=>{
   }
   else{reset();viewMode.value='list'}
 })
+/** 列表里的字段值要能直接取走：知识库ID 这种串手抄会抄错，点一下比拖选再复制可靠。 */
+async function copy(label:string,text?:string|null){
+  if(!text){ElMessage.warning('没有可复制的'+label);return}
+  const ok=await copyText(text)
+  if(ok)ElMessage.success('已复制'+label)
+  else ElMessage.warning('浏览器拒绝了剪贴板访问，请手动复制')
+}
 </script>
 <style scoped>
 /* 左右都留 4px：滚动条贴边时右侧内容不会被挡，左侧也不贴弹窗边框。 */
@@ -595,6 +606,9 @@ gap:8px}
 color:var(--ink-3);
 font-style:normal}
 .kb-code{margin-left:auto}
+/* 可点复制：给个指针与悬停色，否则没人知道这些文字能点 */
+.kb-copyable{cursor:pointer}
+.kb-copyable:hover{color:var(--accent-text)}
 .kb-edit{margin-left:8px;
 padding:0}
 /* 列表工具栏：搜索 + 新建 */
