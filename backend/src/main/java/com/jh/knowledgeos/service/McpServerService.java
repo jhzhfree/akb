@@ -50,6 +50,30 @@ public class McpServerService {
         this(accessService, facade, objectMapper, null);
     }
 
+    private RetrievalAuthorizationService authorizationCapabilities;
+    private DelegatedIdentityService delegationCapabilities;
+
+    @Autowired
+    public void configureAuthorizationCapabilities(RetrievalAuthorizationService authorization,
+        DelegatedIdentityService delegation) {
+        this.authorizationCapabilities = authorization;
+        this.delegationCapabilities = delegation;
+    }
+
+    /** Deployment metadata only: never a caller permission or an ACL verification result. */
+    private Map<String, Object> authorizationCapabilities() {
+        Map<String, Object> report = new LinkedHashMap<String, Object>();
+        report.put("schema_version", 1);
+        report.put("workload_v2_user_delegation_supported", Boolean.FALSE);
+        report.put("legacy_agent_delegation_configured", delegationCapabilities != null && delegationCapabilities.isOctopEnabled());
+        report.put("external_content_tag_mode", authorizationCapabilities == null ? "UNKNOWN" : authorizationCapabilities.mode().name());
+        report.put("workload_content_tag_enforcement", Boolean.TRUE);
+        report.put("explicit_external_user_binding_required", Boolean.TRUE);
+        report.put("empty_tag_grant_semantics", "PUBLIC_ONLY");
+        report.put("capability_is_authorization", Boolean.FALSE);
+        return report;
+    }
+
     /**
      * Handles one JSON-RPC 2.0 message; notifications (no id) produce no response.
      */
@@ -112,6 +136,7 @@ public class McpServerService {
         resources.put("listChanged", Boolean.FALSE);
         capabilities.put("tools", tools);
         capabilities.put("resources", resources);
+        capabilities.put("experimental", java.util.Collections.singletonMap("akb.authorization", authorizationCapabilities()));
         Map<String, Object> serverInfo = new LinkedHashMap<String, Object>();
         serverInfo.put("name", SERVER_NAME);
         serverInfo.put("version", SERVER_VERSION);
