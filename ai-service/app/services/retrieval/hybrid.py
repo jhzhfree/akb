@@ -445,7 +445,14 @@ class HybridRetriever:
         citation with nothing standing behind it, and the answer gate would be right to block it.
         """
         graph = graph_store.load(kb)
-        entities = graph.get("entities") or {}
+        # Filter before seed selection AND traversal: a public relation and public
+        # endpoint evidence cannot authorize disclosure of a private path node.
+        entities = {
+            str(code): entity
+            for code, entity in (graph.get("entities") or {}).items()
+            if self._graph_in_kb(entity, kb)
+            and self._graph_allowed(entity.get("permissionTags"), permission_tags)
+        }
         relations = graph.get("relations") or []
         if not entities or not relations:
             return []
@@ -454,11 +461,18 @@ class HybridRetriever:
             return []
         adjacency: dict[str, list[tuple[str, dict[str, Any]]]] = defaultdict(list)
         for relation in relations:
+            if not self._graph_in_kb(relation, kb):
+                continue
             if not self._graph_allowed(relation.get("permissionTags"), permission_tags):
+                continue
+            if str(relation.get("source")) not in entities or str(relation.get("target")) not in entities:
                 continue
             adjacency[str(relation.get("source"))].append((str(relation.get("target")), relation))
             adjacency[str(relation.get("target"))].append((str(relation.get("source")), relation))
-        documents = [doc for doc in store.load(kb) if allowed(doc, permission_tags)]
+        documents = [
+            doc for doc in store.load(kb)
+            if self._graph_in_kb(doc, kb) and allowed(doc, permission_tags)
+        ]
         paths: list[tuple[str, list[tuple[dict[str, Any], str]]]] = []
         for seed in seeds:
             for neighbour, relation in adjacency.get(seed, [])[:MAX_GRAPH_BRANCH]:
@@ -482,6 +496,17 @@ class HybridRetriever:
             self._as_graph_candidate(score, seed, steps, support, entities, permission_tags)
             for score, seed, steps, support in scored[: max(int(top_k), 0)]
         ]
+
+    @staticmethod
+    def _graph_in_kb(item: Any, kb: Any) -> bool:
+        """Unstamped legacy rows inherit their KB-partitioned snapshot's scope."""
+        if not isinstance(item, dict):
+            return False
+        return all(
+            str(item[key]) == str(kb)
+            for key in ("knowledgeBaseId", "knowledge_base_id", "kb_id")
+            if key in item
+        )
 
     @staticmethod
     def _seed_entities(entities: dict[str, Any], query: str) -> list[str]:
