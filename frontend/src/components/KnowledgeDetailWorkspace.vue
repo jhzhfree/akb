@@ -18,11 +18,14 @@
           </div>
         </header>
 
+        <p v-if="detail.detailsRestricted || detail.omittedSections?.length" role="status" class="mb-4 rounded-lg bg-ink-100 p-3 text-sm text-ink-600">
+          当前正文可见；部分附属信息因权限未加载，不代表没有相关记录。
+        </p>
         <div class="mb-5 grid gap-3 sm:grid-cols-4">
-          <div class="kb-metric"><span>证据</span><b>{{ detail.evidence.length }}</b></div>
-          <div class="kb-metric"><span>冲突</span><b>{{ detail.conflicts.length }}</b></div>
-          <div class="kb-metric"><span>复核</span><b>{{ detail.reviews.length }}</b></div>
-          <div class="kb-metric"><span>评估</span><b>{{ detail.assessments.length }}</b></div>
+          <div class="kb-metric"><span>证据</span><b>{{ sectionCount('evidence', detail.evidence.length) }}</b></div>
+          <div class="kb-metric"><span>冲突</span><b>{{ sectionCount('conflicts', detail.conflicts.length) }}</b></div>
+          <div class="kb-metric"><span>复核</span><b>{{ sectionCount('reviews', detail.reviews.length) }}</b></div>
+          <div class="kb-metric"><span>评估</span><b>{{ sectionCount('assessments', detail.assessments.length) }}</b></div>
         </div>
 
         <!-- 设计 §8：统一详情框架——概览 / 关联 / Evidence / 版本 / 权限 / 审计，所有对象共用。 -->
@@ -73,13 +76,14 @@
           </el-tab-pane>
 
           <!-- 关联：图谱邻域与冲突对象，点开即可跳转图谱或冲突处理 -->
-          <el-tab-pane :label="`关联 ${graphNodes.length}`" name="relation">
+          <el-tab-pane :label="`关联 ${sectionCount('graph', graphNodes.length)}`" name="relation">
             <section class="kb-card p-5">
               <div class="kb-section-head">
                 <div><small>关联图谱</small><h3>关联对象</h3></div>
                 <button class="kb-btn kb-btn-outline" @click="$emit('open-graph',code)">打开图谱</button>
               </div>
-              <div v-if="graphNodes.length" class="space-y-2">
+              <div v-if="restricted('graph')" class="py-8 text-center text-sm text-ink-500">关联对象因权限未加载</div>
+              <div v-else-if="graphNodes.length" class="space-y-2">
                 <div
                   v-for="node in graphNodes"
                   :key="String(node.code)"
@@ -90,7 +94,8 @@
               </div>
               <div v-else class="py-8 text-center text-sm text-ink-500">暂无关联对象</div>
             </section>
-            <section v-if="detail.conflicts.length" class="kb-card mt-4 border-[color:var(--warn-bd)] p-5">
+            <section v-if="restricted('conflicts')" class="kb-card mt-4 p-5 text-sm text-ink-500">知识冲突因权限未加载</section>
+            <section v-else-if="detail.conflicts.length" class="kb-card mt-4 border-[color:var(--warn-bd)] p-5">
               <div class="kb-section-head"><div><small>知识知识冲突</small><h3>知识冲突</h3></div></div>
               <div
                 v-for="(c,i) in detail.conflicts"
@@ -101,10 +106,11 @@
             </section>
           </el-tab-pane>
 
-          <el-tab-pane :label="`证据 ${detail.evidence.length}`" name="evidence">
+          <el-tab-pane :label="`证据 ${sectionCount('evidence', detail.evidence.length)}`" name="evidence">
             <section class="kb-card p-5">
               <div class="kb-section-head"><div><small>证据链</small><h3>证据与来源</h3></div></div>
-              <div class="space-y-3">
+              <div v-if="restricted('evidence')" class="py-8 text-center text-sm text-ink-500">证据与来源因权限未加载</div>
+              <div v-else class="space-y-3">
                 <article v-for="e in detail.evidence" :key="e.evidenceCode"
                   class="cursor-pointer rounded-lg border border-ink-100 bg-white p-4 transition hover:border-[color:var(--info-bd)] hover:shadow-sm"
                   @click="$emit('open-evidence',e.evidenceCode)">
@@ -127,8 +133,9 @@
             </section>
           </el-tab-pane>
 
-          <el-tab-pane :label="`版本 ${(detail.versions||[]).length}`" name="version">
-            <VersionDiffPanel :versions="detail.versions || []" />
+          <el-tab-pane :label="`版本 ${sectionCount('versions', (detail.versions||[]).length)}`" name="version">
+            <div v-if="restricted('versions')" class="kb-card p-5 text-sm text-ink-500">版本记录因权限未加载</div>
+            <VersionDiffPanel v-else :versions="detail.versions || []" />
           </el-tab-pane>
 
           <el-tab-pane label="权限" name="acl">
@@ -168,6 +175,8 @@
           <el-tab-pane label="审计" name="audit">
             <section class="kb-card p-5">
               <div class="kb-section-head"><div><small>机器裁决</small><h3>智能裁决记录</h3></div></div>
+              <div v-if="restricted('assessments')" class="text-sm text-ink-500">智能裁决记录因权限未加载</div>
+              <template v-else>
               <div
                 v-for="a in detail.assessments"
                 :key="String(a.id)"
@@ -175,9 +184,12 @@
                 class="text-ink-800">{{ a.decision }}</b><p
                 class="mt-1 text-ink-500">{{ a.reasonText }}</p></div>
               <div v-if="!detail.assessments.length" class="text-sm text-ink-500">暂无智能裁决记录</div>
+              </template>
             </section>
             <section class="kb-card mt-4 p-5">
               <div class="kb-section-head"><div><small>复核记录</small><h3>人工复核历史</h3></div></div>
+              <div v-if="restricted('reviews')" class="text-sm text-ink-500">人工复核历史因权限未加载</div>
+              <template v-else>
               <div
                 v-for="r in detail.reviews"
                 :key="r.id"
@@ -185,6 +197,7 @@
                 class="mt-1 text-ink-500">{{ r.comment || '—' }}</p><small
                 class="text-ink-500">{{ r.reviewer }} · {{ time(r.createdTime) }}</small></div>
               <div v-if="!detail.reviews.length" class="text-sm text-ink-500">暂无人工复核</div>
+              </template>
             </section>
           </el-tab-pane>
         </el-tabs>
@@ -199,10 +212,13 @@ import type { DocumentChunk, GraphNode, KnowledgeObjectDetail } from '../types'
 import { statusLabel, visibilityLabel } from '../types'
 import VersionDiffPanel from './VersionDiffPanel.vue'
 import { copyText } from '../utils/clipboard'
+import { isDetailSectionRestricted, detailSectionCount } from '../utils/knowledge-detail-access.mjs'
 const props=defineProps<{visible:boolean;mode:'CARD'|'CLAIM'|'CHUNK';code:string;detail:KnowledgeObjectDetail|null;loading:boolean}>()
 defineEmits<{close:[];'open-graph':[code:string];'open-evidence':[evidenceCode:string]}>()
 /** 统一详情框架的当前 Tab：概览 / 关联 / Evidence / 版本 / 权限 / 审计。 */
 const tab=ref('overview')
+const restricted=(section:string)=>isDetailSectionRestricted(props.detail, section)
+const sectionCount=(section:string, count:number)=>detailSectionCount(props.detail, section, count)
 /** 切换对象时回到概览，避免把上一个对象的 Tab 状态带到下一个对象。 */
 watch(()=>props.code,()=>{tab.value='overview'})
 const obj=computed(()=>props.detail?.object||{})

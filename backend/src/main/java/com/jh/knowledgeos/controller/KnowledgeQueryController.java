@@ -2,6 +2,8 @@ package com.jh.knowledgeos.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.jh.knowledgeos.common.ApiResponse;
+import com.jh.knowledgeos.common.UserRole;
+import com.jh.knowledgeos.domain.User;
 import com.jh.knowledgeos.domain.KnowledgeBase;
 import com.jh.knowledgeos.service.AuthContext;
 import com.jh.knowledgeos.service.ChunkPolicyService;
@@ -77,28 +79,79 @@ public class KnowledgeQueryController {
     @PostMapping("/retrieve")
     @Operation(summary = "纯检索：返回排序后的候选 Chunk，不生成答案（设计 §17.1）")
     public ApiResponse<Object> retrieve(@RequestBody Map<String, Object> request) throws Exception {
-        return ApiResponse.ok(service.retrieve(request));
+        return ApiResponse.ok(service.retrieve(authorizeQuery(request)));
     }
 
 
     @PostMapping("/answer")
     @Operation(summary = "生成式回答：答案、引用、置信度与 traceId（设计 §17.1）")
     public ApiResponse<Object> answer(@RequestBody Map<String, Object> request) throws Exception {
-        return ApiResponse.ok(service.answer(request));
+        return ApiResponse.ok(service.answer(authorizeQuery(request)));
     }
 
+
+    /** Authorize the exact canonical KB sent downstream, never client-supplied ACL tags. */
+    private Map<String, Object> authorizeQuery(Map<String, Object> request) {
+        Object raw = request == null ? null : request.get("knowledgeBaseId");
+        Long kb;
+        try {
+            // No floating-point truncation, booleans, nested objects or overflow.
+            String value = raw == null ? "" : String.valueOf(raw).trim();
+            if (!value.matches("[0-9]+")) throw new NumberFormatException();
+            kb = Long.valueOf(value);
+            if (kb <= 0) throw new NumberFormatException();
+        } catch (NumberFormatException invalid) {
+            throw new IllegalArgumentException("knowledgeBaseId 必须为正整数");
+        }
+        accessService.assertRead(kb);
+        Map<String, Object> payload = new LinkedHashMap<String, Object>(request);
+        payload.put("knowledgeBaseId", kb);
+        payload.remove("knowledge_base_id");
+        payload.remove("permission_tags");
+        payload.remove("permissionTags");
+        User user = AuthContext.get();
+        if (user == null || user.getId() == null || !"ACTIVE".equalsIgnoreCase(user.getStatus())) {
+            throw new SecurityException("检索需要有效登录身份");
+        }
+        UserRole role = UserRole.of(user.getRole());
+        boolean unrestrictedRole = role == UserRole.ADMIN || role == UserRole.KNOWLEDGE_ADMIN;
+        // Platform-wide knowledge access does not grant access to another user's private memory.
+        boolean includeMemory = Boolean.parseBoolean(String.valueOf(payload.get("includeMemory")).trim());
+        if ((!unrestrictedRole || includeMemory) && (user.getUserCode() == null || user.getUserCode().trim().isEmpty()
+            || !user.getUserCode().equals(aclContextResolver.currentSubjectCode()))) {
+            throw new SecurityException("检索权限主体与登录身份不一致");
+        }
+        List<String> tags = aclContextResolver.resolve(null);
+        if (!unrestrictedRole && tags == null) {
+            throw new SecurityException("无法确认当前身份的内容权限");
+        }
+        if (tags != null) payload.put("permissionTags", tags);
+        return payload;
+    }
+
+    /** Raw trace bundles have no source-level ACL projection or trustworthy ownership check. */
+    private void assertUnrestrictedTraceAccess() {
+        User user = AuthContext.get();
+        // AuthInterceptor obtains the current ACTIVE user and role from the database each request.
+        // KNOWLEDGE_ADMIN is not a platform-wide KB reader; an absent session is not an admin.
+        if (user == null || user.getId() == null || !"ACTIVE".equalsIgnoreCase(user.getStatus())
+            || UserRole.of(user.getRole()) != UserRole.ADMIN
+            || aclContextResolver.resolve(null) != null) {
+            throw new SecurityException("当前身份暂不可用原始问答溯源；需完成内容权限投影后开放");
+        }
+    }
 
     @PostMapping("/query")
     @Operation(summary = "执行可追溯混合知识问答")
     public ApiResponse<QueryResponse> query(@Valid @RequestBody QueryRequest request, @RequestHeader(value = "X-Authenticated-Permission-Tags",
         required = false) String permissionTags) throws Exception {
-        accessService.assertRead(request.getKnowledgeBaseId());
-        request.setPermissionTags(aclContextResolver.resolve(permissionTags));
-        return ApiResponse.ok(objectMapper.convertValue(service.query(request.toMap()), QueryResponse.class));
+        // Preserve the header parameter for API compatibility, but never trust it as an ACL grant.
+        return ApiResponse.ok(objectMapper.convertValue(service.query(authorizeQuery(request.toMap())), QueryResponse.class));
     }
 
     @GetMapping("/trace/{qid}")
     public ApiResponse<Object> trace(@PathVariable String qid) {
+        assertUnrestrictedTraceAccess();
         return ApiResponse.ok(service.trace(qid));
     }
 
@@ -106,6 +159,7 @@ public class KnowledgeQueryController {
     @GetMapping("/answer-qualification/{qid}")
     @Operation(summary = "查看权威答案资格决策与 Claim 证据账本")
     public ApiResponse<Object> answerQualification(@PathVariable String qid) {
+        assertUnrestrictedTraceAccess();
         return ApiResponse.ok(service.answerQualification(qid));
     }
 

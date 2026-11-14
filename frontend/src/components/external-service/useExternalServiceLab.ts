@@ -137,7 +137,7 @@ export function useExternalServiceLab(props: ExternalServiceLabProps) {
     { key:'claim', method:'GET', path:'/v1/external/claims/{code}', summary:'断言详情' },
     { key:'evidence', method:'GET', path:'/v1/external/evidence/{code}', summary:'证据原文' },
     { key:'graph', method:'GET', path:'/v1/external/graph/{code}', summary:'图谱邻域' },
-    { key:'trace', method:'GET', path:'/v1/external/queries/{queryId}', summary:'问答链路回放' },
+    { key:'trace', method:'GET', path:'/v1/external/queries/{queryId}', summary:'已停用：问答链路回放（等待权限校验）' },
     { key:'ingest', method:'POST', path:'/v1/external/documents/text', summary:'文本接入（INGEST）' },
     { key:'memoryCapture', method:'POST', path:'/v1/external/memories/capture', summary:'写入 Agent 记忆（MEMORY_WRITE）' },
     { key:'memoryRecall', method:'POST', path:'/v1/external/memories/recall', summary:'召回 Agent 记忆（MEMORY_READ）' },

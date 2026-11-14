@@ -96,3 +96,81 @@ def test_upsert_claim_falls_back_to_auto_entity():
     provider = _stub_provider(captured)
     provider._upsert_claim(7, {"claim_code": "CLM_1", "subject": "未知主题"}, {})
     assert captured[1]["params"]["entityCode"] == "AUTO_未知主题"
+
+
+def test_neighborhood_all_path_nodes_are_kb_and_acl_scoped():
+    # An allowed endpoint pair is insufficient: every intermediate node must
+    # pass ACL and KB checks before UNWIND can expose its title.
+    for tags in ([], ["team-a"]):
+        captured = []
+        provider = _stub_provider(captured)
+        result = provider.neighborhood(7, "public-start", depth=3, permission_tags=tags)
+        assert result["nodes"] == []
+        query = captured[0]["cypher"]
+        assert "all(node IN nodes(p) WHERE node.knowledgeBaseId=$kb AND " in query
+        assert "size(coalesce(node.permissionTags, []))=0 OR any(tag IN coalesce(node.permissionTags, []) WHERE tag IN $permissionTags)" in query
+        assert "all(rel IN relationships(p)" in query
+        assert query.index("all(node IN nodes(p)") < query.index("WITH p LIMIT")
+        assert captured[0]["params"]["permissionTags"] == tags
+
+
+def test_generation_neighborhood_all_path_nodes_are_generation_kb_and_acl_scoped():
+    for tags in ([], ["team-a"]):
+        captured = []
+        provider = _stub_provider(captured)
+        provider.active_generation = lambda kb: "active"
+        result = provider.generation_neighborhood(7, "public-start", depth=3, permission_tags=tags)
+        assert result["paths"] == []
+        query = captured[0]["cypher"]
+        assert "all(node IN nodes(p) WHERE node.knowledgeBaseId=$kb AND node.generationId=ptr.activeGenerationId AND " in query
+        assert "size(coalesce(node.permissionTags,[]))=0 OR any(t IN coalesce(node.permissionTags,[]) WHERE t IN $tags)" in query
+        assert "all(rel IN relationships(p)" in query
+        assert query.index("all(node IN nodes(p)") < query.index("RETURN p LIMIT")
+        assert captured[0]["params"]["tags"] == tags
+
+
+def test_generation_multihop_scopes_every_node_and_evidence_object():
+    for tags in ([], ["team-a"]):
+        captured = []
+        provider = _stub_provider(captured)
+        provider.active_generation = lambda kb: "active"
+        result = provider.generation_multihop(7, "public-start", depth=3, permission_tags=tags)
+        assert result["paths"] == []
+        query = captured[0]["cypher"]
+        assert "all(n IN nodes(p) WHERE n.knowledgeBaseId=$kb AND n.generationId=ptr.activeGenerationId" in query
+        assert "size(coalesce(n.permissionTags,[]))=0 OR any(tag IN coalesce(n.permissionTags,[]) WHERE tag IN $tags)" in query
+        assert "size(coalesce(o.permissionTags,[]))=0 OR any(tag IN coalesce(o.permissionTags,[]) WHERE tag IN $tags)" in query
+        assert query.index("coalesce(o.permissionTags") < query.index("RETURN [n")
+        assert "coalesce(about.permissionTags" in query
+        assert captured[0]["params"]["tags"] == tags
+
+
+def test_facet_multihop_checks_all_nodes_and_edges_before_limit():
+    for tags in ([], ["team-a"]):
+        captured = []
+        provider = _stub_provider(captured)
+        provider.active_generation = lambda kb: "active"
+        assert provider.facet_multihop(7, "start", permission_tags=tags)["paths"] == []
+        query = captured[0]["cypher"]
+        assert "all(n IN nodes(p) WHERE n.knowledgeBaseId=$kb AND n.generationId=ptr.activeGenerationId" in query
+        assert "coalesce(n.permissionTags,[])" in query
+        assert "all(r IN relationships(p) WHERE r.generationId=ptr.activeGenerationId" in query
+        assert "coalesce(r.permissionTags,[])" in query
+        assert query.index("all(n IN nodes(p)") < query.index("RETURN DISTINCT")
+        assert captured[0]["params"]["tags"] == tags
+
+
+def test_citation_multihop_scopes_all_entities_evidence_sources_and_links():
+    for tags in ([], ["team-a"]):
+        captured = []
+        provider = _stub_provider(captured)
+        provider.active_generation = lambda kb: "active"
+        assert provider.citation_safe_multihop(7, "start", permission_tags=tags)["paths"] == []
+        query = captured[0]["cypher"]
+        for var, label in (("s", "EntityGen"), ("t", "EntityGen"), ("rf", "RelationFacetGen"), ("ev", "EvidenceGen"), ("src", "SourceGen")):
+            assert "(%s:%s {knowledgeBaseId:$kb,generationId:ptr.activeGenerationId" % (var, label) in query
+        for var in ("rf", "ev", "src"):
+            assert "coalesce(%s.permissionTags,[])" % var in query
+        assert "all(n IN [s,t] WHERE size(coalesce(n.permissionTags,[]))=0" in query
+        assert "all(r IN [startLink,support,derived,targetLink] WHERE" in query
+        assert captured[0]["params"]["tags"] == tags

@@ -400,6 +400,9 @@ export interface KnowledgeVersion {
 }
 export interface ReviewHistory { id:number; decision:string; reviewer?:string; comment?:string; createdTime?:string }
 export interface KnowledgeObjectDetail {
+  /** 附属段因权限未加载，空数组不代表没有记录。 */
+  detailsRestricted?:boolean
+  omittedSections?:string[]
   object:Record<string,unknown>; evidence:EvidenceRow[]; conflicts:ConflictRow[];
   reviews:ReviewHistory[]; assessments:AssessmentRow[]; graph:GraphResult; versions:KnowledgeVersion[]
   /** Chunk 详情才有：同文档上下相邻块，用于把命中的片段放回上下文中读。 */

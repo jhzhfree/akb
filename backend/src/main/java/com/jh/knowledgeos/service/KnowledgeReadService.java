@@ -68,9 +68,20 @@ public class KnowledgeReadService {
      * <p>Neo4j is the serving view, but a knowledge base whose relationships were not yet projected
      * has authoritative evidence bindings that Neo4j cannot show. In that case the response falls
      * back to the MySQL projection and says so through {@code source}, so the UI never renders an
-     * empty canvas while real relations exist.</p>
+     * empty canvas while real relations exist. This fallback is permitted only for an explicitly
+     * unconstrained internal call (null tags); an empty tag list means public-only, not unrestricted.</p>
      */
     public Map<String, Object> graph(Long kb, String code, List<String> permissionTags, Integer depth, Integer limit) {
+        if (permissionTags != null) {
+            for (String tag : permissionTags) {
+                // This legacy GET contract uses comma-delimited, trimmed query values.
+                // Reject ambiguous values instead of widening or silently rewriting the grant.
+                if (tag == null || tag.isEmpty() || !tag.equals(tag.trim())
+                    || java.util.regex.Pattern.compile("(?U)[,&#%?+;=\\s\\p{Cntrl}]").matcher(tag).find()) {
+                    throw new SecurityException("ACL_GRAPH_TAG_TRANSPORT_UNSAFE: tag cannot be represented safely");
+                }
+            }
+        }
         int hops = depth == null || depth < 1 ? 2 : Math.min(depth, 3);
         int cap = limit == null || limit < 10 ? 80 : Math.min(limit, 400);
         Map<String, Object> served = null;
@@ -83,6 +94,11 @@ public class KnowledgeReadService {
         if (served != null && !isEmpty(served.get("edges"))) {
             served.put("source", "neo4j");
             return served;
+        }
+        if (permissionTags != null) {
+            // The authoritative projection has no ACL-aware neighborhood API. Never downgrade
+            // an empty/failed filtered graph (including PUBLIC_ONLY) to an unfiltered graph.
+            throw new SecurityException("ACL_FILTERED_GRAPH_UNAVAILABLE: unfiltered graph fallback is disabled");
         }
         Map<String, Object> fallback = authoritativeGraph.neighborhood(kb, code, hops, cap);
         fallback.put("source", "authoritative");
@@ -119,6 +135,10 @@ public class KnowledgeReadService {
         // A chunk is addressable too: an operator reviewing a citation needs the raw unit,
         // its evidence and its neighbours, not only the cards derived from it.
         if ("CHUNK".equals(type) || "CONTENT_UNIT".equals(type)) {
+            // This legacy projection cannot prove source/neighbor ACLs. Do not read it first.
+            if (permissionTags != null) {
+                throw new SecurityException("ACL_FILTERED_CHUNK_DETAIL_UNAVAILABLE");
+            }
             return chunkDetail(kb, objectCode);
         }
         Map<String, Object> object = mapper.getKnowledgeObject(kb, type, objectCode, permissionTags);
@@ -127,6 +147,19 @@ public class KnowledgeReadService {
         }
         Map<String, Object> result = new LinkedHashMap<String, Object>();
         result.put("object", object);
+        if (permissionTags != null) {
+            // Authorization of the current object does not authorize its sources, historical
+            // contents, governance text, or related objects. These projections have no item ACL.
+            List<String> omitted = java.util.Arrays.asList("evidence", "conflicts", "reviews",
+                "assessments", "versions", "graph");
+            for (String section : omitted) {
+                if (!"graph".equals(section)) result.put(section, java.util.Collections.emptyList());
+            }
+            result.put("graph", java.util.Collections.emptyMap());
+            result.put("detailsRestricted", true);
+            result.put("omittedSections", omitted);
+            return result;
+        }
         result.put("evidence", evidenceMapper.listEvidenceForObject(objectType, objectCode));
         result.put("conflicts", governanceMapper.listObjectConflicts(objectCode));
         result.put("reviews", governanceMapper.listReviewsForObject(objectType, objectCode));

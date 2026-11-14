@@ -107,7 +107,7 @@ public class ExternalServiceAdminController {
             endpoint("GET", "/cards", "知识卡片清单"),
             endpoint("GET", "/cards/{code}", "知识卡片详情"), endpoint("GET", "/claims", "断言清单"),
             endpoint("GET", "/claims/{code}", "断言详情"), endpoint("GET", "/evidence/{code}", "证据原文"), endpoint("GET", "/graph/{code}", "图谱邻域"),
-            endpoint("GET", "/queries/{queryId}", "问答链路回放"), endpoint("GET", "/overview", "知识库概览"),
+            endpoint("GET", "/queries/{queryId}", "已停用：问答链路回放（等待所有者与内容权限校验）"), endpoint("GET", "/overview", "知识库概览"),
             endpoint("POST", "/documents/text", "文本接入（INGEST）"), endpoint("POST", "/memories/capture", "记忆写入（MEMORY_MANAGE）"),
             endpoint("POST", "/memories/recall", "记忆召回（MEMORY_MANAGE）"), endpoint("DELETE", "/memories/{memoryCode}", "记忆删除（MEMORY_MANAGE）")));
         Map<String, Object> mcp = new LinkedHashMap<String, Object>();

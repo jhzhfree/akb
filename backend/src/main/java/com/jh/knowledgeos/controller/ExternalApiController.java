@@ -147,9 +147,14 @@ public class ExternalApiController {
     }
 
     @GetMapping("/queries/{queryId}")
-    @Operation(summary = "问答链路回放：按 queryId 取回完整检索与生成轨迹")
+    @Operation(summary = "外部问答链路回放暂不可用：等待所有者与内容权限校验")
     public ApiResponse<Object> trace(HttpServletRequest request, @PathVariable String queryId) throws Exception {
-        return call(request, "GET /queries/{queryId}", null, (key, kb) -> facade.trace(queryId));
+        return call(request, "GET /queries/{queryId}", null, (key, kb) -> {
+            // A query ID is not authorization. Stored traces contain answers and source content,
+            // but cannot yet be re-authorized against this caller's current content permissions.
+            // Keep authentication, scope enforcement and rejection auditing; never fetch the trace.
+            throw new SecurityException("外部问答回放暂不可用：尚未实现记录所有者与内容权限校验");
+        });
     }
 
     @GetMapping("/overview")
