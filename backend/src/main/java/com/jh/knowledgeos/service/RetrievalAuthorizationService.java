@@ -76,7 +76,8 @@ public class RetrievalAuthorizationService {
             return requested;
         }
         RetrievalAuthorizationContext context = forCredential(key, knowledgeBaseId);
-        if (key.isWorkloadCredential()) return context.effectiveTags(requested);
+        // An authenticated delegated user is never a CLIENT/SHADOW authorization bypass.
+        if (key.isWorkloadCredential() || key.getDelegatedPrincipalId() != null) return context.effectiveTags(requested);
         List<String> removed = context.removedTags(requested);
         if (mode == Mode.CLIENT) {
             return requested;
@@ -102,6 +103,10 @@ public class RetrievalAuthorizationService {
     }
 
     public RetrievalAuthorizationContext forCredential(ApiKey key, Long knowledgeBaseId) {
+        boolean delegated = key != null && key.getDelegatedPrincipalId() != null;
+        if (delegated && (key.getPrincipalId() == null || knowledgeBaseId == null || externalApiMapper == null)) {
+            throw new SecurityException("委托检索缺少服务端授权上下文");
+        }
         String code = key == null ? null : key.getKeyCode();
         Long kb = knowledgeBaseId;
         List<String> keyTags = parseTags(key == null ? null : key.getPermissionTags());
@@ -109,10 +114,13 @@ public class RetrievalAuthorizationService {
         if (key != null && key.getPrincipalId() != null && kb != null && externalApiMapper != null) {
             String grantJson = externalApiMapper.getPrincipalKnowledgeBaseGrantPermissionTags(key.getPrincipalId(), kb);
             kbTags = parseTags(grantJson);
+            if (delegated && kbTags == null) kbTags = Collections.emptyList();
         }
         if (key != null && key.getDelegatedPrincipalId() != null && kb != null && externalApiMapper != null) {
             String employeeGrantJson = externalApiMapper.getPrincipalKnowledgeBaseGrantPermissionTags(key.getDelegatedPrincipalId(), kb);
-            kbTags = intersectPolicies(kbTags, parseTags(employeeGrantJson));
+            List<String> employeeTags = parseTags(employeeGrantJson);
+            // Missing user tag policy must not inherit the wider Agent policy.
+            kbTags = intersectPolicies(kbTags, employeeTags == null ? Collections.emptyList() : employeeTags);
         }
         if (key != null && key.isWorkloadCredential() && kb != null && externalApiMapper != null) {
             if (key.getWorkloadIdentity() == null) throw new SecurityException("缺少已认证 Agent");
@@ -124,7 +132,7 @@ public class RetrievalAuthorizationService {
         List<String> granted = intersectPolicies(keyTags, kbTags);
         if (granted == null) {
             // 未配置标签授权：强制模式下按默认拒绝处理，其余模式不约束。
-            return (mode == Mode.ENFORCE || (key != null && key.isWorkloadCredential()))
+            return (mode == Mode.ENFORCE || delegated || (key != null && key.isWorkloadCredential()))
                 ? RetrievalAuthorizationContext.denyByDefault(code, kb)
                 : RetrievalAuthorizationContext.unconstrained(code, kb);
         }

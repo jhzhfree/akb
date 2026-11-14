@@ -100,6 +100,36 @@ class ExternalAccessServiceTest {
     }
 
     @Test
+    void callerCannotSetDelegatedPrincipalWithRequestFields() {
+        ApiKey key = key(19L, null);
+        when(keys.authenticate("agent-secret")).thenReturn(key);
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        request.addHeader(ExternalAccessService.HEADER, "agent-secret");
+        request.addHeader("X-Delegated-Principal-Id", "27");
+        request.addParameter("delegatedPrincipalId", "27");
+        org.junit.jupiter.api.Assertions.assertNull(service.authenticate(request).getDelegatedPrincipalId());
+    }
+
+    @Test
+    void rejectedOctopAssertionCannotCreateDelegatedIdentity() {
+        DelegatedIdentityService identity = mock(DelegatedIdentityService.class);
+        when(identity.isOctopEnabled()).thenReturn(true);
+        ApiKey key = key(19L, null);
+        key.setPrincipalType("AGENT");
+        when(keys.authenticate("agent-secret")).thenReturn(key);
+        when(identity.authenticateOctopAssertion("invalid", key))
+            .thenThrow(new com.jh.knowledgeos.exception.UnauthorizedException("invalid"));
+        ExternalAccessService access = new ExternalAccessService(keys, mock(ExternalRateLimiter.class), kbAccess,
+            mock(EmbedTokenService.class), mock(EmbedTokenLifecycleService.class), new KnowledgeProperties(), identity);
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        request.addHeader(ExternalAccessService.HEADER, "agent-secret");
+        request.addHeader(ExternalAccessService.OCTOP_ASSERTION_HEADER, "invalid");
+        assertThrows(com.jh.knowledgeos.exception.UnauthorizedException.class, () -> access.authenticate(request));
+        org.junit.jupiter.api.Assertions.assertNull(key.getDelegatedPrincipalId());
+        verify(identity).authenticateOctopAssertion("invalid", key);
+    }
+
+    @Test
     void discoveryDoesNotGrantToolAccessAndPresentProofIsAlwaysVerified() {
         WorkloadIdentityService identity = mock(WorkloadIdentityService.class);
         service.setWorkloadIdentityService(identity);

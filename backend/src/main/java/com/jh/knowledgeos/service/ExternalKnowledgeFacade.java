@@ -217,6 +217,12 @@ public class ExternalKnowledgeFacade {
      * <p>失败就当没有记忆。记忆是增强而不是主链路：一次记忆读取出错不该让整次问答失败，
      * 调用方拿到的是"没有记忆的答案"，而不是一个 500。</p>
      */
+    private void assertMemoryDelegationSupported(ApiKey key) {
+        if (key != null && key.getDelegatedPrincipalId() != null) {
+            throw new SecurityException("委托用户记忆授权尚未实现，不能使用共享 Agent 记忆");
+        }
+    }
+
     private void attachMemory(Map<String, Object> request, ApiKey key, String question) {
         String text = memoryContext(key, question);
         if (!text.isEmpty()) {
@@ -231,6 +237,7 @@ public class ExternalKnowledgeFacade {
      * 的是"没有记忆的答案"，而不是一个 500。</p>
      */
     public String memoryContext(ApiKey key, String question) {
+        assertMemoryDelegationSupported(key);
         if (key == null) {
             return "";
         }
@@ -271,6 +278,7 @@ public class ExternalKnowledgeFacade {
         List<String> effectiveTags = authorization.effectiveTags(key, kb, permissionTags, source);
         Map<String, Object> payload = payload(key, kb, question, topK, effectiveTags, source, answerFormat, minScore);
         if (memoryContext != null && !memoryContext.isEmpty()) {
+            assertMemoryDelegationSupported(key);
             payload.put("memoryContext", memoryContext);
         }
         knowledgeService.streamQuery(payload, listener);
@@ -286,6 +294,7 @@ public class ExternalKnowledgeFacade {
         List<String> effectiveTags = authorization.effectiveTags(key, kb, permissionTags, source);
         Map<String, Object> payload = payload(key, kb, question, topK, effectiveTags, source, answerFormat, minScore);
         if (memoryContext != null && !memoryContext.isEmpty()) {
+            assertMemoryDelegationSupported(key);
             payload.put("memoryContext", memoryContext);
         }
         return knowledgeService.query(payload);
@@ -345,7 +354,8 @@ public class ExternalKnowledgeFacade {
             payload.put("externalKeyCode", key.getKeyCode());
             payload.put("externalKeyName", key.getName());
         }
-        if (permissionTags != null && !permissionTags.isEmpty()) {
+        // [] means PUBLIC_ONLY; omission becomes null (unconstrained) in the AI service.
+        if (permissionTags != null) {
             payload.put("permissionTags", permissionTags);
         }
         return payload;
