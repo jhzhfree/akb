@@ -100,7 +100,7 @@
         </div>
         <div class="flex items-center gap-2">
           <button class="kb-btn-outline text-[12px]" @click="openDetail">打开知识详情</button>
-          <button class="kb-btn-outline text-[12px]" @click="selected = null">关闭</button>
+          <button class="kb-btn-outline text-[12px]" @click="closeSelection">关闭</button>
         </div>
       </div>
 
@@ -108,11 +108,15 @@
         <div>
           <b class="text-xs font-medium text-ink-700">版本链</b>
           <div v-if="chainLoading" class="kb-muted mt-2">载入版本链…</div>
+          <div v-else-if="chainRestricted" class="kb-muted mt-2">因权限未加载版本链</div>
+          <div v-else-if="detailError" class="kb-muted mt-2">{{ detailError }}</div>
           <VersionDiffPanel v-else class="mt-2" :versions="chain" />
         </div>
         <div>
           <b class="text-xs font-medium text-ink-700">证据原文定位</b>
           <div v-if="evidenceLoading" class="kb-muted mt-2">载入证据链…</div>
+          <div v-else-if="evidenceRestricted" class="kb-muted mt-2">因权限未加载证据</div>
+          <div v-else-if="detailError || evidenceError" class="kb-muted mt-2">{{ detailError || evidenceError }}</div>
           <div v-else-if="!evidence.length" class="kb-muted mt-2">
             该对象当前没有绑定证据；没有原文支撑的版本差异只能算推测。
           </div>
@@ -139,6 +143,7 @@ import { computed, ref, watch } from 'vue'
 import PanelState from './PanelState.vue'
 import VersionDiffPanel from './VersionDiffPanel.vue'
 import { getKnowledgeObjectDetail, getVersionEvidence, getVersionSnapshots } from '../api/knowledge'
+import { isDetailSectionRestricted } from '../utils/knowledge-detail-access.mjs'
 import { statusLabel } from '../types'
 import type { KnowledgeVersion, VersionEvidenceRow, VersionSnapshotRow } from '../types'
 
@@ -160,6 +165,11 @@ const chain = ref<KnowledgeVersion[]>([])
 const chainLoading = ref(false)
 const evidence = ref<VersionEvidenceRow[]>([])
 const evidenceLoading = ref(false)
+const chainRestricted = ref(false)
+const evidenceRestricted = ref(false)
+const detailError = ref('')
+const evidenceError = ref('')
+let selectionRequest = 0
 
 const changeTypes = computed(() => [...new Set(groups.value.map(g => g.changeType))].sort())
 const labelOf = (type:string) => type === 'CARD' ? 'Knowledge Card' : type === 'CLAIM' ? 'Assertion' : type
@@ -223,33 +233,49 @@ function setSize(next:number) {
  * 走详情接口而不是列表接口：列表只回 400 字摘要，摘要做不了正文差异比对。
  */
 async function select(row:VersionSnapshotRow) {
+  const request = ++selectionRequest
+  const kb = props.knowledgeBaseId
   selected.value = row
+  chain.value = []
+  evidence.value = []
+  chainRestricted.value = false
+  evidenceRestricted.value = false
+  detailError.value = ''
+  evidenceError.value = ''
   chainLoading.value = true
+  evidenceLoading.value = true
   try {
-    const res = await getKnowledgeObjectDetail(
-      props.knowledgeBaseId, row.objectType as 'CARD' | 'CLAIM', row.objectCode)
-    chain.value = res.data.data?.versions || []
+    const res = await getKnowledgeObjectDetail(kb, row.objectType as 'CARD' | 'CLAIM', row.objectCode)
+    if (request !== selectionRequest) return
+    const detail = res.data.data
+    if (!detail || !detail.object || !Object.keys(detail.object).length) {
+      detailError.value = '详情未能加载，无法确认版本链和证据的访问权限'
+      return
+    }
+    chainRestricted.value = isDetailSectionRestricted(detail, 'versions')
+    evidenceRestricted.value = isDetailSectionRestricted(detail, 'evidence')
+    chain.value = chainRestricted.value ? [] : detail?.versions || []
+    chainLoading.value = false
+    // An omitted detail section must not be recovered through an independent endpoint.
+    if (!evidenceRestricted.value) await loadEvidence(row, kb, request)
   } catch {
-    // 详情拿不到时退回列表摘要：链仍在，只是正文差异为空，比什么都不显示强。
-    const res = await getVersionSnapshots(props.knowledgeBaseId, {
-      objectType:row.objectType, keyword:row.objectCode, limit:100,
-    })
-    chain.value = (res.data.data?.rows || [])
-      .filter(v => v.objectCode === row.objectCode)
-      .map(v => ({ ...v, supersedesVersionNo:v.supersedesVersionNo ?? undefined }))
-  } finally { chainLoading.value = false }
-  await loadEvidence(row)
+    if (request === selectionRequest) detailError.value = '详情未能加载，无法确认版本链和证据的访问权限'
+    // Do not bypass a failed detail authorization with snapshot/evidence fallback calls.
+  } finally {
+    if (request === selectionRequest) {
+      chainLoading.value = false
+      evidenceLoading.value = false
+    }
+  }
 }
 
-async function loadEvidence(row:VersionSnapshotRow) {
-  evidenceLoading.value = true
-  evidence.value = []
+async function loadEvidence(row:VersionSnapshotRow, kb:number, request:number) {
   try {
-    const res = await getVersionEvidence(props.knowledgeBaseId, row.objectType, row.objectCode)
-    evidence.value = res.data.data?.items || []
+    const res = await getVersionEvidence(kb, row.objectType, row.objectCode)
+    if (request === selectionRequest) evidence.value = res.data.data?.items || []
   } catch {
-    evidence.value = []
-  } finally { evidenceLoading.value = false }
+    if (request === selectionRequest) evidenceError.value = '证据加载失败，请重试'
+  }
 }
 
 function applyGroup(group:{ objectType:string; changeType:string }) {
@@ -263,6 +289,7 @@ function openDetail() {
   emit('openDetail', selected.value.objectType, selected.value.objectCode)
 }
 
-watch(() => props.knowledgeBaseId, () => { selected.value = null; search() })
+function closeSelection() { selectionRequest++; selected.value = null }
+watch(() => props.knowledgeBaseId, () => { closeSelection(); search() })
 load()
 </script>

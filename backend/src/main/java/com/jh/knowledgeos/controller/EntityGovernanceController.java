@@ -32,7 +32,14 @@ public class EntityGovernanceController {
         return ApiResponse.ok(entityGovernanceService.entities(kb, aclContextResolver.resolve(permissionTags)));
     }    @GetMapping("/entities/{kb}/{entityCode}")
     @Operation(summary = "实体详情：别名、影响面与归一依据（V1.0 §5.4.1）")
-    public ApiResponse<Object> entityDetail(@PathVariable Long kb, @PathVariable String entityCode) {
+    public ApiResponse<Object> entityDetail(@PathVariable Long kb, @PathVariable String entityCode,
+        @RequestHeader(value = "X-Authenticated-Permission-Tags", required = false) String permissionTags) {
+        // Aliases, supporting objects and impact projections currently have no per-item ACL.
+        com.jh.knowledgeos.domain.User caller = com.jh.knowledgeos.service.AuthContext.get();
+        if (caller == null || caller.getId() == null || !"ACTIVE".equals(caller.getStatus()) || !"ADMIN".equals(caller.getRole())
+            || aclContextResolver.resolve(permissionTags) != null) {
+            throw new SecurityException("ACL_ENTITY_DETAIL_UNAVAILABLE: unfiltered entity detail is disabled for restricted callers");
+        }
         return ApiResponse.ok(entityGovernanceService.detail(kb, entityCode));
     }    @PostMapping("/entities/{kb}/{entityCode}/aliases")
     @Operation(summary = "为实体补充人工别名（V1.0 §5.4.1）")

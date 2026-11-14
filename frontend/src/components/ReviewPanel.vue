@@ -149,7 +149,7 @@
             <div class="judge-side">
               <header><span class="judge-side-tag is-a">{{ objectTypeLabel(selectedReviewType) }}</span><b>{{ selectedReviewTitle }}</b></header>
               <div class="judge-side-meta">
-                {{ statusLabel(selectedReviewStatus) }} · 置信度 {{ score(selectedReviewConfidence) }} · 证据 {{ reviewEvidence.length }}
+                {{ statusLabel(selectedReviewStatus) }} · 置信度 {{ score(selectedReviewConfidence) }} · 证据 {{ reviewEvidenceRestricted ? '因权限未加载' : reviewEvidence.length }}
               </div>
             </div>
             <div class="judge-actions">
@@ -176,6 +176,7 @@
           <template #header>
             <div class="judge-head"><span>证据</span><el-tag size="small">{{ evidenceTotal }}</el-tag></div>
           </template>
+          <div v-if="reviewEvidenceRestricted" class="judge-empty">因权限未加载证据</div>
           <div v-for="group in evidenceGroups" :key="group.key" class="judge-evidence-group">
             <div class="judge-evidence-label">{{ group.label }}</div>
             <article
@@ -191,7 +192,7 @@
             </article>
             <div v-if="!group.items.length" class="judge-evidence-empty">无支撑证据</div>
           </div>
-          <div v-if="!evidenceGroups.length" class="judge-empty">选中冲突或待审核对象后，按来源 / 页码 / 权威度展示支撑证据</div>
+          <div v-if="!reviewEvidenceRestricted && !evidenceGroups.length" class="judge-empty">选中冲突或待审核对象后，按来源 / 页码 / 权威度展示支撑证据</div>
         </el-card>
       </el-col>
     </el-row>
@@ -219,6 +220,7 @@
 </template>
 <script setup lang="ts">
 import{computed,ref}from'vue'
+import { isDetailSectionRestricted } from '../utils/knowledge-detail-access.mjs'
 import type{AdjudicationEvidence,AdjudicationSide,AssessmentRow,ConflictDetail,ConflictRow,ReviewRow}from'../types'
 import{objectTypeLabel,statusLabel}from'../types'
 /**
@@ -330,7 +332,9 @@ const selectedReviewTitle=computed(()=>
 const selectedReviewType=computed(()=>String(props.reviewDetail?.objectType||props.selectedReview?.objectType||''))
 const selectedReviewStatus=computed(()=>String(props.reviewDetail?.status||props.selectedReview?.status||''))
 const selectedReviewConfidence=computed(()=>props.reviewDetail?.confidence??props.selectedReview?.confidence)
+const reviewEvidenceRestricted=computed(()=>!props.conflictDetail?.sides?.length && !!selectedReviewCode.value && isDetailSectionRestricted(props.reviewDetail, 'evidence'))
 const reviewEvidence=computed<AdjudicationEvidence[]>(()=>{
+  if(reviewEvidenceRestricted.value)return []
   const list=props.reviewDetail?.evidence
   return Array.isArray(list)?list as AdjudicationEvidence[]:[]
 })
@@ -343,12 +347,12 @@ const evidenceGroups=computed<{key:string;label:string;items:AdjudicationEvidenc
       items:Array.isArray(side.evidence)?side.evidence:[],
     }))
   }
-  if(selectedReviewCode.value){
+  if(selectedReviewCode.value && !reviewEvidenceRestricted.value){
     return [{key:selectedReviewCode.value,label:`对象 · ${selectedReviewTitle.value}`,items:reviewEvidence.value}]
   }
   return []
 })
-const evidenceTotal=computed(()=>evidenceGroups.value.reduce((sum,group)=>sum+group.items.length,0))
+const evidenceTotal=computed(()=>reviewEvidenceRestricted.value ? '因权限未加载' : evidenceGroups.value.reduce((sum,group)=>sum+group.items.length,0))
 
 const submitConflict=(decision:string):void=>{
   if(!props.selectedConflictId)return

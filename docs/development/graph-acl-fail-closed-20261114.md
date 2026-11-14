@@ -29,3 +29,11 @@
 - `/facet-multihop` 对完整路径所有节点和边施加 ACL/active-generation，所有节点须属于请求 KB。
 - `/citation-safe-multihop` 为 evidence/source/目标实体加 KB 与 active-generation；源、目标实体及四类关联边也须满足 ACL，各关联边限定 active-generation。缺少生成标记的旧投影因此可能不再召回，属于失败关闭行为，需重建合规投影。
 - 上述新增三类多跳均使用 mock 查询合约测试覆盖 [] 和显式标签；尚未连接真实 Neo4j 解析/执行查询。
+
+## 内部控制台权威投影入口追加封口
+
+`GET /api/knowledge/graph/{kb}/overview` 和 `GET /api/knowledge/entities/{kb}/{entityCode}` 受 KB 访问控制，但角色拦截器未禁止普通用户读取这两类内容。其后端 overview 全图计数/关系及 entity detail 关联信息目前无逐项 ACL，因此控制器现在统一解析当前身份标签后，仅允许 AuthContext 中当前具备非空持久用户 ID、ACTIVE、角色精确为平台 ADMIN 且解析结果为 null 的上下文继续；[] 和任何显式标签集合均抛 SecurityException（标准 403）。错误分别标记 `ACL_GRAPH_OVERVIEW_UNAVAILABLE` / `ACL_ENTITY_DETAIL_UNAVAILABLE`，不会进入服务读取未过滤投影。
+
+兼容影响：受限用户暂不可使用工作台图谱总览和实体聚合详情，即使其中部分数据公开；实体列表及具备 ACL 的邻域查询不受此项变更影响。当前 ACTIVE 平台 ADMIN 的 null 无约束上下文继续原行为，匿名、普通账号、KNOWLEDGE_ADMIN 及不活动账号即使解析结果为 null 也拒绝（包括 identity DB 关闭产生的 null），仍受既有 KB/身份边界约束。未来只有在整个投影（含计数、关联、支撑对象）实现 ACL 后才能开放，不能通过把 [] 转成 null 恢复访问。
+
+定向测试 `AuthoritativeReadBoundaryTest` 覆盖两入口的 []、非空授权标签与 null，以及匿名、普通用户、KNOWLEDGE_ADMIN、不活动/无状态 ADMIN、identity DB 关闭的负向场景，及无持久用户 ID 的 ADMIN 负例，共 13 个测试；受限场景断言服务零交互。测试不启动真实服务。

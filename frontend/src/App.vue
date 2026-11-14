@@ -1014,31 +1014,43 @@ await Promise.all([loadReview(),loadOverview()])}catch(e){err(e)}finally{adjudic
 async function review(row:ReviewRow, decision:string, comment=''){
 try{await reviewKnowledge(row,decision,comment);
 ElMessage.success('裁决已提交');
-selectedReview.value=null;reviewDetail.value=null;
+clearReviewSelection();
 await Promise.all([loadReview(),loadOverview()])}catch(e){err(e)}}
 async function resolveConflict(row:ConflictRow,
     status:string){try{await resolveKnowledgeConflict(row.id,status);
 await loadReview()}catch(e){err(e)}}
 /** 选中冲突：拉取双方的值 / 条件 / 版本 / 置信度与各自证据，裁决才有依据（设计 §4.4）。 */
+let reviewSelectionRequest = 0
+function clearReviewSelection() {
+  reviewSelectionRequest++
+  selectedReview.value=null;reviewDetail.value=null
+  selectedConflictId.value=null;conflictDetail.value=null;conflictDetailLoading.value=false
+}
 async function selectConflict(id:number){
-selectedConflictId.value=id;selectedReview.value=null;reviewDetail.value=null
+clearReviewSelection()
+const request=reviewSelectionRequest
+selectedConflictId.value=id
 conflictDetailLoading.value=true
-try{conflictDetail.value=unwrap(await getConflictTargets(id),null)}
-catch(e){err(e);conflictDetail.value=null}finally{conflictDetailLoading.value=false}}
-/** 选中待审核对象：详情接口带 Evidence 与历史裁决记录，右栏据此展示原文与权威度。 */
+try{const detail=unwrap(await getConflictTargets(id),null)
+if(request===reviewSelectionRequest)conflictDetail.value=detail}
+catch(e){if(request===reviewSelectionRequest){err(e);conflictDetail.value=null}}
+finally{if(request===reviewSelectionRequest)conflictDetailLoading.value=false}}
+/** 旧选择的详情不得写入当前选择；切换时先清空旧证据。 */
 async function selectReview(row:ReviewRow){
-selectedReview.value=row;selectedConflictId.value=null;conflictDetail.value=null
+clearReviewSelection()
+const request=reviewSelectionRequest
+selectedReview.value=row
 const type=String(row.objectType||'').toUpperCase()
 const code=String(row.objectCode||'')
 if((type==='CARD'||type==='CLAIM')&&code){
-  try{reviewDetail.value=unwrap(await getKnowledgeObjectDetail(knowledgeBaseId.value,type as 'CARD'|'CLAIM',code),null) as unknown as Record<string,unknown>}
-  catch(e){err(e);reviewDetail.value=null}
-  return}
-reviewDetail.value=null}
+  try{const detail=unwrap(await getKnowledgeObjectDetail(knowledgeBaseId.value,type as 'CARD'|'CLAIM',code),null) as unknown as Record<string,unknown>
+  if(request===reviewSelectionRequest)reviewDetail.value=detail}
+  catch(e){if(request===reviewSelectionRequest){err(e);reviewDetail.value=null}}
+}}
 async function adjudicateConflicted(id:number, decision:string, comment=''){
 try{await adjudicateConflict(id,decision,comment);
 ElMessage.success('冲突裁决已提交');
-selectedConflictId.value=null;conflictDetail.value=null;
+clearReviewSelection();
 await Promise.all([loadReview(),loadOverview()])}catch(e){err(e)}}
 /**
  * 打开图谱：V2.1 基线变更②——知识图谱归入知识检索，起点编码写入 graphCode 后由图谱面板加载邻域。
@@ -1128,6 +1140,7 @@ void loadSpaceContext();
 void loadActive()});
 watch(knowledgeBaseId,
     v=>{requestGate.invalidate();
+clearReviewSelection();
 localStorage.setItem('llmkb.kbId',String(v));
 auditPage.value=1;changePage.value=1;
 // 清除旧库列表和摘要，避免新库页面短暂展示之前的知识库数据。

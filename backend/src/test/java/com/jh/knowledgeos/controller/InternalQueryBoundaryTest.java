@@ -198,4 +198,40 @@ class InternalQueryBoundaryTest {
         controller.trace("q"); controller.answerQualification("q");
         verify(service).trace("q"); verify(service).answerQualification("q");
     }
+    @Test void historicalAnswersDeniedForAnonymousAndAllNonPlatformAdminRoles() {
+        AuthContext.clear();
+        assertThrows(SecurityException.class, () -> controller.queryHistory(42L, 1, 10, null));
+        for (String role : Arrays.asList("KNOWLEDGE_VIEWER", "KNOWLEDGE_OPERATOR", "KNOWLEDGE_AUDITOR", "KNOWLEDGE_ADMIN")) {
+            user(role);
+            assertThrows(SecurityException.class, () -> controller.queryHistory(42L, 1, 10, null));
+        }
+        verifyNoInteractions(service);
+    }
+    @Test void historicalAnswersDeniedForInactiveOrConstrainedPlatformAdmin() {
+        user("ADMIN"); when(resolver.resolve(null)).thenReturn(null);
+        AuthContext.get().setStatus("DISABLED");
+        assertThrows(SecurityException.class, () -> controller.queryHistory(42L, 1, 10, null));
+        user("ADMIN"); when(resolver.resolve(null)).thenReturn(Collections.emptyList());
+        assertThrows(SecurityException.class, () -> controller.queryHistory(42L, 1, 10, null));
+        AuthContext.get().setId(null);
+        assertThrows(SecurityException.class, () -> controller.queryHistory(42L, 1, 10, null));
+        verifyNoInteractions(service);
+    }
+    @Test void historicalAnswersStillRequireValidReadableKnowledgeBaseForAdmin() {
+        user("ADMIN"); when(resolver.resolve(null)).thenReturn(null);
+        assertThrows(IllegalArgumentException.class, () -> controller.queryHistory(null, 1, 10, null));
+        assertThrows(IllegalArgumentException.class, () -> controller.queryHistory(0L, 1, 10, null));
+        doThrow(new SecurityException("denied")).when(access).assertRead(42L);
+        assertThrows(SecurityException.class, () -> controller.queryHistory(42L, 1, 10, null));
+        verifyNoInteractions(service);
+    }
+    @Test void historicalAnswersRetainAdminPaginationAndLegacyLimit() {
+        user("ADMIN"); when(resolver.resolve(null)).thenReturn(null);
+        controller.queryHistory(42L, 2, 10, 30);
+        controller.queryHistory(42L, 1, null, 30);
+        verify(access, times(2)).assertRead(42L);
+        verify(service).queryHistory(42L, 2, 10);
+        verify(service).queryHistory(42L, 1, 30);
+    }
+
 }

@@ -9,8 +9,6 @@ import com.jh.knowledgeos.domain.ApiKey;
 import com.jh.knowledgeos.domain.Claim;
 import com.jh.knowledgeos.domain.KnowledgeBase;
 import com.jh.knowledgeos.domain.KnowledgeCard;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 import java.io.ByteArrayInputStream;
@@ -45,8 +43,6 @@ public class ExternalKnowledgeFacade {
 
     /** 注入答案的记忆条数上限：够覆盖长期偏好，又不至于把提示词撑满。 */
     private static final int MEMORY_CONTEXT_LIMIT = 8;
-
-    private static final Logger log = LoggerFactory.getLogger(ExternalKnowledgeFacade.class);
 
     public ExternalKnowledgeFacade(KnowledgeService knowledgeService, KnowledgeBaseService knowledgeBaseService,
         ObjectMapper objectMapper, RetrievalAuthorizationService authorization, AgentMemoryService memories) {
@@ -214,8 +210,7 @@ public class ExternalKnowledgeFacade {
      * 调用方以前留下过什么"，不是知识库里的证据。拿它去检索会把召回带偏，也会让证据链出现
      * 库里并不存在的来源。</p>
      *
-     * <p>失败就当没有记忆。记忆是增强而不是主链路：一次记忆读取出错不该让整次问答失败，
-     * 调用方拿到的是"没有记忆的答案"，而不是一个 500。</p>
+     * <p>请求记忆时必须完成独立的记忆授权；拒绝或读取失败不能伪装为无记忆的成功答案。</p>
      */
     private void assertMemoryDelegationSupported(ApiKey key) {
         if (key != null && key.getDelegatedPrincipalId() != null) {
@@ -230,25 +225,11 @@ public class ExternalKnowledgeFacade {
         }
     }
 
-    /**
-     * 该凭证身份下的记忆，渲染成可直接并入生成上下文的文本；拿不到就是空串。
-     *
-     * <p>失败不抛：记忆是增强而不是主链路，一次记忆读取出错不该让整次问答失败，调用方拿到
-     * 的是"没有记忆的答案"，而不是一个 500。</p>
-     */
+    /** Authorized memory context; authorization and backend failures propagate to the caller. */
     public String memoryContext(ApiKey key, String question) {
         assertMemoryDelegationSupported(key);
-        if (key == null) {
-            return "";
-        }
-        try {
-            List<Map<String, Object>> rows = memories.recallByIdentity(memories.namespace(key),
-                memories.agentCode(key), question, MEMORY_CONTEXT_LIMIT);
-            return memories.renderContext(rows);
-        } catch (RuntimeException e) {
-            log.warn("记忆注入失败，本次问答按无记忆处理：{}", e.getMessage());
-            return "";
-        }
+        List<Map<String, Object>> rows = memories.recallContext(key, question, MEMORY_CONTEXT_LIMIT);
+        return memories.renderContext(rows);
     }
 
     /**

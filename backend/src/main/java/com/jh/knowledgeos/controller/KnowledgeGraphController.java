@@ -82,7 +82,15 @@ public class KnowledgeGraphController {
      */
     @GetMapping("/graph/{kb}/overview")
     @Operation(summary = "知识库关系视图概览：最关联对象与其关系")
-    public ApiResponse<Object> graphOverview(@PathVariable Long kb, @RequestParam(value = "limit", required = false) Integer limit) {
+    public ApiResponse<Object> graphOverview(@PathVariable Long kb, @RequestParam(value = "limit", required = false) Integer limit,
+        @RequestHeader(value = "X-Authenticated-Permission-Tags", required = false) String permissionTags) {
+        // The authoritative overview includes aggregate counts and relations without content ACL.
+        // A KB read grant alone cannot authorize this projection; [] is public-only, not admin.
+        com.jh.knowledgeos.domain.User caller = com.jh.knowledgeos.service.AuthContext.get();
+        if (caller == null || caller.getId() == null || !"ACTIVE".equals(caller.getStatus()) || !"ADMIN".equals(caller.getRole())
+            || aclContextResolver.resolve(permissionTags) != null) {
+            throw new SecurityException("ACL_GRAPH_OVERVIEW_UNAVAILABLE: unfiltered overview is disabled for restricted callers");
+        }
         return ApiResponse.ok(service.graphOverview(kb, limit));
     }
 

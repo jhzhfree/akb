@@ -222,6 +222,26 @@ public class AgentMemoryService {
         return result;
     }
 
+    /** External context injection must use the same capability and exact AGENT grant as recall. */
+    public List<Map<String, Object>> recallContext(ApiKey key, String query, int limit) {
+        assertEnabled();
+        if (key == null || !key.isUsable() || key.getId() == null || key.getPrincipalId() == null
+            || !ApiKey.STATUS_ACTIVE.equalsIgnoreCase(key.getPrincipalStatus())) {
+            throw new SecurityException("记忆上下文需要有效凭证与已验证的活动主体");
+        }
+        if (key.getDelegatedPrincipalId() != null) {
+            throw new SecurityException("委托用户记忆授权尚未实现，不能使用共享 Agent 记忆");
+        }
+        access.assertScope(key, ApiKey.SCOPE_MEMORY_READ);
+        String namespace = namespace(key);
+        String agent = agentCode(key);
+        if (trimToNull(agent) == null) {
+            throw new SecurityException("记忆上下文缺少服务端 Agent 身份");
+        }
+        requireSharedScopeAccess(key, namespace, "AGENT", agent, "READ", false);
+        return recallByIdentity(namespace, agent, query, limit);
+    }
+
     /**
      * 按身份直接召回，供问答链路注入记忆用（控制台与嵌入挂件都没有 API Key）。
      *
@@ -305,11 +325,18 @@ public class AgentMemoryService {
     }
 
     private void requireSharedScopeAccess(ApiKey key, String namespace, String scopeType, String scopeCode, String accessMode) {
+        requireSharedScopeAccess(key, namespace, scopeType, scopeCode, accessMode, true);
+    }
+
+    private void requireSharedScopeAccess(ApiKey key, String namespace, String scopeType, String scopeCode,
+        String accessMode, boolean allowLegacyKeyGrant) {
         boolean agentGrant = key.getPrincipalId() != null
             && mapper.hasPrincipalScopeAccess(key.getPrincipalId(), namespace, scopeType, scopeCode, accessMode);
-        // Transition fallback for grants that were not safe to merge because sibling keys had
-        // different scope grants. New and migrated common grants are principal-owned.
-        boolean legacyKeyGrant = !agentGrant && key.getDelegatedPrincipalId() == null
+        // Bound principals are authoritative: residual pre-migration key grants must never
+        // resurrect access after a principal grant is revoked. Only unbound legacy callers
+        // retain compatibility; context injection always requires an active bound principal.
+        boolean legacyKeyGrant = allowLegacyKeyGrant && key.getPrincipalId() == null
+            && !agentGrant && key.getDelegatedPrincipalId() == null
             && mapper.hasScopeAccess(key.getId(), namespace, scopeType, scopeCode, accessMode);
         if (!agentGrant && !legacyKeyGrant) {
             throw new SecurityException("当前 Agent 主体未获准访问该记忆作用域");

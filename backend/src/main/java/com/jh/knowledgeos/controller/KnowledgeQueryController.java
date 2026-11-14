@@ -178,5 +178,9 @@ public class KnowledgeQueryController {
         @RequestParam(value = "pageSize", required = false) Integer pageSize,
         // 兼容旧调用：早先只传 limit，现在当作 pageSize，页码默认第一页。
         @RequestParam(value = "limit", required = false) Integer limit) {
+        // Historical answers include content retrieved under earlier ACLs, not a current ACL projection.
+        assertUnrestrictedTraceAccess();
+        if (kb == null || kb <= 0) throw new IllegalArgumentException("knowledgeBaseId 必须为正整数");
+        accessService.assertRead(kb);
         return ApiResponse.ok(service.queryHistory(kb, page, pageSize == null ? limit : pageSize));
     }}

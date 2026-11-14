@@ -67,7 +67,7 @@ class AgentMemoryServiceTest {
         request.setScopeType("PROJECT");
         request.setScopeCode("release-2026");
         request.setLimit(12);
-        when(mapper.hasScopeAccess(41L, "octop-prod", "PROJECT", "release-2026", "READ")).thenReturn(true);
+        when(mapper.hasPrincipalScopeAccess(901L, "octop-prod", "PROJECT", "release-2026", "READ")).thenReturn(true);
         when(mapper.recall("octop-prod", "agent-ops", "PROJECT", "release-2026", "deployment rollback", 12))
             .thenReturn(Collections.<Map<String, Object>>singletonList(new LinkedHashMap<String, Object>()));
 
@@ -78,13 +78,13 @@ class AgentMemoryServiceTest {
     }
 
     @Test
-    void sharedCaptureAndRecallRequireExactCredentialGrant() {
+    void sharedCaptureAndRecallRequireExactPrincipalGrant() {
         ApiKey key = key();
         MemoryCaptureRequest capture = new MemoryCaptureRequest();
         capture.setMemoryLevel("L2"); capture.setScopeType("PROJECT"); capture.setScopeCode("release-2026");
         capture.setContent("Deployment rollback verified"); capture.setSourceType("TASK_RESULT"); capture.setSourceRef("run-44");
         assertThrows(SecurityException.class, () -> service.capture(key, capture));
-        verify(mapper).hasScopeAccess(41L, "octop-prod", "PROJECT", "release-2026", "WRITE");
+        verify(mapper).hasPrincipalScopeAccess(901L, "octop-prod", "PROJECT", "release-2026", "WRITE");
         verify(mapper, never()).insert(any(String.class), any(String.class), any(String.class), any(String.class), any(String.class),
             any(String.class), any(String.class), any(String.class), any(String.class), any(String.class), any(Double.class),
             any(Integer.class), any(java.time.LocalDateTime.class), any(Long.class), any(String.class), any(String.class));
@@ -92,7 +92,8 @@ class AgentMemoryServiceTest {
         MemoryRecallRequest recall = new MemoryRecallRequest();
         recall.setScopeType("PROJECT"); recall.setScopeCode("other-project"); recall.setQuery("rollback");
         assertThrows(SecurityException.class, () -> service.recall(key, recall));
-        verify(mapper).hasScopeAccess(41L, "octop-prod", "PROJECT", "other-project", "READ");
+        verify(mapper).hasPrincipalScopeAccess(901L, "octop-prod", "PROJECT", "other-project", "READ");
+        verify(mapper, never()).hasScopeAccess(any(Long.class), any(String.class), any(String.class), any(String.class), any(String.class));
     }
 
     @Test
@@ -212,7 +213,7 @@ class AgentMemoryServiceTest {
         key.setScopes("MEMORY_READ,MEMORY_WRITE");
         key.setMemoryNamespace("octop-prod");
         key.setMemoryAgentCode("agent-ops");
-        // 主体化后 Memory 授权挂在 principal 上；没有主体的 Key 不再具备记忆访问能力。
+        // 已绑定主体的 Memory 授权只能使用 principal grant，不能回退历史 Key grant。
         key.setPrincipalId(901L);
         return key;
     }
