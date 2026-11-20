@@ -273,6 +273,7 @@ public class KnowledgeProperties {
             private String issuer = "";
             private String jwkSetUri = "";
             private String audience = "";
+            private String authorizedParty = "";
 
             public boolean isEnabled() { return enabled; }
             public void setEnabled(boolean value) { enabled = value; }
@@ -282,6 +283,8 @@ public class KnowledgeProperties {
             public void setJwkSetUri(String value) { jwkSetUri = value == null ? "" : value.trim(); }
             public String getAudience() { return audience; }
             public void setAudience(String value) { audience = value == null ? "" : value.trim(); }
+            public String getAuthorizedParty() { return authorizedParty; }
+            public void setAuthorizedParty(String value) { authorizedParty = value == null ? "" : value.trim(); }
         }
 
         private boolean mcpEnabled = true;

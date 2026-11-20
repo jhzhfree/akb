@@ -51,11 +51,18 @@ public class DelegatedIdentityService {
             OAuth2TokenValidator<Jwt> requiredClaims = jwt -> {
                 boolean hasAudience = jwt.getAudience() != null && jwt.getAudience().contains(properties.getAudience());
                 boolean hasExp = jwt.getExpiresAt() != null;
-                boolean hasNbf = jwt.getNotBefore() != null;
                 boolean hasSubject = !blank(jwt.getSubject());
-                if (hasAudience && hasExp && hasNbf && hasSubject) return OAuth2TokenValidatorResult.success();
+                String authorizedParty = properties.getAuthorizedParty();
+                Object identityKind = jwt.getClaims().get("identity_kind");
+                boolean humanIdentity = !jwt.getClaims().containsKey("identity_kind") || "human".equals(identityKind);
+                boolean clientMatches = blank(authorizedParty)
+                    ? jwt.getNotBefore() != null
+                    : authorizedParty.equals(jwt.getClaims().get("azp")) && jwt.getIssuedAt() != null;
+                if (hasAudience && hasExp && hasSubject && humanIdentity && clientMatches) {
+                    return OAuth2TokenValidatorResult.success();
+                }
                 return OAuth2TokenValidatorResult.failure(new OAuth2Error("invalid_token",
-                    "JWT must contain the configured audience, exp, nbf and sub claims", null));
+                    "JWT does not match the delegated user identity policy", null));
             };
             nimbus.setJwtValidator(jwt -> {
                 OAuth2TokenValidatorResult standardResult = standard.validate(jwt);

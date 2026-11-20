@@ -194,7 +194,7 @@ knowledge.external.delegated-identity.jwk-set-uri=https://idp.example.com/.well-
 knowledge.external.delegated-identity.audience=akb-external-api
 ```
 
-JWT 必须包含并通过验证：`iss`、配置的 `aud`、`exp`、`nbf`、非空 `sub`。管理端需先创建 USER 主体，再将 IdP `issuer + subject` 显式映射到该主体；不会按 token 自动创建用户。示例：
+JWT 必须通过签名、`iss`、配置的 `aud`、`exp` 和非空 `sub` 校验。默认要求 `nbf`。接入统一身份平台时可设置 `knowledge.external.delegated-identity.authorized-party=akb-user-client`，此时 JWT 必须包含 `iat` 和匹配该客户端的 `azp`，签发方可省略 `nbf`，提供时仍会验证。该客户端应只用于用户授权流程。若 JWT 带有 `identity_kind`，此入口只接受 `human`。管理端需先创建 USER 主体，再将 IdP `issuer + subject` 显式映射到该主体；不会按 token 自动创建用户。示例：
 
 ```http
 POST /api/external/admin/principals/users
